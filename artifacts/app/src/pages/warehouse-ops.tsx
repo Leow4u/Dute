@@ -260,7 +260,7 @@ function WmsModuleSnapshot({
               className={
                 blocked > 0
                   ? "border-destructive/20 bg-destructive/10 text-destructive"
-                  : "border-primary/20 bg-primary/10 text-primary"
+                  : "border-primary/20 bg-primary/10 text-primary-texto"
               }
             >
               {formatNumber(blocked)} bloqueio(s)
@@ -514,7 +514,7 @@ function PhysicalFlowMap({
               className={
                 blockedTotal > 0
                   ? "border-destructive/20 bg-destructive/10 text-destructive"
-                  : "border-primary/20 bg-primary/10 text-primary"
+                  : "border-primary/20 bg-primary/10 text-primary-texto"
               }
             >
               {formatNumber(blockedTotal)} bloqueio(s)
@@ -568,7 +568,7 @@ function PhysicalFlowMap({
                     {hasAiSignal ? (
                       <Badge
                         variant="outline"
-                        className="shrink-0 border-primary/20 bg-primary/10 text-primary"
+                        className="shrink-0 border-primary/20 bg-primary/10 text-primary-texto"
                       >
                         IA
                       </Badge>
@@ -761,7 +761,7 @@ function QueueCard({
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="truncate text-base">{queue.label}</CardTitle>
                 {isFocusQueue ? (
-                  <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                  <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-texto">
                     módulo
                   </Badge>
                 ) : null}
@@ -865,7 +865,7 @@ function BlockedTasksPanel({
             className={cn(
               entries.length > 0
                 ? "border-destructive/20 bg-destructive/10 text-destructive"
-                : "border-primary/20 bg-primary/10 text-primary",
+                : "border-primary/20 bg-primary/10 text-primary-texto",
             )}
           >
             {formatNumber(entries.length)}

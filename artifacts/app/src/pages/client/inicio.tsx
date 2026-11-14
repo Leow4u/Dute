@@ -134,7 +134,7 @@ export function ClienteInicio() {
                   <section className="min-w-0">
                     <div className="mb-3 flex items-center justify-between px-1">
                       <h2 className="text-sm font-semibold">Pedidos em andamento</h2>
-                      <Link href="/portal/pedidos" className="text-sm font-medium text-primary hover:underline">
+                      <Link href="/portal/pedidos" className="text-sm font-medium text-primary-texto hover:underline">
                         Ver todos ›
                       </Link>
                     </div>
@@ -334,7 +334,7 @@ function RoutineNews() {
             <span className="min-w-0 flex-1 truncate">
               <b className="font-semibold">{item.title.replace(/^Rotina:\s*/, "")}</b> chegou
             </span>
-            <span className="shrink-0 font-medium text-primary">Abrir ›</span>
+            <span className="shrink-0 font-medium text-primary-texto">Abrir ›</span>
           </Link>
         </li>
       ))}
@@ -400,7 +400,7 @@ function Action({
 }) {
   const body = (
     <>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary-texto">
         <Icon className="h-5 w-5" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
@@ -434,7 +434,7 @@ function Panel({
     <section className="h-fit overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
-        <Link href={href} className="text-sm font-medium text-primary hover:underline">
+        <Link href={href} className="text-sm font-medium text-primary-texto hover:underline">
           {linkLabel} ›
         </Link>
       </div>

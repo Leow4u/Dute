@@ -1258,7 +1258,7 @@ export function OpeningInventoryWorkspace() {
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary-texto">
                 <PackageOpen className="size-5" />
               </div>
               <div>
@@ -1288,7 +1288,7 @@ export function OpeningInventoryWorkspace() {
                 className={cn(
                   "w-fit",
                   sessionOpen
-                    ? "border-primary/20 bg-primary/10 text-primary"
+                    ? "border-primary/20 bg-primary/10 text-primary-texto"
                     : "border-border bg-card",
                 )}
               >
@@ -2527,7 +2527,7 @@ export function ExistingCycleCountWorkspace() {
                 Conte um item num endereço; a diferença vira ajuste com evento.
               </p>
             </div>
-            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary">
+            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary-texto">
               ajuste auditado
             </Badge>
           </div>

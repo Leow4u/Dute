@@ -68,7 +68,7 @@ export function StockMetricCard({
 }: StockMetricCardProps) {
   const toneClass = {
     default: "bg-card text-muted-foreground",
-    blue: "bg-primary/10 text-primary",
+    blue: "bg-primary/10 text-primary-texto",
     amber: "bg-warning-soft text-warning-soft-foreground",
     rose: "bg-destructive-soft text-destructive-soft-foreground",
   }[tone];

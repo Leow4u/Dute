@@ -30,7 +30,7 @@ export function ProductIdentityCard({
   ];
   return (
     <section aria-label="Cadastro encontrado" className="@container rounded-lg border border-primary/20 bg-primary/5 p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-primary">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-primary-texto">
         <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
         <span>{selected ? "Cadastro selecionado" : "Cadastro encontrado"}{matchLabel ? ` ${matchLabel}` : ""}</span>
       </div>

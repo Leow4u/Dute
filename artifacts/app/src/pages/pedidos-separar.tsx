@@ -69,6 +69,8 @@ import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view
 
 const SEM_ITENS: WarehouseTaskItem[] = [];
 
+const LISTA = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+
 type Acao =
   | { tipo: "separar" | "desfazer"; linha: LinhaDaLista }
   | { tipo: "menos"; linha: LinhaDaLista; diferenca: DiferencaDaLinha }
@@ -422,6 +424,14 @@ export default function PaginaPedidosSeparar() {
 
   // O que falta às leituras da bancada (parte 13l): a fila (a consulta) e as escutas (as linhas, a tarefa, as caixas, a
   // entrada e o prazo). O "Tentar de novo" lê do zero a fila que falhou e assina de novo as escutas sem resposta.
+  // A leitura de apoio que não chegou diz o que falta, em qualquer falta, como o romaneio e a lista; sem conexão, o
+  // aviso da conexão (ou a faixa) diz por quê (parte 13m). As linhas que não chegaram seguem as da fila.
+  const naoChegou = [
+    tarefaAoVivo.erro ? "os volumes" : null,
+    caixasAoVivo.erro || entradaAoVivo.erro ? "as caixas" : null,
+    solicitacao.erro ? "o prazo do pedido" : null,
+  ].filter((oQue): oQue is string => Boolean(oQue));
+  const avisos = naoChegou.length ? [`Não foi possível carregar ${LISTA.format(naoChegou)}.`] : [];
   const leituraDaBancada = juntarTentativas(novaTentativaDe([linhasAoVivo, tarefaAoVivo, caixasAoVivo, entradaAoVivo, solicitacao]), {
     tentando: false,
     tentar: () => {
@@ -442,6 +452,7 @@ export default function PaginaPedidosSeparar() {
         // A primeira leitura é a da fila: "Tentar de novo" a lê do zero (o react-query não recomeça a leitura presa).
         onTentar={() => relerDoZero(queryClient, [["warehouse-ops"]])}
         leitura={leituraDaBancada}
+        avisos={avisos}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
         comecouEm={situacao?.separation_started_at}

@@ -40,7 +40,15 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
   `muted` para tipo e categoria.
 - `primary-texto` é o primário como texto no cartão (o "Ver itens" e o "Ver
   volumes" da fila): o próprio `primary` no claro; no escuro, mais claro
-  (6,3:1 no cartão), porque o azul do botão, como texto, dá 4,4:1.
+  (6,3:1 no cartão), porque o azul do botão, como texto, dá 4,4:1; na v3
+  clara, o vermelho da marca um tom mais fundo (`358 81% 44%`), porque o do
+  botão dá 4,2:1 no fundo da v3 (parte 13m). Tem 4,5:1 no fundo, no cartão,
+  no muted e no selo do primário (o tom a 10% e a 5%), nos dois temas
+  (`lib/carregando/tokens.test.ts`). O texto sobre o tom do primário (o selo
+  `bg-primary/10`, o painel `bg-primary/5`), o texto do primário no portal e
+  o link de volta das folhas (o romaneio, a lista, as etiquetas) são o
+  `text-primary-texto`; o `text-primary` fica para a borda, o ícone e o
+  hover (travado em `lib/carregando/trava.test.ts`).
 - `--primary-fundo` é o fundo do primário: o `bg-primary` o lê pelo
   `--background-color-primary` do `@theme` (o namespace do fundo vem antes do
   `--color-*`), sem classe nova, e o `text-primary`, a borda e o anel seguem
@@ -385,9 +393,19 @@ Etiquetas), a falta de conexão vira o aviso da conexão pela `FalhaNaLeitura`
 tela; a fila que falhou sem nada lido fica na falha enquanto tenta de novo
 (`useLeituraComFalha`), e o foco fica no "Tentar de novo"; com o que está
 lido, a `FaixaAoVivo` ("romaneio de", "pedido de"). A leitura de apoio que não
-chegou (o prazo do romaneio, o destino da lista) segue com a frase que diz o
-que falta, em qualquer falta, e o aviso da conexão (ou a faixa) diz por quê,
-com o "Tentar de novo" que assina de novo o que não chegou. Onde a tela tem a
+chegou (o prazo do romaneio, o destino da lista; na bancada, os volumes, as
+caixas e o prazo, numa frase só: "Não foi possível carregar as caixas e o
+prazo do pedido.") segue com a frase que diz o que falta, em qualquer falta, e
+o aviso da conexão (ou a faixa) diz por quê, com o "Tentar de novo" que assina
+de novo o que não chegou. Na folha impressa, o campo do dado que não chegou
+diz isso no papel ("prazo não carregado", "destino não carregado"), e não o
+"—" de quem não tem o dado, e o Imprimir segue liberado (parte 13m). O erro do
+servidor da leitura no lugar da lista tem sempre o "Tentar de novo" (os
+volumes das Etiquetas, pela `FalhaNaLeitura`). Em Pedidos, o "Para quando" que
+o servidor recusou diz "Prazo não carregado" na linha, e o Atualizar da tela o
+assina de novo; sem conexão, a linha não repete o estado da conexão. Com uma
+lista sem conexão e outra recusada pelo servidor (Emissões), a faixa e a frase
+do servidor ficam juntas. Onde a tela tem a
 `LinhaDeEstado` (Pedidos), a leitura ao vivo que a lista mostra junto (as
 entregas) entra por `aoVivo`: a linha diz a falta, com a hora mais antiga do
 que está na tela, e o "Tentar de novo" dela assina de novo; o pedido não

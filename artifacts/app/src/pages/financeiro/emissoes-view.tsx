@@ -52,7 +52,10 @@ export type AcoesDasEmissoes = {
 
 export type EmissoesViewProps = {
   estado: EstadoDasEmissoes;
-  /** As listas já lidas não se atualizaram: elas ficam, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  /**
+   * O servidor recusou a releitura de uma das listas já lidas: elas ficam, e a frase fica escrita em cima, sem falar,
+   * com "Tentar de novo". A falta de conexão da outra é a faixa, e as duas ficam (parte 13m).
+   */
   falhaNaReleitura?: boolean;
   emissoes: readonly EmissaoDoFinanceiro[];
   baixas: readonly BaixaDoFinanceiro[];
@@ -303,9 +306,10 @@ export function EmissoesView(props: EmissoesViewProps) {
           {falha}
         </p>
       ) : null}
-      {/* As listas lidas, sem conexão: elas ficam, com a hora; o erro do servidor diz que não atualizou (parte 13l). */}
+      {/* As listas lidas, sem conexão: elas ficam, com a hora; o erro do servidor diz que não atualizou (parte 13l), também
+          com a outra lista sem conexão (parte 13m). */}
       {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
-      {estado === "pronto" && props.falhaNaReleitura && leitura.falta !== "conexao" ? (
+      {estado === "pronto" && props.falhaNaReleitura ? (
         <FalhaNaSecao
           mensagem="Não foi possível atualizar as emissões."
           alerta={false}

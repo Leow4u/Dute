@@ -50,7 +50,7 @@ export function PedidosListaView({
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 pb-24">
       <div className="no-print flex flex-col gap-4">
-        <Link href="/pedidos" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary">
+        <Link href="/pedidos" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary-texto">
           <ArrowLeft className="size-4" aria-hidden="true" />
           Pedidos
         </Link>
@@ -87,8 +87,14 @@ export function PedidosListaView({
               {aviso}
             </p>
           ))}
-          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela. */}
-          <div className="overflow-x-auto rounded-lg border border-border bg-muted p-4">
+          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela, e recebe o foco
+              do teclado para rolar (scrollable-region-focusable; parte 13m, como no romaneio). */}
+          <div
+            role="region"
+            aria-label="Folha da lista de separação"
+            tabIndex={0}
+            className="overflow-x-auto rounded-lg border border-border bg-muted p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
+          >
             <ListaDeSeparacaoDocumento folha={folha} />
           </div>
         </>

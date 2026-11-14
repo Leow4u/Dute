@@ -759,7 +759,12 @@ export default function Pedidos() {
   // com a barra no topo do primeiro cartão. Os saldos da validação relêem
   // junto do toque.
   const leiturasDaLista = decider ? [opsNaTela, requestsNaTela] : [opsNaTela];
-  const atualizarLista = useAtualizarLista(leiturasDaLista, () => void queryClient.invalidateQueries({ queryKey: ["stock-balances"] }));
+  // O toque no Atualizar também assina de novo o "Para quando" que o servidor recusou, em cada linha (parte 13m).
+  const [novaTentativaDoPrazo, setNovaTentativaDoPrazo] = useState(0);
+  const atualizarLista = useAtualizarLista(leiturasDaLista, () => {
+    void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
+    setNovaTentativaDoPrazo((vez) => vez + 1);
+  });
   const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
 
   // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
@@ -943,6 +948,7 @@ export default function Pedidos() {
                       tone="pick"
                       paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                       lerParaQuando={!decider}
+                      novaTentativaDoPrazo={novaTentativaDoPrazo}
                       // O pedido por separar abre com os itens; o que já está em separação, fechado (a bancada mostra).
                       defaultOpen={!separacaoComecou(order.pick, order.pick?.items ?? [])}
                       listaHref={hrefDaListaDeSeparacao(order.key)}
@@ -987,6 +993,7 @@ export default function Pedidos() {
                       tone="deliver"
                       paraQuando={paraQuandoDoPedido(order, requests.data?.items)}
                       lerParaQuando={!decider}
+                      novaTentativaDoPrazo={novaTentativaDoPrazo}
                       onTreat={operador ? () => setTreating(order) : undefined}
                       {...(order.stage === "enviar" ? daEntrega(order) : {})}
                       volumes={volumesDoPedidoNaFila(order)}
@@ -1433,15 +1440,33 @@ function LinhaParaAprovar({
  * O "Para quando" da linha do pedido. A coordenação já tem o da lista das
  * solicitações; quem só separa não lê essa lista, e o prazo vem da
  * solicitação que originou o pedido, lida pelo id (docs/mockups/WmsSepararLista.dc.html).
+ *
+ * A leitura que o servidor recusou diz que o prazo não veio, sem afirmar o
+ * vazio, e o Atualizar da tela a assina de novo (`novaTentativa` muda a cada
+ * toque); sem conexão, o estado da conexão já avisa, e a linha não repete
+ * (carregamento v2, parte 13m).
  */
-function useParaQuandoDoPedido(order: Pick<OrderGroup, "requestId">, daFila: string | undefined, ler: boolean): string | undefined {
+function useParaQuandoDoPedido(order: Pick<OrderGroup, "requestId">, daFila: string | undefined, ler: boolean, novaTentativa = 0): string | undefined {
   const requestId = !daFila && ler ? order.requestId : undefined;
   const solicitacao = useDocumento(
     requestId ? `customer_requests/${requestId}:para-quando` : null,
     (db) => doc(db, "customer_requests", requestId ?? "-"),
     (_id, data) => ({ dueAt: data.due_at as unknown }),
   );
-  return daFila ?? (solicitacao.item ? linhaDoParaQuando(solicitacao.item.dueAt) : undefined);
+  const falhou = solicitacao.erro && solicitacao.falta !== "conexao";
+  const pedida = useRef(novaTentativa);
+  const tentar = useRef(solicitacao.tentar);
+  useEffect(() => {
+    tentar.current = solicitacao.tentar;
+  });
+  useEffect(() => {
+    if (pedida.current === novaTentativa) return;
+    pedida.current = novaTentativa;
+    if (solicitacao.erro) void tentar.current();
+  }, [novaTentativa, solicitacao.erro]);
+  if (daFila) return daFila;
+  if (solicitacao.item) return linhaDoParaQuando(solicitacao.item.dueAt);
+  return falhou ? "Prazo não carregado" : undefined;
 }
 
 /** A linha do pedido em separação ou entrega. Exportada para o teste (pedidos.lista.test.tsx). */
@@ -1455,6 +1480,7 @@ export function OrderRow({
   detail,
   paraQuando: paraQuandoDaFila,
   lerParaQuando = false,
+  novaTentativaDoPrazo = 0,
   defaultOpen = false,
   onTreat,
   listaHref,
@@ -1474,6 +1500,8 @@ export function OrderRow({
   paraQuando?: string;
   /** Quem não lê a lista das solicitações (o armazém) lê o prazo da solicitação do pedido, pelo id. */
   lerParaQuando?: boolean;
+  /** Muda a cada toque no Atualizar da tela: o prazo que não chegou assina de novo (parte 13m). */
+  novaTentativaDoPrazo?: number;
   defaultOpen?: boolean;
   onTreat?: () => void;
   /** A lista de separação do pedido para imprimir (separação com caixas, parte 1b). */
@@ -1495,7 +1523,7 @@ export function OrderRow({
   const items = orderItems(order);
   const blocked = Boolean(order.blockedReason || order.exceptionCount);
   const meta = orderMeta(order);
-  const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando);
+  const paraQuando = useParaQuandoDoPedido(order, paraQuandoDaFila, lerParaQuando, novaTentativaDoPrazo);
   // O selo só no pedido ainda para separar: depois de concluída, a separação não é mais notícia.
   const selo = order.stage === "separar" ? seloDaSeparacao(order.pick, items) : null;
   // "Imprimir lista" (docs/mockups/WmsSepararLista.dc.html): no computador, um botão antes das ações do pedido.

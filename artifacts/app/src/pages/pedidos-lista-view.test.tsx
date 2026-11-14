@@ -242,3 +242,14 @@ describe("a lista de separação carregando (carregamento v2, parte 13c)", () =>
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+/** Como no romaneio (parte 13m): a caixa que rola a folha a 390 px recebe o foco do teclado, com o nome e o anel. */
+describe("Pedidos › Lista de separação, a folha que rola (parte 13m)", () => {
+  it("a caixa que rola a folha é uma região com nome, no Tab, com o anel", () => {
+    const caixa = new JSDOM(render("pronto", FOLHA)).window.document.querySelector<HTMLElement>(".overflow-x-auto")!;
+    expect(caixa.getAttribute("role")).toBe("region");
+    expect(caixa.getAttribute("tabindex")).toBe("0");
+    expect(caixa.getAttribute("aria-label")).toBe("Folha da lista de separação");
+    expect(caixa.className).toContain("focus-visible:ring-foco");
+  });
+});

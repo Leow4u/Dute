@@ -607,9 +607,13 @@ describe("o anel do foco, em cada contexto", () => {
 describe("o primário como texto, em cada contexto", () => {
   const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
 
-  it("vira utilidade (text-primary-texto): o próprio --primary no claro e na v3", () => {
+  it("vira utilidade (text-primary-texto): o próprio --primary no claro; na v3, o vermelho dela mais fundo, do mesmo matiz", () => {
     expect(variaveis("@theme inline").get("--color-primary-texto")).toBe("hsl(var(--primary-texto))");
-    for (const nome of ["claro", "v3"]) expect(temas[nome].valor("--primary-texto"), nome).toBe(temas[nome].valor("--primary"));
+    expect(temas.claro.valor("--primary-texto")).toBe(temas.claro.valor("--primary"));
+    // Parte 13m: o vermelho da v3 como texto dava 4,2:1 no fundo e 3,6 a 3,9:1 no selo; o do botão fica o mesmo.
+    const [matiz, saturacao] = temas.v3.valor("--primary").split(/\s+/);
+    expect(temas.v3.valor("--primary-texto").split(/\s+/).slice(0, 2)).toEqual([matiz, saturacao]);
+    expect(temas.v3.valor("--primary-fundo")).toBe("358 81% 51%");
   });
 
   it("tem 4,5:1 no cartão e no popover", () => {
@@ -618,6 +622,32 @@ describe("o primário como texto, em cada contexto", () => {
         expect(contraste(t.cor("--primary-texto"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(4.5);
       }
     }
+  });
+
+  /**
+   * Parte 13m: o primário como texto também no fundo da página (o link de
+   * volta do romaneio), no muted e no selo, o tom do primário a 10% (e a 5%)
+   * sobre o fundo e o cartão ("OK físico", "cadastro localizado").
+   */
+  it("tem 4,5:1 no fundo, no muted e no selo do primário (o tom a 10% e a 5%, sobre o fundo e o cartão)", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      const texto = t.cor("--primary-texto");
+      for (const fundo of ["--background", "--muted"]) {
+        expect(contraste(texto, t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const base of ["--background", "--card"]) {
+        for (const tom of [0.1, 0.05]) {
+          const selo = sobre(t.cor("--primary-fundo"), t.cor(base), tom);
+          expect(contraste(texto, selo), `${nome} selo a ${tom} sobre ${base}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
+  it("o vermelho da v3, como texto, ficava abaixo de 4,5:1 no fundo e no selo", () => {
+    const { v3 } = temas;
+    expect(contraste(v3.cor("--primary"), v3.cor("--background"))).toBeLessThan(4.5);
+    expect(contraste(v3.cor("--primary"), sobre(v3.cor("--primary-fundo"), v3.cor("--card"), 0.1))).toBeLessThan(4.5);
   });
 
   it("o --primary do escuro, como texto no cartão, ficava abaixo de 4,5:1", () => {

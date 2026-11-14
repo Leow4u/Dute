@@ -2,6 +2,7 @@ import { nomeComTamanho, nomeSemTamanho, ordemDoTamanho, tamanhoDoCodigo } from 
 
 import { textoDoParaQuandoComAno } from "../order-queue";
 import type { WarehouseTaskItem } from "./model";
+import { DESTINO_NAO_CARREGADO, PRAZO_NAO_CARREGADO } from "./romaneio";
 
 /**
  * A lista de separação do pedido (docs/plataforma/separacao-com-caixas.md,
@@ -166,7 +167,7 @@ export type FolhaDaLista = {
   numero: string;
   cliente: string;
   destino: string;
-  /** "Seg 16/11/2026 11:36"; "" sem prazo. */
+  /** "Seg 16/11/2026 11:36"; "" sem prazo; "prazo não carregado" quando a solicitação não chegou. */
   paraQuando: string;
   /** "116 itens · 3.335 un." */
   resumo: string;
@@ -198,6 +199,8 @@ export function folhaDaLista(dados: {
   destino?: string | null;
   /** O `due_at` da solicitação que originou o pedido. */
   paraQuando?: unknown;
+  /** A leitura da solicitação não chegou: o destino e o prazo dizem, no papel, em vez do traço (parte 13m). */
+  solicitacaoNaoCarregada?: boolean;
   por?: string | null;
   agora: Date;
   grupos: GrupoDaLista[];
@@ -205,8 +208,8 @@ export function folhaDaLista(dados: {
   return {
     numero: texto(dados.numero),
     cliente: texto(dados.cliente),
-    destino: texto(dados.destino),
-    paraQuando: textoDoParaQuandoComAno(dados.paraQuando),
+    destino: dados.solicitacaoNaoCarregada ? DESTINO_NAO_CARREGADO : texto(dados.destino),
+    paraQuando: dados.solicitacaoNaoCarregada ? PRAZO_NAO_CARREGADO : textoDoParaQuandoComAno(dados.paraQuando),
     resumo: resumoDoGrupo({
       itens: dados.grupos.reduce((soma, grupo) => soma + grupo.itens, 0),
       unidades: dados.grupos.reduce((soma, grupo) => soma + grupo.unidades, 0),

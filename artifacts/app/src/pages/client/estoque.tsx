@@ -801,7 +801,7 @@ export function ClienteEstoque() {
                 variant="outline"
                 className={cn(
                   "hidden h-10 shrink-0 gap-2 rounded-lg px-3 font-medium md:inline-flex",
-                  cartQuantity > 0 && "border-primary/20 bg-info-soft text-primary hover:bg-primary/10 active:bg-primary/15 dark:text-info-soft-foreground",
+                  cartQuantity > 0 && "border-primary/20 bg-info-soft text-primary-texto hover:bg-primary/10 active:bg-primary/15 dark:text-info-soft-foreground",
                 )}
                 aria-expanded={cartOpen}
                 aria-label={`Abrir pedido de abastecimento com ${formatNumber(cartQuantity)} ${cartQuantity === 1 ? "peça" : "peças"}`}
@@ -1000,7 +1000,7 @@ function OpeningInventoryState({
 }) {
   return (
     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-card text-primary">
+      <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-card text-primary-texto">
         <Package className="h-6 w-6" aria-hidden="true" />
       </span>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
@@ -1148,7 +1148,7 @@ export function MarketplaceToolbar({
                 type="button"
                 variant="outline"
                 aria-label={activeFilterCount ? `Filtros, ${activeFilterCount} ${activeFilterCount === 1 ? "ativo" : "ativos"}` : "Filtros"}
-                className={cn("hidden h-11 shrink-0 gap-2 md:inline-flex", (filtersOpen || activeFilterCount > 0) && "border-primary bg-info-soft text-primary")}
+                className={cn("hidden h-11 shrink-0 gap-2 md:inline-flex", (filtersOpen || activeFilterCount > 0) && "border-primary bg-info-soft text-primary-texto")}
               >
                 <SlidersHorizontal aria-hidden="true" />
                 Filtros
@@ -1174,7 +1174,7 @@ export function MarketplaceToolbar({
               </div>
               <div className="shrink-0 space-y-2 border-t border-border px-5 py-3">
                 <p className="flex items-center gap-2 text-xs text-muted-foreground"><Info className="h-4 w-4 shrink-0" aria-hidden="true" />Filtros aplicados automaticamente</p>
-                <Button type="button" variant="ghost" size="sm" className="-ml-3 text-primary" disabled={!hasActiveFilters} onClick={onClearFilters}>
+                <Button type="button" variant="ghost" size="sm" className="-ml-3 text-primary-texto" disabled={!hasActiveFilters} onClick={onClearFilters}>
                   Limpar filtros
                 </Button>
               </div>
@@ -1289,7 +1289,7 @@ export function ActiveFilterChips({ filters, onRemove }: { filters: CatalogFilte
   return (
     <div className="flex flex-wrap gap-2">
       {filters.map((filter) => (
-        <Button key={filter.key} type="button" variant="outline" size="sm" aria-label={`Tirar o filtro ${filter.label}`} onClick={() => onRemove(filter.key)} className={cn("border-primary/25 bg-primary/10 text-primary", filter.key === "situacao" && "md:hidden")}>
+        <Button key={filter.key} type="button" variant="outline" size="sm" aria-label={`Tirar o filtro ${filter.label}`} onClick={() => onRemove(filter.key)} className={cn("border-primary/25 bg-primary/10 text-primary-texto", filter.key === "situacao" && "md:hidden")}>
           {filter.label}<X aria-hidden="true" />
         </Button>
       ))}
@@ -1501,7 +1501,7 @@ export function StockList({
                   <div className="mt-1 flex flex-wrap gap-2">
                     <StockBadge status={status} />
                     {cart[product.key] ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary-texto">
                         {formatNumber(cart[product.key])} no pedido
                       </span>
                     ) : null}
@@ -1948,7 +1948,7 @@ function VariantButtons({
               "flex cursor-pointer flex-col items-center rounded-md border leading-tight transition",
               large ? "min-h-11 min-w-[52px] justify-center px-2.5 py-1" : "min-w-[44px] px-2 py-1",
               active
-                ? "border-primary bg-primary/10 text-primary"
+                ? "border-primary bg-primary/10 text-primary-texto"
                 : "border-border text-foreground hover:border-primary/40",
               semPeca && !active && "text-muted-foreground/60",
             )}
@@ -2690,7 +2690,7 @@ function ProductVisual({
       >
         <div
           className={cn(
-            "flex items-center justify-center border border-border bg-card text-primary",
+            "flex items-center justify-center border border-border bg-card text-primary-texto",
             compact ? "h-12 w-12 rounded-lg" : "h-20 w-20 rounded-lg",
           )}
         >
@@ -2880,7 +2880,7 @@ function ViewModeButton({
       className={cn(
         "flex h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm transition",
         active
-          ? "bg-card text-primary"
+          ? "bg-card text-primary-texto"
           : "text-muted-foreground hover:bg-card",
       )}
     >

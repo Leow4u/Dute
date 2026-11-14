@@ -53,7 +53,8 @@ export function PedidosRomaneioView({
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 pb-24">
       <div className="no-print flex flex-col gap-4">
-        <Link href={voltar?.href ?? "/pedidos"} className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary">
+        {/* O primário como texto (4,5:1 no fundo da v3; o text-primary dava 4,2:1; parte 13m). */}
+        <Link href={voltar?.href ?? "/pedidos"} className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-primary-texto">
           <ArrowLeft className="size-4" aria-hidden="true" />
           {voltar?.rotulo ?? "Pedidos"}
         </Link>
@@ -90,8 +91,14 @@ export function PedidosRomaneioView({
               {aviso}
             </p>
           ))}
-          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela. */}
-          <div className="overflow-x-auto rounded-lg border border-border bg-muted p-4">
+          {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela, e recebe o foco
+              do teclado para rolar (scrollable-region-focusable; parte 13m). */}
+          <div
+            role="region"
+            aria-label="Folha do romaneio"
+            tabIndex={0}
+            className="overflow-x-auto rounded-lg border border-border bg-muted p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
+          >
             <RomaneioDocumento folha={folha} />
           </div>
         </>

@@ -84,7 +84,7 @@ export function ClienteRelatorio() {
             <div className="mx-auto flex w-full max-w-[860px] flex-col gap-4 pb-8">
               <div className="no-print flex flex-wrap items-end justify-between gap-3">
                 <div className="flex flex-col gap-2">
-                  <Link href="/portal/faturas" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                  <Link href="/portal/faturas" className="inline-flex items-center gap-1 text-sm font-medium text-primary-texto hover:underline">
                     <ArrowLeft className="h-4 w-4" />
                     Faturas
                   </Link>

@@ -354,7 +354,7 @@ describe("Financeiro › Emissões sem conexão", () => {
     expect(
       await estadosDaFalta((leitura, situacao) => (
         // Sem emissão na tela: a parada já tem um "Tentar de novo" dela.
-        <EmissoesView {...props({ estado: situacao, emissoes: [], leitura, falhaNaReleitura: situacao === "pronto" && leitura.falta !== null })} />
+        <EmissoesView {...props({ estado: situacao, emissoes: [], leitura, falhaNaReleitura: situacao === "pronto" && leitura.falta === "servidor" })} />
       )),
     ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar as emissões." }));
   });

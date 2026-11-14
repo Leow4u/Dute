@@ -88,7 +88,7 @@ export function StockTypeFilter({ categories, selectedValues, onChange, resetKey
             type="button"
             variant="ghost"
             size="sm"
-            className="px-1 text-primary"
+            className="px-1 text-primary-texto"
             aria-controls={listId}
             aria-expanded={expanded}
             aria-describedby={hiddenSelectionCount ? hiddenSelectionId : undefined}

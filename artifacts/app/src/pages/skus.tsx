@@ -356,7 +356,7 @@ export default function Skus() {
                             current <= 0 ? 'bg-destructive-soft text-destructive-soft-foreground' :
                             isLow ? 'bg-warning-soft text-warning-soft-foreground' :
                             sku.estado === 'AVARIADO' ? 'bg-destructive-soft text-destructive-soft-foreground' :
-                            'bg-primary/10 text-primary'
+                            'bg-primary/10 text-primary-texto'
                           }>
                             {current <= 0 ? "ZERADO" : isLow ? "BAIXO" : sku.estado || "OK"}
                           </Badge>

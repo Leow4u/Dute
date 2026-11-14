@@ -483,6 +483,15 @@
   --destructive-fundo: var(--destructive);
 }
 
+/* O primário como texto na v3 clara (parte 13m): o vermelho dela, do mesmo
+   matiz, mais fundo. O --primary dava 4,2:1 no fundo #F5F5F3 (o link de volta
+   do romaneio) e 3,6 a 3,9:1 nos selos do primário a 10%; este dá 5,3:1 no
+   fundo, 5,7:1 no cartão, 5,1:1 no muted e 4,5:1 ou mais no selo, sobre o
+   fundo e o cartão. O botão fica o vermelho da marca (o --primary-fundo). */
+:root:not(.dark) .v3 {
+  --primary-texto: 358 81% 44%;
+}
+
 .dark {
   --primary-texto: 217 85% 65%;
   --primary-fundo: 217 85% 51%;

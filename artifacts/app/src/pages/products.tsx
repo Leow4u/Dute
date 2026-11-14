@@ -258,7 +258,7 @@ export default function Products() {
                         </Badge>
                       </td>
                       <td className="px-4 py-2 text-xs">
-                        {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-primary/10 text-primary">{product.categoria}</Badge>}
+                        {product.categoria && <Badge variant="secondary" className="mr-1 mb-1 font-normal bg-primary/10 text-primary-texto">{product.categoria}</Badge>}
                         {product.grupo && <Badge variant="outline" className="font-normal text-muted-foreground">{product.grupo}</Badge>}
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">

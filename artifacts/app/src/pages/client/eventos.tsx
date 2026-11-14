@@ -229,7 +229,7 @@ function EventCard({
           <span
             className={
               upcoming
-                ? "shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary"
+                ? "shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary-texto"
                 : "shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground"
             }
           >
@@ -284,7 +284,7 @@ function EventCard({
         })}
       </ul>
       {event.items.length > PREVIEW_ITEMS ? (
-        <Button type="button" variant="ghost" size="sm" className="mx-2 mb-2 cursor-pointer self-start text-primary" onClick={onToggle}>
+        <Button type="button" variant="ghost" size="sm" className="mx-2 mb-2 cursor-pointer self-start text-primary-texto" onClick={onToggle}>
           {open ? "Mostrar menos" : `Ver os ${formatNumber(event.items.length)} itens`}
         </Button>
       ) : null}

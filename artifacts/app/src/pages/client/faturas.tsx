@@ -196,7 +196,7 @@ export function ClienteFaturas() {
                                 )}
                               </td>
                               <td className="py-2.5 text-right">
-                                <Link href={`/portal/faturas/fatura?competencia=${invoice.competencia}`} className="text-sm font-medium text-primary hover:underline">
+                                <Link href={`/portal/faturas/fatura?competencia=${invoice.competencia}`} className="text-sm font-medium text-primary-texto hover:underline">
                                   Ver fatura
                                 </Link>
                               </td>

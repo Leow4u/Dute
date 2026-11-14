@@ -395,3 +395,29 @@ describe("a borda do fundo cheio (revisão da parte 13k)", () => {
     expect(achados).toEqual([]);
   });
 });
+
+/**
+ * O primário como texto (parte 13m): o `text-primary` dava 4,39:1 no cartão
+ * escuro do portal ("Ver ›", "Abrir ›", a "Grade") e de 3,6 a 4,2:1 nos selos
+ * do primário a 10% ("OK físico", "cadastro localizado", "Cadastro
+ * encontrado", "ajuste auditado"). O texto é o `text-primary-texto`, com
+ * 4,5:1 no fundo, no cartão, no muted e no selo, nos dois temas
+ * (tokens.test.ts); o `text-primary` fica para a borda, o ícone e o hover.
+ */
+describe("o primário como texto (parte 13m)", () => {
+  const TEXTO_DO_PRIMARIO = /(?:^|\s)text-primary(?:\s|$)/;
+  const SELO_DO_PRIMARIO = /(?:^|\s)bg-primary\/10(?:\s|$)/;
+
+  it("o selo do primário (o tom a 10%) escreve com o text-primary-texto", () => {
+    expect(lista(TRECHOS.filter((trecho) => SELO_DO_PRIMARIO.test(trecho.texto) && TEXTO_DO_PRIMARIO.test(trecho.texto)))).toEqual([]);
+  });
+
+  it("no portal, o texto do primário é o text-primary-texto (o cartão escuro)", () => {
+    expect(lista(TRECHOS.filter((trecho) => arquivoDo(trecho).startsWith("pages/client/") && TEXTO_DO_PRIMARIO.test(trecho.texto)))).toEqual([]);
+  });
+
+  it("o link de volta das folhas do WMS (o romaneio, a lista e as etiquetas) usa o text-primary-texto", () => {
+    const folhas = new Set(["pages/pedidos-romaneio-view.tsx", "pages/pedidos-lista-view.tsx", "pages/warehouse-labels.tsx"]);
+    expect(lista(TRECHOS.filter((trecho) => folhas.has(arquivoDo(trecho)) && TEXTO_DO_PRIMARIO.test(trecho.texto)))).toEqual([]);
+  });
+});

@@ -849,14 +849,14 @@ export function ReturnWorkspace() {
         <CardHeader className="border-b border-border/70 p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary-texto">
                 <RotateCcw className="size-5" />
               </div>
               <div>
                 <CardTitle>Devoluções</CardTitle>
               </div>
             </div>
-            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary">
+            <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary-texto">
               produto existente obrigatório
             </Badge>
           </div>
@@ -932,7 +932,7 @@ export function ReturnWorkspace() {
                               repetido nesta devolução
                             </Badge>
                           ) : existing ? (
-                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-texto">
                               cadastro localizado
                             </Badge>
                           ) : naoLocalizado ? (
@@ -1101,7 +1101,7 @@ export function ReturnWorkspace() {
                           {line.reference ? ` · ${line.reference}` : ""}
                         </div>
                       </div>
-                      <Badge variant="outline" className={isDone ? "border-primary/20 bg-primary/10 text-primary" : ""}>
+                      <Badge variant="outline" className={isDone ? "border-primary/20 bg-primary/10 text-primary-texto" : ""}>
                         {isDone ? "definido" : "pendente"}
                       </Badge>
                     </div>

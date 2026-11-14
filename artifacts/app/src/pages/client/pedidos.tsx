@@ -159,7 +159,7 @@ function Steps({ view, withDates = false }: { view: OrderView; withDates?: boole
             <span
               className={cn(
                 "mt-1 pr-2 text-xs",
-                current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
+                current ? "font-semibold text-primary-texto" : done ? "text-foreground/70" : "text-muted-foreground",
               )}
             >
               {label}
@@ -206,7 +206,7 @@ function ActiveCard({ view, onOpen }: { view: OrderView; onOpen: () => void }) {
         ) : null}
         <span className="ml-auto inline-flex items-center gap-3">
           {view.canCancel ? <CancelOrder view={view} /> : null}
-          <button type="button" className="inline-flex items-center font-medium text-primary hover:underline" onClick={onOpen}>
+          <button type="button" className="inline-flex items-center font-medium text-primary-texto hover:underline" onClick={onOpen}>
             Ver itens
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -271,7 +271,7 @@ function OrderDetail({ view, proofs, onBack }: { view: OrderView; proofs: Portal
   const pieces = view.items.reduce((sum, item) => sum + item.quantity, 0);
   return (
     <Page>
-      <button type="button" className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={onBack}>
+      <button type="button" className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary-texto hover:underline" onClick={onBack}>
         <ArrowLeft className="h-4 w-4" />
         Pedidos
       </button>

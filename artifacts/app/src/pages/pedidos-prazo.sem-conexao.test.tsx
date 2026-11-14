@@ -199,3 +199,41 @@ describe("o destino da lista de separação que não chegou (revisão da parte 1
     expect(container.textContent).not.toMatch(/Sem conexão|Reconectando/);
   });
 });
+
+/**
+ * A folha impressa com o dado que não chegou (parte 13m): antes, o papel saía
+ * com "—" no prazo (no destino), como um pedido sem prazo, e só a tela
+ * avisava. Agora o próprio campo diz que o dado não chegou, e o Imprimir
+ * continua liberado.
+ */
+describe("a folha impressa com o prazo ou o destino que não chegou (parte 13m)", () => {
+  const folha = () => container.querySelector<HTMLElement>(".print-area");
+  const campo = (rotulo: string) => {
+    const achado = [...(folha()?.querySelectorAll("span") ?? [])].find((elemento) => elemento.textContent === rotulo);
+    return achado?.nextElementSibling?.textContent ?? null;
+  };
+  const imprimir = () => [...container.querySelectorAll("button")].find((botao) => botao.textContent?.includes("Imprimir"));
+
+  for (const falta of ["conexao", "servidor"] as const) {
+    it(`o romaneio sem o prazo (${falta}): "prazo não carregado" no campo, e o Imprimir liberado`, async () => {
+      estado.faltas[PRAZO] = { erro: true, falta, lidaEm: null };
+      await montar(falta === "conexao" ? "sem-conexao" : "conectado", "romaneio");
+      expect(campo("Para quando")).toBe("prazo não carregado");
+      expect(imprimir()?.disabled).toBe(false);
+    });
+
+    it(`a lista sem a solicitação (${falta}): "destino não carregado" e "prazo não carregado", e o Imprimir liberado`, async () => {
+      estado.faltas[DESTINO] = { erro: true, falta, lidaEm: null };
+      await montar(falta === "conexao" ? "sem-conexao" : "conectado", "lista");
+      await vi.waitFor(() => expect(folha()).not.toBeNull(), { timeout: 3_000 });
+      expect(campo("Destino")).toBe("destino não carregado");
+      expect(campo("Para quando")).toBe("prazo não carregado");
+      expect(imprimir()?.disabled).toBe(false);
+    });
+  }
+
+  it("com o prazo lido, a folha diz o prazo", async () => {
+    await montar("conectado", "romaneio");
+    expect(campo("Para quando")).toBe("Seg 16/11/2026 11:36");
+  });
+});

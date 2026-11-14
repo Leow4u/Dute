@@ -96,7 +96,9 @@ export default function FinanceiroEmissoes() {
       ocupado={ocupado}
       emAndamento={emAndamento}
       leitura={juntarTentativas(leitura.releitura, leituraDasBaixas.releitura)}
-      falhaNaReleitura={lidas && falhas.length > 0}
+      // A recusa do servidor numa das listas lidas, também com a outra sem conexão: as duas faltas ficam na tela, a
+      // frase e a faixa, sem uma tirar a outra (parte 13m).
+      falhaNaReleitura={lidas && [leitura.releitura, leituraDasBaixas.releitura].some((releitura) => releitura.falta === "servidor")}
       aviso={aviso}
       falha={falha}
       acoes={{

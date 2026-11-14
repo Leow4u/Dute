@@ -219,10 +219,7 @@ export default function WarehouseLabelsPage() {
     ...(wantsPositions ? [[positionsQuery, posicoesLidas] as const] : []),
   ]);
   const falhouNaLeitura = falhaDaLeitura !== null;
-  const error =
-    (wantsVolumes && orderVolumes.estado === "erro" ? new Error("Não foi possível carregar os volumes do pedido.") : null) ||
-    (wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null) ||
-    null;
+  const error = wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null;
   const back = fromOrder
     ? // De volta ao pedido: a bancada, ou o pedido já separado.
       { href: query.order ? hrefDaBancada(query.order) : "/pedidos", label: order?.numero || "Pedidos" }
@@ -282,7 +279,7 @@ export default function WarehouseLabelsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="no-print flex flex-col gap-4">
-        <Link href={back.href} className="inline-flex w-fit items-center gap-2 text-sm text-primary">
+        <Link href={back.href} className="inline-flex w-fit items-center gap-2 text-sm text-primary-texto">
           <ArrowLeft className="size-4" />
           {back.label}
         </Link>
@@ -361,11 +358,12 @@ export default function WarehouseLabelsPage() {
           mensagem="Não consegui carregar as etiquetas."
           focoAoSair={ID_DO_RESUMO}
         />
-      ) : wantsVolumes && orderVolumes.estado === "erro" && orderVolumes.aoVivo.falta === "conexao" ? (
-        // Os volumes que não chegaram sem conexão: o aviso da conexão, com "Tentar de novo", e não a falha (parte 13l).
+      ) : wantsVolumes && orderVolumes.estado === "erro" ? (
+        // Os volumes que não chegaram: sem conexão, o aviso da conexão (parte 13l); o erro do servidor, a falha com a
+        // frase; os dois com "Tentar de novo", que assina de novo o que não chegou (parte 13m).
         <FalhaNaLeitura
           className="no-print"
-          leitura={{ error: erroDaLeituraAoVivo("conexao"), refetch: orderVolumes.tentar }}
+          leitura={{ error: erroDaLeituraAoVivo(orderVolumes.aoVivo.falta), refetch: orderVolumes.tentar }}
           mensagem="Não foi possível carregar os volumes do pedido."
           focoAoSair={ID_DO_RESUMO}
         />

@@ -65,6 +65,14 @@ describe("o romaneio do pedido", () => {
     });
   });
 
+  it("o prazo que não chegou: o campo diz, no papel, em vez do traço de sem prazo (parte 13m)", () => {
+    const folha = folhaDoRomaneio({ numero: "PED-0002", paraQuando: undefined, prazoNaoCarregado: true, volumes: [] });
+    expect(folha.paraQuando).toBe("prazo não carregado");
+    // Com o prazo lido, vale o prazo; sem prazo na solicitação, o vazio de sempre.
+    expect(folhaDoRomaneio({ numero: "PED-0002", paraQuando: "2026-11-16T14:36:00.000Z", volumes: [] }).paraQuando).toBe("Seg 16/11/2026 11:36");
+    expect(folhaDoRomaneio({ numero: "PED-0002", paraQuando: null, volumes: [] }).paraQuando).toBe("");
+  });
+
   it("o endereço leva o pedido na busca", () => {
     expect(hrefDoRomaneio("ord_creq 1")).toBe("/pedidos/romaneio?pedido=ord_creq%201");
   });

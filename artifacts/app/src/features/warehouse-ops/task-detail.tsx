@@ -1072,7 +1072,7 @@ function ExpeditionReadinessSection({
           variant="outline"
           className={
             isReadyToDispatch
-              ? "border-primary/20 bg-primary/10 text-primary"
+              ? "border-primary/20 bg-primary/10 text-primary-texto"
               : "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
           }
         >
@@ -1263,7 +1263,7 @@ function TaskAiEvidencePanel({
       caption: `Prazo: ${formatDate(task.due_at)}`,
       className: isDueSoon(task.due_at)
         ? "border-warning-soft-border bg-warning-soft text-warning-soft-foreground"
-        : "border-primary/20 bg-primary/10 text-primary",
+        : "border-primary/20 bg-primary/10 text-primary-texto",
     },
     {
       label: "Memória operacional",
@@ -1718,7 +1718,7 @@ export function TaskDetailPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+              <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-texto">
                 {queue.label}
               </Badge>
               <Badge variant="outline" className={priorityClass(task.priority)}>

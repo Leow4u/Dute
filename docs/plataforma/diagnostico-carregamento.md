@@ -800,7 +800,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área (13a a 13g), a trava, o anel do foco e o aceite (13h), o que a conferência final achou (13i), o Sem conexão nas telas ao vivo (13j e 13l) e as chaves por tentativa e o primário no escuro (13k) | PR 610 |
+| 13 | A migração por área (13a a 13g), a trava, o anel do foco e o aceite (13h), o que a conferência final achou (13i), o Sem conexão nas telas ao vivo (13j e 13l), as chaves por tentativa e o primário no escuro (13k) e os últimos pontos pequenos (13m) | PR 610 |
 
 Escolhas que esperam a confirmação do Leonardo, sem bloquear o código:
 
@@ -860,7 +860,12 @@ Escolhas que esperam a confirmação do Leonardo, sem bloquear o código:
   e o aviso fica em "Reconectando…" sem falar, como o momento 8 manda. O
   leitor de tela ouve "Carregando…" e depois nada. Dizer a falta que dura
   (por exemplo, na desistência dos 70 s) muda a regra aprovada (revisão da
-  13l).
+  13l);
+- o primário como texto na v3 clara (`--primary-texto`) passa a ser o
+  vermelho da marca um tom mais fundo (`358 81% 44%`, `#CB151B`), e não o
+  `#E71C23` do botão: o do botão dava 4,2:1 no fundo da v3 e 3,6 a 3,9:1 nos
+  selos do primário. Os links da fila, o link de volta das folhas e os selos
+  ficam mais escuros que o botão; o botão não muda (13m).
 
 Pedem desenho: o "Sem conexão" dentro do diálogo (13a) e a confirmação do
 Cancelar convite (13e). E o aceite do indicador num Android médio de verdade,
@@ -3768,7 +3773,10 @@ Fica aberto:
   classe, e o texto segue o `--primary`; 4,92:1 nas telas principais*);
 - o resto do `text-primary` do app no cartão escuro (4,39:1) e o vermelho da
   v3 como texto no fundo `#F5F5F3` (4,2:1, como o "Ver histórico completo de
-  pedidos"): só a fila passou ao `--primary-texto`;
+  pedidos"): só a fila passou ao `--primary-texto` (*em parte na parte 13m:
+  o portal, os selos e o link de volta das folhas passam ao
+  `--primary-texto`, que na v3 clara dá 5,3:1 no fundo; o resto do WMS no
+  cartão escuro segue*);
 - nas Movimentações, a primeira leitura ainda não tem a forma final (as
   linhas-fantasma), e o rodapé diz "Exibindo 0 de 0 movimentações" enquanto
   lê;
@@ -4492,7 +4500,9 @@ Fica aberto:
 - o `text-primary` no cartão escuro (4,39:1), que o axe acusa no portal (o
   "Ver ›", o "Abrir ›" e a "Grade"). Com o fundo separado, clarear o
   `--primary` do escuro já não estraga o branco do botão, mas muda as
-  bordas, os ícones e os links do escuro e pede a medição das telas;
+  bordas, os ícones e os links do escuro e pede a medição das telas
+  (*resolvido na parte 13m: o texto do primário no portal é o
+  `text-primary-texto`, 6,25:1 no cartão escuro, sem mexer no `--primary`*);
 - no escuro, a etapa atual da chegada por caixa tem a borda (`border-primary`,
   55%) um pouco mais clara que o fundo (51%), a 1 px (*resolvido na revisão
   abaixo, ali, no Checkbox e nas etapas do portal*);
@@ -4605,8 +4615,9 @@ Fica aberto:
   encontrado", "ajuste auditado") ficam abaixo de 4,5:1 nos dois temas: de
   3,6 a 4,2:1 na v3 clara e de 3,9 a 4,2:1 no escuro. É de antes da parte e
   vale para os selos do app inteiro: pede o primário como texto sobre o
-  tom, e a medição das telas;
-- o `text-primary` no cartão escuro (4,39:1) segue aberto, como acima;
+  tom, e a medição das telas (*resolvido na parte 13m*);
+- o `text-primary` no cartão escuro (4,39:1) segue aberto, como acima (*no
+  portal, resolvido na parte 13m*);
 - as pranchas `WmsCarregandoV2*` e a especificação (4.3) com o azul de
   antes no escuro.
 
@@ -4704,21 +4715,22 @@ Fica aberto:
 
 - a faixa ainda empurra a lista quando entra e quando sai (na lista da 10.4);
 - o "Para quando" de cada pedido (a solicitação lida pelo id) segue calado
-  quando a leitura falha, como antes;
+  quando a leitura falha, como antes (*resolvido na parte 13m*);
 - na lista de separação, as posições e as caixas (consultas) que falham sem
   conexão ainda dizem "Não foi possível carregar…" (*é a regra desde a
   revisão da parte 13l: a frase da leitura de apoio diz o que falta*); nas
   Etiquetas, o erro do servidor dos volumes segue no alerta sem "Tentar de
-  novo", de antes;
+  novo", de antes (*resolvido na parte 13m*);
 - em Emissões, com uma lista lida sem conexão e a outra recusada pelo
-  servidor, a faixa da conexão esconde o "Não foi possível atualizar";
+  servidor, a faixa da conexão esconde o "Não foi possível atualizar"
+  (*resolvido na parte 13m*);
 - no navegador, só o romaneio, A receber e a Nova demanda: Pedidos (as
   entregas na linha de estado), Separar, as devoluções, os avisos do cliente
   e a saída da última escuta foram vistos só nos testes (*vistos no Chromium
   na revisão da parte 13l*);
 - o servidor que cai com a escuta aberta e o aparelho conectado segue sem
-  aparecer (o SDK não se dá por offline), e o diálogo inteiro sem conexão
-  segue pedindo desenho;
+  aparecer (o SDK não se dá por offline) (*registrado como limite do SDK na
+  parte 13m*), e o diálogo inteiro sem conexão segue pedindo desenho;
 - o aceite num Android médio e a conferência com leitor de tela de verdade.
 
 **A revisão da parte 13l (14/11/2026).** Três revisões (a lógica e o tempo, a
@@ -4824,7 +4836,7 @@ foi reproduzido e corrigido com o teste que falha antes:
     possível carregar o prazo do pedido." (1024 × 46 px a 1440, 358 × 46 a
     390), e o "Tentar de novo" da faixa assina o prazo de novo (antes,
     nada). O axe acha só o link de volta em vermelho e, a 390 px, a folha
-    que rola sem foco, os dois de antes.
+    que rola sem foco, os dois de antes (*resolvidos na parte 13m*).
 - **Testes**: 29 testes novos ou mudados. Contra o código da parte, 14 falham
   (os das correções acima). Dez passam nele e falham antes da parte: são a
   trava dos textos e o axe que faltavam. Os cinco que passam nos dois guardam
@@ -4837,13 +4849,135 @@ Fica aberto:
 - a faixa ainda empurra a lista quando entra e quando sai (na lista da 10.4);
 - na bancada de Separar, a leitura de apoio sem conexão e sem hora (as
   caixas, a tarefa, o prazo) diz o aviso da conexão acima da bancada, sem
-  dizer qual leitura falta;
+  dizer qual leitura falta (*resolvido na parte 13m*);
 - o "Para quando" de cada pedido em Pedidos segue calado quando a leitura
   falha; nas Etiquetas, o erro do servidor dos volumes segue no alerta sem
   "Tentar de novo"; em Emissões, com uma lista lida sem conexão e a outra
-  recusada pelo servidor, a faixa esconde o "Não foi possível atualizar";
+  recusada pelo servidor, a faixa esconde o "Não foi possível atualizar"
+  (*os três resolvidos na parte 13m*);
 - a folha impressa do romaneio e a da lista saem com "—" no prazo (no
-  destino) que não chegou, sem aviso no papel, como antes da parte;
+  destino) que não chegou, sem aviso no papel, como antes da parte
+  (*resolvido na parte 13m*);
 - o servidor que cai com a escuta aberta e o aparelho conectado segue sem
-  aparecer, e o diálogo inteiro sem conexão segue pedindo desenho;
+  aparecer (*registrado como limite do SDK na parte 13m*), e o diálogo
+  inteiro sem conexão segue pedindo desenho;
+- o aceite num Android médio e a conferência com leitor de tela de verdade.
+
+**Parte 13m, os últimos pontos pequenos (PR 610, 14/11/2026).** Fecha o que a
+revisão da 13l deixou e não pedia desenho, mudando o mínimo em cada ponto,
+com as peças que já existiam (nenhuma peça nova):
+
+- **A bancada de Separar diz o que não chegou.** A leitura de apoio que não
+  chegou (os volumes, que moram na tarefa; as caixas e o conteúdo de entrada
+  delas; o prazo) ganha a frase na voz do romaneio e da lista, uma só e curta:
+  "Não foi possível carregar as caixas e o prazo do pedido.", em qualquer
+  falta. O aviso da conexão (sem hora) ou a faixa ("Sem conexão · pedido de
+  10:42") seguem dizendo por quê; o erro do servidor, que antes não dizia
+  nada, também fica com a frase. As linhas que não chegaram ao vivo seguem
+  as da fila e não entram na frase.
+- **O "Para quando" que não veio, em Pedidos.** Para quem não lê a lista das
+  solicitações (o armazém), o prazo que o servidor recusou diz "Prazo não
+  carregado" no lugar do "Para quando" (antes, a linha ficava calada, como
+  um pedido sem prazo), e o Atualizar da tela assina de novo o que falhou
+  (`novaTentativaDoPrazo`, pelo `alemDaLista` do `useAtualizarLista`); o
+  prazo lido não assina de novo. Sem conexão, a linha não repete: o estado
+  da conexão (a linha de estado e a faixa do shell) já diz.
+- **As Etiquetas dos volumes com o "Tentar de novo".** O erro do servidor dos
+  volumes sai do alerta sem saída e entra na `FalhaNaLeitura`, como a falta
+  de conexão: "Não foi possível carregar os volumes do pedido." com "Tentar
+  de novo" (44 px), que assina de novo o que não chegou. O "Pedido não
+  encontrado." segue no alerta.
+- **Emissões com as duas faltas.** A frase "Não foi possível atualizar as
+  emissões." agora é só da recusa do servidor numa das listas lidas
+  (`falhaNaReleitura`), e não some quando a outra está sem conexão: a faixa
+  e a frase ficam juntas.
+- **A folha impressa diz o dado que não chegou.** O prazo (no romaneio) e o
+  destino e o prazo (na lista) que não chegaram saem no próprio campo como
+  "prazo não carregado" e "destino não carregado", e não com o "—" de quem
+  não tem prazo; o "—" fica para o dado que não existe. O Imprimir continua
+  liberado, e o texto sai no papel (no CSS de impressão, o campo fica, e a
+  barra de cima sai).
+- **O romaneio sem os dois achados do axe.** O link de volta é o primário
+  como texto (`text-primary-texto`), e a caixa que rola a folha a 390 px é
+  uma região com nome ("Folha do romaneio"), no Tab (`tabIndex=0`), com o
+  anel do foco; a seta rola a folha. A lista de separação, que tem a mesma
+  barra e a mesma folha, e o link de volta das Etiquetas mudam igual.
+- **O primário como texto nos selos e no portal.** O `--primary-texto` da v3
+  clara passa a ser o vermelho da marca um tom mais fundo (`358 81% 44%`):
+  5,3:1 no fundo, 5,7:1 no cartão, 5,1:1 no muted e 4,5:1 ou mais nos selos
+  do primário a 10% e a 5%, sobre o fundo e o cartão; o botão segue o
+  vermelho da marca (`--primary-fundo`). No escuro, o token da 13h (6,25:1 no
+  cartão) já servia. Os selos do primário a 10% ("OK físico", "concluída",
+  "cadastro localizado", "ajuste auditado" e os que o grep achou), o
+  "Cadastro encontrado" e o texto do primário no portal ("Ver ›", "Abrir ›",
+  "Ver todos ›", a "Grade" e os outros links dele) passam ao
+  `text-primary-texto`. Travado em `tokens.test.ts` (o contraste no fundo, no
+  muted e no selo, em todos os contextos) e em `trava.test.ts` (nenhum selo
+  do primário a 10% nem texto do portal com o `text-primary`).
+- **O limite do SDK: o servidor que cai com a escuta aberta.** Com o aparelho
+  conectado e a escuta já em dia, o servidor que para de responder não chega
+  à tela: no Firebase 12.15.0 (`@firebase/firestore` 4.16.0), o estado da
+  conexão do SDK (`OnlineStateTracker`) só vai a "Offline" quando o canal de
+  escuta falha ao abrir (uma falha) ou quando não abre em 10 s; o canal
+  aberto (WebChannel) tenta de novo por conta própria e não fecha com erro,
+  e o SDK segue "Online", sem resposta só do cache (a escuta já pede os
+  metadados, `includeMetadataChanges`). Medido na parte 13j: com o emulador
+  parado e a escuta aberta, nada muda em 30 s, antes e depois. Fica como
+  limite do SDK, e não da tela: a tela mostra a falta assim que o SDK ou a
+  rede a dizem.
+- **No Chromium** (harness fora do repositório, com as telas de verdade, a
+  API falsa no próprio navegador e as escutas do teste, dados sintéticos, só
+  127.0.0.1; antes = `15bc25c`):
+  - a bancada sem conexão, com as caixas e o prazo sem hora: antes, só "Sem
+    conexão."; depois, a frase (1104 × 46 px a 1440 no claro, 4,51:1; 358 ×
+    66 px a 390 no escuro, 12,1:1), alerta, abaixo do aviso;
+  - Pedidos, com o prazo recusado: antes, a linha sem nada e o Atualizar sem
+    nova assinatura; depois, "Prazo não carregado" (7,9:1) e o Atualizar
+    assina de novo o prazo;
+  - as Etiquetas com os volumes recusados: antes, o alerta sem saída; depois,
+    "Tentar de novo" de 44 px, que assina de novo os volumes, a 1440 e a 390
+    px, nos dois temas;
+  - Emissões, as emissões sem conexão e as baixas recusadas: antes, só "Sem
+    conexão · lista de 10:55"; depois, a faixa e a frase;
+  - o romaneio e a lista com o prazo (o destino) recusado: antes, "—" no
+    campo, também no papel; depois, "prazo não carregado" (e "destino não
+    carregado" na lista), visível com o CSS de impressão, e o Imprimir
+    liberado. A folha rola a 390 px: o Tab chega a ela depois do Imprimir, e
+    a seta a rola 80 px;
+  - o contraste: o link de volta (romaneio, lista e Etiquetas) de 4,22:1 a
+    5,30:1 no claro (e de 4,60:1 a 6,55:1 no escuro); os selos de 3,61 e
+    3,89:1 a 4,53 e 4,88:1 no claro (sobre o fundo e o cartão) e de 4,27 e
+    4,02:1 a 6,08 e 5,73:1 no escuro; o "Cadastro encontrado" de 4,21 a
+    5,28:1 (claro) e de 4,23 a 6,02:1 (escuro); no portal escuro, o "Abrir ›"
+    de 4,27 a 6,08:1, o "Ver" e o "Abrir" de 4,39 a 6,25:1 e a "Grade" de 4,39
+    a 6,25:1; no portal claro, nada muda (6,04:1);
+  - o axe-core (WCAG 2.1 A e AA, com o contraste): antes, o link de volta do
+    romaneio, da lista e das Etiquetas (no claro), a folha do romaneio e a da
+    lista que rolam sem foco (a 390 px, nos dois temas), os três links do Início do
+    portal e a "Grade" do Estoque (no escuro) e os nove selos da prancha (nos
+    dois temas); depois, nada no romaneio, nas Etiquetas, na lista, no portal
+    (Início e Estoque, a 1440 e a 390 px), nos selos, na bancada, em Pedidos
+    nem em Emissões, no claro e no escuro.
+- **Testes**: 32 testes novos ou mudados; contra o código de antes, 23 falham.
+  Os nove que passam nos dois guardam o que deve continuar igual: o prazo em
+  dia, o prazo lido que não assina de novo e o sem conexão que não repete na
+  linha (Pedidos); só a faixa com as duas listas sem conexão e só a frase com
+  o servidor (Emissões); a folha com o prazo lido; o vermelho da v3 que, como
+  texto, ficava abaixo de 4,5:1 (o registro do antes); o matiz do token e a
+  frase das Emissões no estado da falta. A suíte do app fica em 498 arquivos
+  e 5.625 testes (antes, 495 e 5.596).
+
+Fica aberto:
+
+- o `text-primary` no cartão escuro fora do portal e dos selos (o "OK físico"
+  em número na conferência, o "pronto para packing" e os outros textos do
+  WMS em `text-primary` sobre o cartão) segue em 4,39:1 no escuro; a trava
+  pega o selo em que o tom e o texto estão na mesma classe, e não o painel
+  com o tom por fora (como o "Cadastro encontrado", trocado à mão);
+- na bancada, as linhas que não chegaram ao vivo seguem as da fila sem frase
+  própria (o aviso da conexão, sem hora, diz a falta);
+- o resto que espera o Leonardo ou pede desenho, como antes: a faixa que
+  empurra a lista, o "Sem conexão" dentro do diálogo e o "Reconectando" que
+  não se resolve (na lista da 10.4), e o servidor que cai com a escuta
+  aberta (o limite do SDK, acima);
 - o aceite num Android médio e a conferência com leitor de tela de verdade.

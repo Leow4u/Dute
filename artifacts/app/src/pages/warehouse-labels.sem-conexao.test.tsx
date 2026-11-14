@@ -9,8 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * parte 13l; a revisão da parte pediu a trava dos textos e o axe dos estados
  * da falta). Os volumes que não chegaram sem conexão dizem o aviso da conexão
  * ("Sem conexão." ou "Reconectando…", com "Tentar de novo"); os lidos ficam,
- * com a faixa "Sem conexão · pedido de 10:42"; o erro do servidor segue no
- * alerta de antes. Só os rótulos da falta entram. Dados sintéticos.
+ * com a faixa "Sem conexão · pedido de 10:42"; o erro do servidor diz a
+ * falha no lugar da prévia, com "Tentar de novo", que assina de novo os
+ * volumes (parte 13m; antes, o alerta sem a nova tentativa). Só os rótulos
+ * da falta entram. Dados sintéticos.
  */
 
 const estado = vi.hoisted(() => ({
@@ -19,6 +21,8 @@ const estado = vi.hoisted(() => ({
   consultas: {} as Record<string, Array<Record<string, unknown>>>,
   /** Por chave: a falta da escuta. */
   faltas: {} as Record<string, { erro: boolean; falta: "conexao" | "servidor" | null; lidaEm: number | null }>,
+  /** As chaves que assinaram de novo. */
+  tentativas: [] as string[],
 }));
 
 vi.mock("wouter", async (original) => ({
@@ -37,7 +41,11 @@ vi.mock("@/lib/operacao/leitura", async (original) => ({
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, data: Record<string, unknown>) => unknown) => {
     const docs = chave ? estado.consultas[chave] : undefined;
     const falta = (chave && estado.faltas[chave]) || { erro: false, falta: null, lidaEm: null };
-    return { itens: falta.erro ? null : docs ? docs.map((data) => mapear(String(data.id), data)).filter((item) => item !== null) : null, ...falta, tentando: false, tentar: () => Promise.resolve() };
+    const tentar = () => {
+      estado.tentativas.push(String(chave));
+      return Promise.resolve();
+    };
+    return { itens: falta.erro ? null : docs ? docs.map((data) => mapear(String(data.id), data)).filter((item) => item !== null) : null, ...falta, tentando: false, tentar };
   },
   useDocumento: (chave: string | null, _referencia: unknown, mapear: (id: string, data: Record<string, unknown>) => unknown) => {
     const data = chave ? estado.documentos[chave] : undefined;
@@ -126,7 +134,7 @@ const ESTADOS = [
   ["sem nada lido, reconectando", "reconectando", { erro: true, falta: "conexao", lidaEm: null }, ["Reconectando…", "Tentar de novo"]],
   ["lidos, sem conexão", "sem-conexao", { erro: false, falta: "conexao", lidaEm: DEZ_E_QUARENTA_E_DOIS }, ["Sem conexão · pedido de 10:42", "Tentar de novo"]],
   ["lidos, reconectando", "reconectando", { erro: false, falta: "conexao", lidaEm: DEZ_E_QUARENTA_E_DOIS }, ["Reconectando…", "· pedido de 10:42", "Tentar de novo"]],
-  ["erro do servidor", "conectado", { erro: true, falta: "servidor", lidaEm: null }, ["Não foi possível montar as etiquetas", "Não foi possível carregar os volumes do pedido."]],
+  ["erro do servidor", "conectado", { erro: true, falta: "servidor", lidaEm: null }, ["Não foi possível carregar os volumes do pedido.", "Tentar de novo"]],
 ] as const;
 
 describe("Estoque › Etiquetas dos volumes, nos estados da falta", () => {
@@ -144,4 +152,16 @@ describe("Estoque › Etiquetas dos volumes, nos estados da falta", () => {
       expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     });
   }
+});
+
+describe("Estoque › Etiquetas dos volumes, o erro do servidor (parte 13m)", () => {
+  it("o Tentar de novo da falha assina de novo os volumes que não chegaram", async () => {
+    estado.faltas = { "packages:ord_1": { erro: true, falta: "servidor", lidaEm: null } };
+    estado.tentativas = [];
+    await abrirNa("conectado");
+    const botao = [...container.querySelectorAll("button")].find((candidato) => candidato.textContent === "Tentar de novo");
+    expect(botao, "o Tentar de novo da falha").toBeDefined();
+    await act(async () => botao!.click());
+    await vi.waitFor(() => expect(estado.tentativas).toContain("packages:ord_1"), { timeout: 3_000 });
+  });
 });

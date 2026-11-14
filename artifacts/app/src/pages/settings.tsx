@@ -155,7 +155,7 @@ export function SettingsApp() {
         <CardHeader className="border-b border-border/60 bg-card">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary-texto">
                 <Smartphone className="h-5 w-5" />
               </div>
               <div>

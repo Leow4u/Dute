@@ -228,7 +228,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
               <span
                 className={cn(
                   "mt-1 pr-2 text-xs",
-                  current ? "font-semibold text-primary" : done ? "text-foreground/70" : "text-muted-foreground",
+                  current ? "font-semibold text-primary-texto" : done ? "text-foreground/70" : "text-muted-foreground",
                 )}
               >
                 {label}
@@ -258,7 +258,7 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
             onAbrir={() => setConfirming(true)}
             onManter={() => setConfirming(false)}
             onConfirmar={() => cancel.mutate()}
-            classeDoGatilho="ml-auto font-medium text-primary hover:underline"
+            classeDoGatilho="ml-auto font-medium text-primary-texto hover:underline"
             className="ml-auto"
           />
         ) : null}

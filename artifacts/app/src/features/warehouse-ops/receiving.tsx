@@ -1021,7 +1021,7 @@ export function UnplannedReceiptDialog({
                               complete cadastro e foto
                             </Badge>
                           ) : existing ? (
-                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-texto">
                               produto existente
                             </Badge>
                           ) : line.createNew ? (
@@ -1556,7 +1556,7 @@ export function ReceivingConferenceSection({
     }
     if (difference === 0) {
       return (
-        <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+        <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-texto">
           OK físico
         </Badge>
       );

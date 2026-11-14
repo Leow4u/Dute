@@ -42,6 +42,8 @@ export default function PaginaPedidosRomaneio() {
           cliente: clientes.find((cliente) => cliente.code === pedido.clienteCodigo)?.name || pedido.clienteCodigo,
           destino: pedido.destino,
           paraQuando: solicitacao.item?.paraQuando,
+          // O prazo que não chegou: o papel diz, no campo, em vez do traço de sem prazo (parte 13m).
+          prazoNaoCarregado: Boolean(solicitacaoId) && solicitacao.erro,
           lacre: pedido.lacre,
           separadoDe: pedido.separadoDe,
           separadoAte: pedido.separadoAte,

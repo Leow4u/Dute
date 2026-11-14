@@ -13,7 +13,7 @@ export type FolhaDoRomaneio = {
   numero: string;
   cliente: string;
   destino: string;
-  /** "Seg 16/11/2026 11:36"; "" sem prazo. */
+  /** "Seg 16/11/2026 11:36"; "" sem prazo; "prazo não carregado" quando a leitura dele não chegou. */
   paraQuando: string;
   lacre: string;
   /** "10/11 a 13/11/2026"; "" sem as datas. */
@@ -50,12 +50,18 @@ export function periodoDaSeparacao(de: string | null | undefined, ate: string | 
   return `${inicio.ano === fim.ano ? `${inicio.dia}/${inicio.mes}` : inteiro(inicio)} a ${inteiro(fim)}`;
 }
 
+/** O campo da folha cujo dado não chegou: o papel diz, em vez do traço, que é o de sem dado (parte 13m). */
+export const PRAZO_NAO_CARREGADO = "prazo não carregado";
+export const DESTINO_NAO_CARREGADO = "destino não carregado";
+
 export function folhaDoRomaneio(dados: {
   numero: string;
   cliente?: string | null;
   destino?: string | null;
   /** O `due_at` da solicitação que originou o pedido. */
   paraQuando?: unknown;
+  /** A leitura da solicitação não chegou: o papel diz, no campo, em vez do vazio de sem prazo (parte 13m). */
+  prazoNaoCarregado?: boolean;
   lacre?: string | null;
   separadoDe?: string | null;
   separadoAte?: string | null;
@@ -67,7 +73,7 @@ export function folhaDoRomaneio(dados: {
     numero: texto(dados.numero),
     cliente: texto(dados.cliente),
     destino: texto(dados.destino),
-    paraQuando: textoDoParaQuandoComAno(dados.paraQuando),
+    paraQuando: dados.prazoNaoCarregado ? PRAZO_NAO_CARREGADO : textoDoParaQuandoComAno(dados.paraQuando),
     lacre: texto(dados.lacre),
     separado: periodoDaSeparacao(dados.separadoDe, dados.separadoAte),
     por: texto(dados.por),

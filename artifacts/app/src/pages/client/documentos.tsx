@@ -149,12 +149,12 @@ export function DocumentList({ rows }: { rows: PortalDocument[] }) {
           </div>
           <div className="col-start-2 flex gap-4 text-sm font-medium sm:col-start-auto">
             {row.href ? (
-              <a href={row.href} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              <a href={row.href} target="_blank" rel="noreferrer" className="text-primary-texto hover:underline">
                 Abrir
               </a>
             ) : null}
             {row.link ? (
-              <Link href={row.link.href} className="text-primary hover:underline">
+              <Link href={row.link.href} className="text-primary-texto hover:underline">
                 {row.link.label}
               </Link>
             ) : null}

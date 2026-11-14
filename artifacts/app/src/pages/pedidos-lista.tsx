@@ -73,6 +73,8 @@ export default function PaginaPedidosLista() {
           cliente: clientes.find((cliente) => cliente.code === codigoDoCliente)?.name || codigoDoCliente,
           destino: solicitacao.item?.destino,
           paraQuando: solicitacao.item?.paraQuando,
+          // O destino e o prazo que não chegaram: o papel diz, nos campos, em vez do traço (parte 13m).
+          solicitacaoNaoCarregada: Boolean(solicitacaoId) && solicitacao.erro,
           por: user?.fullName,
           agora,
           grupos: lista.grupos,
