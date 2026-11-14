@@ -2614,10 +2614,13 @@ Fica aberto:
   manda outro conteúdo com a mesma chave, e o servidor recusa se a primeira
   tiver gravado; vale confirmar com o Leonardo;
 - os Retornos da Operação que voltam a ler depois da falha e não têm retorno
-  somem com o foco no aviso: o foco não tem para onde ir na tela;
+  somem com o foco no aviso; desde a junção com o PR, o foco vai ao título da
+  página (a `segurarOFocoQueSai`), e não mais ao `body`;
 - a mensagem da falha do romaneio, da lista de separação, da bancada de
   separação e do pedido separado ("Não foi possível carregar o pedido.")
-  continua sem "Tentar de novo": vem da leitura ao vivo, que não relê sozinha;
+  ficou sem "Tentar de novo", porque a leitura ao vivo não relia; depois da
+  junção, a `useLeitura` relê (13g), e a correção da junção deu às quatro a
+  saída (a demora, a desistência e a falha com "Tentar de novo");
 - a foto dos itens que não veio (a leitura das fotos que falhou) volta ao
   "sem foto", sem aviso;
 - os `role="status"` dos cartões de identificação (o produto novo e a
@@ -2764,8 +2767,10 @@ escritas seguem as de antes.
     mais o botão nem sai do cartão;
   - **A fatura presa tem saída.** A espera em bloco (`CarregandoNaRegiao`)
     ganhou o "Tentar de novo" aos 10 s, quando quem lê sabe ler de novo, com
-    44 px e "Tentando de novo…"; a leitura presa é cancelada e lida de novo, e
-    o foco vai à volta para o Fechamento quando a fatura chega;
+    44 px; a leitura presa é cancelada e lida de novo, e o foco vai à volta
+    para o Fechamento quando a fatura chega. Na junção com o PR, o "Tentando
+    de novo…" do botão saiu: a nova tentativa é uma espera nova, que diz o
+    gerúndio de novo aos 300 ms, com o foco na região;
   - **A aba Contratos é uma espera só.** A espera do cliente ativo e a do
     arquivo da aba usam o mesmo relógio, desde que a aba abriu: a caixa não
     some na troca, e a demora vem aos 10 s do começo;
@@ -3027,7 +3032,8 @@ Fica aberto:
 - o Cancelar convite continua sem confirmação, que pede um desenho;
 - as telas que esperam o `isLoading` do cliente ativo (Faturamento,
   Contratos) não leem o `falhou`: com a lista que falhou, seguem com o
-  cliente legado (área 13d);
+  cliente legado (área 13d; resolvido na correção da junção das partes 10 e
+  13);
 - quando tudo lê ao mesmo tempo, aparecem três indicadores juntos (o seletor,
   o item do menu e a tela), a confirmar com o Leonardo;
 - a conferência com leitor de tela de verdade, num Android médio e no
@@ -3269,7 +3275,8 @@ mesmo tempo que a revisão da 13a, as 13e, 13f e 13g e a correção do relógio
   tabela 10.4 com as sete partes e, no sistema visual, uma linha só para a
   `CarregandoNaRegiao`.
 
-Fica aberto:
+Fica aberto (no registro da junção; a revisão abaixo resolveu o primeiro e o
+último):
 
 - a `FalhaNaLeitura` (parte 10) ainda diz "Tentando de novo…" no toque, sem
   o relógio, no `ErroNaLeitura`; na falta de conexão, o `BlocoSemConexao` já
@@ -3279,3 +3286,80 @@ Fica aberto:
   tenta desde a 13g: fica para a revisão da 13g;
 - o "Conferir" do "Numerar agora" aos 70 s não relê nada enquanto a
   numeração não responde (a 13d não deu a ele o que conferir).
+
+**A revisão da junção (14/11/2026).** Três revisões (a lógica entre as
+partes, o app inteiro no Chromium e o leitor de tela) acharam o que a junção
+deixou entre as duas metades; cada achado foi reproduzido e corrigido com o
+teste que falha antes:
+
+- **O cliente ativo que falhou não segura mais as telas da cópia.** Com a
+  lista dos clientes que falhou, a 13e diz "Não carregou" no seletor e não
+  conta mais como lendo (o `isLoading` cai, também na nova tentativa); o
+  Fechamento, a fatura, os Contratos, o Receber e "Adicionar documento" só
+  esperavam o `isLoading` e liam e gravavam com o cliente padrão, também com
+  outro escolhido no aparelho ("Marcar como paga" e "Emitir" iam ao padrão).
+  Agora, com o `falhou`, a tela diz "Não consegui carregar o cliente ativo."
+  no lugar do dado (`FalhaDoClienteAtivo`), com "Tentar de novo", que lê de
+  novo a lista dos clientes e nunca o dado da tela; os meses do Fechamento
+  dizem "—", o Receber não lê os avisos e a "Chegada avulsa" e o "Adicionar
+  documento" ficam `aria-disabled`. A contagem lembrada de Pedidos não grava
+  com o cliente que não se confirmou;
+- **O "Numerar agora" aos 70 s confere.** A junção juntou o botão da 13d,
+  que vira "Conferir", ao aviso da escrita da 13e. O "Conferir" ficava mudo
+  enquanto a chamada não respondia e depois só voltava ao repouso, com a
+  prévia velha na tela. Agora ele relê a prévia (a numeração sem gravar),
+  também com a chamada a caminho, e diz "Conferindo…": sem nada a numerar,
+  valeu ("Numerado"); com o que falta, a prévia nova, e o "Numerar agora"
+  fica `aria-disabled` até a primeira chamada responder; nunca numera de
+  novo. O aviso é o apoio do botão: "Sem confirmação do servidor" fica com o
+  "Conferir", também depois de a chamada cair no prazo, e sai com o fim que
+  ele achou. O tipo do aviso é o da chamada feita, e a numeração que acaba
+  depois dos 10 s não faz o Anunciador dizer a demora de novo;
+- **A nova tentativa da `FalhaNaLeitura` e dos Clientes no relógio.** O
+  "Tentando de novo…" entra depois de 300 ms e fica pelo menos 500 ms (o
+  `useTentandoNoRelogio`, como o bloco da conexão e o portal): a nova
+  tentativa que responde antes, com o dado ou com a falha de novo, não pisca
+  o botão nem muda o alerta, que o leitor de tela relia inteiro duas vezes em
+  100 ms. A que demora mais diz "Tentando de novo…" e, se falhar de novo,
+  volta ao "Tentar de novo": o alerta muda e é relido, o que diz a falha
+  nova. O toque repetido com a leitura a caminho não lê de novo;
+- **A lista de separação, o romaneio, a bancada e o pedido separado têm
+  saída.** A lista continua a espera da rota, como o romaneio. As quatro
+  ganharam o `onTentar`: "Tentar de novo" aos 10 s, a desistência aos 70 s e
+  a falha com "Tentar de novo" (a `FalhaNaLeitura`). A lista e a bancada
+  leem do zero a fila e o que a folha espera; o romaneio e o pedido separado
+  assinam de novo só a leitura ao vivo que não chegou
+  (`tentarOsQueFaltam`, na `useVolumesDoPedido`);
+- **A `SaiComOFoco` com o alvo travado.** O alvo que está na tela mas não
+  pode receber o foco (o "Entrega" `disabled` enquanto outra ação grava, o
+  que está numa lista inerte ou escondida) conta como ausente: o foco vai ao
+  título da seção, e não ao da página;
+- **A contagem do segmentado na falha** é "—" em Pedidos e no Receber, como
+  a `NumeroLido` e os SKUs: o Receber ficava com o bloco de quem ainda lê, e
+  Pedidos com o rótulo só;
+- **No Chromium** (harness com a API falsa, só 127.0.0.1): com a lista dos
+  clientes em 500 e ACME no aparelho, o Fechamento não chama `/api/billing`
+  e diz a falha, com os meses em "—"; com o prazo de 70 s, aos 71 s, a
+  mesma tela, e nenhuma leitura do mês; o Receber diz "Em aberto · —" e a
+  falha do cliente. O "Tentar de novo" com a nova tentativa em 150 ms não
+  mostra mais "Tentando de novo…" no Catálogo, no Estoque nem nos Clientes.
+  O "Conferir" do Numerar com o Enter diz "Conferindo…" (`aria-busy`) e
+  volta à prévia nova; o Anunciador diz a demora uma vez. A `SaiComOFoco`
+  com o alvo `disabled` leva o foco ao H2 da seção. Pedidos e Receber em
+  falha, a 1440 e a 390 no escuro: "Em aberto · —", sem rolagem lateral e o
+  axe limpo.
+
+Fica aberto:
+
+- o Estoque, o Catálogo e as outras telas que leem pelo `code` sem esperar o
+  cliente ativo (nem enquanto lê, nem na falha) seguem com o cliente padrão
+  quando a lista falha (o título diz "Estoque · BTG Pactual"): elas não
+  esperavam o `isLoading` antes da junção, e a regra precisa de uma espera
+  que essas telas não têm;
+- enquanto a lista dos clientes lê, o Receber lê os avisos com o provisório,
+  como na parte 8 (a contagem lembrada não grava com ele);
+- o Pedidos e as outras telas que passam o `isFetching` cru ao
+  `ErroNaLeitura` (Pedidos, as Chaves, a Central da IA) ainda dizem
+  "Tentando de novo…" na hora;
+- o diálogo "Cancelar pedido" de Pedidos diz o nome do cliente ativo, e não
+  o do pedido.

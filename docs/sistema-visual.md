@@ -133,7 +133,11 @@ demora vem aos 10 s do toque, e a entrada ("Abrindo Pedidos") não é anunciada
 de novo como "Carregando pedidos". **O cliente ativo é a fronteira também
 enquanto lê:** a tela interna não lê nem grava com o cliente padrão antes de
 a lista dos clientes chegar, e o "Tentar de novo" da demora lê de novo essa
-lista (o `tentar` do `useActiveCustomer`), nunca o dado da tela.
+lista (o `tentar` do `useActiveCustomer`), nunca o dado da tela. Com a lista
+que falhou (o `falhou`, também durante a nova tentativa), a tela diz "Não
+consegui carregar o cliente ativo." no lugar do dado, com "Tentar de novo",
+que lê de novo a lista (`FalhaDoClienteAtivo`), e a ação que grava para o
+cliente fica `aria-disabled`.
 
 **As peças:**
 
@@ -160,7 +164,8 @@ lista (o `tentar` do `useActiveCustomer`), nunca o dado da tela.
 **As listas na primeira leitura** (`QueueGroup` com `count={null}` e
 `carregando`, momento 2): Pedidos e Receber nascem com a forma final. Desde 0
 ms, os títulos reais dos grupos, com o bloco de 16 × 12 px no lugar do número,
-e o segmentado "Em aberto · ▪"; nunca "0" nem "Nenhum…" antes de ler. Os
+e o segmentado "Em aberto · ▪" (na falha, "Em aberto · —"); nunca "0" nem
+"Nenhum…" antes de ler. Os
 cartões já têm a altura das linhas-fantasma, pela contagem lembrada da lista e
 do cliente (`lib/carregando/contagem-lembrada.ts`, de 1 a 5; sem ela, 2), e
 elas aparecem aos 300 ms, com o brilho de dois ciclos, um por cartão e nunca
@@ -203,8 +208,9 @@ página nova que chega com o topo do cartão acima da tela o traz à vista. A
 troca que falha mostra o aviso no lugar da lista (`FalhaNaLeitura`, com
 "Tentar de novo", que segue no aviso enquanto tenta), nunca o vazio, a lista
 do filtro anterior nem um zero ao lado; "Tentando de novo…" só na nova
-tentativa que a pessoa pede, e, quando ela dá certo, o foco vai à linha de
-estado. **A releitura que falha nunca apaga a lista nem a empurra**: a lista
+tentativa que a pessoa pede, no relógio da espera (depois de 300 ms, e pelo
+menos 500 ms: a que falha de novo antes não muda o alerta), e, quando ela dá
+certo, o foco vai à linha de estado. **A releitura que falha nunca apaga a lista nem a empurra**: a lista
 lida fica, e o erro vai para a linha de estado ("Não consegui atualizar ·
 lista de 10:42", ou a falta de conexão), sempre reservada. Só a leitura sem
 nada lido troca a lista pelo aviso. A releitura automática não fala; quem
