@@ -27,6 +27,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/comercial/leitura";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -145,6 +146,8 @@ export type MontarViewProps = {
   contatos: ContatoResumo[];
   locais: LocalResumo[];
   catalogo: ItemDaTabela[] | "carregando" | "erro";
+  /** A nova tentativa da leitura da tabela de preços do orçamento. */
+  leituraDoCatalogo?: NovaTentativa;
   /** Uma gravação em andamento: a tela fica travada até ela voltar. */
   ocupado: boolean;
   /**
@@ -1224,11 +1227,13 @@ function Itens(props: MontarViewProps) {
             Ajuste
           </Button>
           {/* A tabela que ainda não veio: a busca espera por ela, e a espera aparece aqui (parte 13g). */}
-          {catalogo === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a tabela…" /> : null}
+          {catalogo === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a tabela…" onTentar={props.leituraDoCatalogo?.tentar} /> : null}
           {catalogo === "erro" ? (
-            <p role="alert" className="text-sm font-semibold text-destructive">
-              Não foi possível carregar a tabela.
-            </p>
+            <FalhaNaSecao
+              mensagem="Não foi possível carregar a tabela."
+              tentando={props.leituraDoCatalogo?.tentando ?? false}
+              onTentar={props.leituraDoCatalogo?.tentar ?? SEM_NOVA_TENTATIVA.tentar}
+            />
           ) : null}
         </div>
       ) : null}
@@ -1570,6 +1575,8 @@ function OrcamentosParecidos(props: MontarViewProps & { parecidos: Parecidos }) 
 export function MontarView(props: MontarViewProps) {
   const totais = totaisDaTela(props);
   const { aviso, dados } = props;
+  // O aviso do recálculo fica escrito, sem região viva solta: o Anunciador o diz uma vez (o "Orçamento salvo" é do toast).
+  useAnunciarAoMudar(aviso?.tipo === "info" ? aviso.texto : null);
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <Cabecalho {...props} totalCents={totais.total} />
@@ -1583,7 +1590,7 @@ export function MontarView(props: MontarViewProps) {
       ) : null}
       {aviso ? (
         <p
-          role={aviso.tipo === "erro" ? "alert" : "status"}
+          role={aviso.tipo === "erro" ? "alert" : undefined}
           className={cn(
             "rounded-md border px-4 py-3 text-sm font-semibold",
             aviso.tipo === "erro"

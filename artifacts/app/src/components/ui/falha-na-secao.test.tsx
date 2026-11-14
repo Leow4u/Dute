@@ -3,6 +3,7 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Anunciador } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
@@ -110,6 +111,62 @@ describe("a falha na seção", () => {
     expect(container.querySelector("[data-falha-na-secao]")).toBeNull();
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement?.textContent).toBe("Armazém");
+  });
+
+  it("a nova tentativa pedida que falha de novo: o alerta fica o mesmo, e o Anunciador diz a frase outra vez", async () => {
+    let acabar: () => void = () => undefined;
+    const onTentar = vi.fn(() => new Promise<void>((pronto) => (acabar = pronto)));
+    act(() =>
+      raiz!.render(
+        <>
+          <Anunciador />
+          <FalhaNaSecao mensagem="Não foi possível carregar suas OS." tentando={false} onTentar={onTentar} />
+        </>,
+      ),
+    );
+    const fala = () => container.querySelector("[data-anunciador]")?.textContent ?? "";
+    passar(3_000);
+    expect(fala()).toBe("");
+    act(() => botao().click());
+    passar(CARREGANDO.atrasoMs);
+    await act(async () => acabar());
+    passar(CARREGANDO.minimoMs + CARREGANDO.atrasoMs);
+    expect(botao().textContent).toBe("Tentar de novo");
+    expect(fala()).toBe("Não foi possível carregar suas OS.");
+  });
+
+  it("a nova tentativa pela leitura ao vivo (sem promessa) que falha de novo também é dita; a que dá certo, não", () => {
+    function Leitura({ tentando, lida }: { tentando: boolean; lida: boolean }) {
+      return (
+        <>
+          <Anunciador />
+          <section>
+            <h2>Minhas OS</h2>
+            {lida ? <p>OS 10045-01</p> : <FalhaNaSecao mensagem="Não foi possível carregar suas OS." tentando={tentando} onTentar={() => undefined} />}
+          </section>
+        </>
+      );
+    }
+    const fala = () => container.querySelector("[data-anunciador]")?.textContent ?? "";
+    act(() => raiz!.render(<Leitura tentando={false} lida={false} />));
+    passar(3_000);
+    act(() => botao().click());
+    act(() => raiz!.render(<Leitura tentando lida={false} />));
+    passar(CARREGANDO.atrasoMs + CARREGANDO.minimoMs);
+    act(() => raiz!.render(<Leitura tentando={false} lida={false} />));
+    passar(CARREGANDO.atrasoMs);
+    expect(fala()).toBe("Não foi possível carregar suas OS.");
+    const dita = container.querySelector("[data-anunciador] span");
+
+    // Outra vez, e agora a leitura chega: nada é dito (a fala na região é a mesma de antes), e o aviso sai.
+    passar(3_000);
+    act(() => botao().click());
+    act(() => raiz!.render(<Leitura tentando lida={false} />));
+    passar(CARREGANDO.atrasoMs + CARREGANDO.minimoMs);
+    act(() => raiz!.render(<Leitura tentando={false} lida />));
+    passar(3_000);
+    expect(container.querySelector("[data-falha-na-secao]")).toBeNull();
+    expect(container.querySelector("[data-anunciador] span")).toBe(dita);
   });
 
   it("no celular, o Tentar de novo tem 44 px", () => {

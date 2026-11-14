@@ -332,3 +332,13 @@ describe("Financeiro › Emissões", () => {
     expect(await violacoesDeAcessibilidade(render({ emissoes: [], falha: "Não foi possível mudar a emissão." }))).toEqual([]);
   });
 });
+
+describe("Emissões: a releitura que falha não apaga as listas (revisão da parte 13g)", () => {
+  it("as emissões lidas ficam, e a frase fica escrita em cima, sem alerta, com Tentar de novo", () => {
+    const html = render({ falhaNaReleitura: true });
+    expect(html).toContain("Não foi possível atualizar as emissões.");
+    expect(html).not.toMatch(/role="alert"[^>]*>Não foi possível atualizar/);
+    expect(html).toContain("Precisam de você");
+    expect(html).toMatch(/Não foi possível atualizar as emissões\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});

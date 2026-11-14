@@ -8,6 +8,7 @@ import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 
 import { DocumentoView, type DocumentoViewProps } from "./documento-view";
 import { semCamadasEscondidas } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 /**
  * O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html), só a
@@ -212,5 +213,11 @@ describe("documento A4 do orçamento", () => {
       expect(html).not.toContain("print-area");
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Imprimir/);
     }
+  });
+});
+
+describe("documento do orçamento: acessibilidade (revisão da parte 13g)", () => {
+  it("o axe não acusa nada no documento", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
   });
 });

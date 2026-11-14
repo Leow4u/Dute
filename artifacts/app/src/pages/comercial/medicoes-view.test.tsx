@@ -15,6 +15,7 @@ import { ROTA_MEDICOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao";
 
 import { MedicoesView, type MedicoesViewProps } from "./medicoes-view";
 import { semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 /**
  * Tela de Medições (docs/mockups/ComMedicaoMensal.dc.html), parte 16b: só
@@ -350,7 +351,7 @@ describe("tela de medições: marcas e estados", () => {
     const medicaoLendo = render({ medicao: "carregando" });
     expect(texts(medicaoLendo).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual([]);
     expect(medicaoLendo).toContain("data-carregando-na-regiao");
-    expect(texts(render({ medicao: "erro" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Não foi possível carregar a medição."]);
+    expect(texts(render({ medicao: "erro" })).slice(CABECALHO_E_COMPETENCIAS.length)).toEqual(["Não foi possível carregar a medição.", "Tentar de novo"]);
     expect(render({ medicao: "erro" })).toMatch(/role="alert"[^>]*>Não foi possível carregar a medição\./);
     const contratosLendo = render({ estado: "carregando", contrato: null, medicao: "carregando", chips: [] });
     expect(texts(contratosLendo)).toEqual(["Medições"]);
@@ -368,5 +369,18 @@ describe("tela de medições: marcas e estados", () => {
     const t = texts(render({ tabelas: "erro" }));
     expect(t).toEqual(expect.arrayContaining(["Demandas do mês", "Resumo por item"]));
     expect(t).not.toContain("LPU Safra 2026");
+  });
+});
+
+describe("medições: a falha da medição tem saída, e o axe (revisão da parte 13g)", () => {
+  it("a medição que falhou diz a falha com Tentar de novo, que assina de novo a leitura", () => {
+    const html = render({ medicao: "erro", leituraDaMedicao: { tentando: false, tentar: () => undefined } });
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a medição\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+
+  it("o axe não acusa nada na medição, lendo e na falha", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ medicao: "carregando" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ medicao: "erro" }))).toEqual([]);
   });
 });

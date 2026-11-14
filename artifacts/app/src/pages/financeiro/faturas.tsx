@@ -144,6 +144,7 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       hoje={hoje}
       aberta={aberta}
       pagamentos={pagamentos.pagamentos && aberta ? pagamentosDaNf(pagamentos.pagamentos, aberta.id) : null}
+      leituraDosPagamentos={pagamentos}
       baixas={baixasDaNf.baixas ? baixasPorPagamento(baixasDaNf.baixas) : null}
       painel={painel}
       resultado={resultado}
@@ -152,7 +153,12 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       leitura={leitura.releitura}
       receita={
         filtro === "pagos"
-          ? { mes, dados: doMes.pagamentos && leitura.faturas ? receitaPorCliente(doMes.pagamentos, nomesDosClientes(faturas)) : null, erro: doMes.erro }
+          ? {
+              mes,
+              dados: doMes.pagamentos && leitura.faturas ? receitaPorCliente(doMes.pagamentos, nomesDosClientes(faturas)) : null,
+              erro: doMes.erro,
+              leitura: doMes,
+            }
           : null
       }
       acoes={{

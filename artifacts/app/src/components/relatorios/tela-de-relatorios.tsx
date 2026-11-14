@@ -217,7 +217,9 @@ export function TelaDeRelatorios({
             </p>
           ) : null}
         </div>
-        <section aria-labelledby="titulo-do-relatorio" className="print-area flex flex-col gap-5">
+        {/* O papel claro da impressão (print-area) só com o relatório lido: a espera e a falha ficam nas cores do
+            tema, como no resto da tela, e não somem no escuro (o rótulo da espera em tinta clara sobre o fundo escuro). */}
+        <section aria-labelledby="titulo-do-relatorio" className={cn("flex flex-col gap-5", pronto && "print-area")} data-relatorio="">
           <div className="flex flex-col gap-1">
             <h2 id="titulo-do-relatorio" className="text-2xl font-extrabold tracking-tight">
               {titulo}

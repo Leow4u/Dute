@@ -133,7 +133,8 @@ export function NovoOrcamentoDialog({
                 className="pl-9"
               />
             </div>
-            <div role="listbox" aria-label="Clientes" className="max-h-56 overflow-y-auto rounded-md border border-border">
+            {/* A lista sem cliente não é listbox: o listbox sem opção falha no leitor de tela (aria-required-children). */}
+            <div role={lista.length ? "listbox" : "group"} aria-label="Clientes" className="max-h-56 overflow-y-auto rounded-md border border-border">
               {lista.length ? (
                 lista.map((cadastro) => (
                   <button

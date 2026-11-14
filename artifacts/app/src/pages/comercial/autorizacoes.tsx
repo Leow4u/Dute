@@ -222,6 +222,7 @@ export default function ComercialAutorizacoesPage({ somenteLeitura = false }: { 
         painel={{ aberto, marcadas, form, resultado, erro }}
         contratos={contratos.itens ?? []}
         autorizadas={autorizadas}
+        leituraDasAutorizadas={autorizacoes}
         vencidos={vencidos}
         hoje={hoje}
         ocupado={ocupado}

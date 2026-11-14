@@ -10,6 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
+import { Anunciador } from "@/lib/carregando/anunciador";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
@@ -762,5 +763,96 @@ describe("o movimento reduzido", () => {
     ]) {
       expect(declaradas(seletor, REDUZIDO_NOS_COMPONENTES).get("animation"), seletor).toBe("none");
     }
+  });
+});
+
+describe("a ação de uma linha entre várias (o objeto) e o botão que sai", () => {
+  function linha(estado: EstadoDaAcao, mostrar = true, extra: Partial<BotaoDeAcaoProps> = {}) {
+    act(() =>
+      reacao!.render(
+        <>
+          <Anunciador />
+          <section aria-labelledby="precisam">
+            <h2 id="precisam">Precisam de você</h2>
+            {mostrar ? <BotaoDeAcao estado={estado} rotulo="Tentar de novo" andamento="Retomando…" objeto="Itaú Unibanco" {...extra} /> : null}
+          </section>
+        </>,
+      ),
+    );
+  }
+  const fala = () => container!.querySelector("[data-anunciador]")?.textContent ?? "";
+
+  it("o nome é o rótulo à vista com o objeto, também em andamento (2.5.3), e aos 300 ms o Anunciador diz o gerúndio com ele", () => {
+    linha("repouso");
+    expect(nome()).toBe("Tentar de novo, Itaú Unibanco");
+    linha("andamento");
+    expect(nome()).toBe("Tentar de novo, Itaú Unibanco");
+    expect(fala()).toBe("");
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe("Retomando…, Itaú Unibanco");
+    expect(fala()).toBe("Retomando, Itaú Unibanco");
+    passar(CARREGANDO.minimoMs);
+    linha("repouso");
+    passar(FIM_DA_TROCA_MS);
+    expect(nome()).toBe("Tentar de novo, Itaú Unibanco");
+  });
+
+  it("a ação que volta antes dos 300 ms não fala nada", () => {
+    linha("repouso");
+    linha("andamento");
+    passar(CARREGANDO.atrasoMs - 100);
+    linha("repouso");
+    passar(3_000);
+    expect(fala()).toBe("");
+  });
+
+  it("sem o objeto, o nome é o do aria-label de quem usa (ou o rótulo), e nada é anunciado", () => {
+    linha("repouso", true, { objeto: undefined, "aria-label": "Tentar de novo a emissão" });
+    expect(nome()).toBe("Tentar de novo a emissão");
+    linha("andamento", true, { objeto: undefined, "aria-label": "Tentar de novo a emissão" });
+    passar(CARREGANDO.atrasoMs);
+    expect(fala()).toBe("");
+  });
+
+  it("com focoAoSair, o botão que sai com o foco (o formulário fechou) leva o foco ao título da seção, nunca ao body", async () => {
+    linha("repouso", true, { focoAoSair: true });
+    botao().focus();
+    expect(document.activeElement).toBe(botao());
+    linha("repouso", false, { focoAoSair: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.tagName).toBe("H2");
+    expect(document.activeElement?.textContent).toBe("Precisam de você");
+  });
+
+  it("com focoAoSair dado, o foco vai ao destino pedido", async () => {
+    act(() =>
+      reacao!.render(
+        <section>
+          <button type="button" id="editar">
+            Editar
+          </button>
+          <BotaoDeAcao estado="repouso" rotulo="Salvar" andamento="Salvando…" focoAoSair={() => document.getElementById("editar")} />
+        </section>,
+      ),
+    );
+    const salvar = container!.querySelector<HTMLButtonElement>(".botao-acao")!;
+    salvar.focus();
+    expect(document.activeElement).toBe(salvar);
+    act(() =>
+      reacao!.render(
+        <section>
+          <button type="button" id="editar">
+            Editar
+          </button>
+        </section>,
+      ),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement?.id).toBe("editar");
   });
 });

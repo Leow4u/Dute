@@ -48,6 +48,12 @@ export function useEmissoesDoFinanceiro(role: ProfileRole | null | undefined, li
     emissoes: comFalha.data,
     carregando: comFalha.isPending && !comFalha.isError,
     falhas: comFalha.isError ? ["emissões"] : [],
-    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+    releitura: {
+      tentando: comFalha.isError && comFalha.isFetching,
+      // Só a leitura que falhou relê: a lida fica como está.
+      tentar: () => {
+        if (comFalha.isError) void leitura.refetch();
+      },
+    },
   };
 }

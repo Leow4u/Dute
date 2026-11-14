@@ -90,6 +90,8 @@ export type AutorizacoesViewProps = {
   ocupado: boolean;
   /** A nova tentativa da leitura da fila (parte 13g). */
   leitura?: NovaTentativa;
+  /** A nova tentativa da leitura das autorizadas a faturar. */
+  leituraDasAutorizadas?: NovaTentativa;
   acoes: AcoesDasAutorizacoes;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
@@ -410,15 +412,13 @@ function Painel({ linhas, painel, contratos, hoje, ocupado, acoes }: Autorizacoe
 
 // --- Autorizadas, a faturar ----------------------------------------------------------------
 
-function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura }: AutorizacoesViewProps) {
+function Autorizadas({ autorizadas, ocupado, acoes, somenteLeitura, leituraDasAutorizadas: leitura = SEM_NOVA_TENTATIVA }: AutorizacoesViewProps) {
   const lista = Array.isArray(autorizadas) ? autorizadas : null;
   let conteudo: ReactNode;
-  if (autorizadas === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as autorizações…" className="px-5 py-7" />;
+  if (autorizadas === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as autorizações…" onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (autorizadas === "erro")
     conteudo = (
-      <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
-        Não foi possível carregar as autorizações.
-      </p>
+      <FalhaNaSecao mensagem="Não foi possível carregar as autorizações." tentando={leitura.tentando} onTentar={leitura.tentar} className="justify-center px-5 py-7" />
     );
   else if (!lista?.length) conteudo = <Vazio>Nenhuma autorização a faturar</Vazio>;
   else {

@@ -247,7 +247,7 @@ export function ColaboradoresView({
       >
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{editando ? editando.nome : "Novo colaborador"}</h1>
-          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" />
+          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
         </header>
         {erro ? <p role="alert" className="text-sm text-destructive">{erro}</p> : null}
         <Campo id="colaborador-nome" rotulo="Nome">
@@ -314,6 +314,7 @@ export function ColaboradoresView({
               bloqueado={ocupado && emAndamento !== "ativo"}
               rotulo={editando.ativo ? "Desativar" : "Reativar"}
               andamento={editando.ativo ? "Desativando…" : "Reativando…"}
+              focoAoSair
               onClick={() => onAtivo(!editando.ativo)}
             />
           ) : null}
@@ -383,7 +384,7 @@ export function VeiculosView({
       >
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{editando ? editando.placa : "Novo veículo"}</h1>
-          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" />
+          <BotaoDeAcao type="submit" estado={ocupado && emAndamento !== "ativo" ? "andamento" : "repouso"} bloqueado={ocupado && emAndamento === "ativo"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
         </header>
         {erro ? <p role="alert" className="text-sm text-destructive">{erro}</p> : null}
         <Campo id="veiculo-placa" rotulo="Placa">
@@ -428,6 +429,7 @@ export function VeiculosView({
               bloqueado={ocupado && emAndamento !== "ativo"}
               rotulo={editando.ativo ? "Desativar" : "Reativar"}
               andamento={editando.ativo ? "Desativando…" : "Reativando…"}
+              focoAoSair
               onClick={() => onAtivo(!editando.ativo)}
             />
           ) : null}

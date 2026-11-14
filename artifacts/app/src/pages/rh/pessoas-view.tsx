@@ -93,6 +93,7 @@ export function PessoasView({
   busca,
   onBusca,
   leitura = SEM_NOVA_TENTATIVA,
+  falhaNaReleitura = false,
 }: {
   estado: EstadoDaTela;
   colaboradores: readonly ColaboradorNoPainel[];
@@ -100,6 +101,12 @@ export function PessoasView({
   onBusca: (valor: string) => void;
   /** A nova tentativa da leitura do painel (parte 13g). */
   leitura?: NovaTentativa;
+  /**
+   * O painel já lido não se atualizou (a releitura do intervalo ou a de depois
+   * de gravar falhou): a lista fica, e a frase fica escrita em cima dela, sem
+   * falar, com "Tentar de novo" (necessidade 8; momento 7).
+   */
+  falhaNaReleitura?: boolean;
 }) {
   const ativas = colaboradores.filter((colaborador) => colaborador.ativo);
   const inativas = colaboradores.filter((colaborador) => !colaborador.ativo);
@@ -121,6 +128,15 @@ export function PessoasView({
           <Input type="search" aria-label="Buscar" placeholder="Buscar nome ou função" value={busca} onChange={(evento) => onBusca(evento.target.value)} className="pl-9" />
         </label>
       </header>
+      {estado === "pronto" && falhaNaReleitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as pessoas."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      ) : null}
       <Secao id="ativas" titulo="Ativas" total={ativas.length} estado={estado}>
         {conteudo}
       </Secao>

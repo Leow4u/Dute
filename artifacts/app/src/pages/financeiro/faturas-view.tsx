@@ -9,7 +9,6 @@ import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { NumeroLido } from "@/components/ui/numero-lido";
-import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,7 +71,7 @@ export type AcoesDasFaturas = {
 };
 
 /** A receita por cliente do mês, só em Pagos. `dados` null enquanto carrega. */
-export type ReceitaDoMes = { mes: string; dados: ReceitaPorCliente | null; erro: boolean };
+export type ReceitaDoMes = { mes: string; dados: ReceitaPorCliente | null; erro: boolean; leitura?: NovaTentativa };
 
 export type PainelDaNfAberta = {
   pagamento: FormDoPagamento;
@@ -91,8 +90,10 @@ export type FaturasViewProps = {
   /** "AAAA-MM-DD" de hoje em São Paulo. */
   hoje: string;
   aberta: FaturaDoFinanceiro | null;
-  /** Os pagamentos da NF aberta; null enquanto carregam. */
+  /** Os pagamentos da NF aberta; null enquanto carregam (ou na falha, com `leituraDosPagamentos.erro`). */
   pagamentos: PagamentoDaNf[] | null;
+  /** A leitura dos pagamentos da NF aberta: a falha, com a nova tentativa, nunca vira espera sem fim. */
+  leituraDosPagamentos?: NovaTentativa & { erro: boolean };
   /** Na NF que saiu pela Omie, a baixa de cada pagamento, pelo id dele (parte 7.4i). */
   baixas?: ReadonlyMap<string, EtapaDaBaixa> | null;
   painel: PainelDaNfAberta;
@@ -244,6 +245,7 @@ function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes, leitura = 
 
 function Pagamentos({
   pagamentos,
+  leitura,
   baixas,
   painel,
   ocupado,
@@ -252,6 +254,7 @@ function Pagamentos({
   podeEstornar,
 }: {
   pagamentos: PagamentoDaNf[] | null;
+  leitura?: NovaTentativa & { erro: boolean };
   baixas: ReadonlyMap<string, EtapaDaBaixa> | null;
   painel: PainelDaNfAberta;
   ocupado: boolean;
@@ -259,7 +262,9 @@ function Pagamentos({
   acoes: AcoesDasFaturas;
   podeEstornar: boolean;
 }) {
-  if (pagamentos === null) return <CarregandoNaRegiao rotulo="Carregando os pagamentos…" />;
+  // A falha dos pagamentos nunca vira espera: a frase e o "Tentar de novo".
+  if (leitura?.erro) return <FalhaNaSecao mensagem="Não foi possível carregar os pagamentos." tentando={leitura.tentando} onTentar={leitura.tentar} />;
+  if (pagamentos === null) return <CarregandoNaRegiao rotulo="Carregando os pagamentos…" onTentar={leitura?.tentar} />;
   if (!pagamentos.length) return <p className="text-sm font-bold text-muted-foreground">Nenhum pagamento</p>;
   return (
     <ul className="flex flex-col gap-2">
@@ -354,7 +359,7 @@ function Confirmacao({
   );
 }
 
-function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, acoes, emAndamento = null }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
+function Painel({ aberta: fatura, hoje, pagamentos, leituraDosPagamentos, baixas, painel, ocupado, acoes, emAndamento = null }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
   const daAcao = (acao: string) => ({ estado: emAndamento === acao ? ("andamento" as const) : ("repouso" as const), bloqueado: ocupado && emAndamento !== acao });
   const pode = acoesDaNf(fatura);
   const situacao = situacaoDaCobranca(fatura, hoje);
@@ -447,6 +452,7 @@ function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, aco
         <Subtitulo>Pagamentos</Subtitulo>
         <Pagamentos
           pagamentos={pagamentos}
+          leitura={leituraDosPagamentos}
           baixas={baixas ?? null}
           painel={painel}
           ocupado={ocupado}
@@ -531,13 +537,9 @@ function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string
   const mes = rotuloDoMes(receita.mes);
   const dados = receita.dados;
   let conteudo: ReactNode;
-  if (receita.erro)
-    conteudo = (
-      <p role="alert" className="text-sm font-bold text-destructive">
-        Não foi possível carregar os pagamentos.
-      </p>
-    );
-  else if (!dados) conteudo = <CarregandoNaRegiao rotulo="Carregando os pagamentos…" />;
+  const leitura = receita.leitura ?? SEM_NOVA_TENTATIVA;
+  if (receita.erro) conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os pagamentos." tentando={leitura.tentando} onTentar={leitura.tentar} />;
+  else if (!dados) conteudo = <CarregandoNaRegiao rotulo="Carregando os pagamentos…" onTentar={receita.leitura?.tentar} />;
   else if (!dados.pagamentos) conteudo = <p className="text-sm font-bold text-muted-foreground">{`Nenhum pagamento em ${mes}`}</p>;
   else {
     conteudo = (
@@ -572,8 +574,7 @@ function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string
 export function FaturasView(props: FaturasViewProps) {
   const { filtro, estado, faturas, busca, hoje, aberta, resultado, acoes, receita } = props;
   const exporta = estado === "pronto" && faturasDoFiltro(faturas, filtro, hoje, busca).length > 0;
-  // A confirmação da gravação fica escrita; o Anunciador a diz uma vez.
-  useAnunciarAoMudar(resultado);
+  // A confirmação da gravação fica escrita, sem região viva: quem a diz é o toast, uma vez.
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">

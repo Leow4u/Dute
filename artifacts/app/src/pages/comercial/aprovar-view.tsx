@@ -230,6 +230,15 @@ function Linhas({ linhas, cartao }: { linhas: LinhaCompacta[]; cartao: CartaoDaA
   );
 }
 
+/**
+ * A confirmação toma o lugar dos botões: o foco que estava no Aprovar vai ao
+ * Próximo (ou ao Recarregar do cartão parado) e, sem ele, ao título da tela;
+ * nunca ao `body` (WCAG 2.4.3).
+ */
+function focoDepoisDeAprovar(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[data-depois-de-aprovar]");
+}
+
 function Rodape(props: AprovarViewProps) {
   const { confirmacao, parado, ocupado, handlers } = props;
   const emAndamento = props.emAndamento ?? null;
@@ -244,12 +253,12 @@ function Rodape(props: AprovarViewProps) {
             {parado.texto}
           </span>
           {parado.acao === "recarregar" ? (
-            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.recarregar}>
+            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.recarregar} data-depois-de-aprovar="">
               <RefreshCw aria-hidden="true" />
               Recarregar
             </Button>
           ) : (
-            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.proximo} disabled={!props.podeProximo}>
+            <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.proximo} disabled={!props.podeProximo} data-depois-de-aprovar="">
               Próximo
               <ChevronRight aria-hidden="true" />
             </Button>
@@ -261,7 +270,7 @@ function Rodape(props: AprovarViewProps) {
             <Check className="size-5" aria-hidden="true" />
             {confirmacao}
           </span>
-          <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.proximo} disabled={!props.podeProximo}>
+          <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={handlers.proximo} disabled={!props.podeProximo} data-depois-de-aprovar="">
             Próximo
             <ChevronRight aria-hidden="true" />
           </Button>
@@ -280,6 +289,7 @@ function Rodape(props: AprovarViewProps) {
               icone={<Check aria-hidden="true" />}
               rotulo="Aprovar"
               andamento="Aprovando…"
+              focoAoSair={focoDepoisDeAprovar}
               onClick={handlers.aprovar}
             />
           </div>
@@ -292,6 +302,7 @@ function Rodape(props: AprovarViewProps) {
             icone={<Send aria-hidden="true" />}
             rotulo="Aprovar e enviar"
             andamento="Aprovando e enviando…"
+            focoAoSair={focoDepoisDeAprovar}
             onClick={handlers.aprovarEEnviar}
           />
         </>

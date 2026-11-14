@@ -4,6 +4,7 @@ import { collection, query, where, type DocumentData } from "firebase/firestore"
 import { useSearch } from "wouter";
 
 import { useAppUser } from "@/lib/auth";
+import { useConsultasComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { nomesDosClientes, pagamentoDaNf } from "@/lib/financeiro/faturas";
 import { lerDocumento } from "@/lib/financeiro/ler-documento";
 import {
@@ -75,8 +76,9 @@ export default function FinanceiroRelatorios() {
     typeof dados.servico === "string" && dados.servico.trim() ? { id, servico: dados.servico.trim() } : null,
   );
 
-  const erro =
-    leituraDasFaturas.falhas.length > 0 || (comPagamentos && pagamentos.erro) || lidas.some((lida) => lida.isError) || (comCatalogo && catalogo.erro);
+  // A nova tentativa do rateio fica na falha até as consultas responderem (o aviso não sai com o foco nele).
+  const rateio = useConsultasComFalha(lidas);
+  const erro = leituraDasFaturas.falhas.length > 0 || (comPagamentos && pagamentos.erro) || rateio.erro || (comCatalogo && catalogo.erro);
   const carregando =
     leituraDasFaturas.carregando || (comPagamentos && pagamentos.itens === null) || lidas.some((lida) => lida.isPending) || (comCatalogo && catalogo.itens === null);
   const estado = erro ? "erro" : !problema && carregando ? "carregando" : "pronto";
@@ -113,12 +115,7 @@ export default function FinanceiroRelatorios() {
       hoje={hoje}
       clientes={clientes}
       estado={estado}
-      leitura={juntarTentativas(leituraDasFaturas.releitura, novaTentativaDe([pagamentos, catalogo]), {
-        tentando: lidas.some((lida) => lida.isError && lida.isFetching),
-        tentar: () => {
-          for (const lida of lidas) if (lida.isError) void lida.refetch();
-        },
-      })}
+      leitura={juntarTentativas(leituraDasFaturas.releitura, novaTentativaDe([pagamentos, catalogo]), rateio)}
       problema={problema}
       resumo={resumo}
       tabela={tabela}

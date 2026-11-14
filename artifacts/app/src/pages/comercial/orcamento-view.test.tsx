@@ -803,3 +803,16 @@ describe("os orçamentos parecidos na montagem (parte 5.3c)", () => {
     expect(texts(render({ parecidos: PARECIDOS, ocupado: true }))).not.toContain("Usar as quantidades");
   });
 });
+
+describe("Orçamento: a tabela que não veio tem saída (revisão da parte 13g)", () => {
+  it("a falha da tabela diz o que não carregou com Tentar de novo", () => {
+    expect(render({ catalogo: "erro", leituraDoCatalogo: { tentando: false, tentar: () => undefined } })).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a tabela\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+
+  it("o aviso do recálculo fica escrito sem região viva solta; o erro continua alerta", () => {
+    const info = render({ aviso: { tipo: "info", texto: "Os preços foram recalculados pela tabela vigente." } });
+    expect(info).toContain("Os preços foram recalculados pela tabela vigente.");
+    expect(info).not.toMatch(/role="status"/);
+    expect(render({ aviso: { tipo: "erro", texto: "Falta o contato." } })).toMatch(/<p role="alert"[^>]*>Falta o contato\.<\/p>/);
+  });
+});

@@ -8,7 +8,6 @@ import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { NumeroLido } from "@/components/ui/numero-lido";
-import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -453,8 +452,7 @@ function Esperando({ linhas, busca }: AFaturarViewProps) {
 export function AFaturarView(props: AFaturarViewProps) {
   const { estado, linhas, busca, painel, ocupado, acoes } = props;
   const temProntas = estado === "pronto" && linhas.some((linha) => linha.situacao === "pronta");
-  // A confirmação do registro fica escrita; o Anunciador a diz uma vez.
-  useAnunciarAoMudar(painel.resultado);
+  // A confirmação do registro fica escrita, sem região viva: quem a diz é o toast, uma vez.
   const painelAberto = painel.aberto && temProntas;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">

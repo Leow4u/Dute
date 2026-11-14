@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardList, Package, Truck, Wrench, type LucideIcon } from "lucide-react";
 
 import { DEMORANDO } from "@/components/ui/carregando-tela";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { dataDaTv, horaDaTv, type CartaoDaTv, type IconeDaOs, type PainelDaTv, type TomDoSelo } from "@/lib/tv/quadro";
 import { cn } from "@/lib/utils";
@@ -38,18 +39,25 @@ export type TvViewProps = {
  * própria releitura do quadro. A caixa é decorativa; o texto diz.
  */
 function QuadroCarregando() {
-  const espera = useEspera(true);
+  // A espera continua a da rota ("Abrindo TV da sala…"): o mesmo relógio, sem o vão de 300 ms entre uma caixa e a
+  // outra, e sem anunciar de novo o que ela já anunciou.
+  const rota = useEsperaDaRota(true, true);
+  const espera = useEspera(true, { desde: rota?.inicio });
+  const [continua] = useState(() => Boolean(rota) && espera.visivel);
   const anunciar = useAnuncio();
   const demorando = espera.fase === "demorando" || espera.fase === "sem-resposta";
   useEffect(() => {
     if (!espera.visivel) return undefined;
+    if (demorando ? rota?.demora : rota?.entrada) return undefined;
     return anunciar(demorando ? DEMORANDO : "Carregando o quadro");
-  }, [espera.visivel, demorando, anunciar]);
+  }, [espera.visivel, demorando, anunciar, rota]);
+  // O anúncio da rota que esta espera herdou sai com ela.
+  useEffect(() => () => rota?.retirar?.(), [rota]);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5">
       {espera.visivel ? (
         <>
-          <Spinner tamanho={40} calmo={espera.calmo} className="text-foreground" />
+          <Spinner tamanho={40} calmo={espera.calmo} className="text-foreground" data-continua={continua ? "" : undefined} />
           <p className="text-3xl font-bold text-foreground">Carregando o quadro…</p>
           {demorando ? <p className="text-2xl font-bold text-amber-soft-foreground">{DEMORANDO}</p> : null}
         </>

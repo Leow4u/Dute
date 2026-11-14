@@ -14,6 +14,7 @@ import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 
 import { ABA_INICIAL, ClientesView, type ClientesViewProps, type FichaAba } from "./clientes-view";
 import { semCamadasEscondidas } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 const CADASTROS = (
   [
@@ -297,10 +298,10 @@ describe("tela de Clientes e prospects", () => {
     const comErro = texts(render({ contratos: "erro" }));
     expect(comErro).not.toContain("Sem contrato");
     expect(comErro).toContain("Erro ao ler contratos");
-    // A falha diz o que não carregou, como alerta (parte 13g).
-    expect(texts(render({ contratos: "erro", aba: "contratos" })).at(-1)).toBe("Não foi possível carregar os contratos.");
-    expect(texts(render({ locais: "erro", aba: "locais" })).at(-1)).toBe("Não foi possível carregar os locais.");
-    expect(texts(render({ contatos: "erro", aba: "contatos" })).at(-1)).toBe("Não foi possível carregar os contatos.");
+    // A falha diz o que não carregou, como alerta, com o "Tentar de novo" (parte 13g e a revisão dela).
+    expect(texts(render({ contratos: "erro", aba: "contratos" })).slice(-2)).toEqual(["Não foi possível carregar os contratos.", "Tentar de novo"]);
+    expect(texts(render({ locais: "erro", aba: "locais" })).slice(-2)).toEqual(["Não foi possível carregar os locais.", "Tentar de novo"]);
+    expect(texts(render({ contatos: "erro", aba: "contatos" })).slice(-2)).toEqual(["Não foi possível carregar os contatos.", "Tentar de novo"]);
     expect(render({ locais: "erro", aba: "locais" })).toMatch(/role="alert"[^>]*>Não foi possível carregar os locais\./);
   });
 
@@ -311,5 +312,37 @@ describe("tela de Clientes e prospects", () => {
     expect(lendo).toContain("data-carregando-na-regiao");
     expect(texts(lendo).filter((texto) => /^\d+$/.test(texto))).toEqual([]);
     expect(texts(render({ estado: "erro", selecionado: null })).slice(-2)).toEqual(["Não foi possível carregar o cadastro.", "Tentar de novo"]);
+  });
+});
+
+describe("Clientes: a leitura da ficha que falha tem saída, e o axe (revisão da parte 13g)", () => {
+  it("os locais, os contatos e os contratos que falharam dizem a falha com Tentar de novo, nunca só a frase", () => {
+    const tentar = { tentando: false, tentar: () => undefined };
+    for (const [aba, extra, frase] of [
+      ["locais", { locais: "erro" }, "Não foi possível carregar os locais."],
+      ["contatos", { contatos: "erro" }, "Não foi possível carregar os contatos."],
+      ["contratos", { contratos: "erro" }, "Não foi possível carregar os contratos."],
+    ] as const) {
+      const html = render({ aba, ...extra, releituras: { locais: tentar, contatos: tentar, contratos: tentar } } as Partial<ClientesViewProps>);
+      expect(html).toContain(frase);
+      expect(html).toMatch(new RegExp(`<p role="alert"[^>]*>${frase.replace(/\./g, "\\.")}</p><button[^>]*>[\\s\\S]*?Tentar de novo</button>`));
+    }
+  });
+
+  it("lendo os locais, a região tem a saída aos 10 s (o Tentar de novo da demora)", () => {
+    const html = render({ aba: "locais", locais: "carregando", releituras: { locais: { tentando: false, tentar: () => undefined } } });
+    expect(html).toMatch(/data-carregando-na-regiao=""[^>]*|tabindex="-1"[^>]*data-carregando-na-regiao=""/);
+    expect(html).toMatch(/<div tabindex="-1"[^>]*data-carregando-na-regiao=""/);
+  });
+
+  it("a ação de cada linha leva o local ou o contato no nome: o leitor de tela sabe qual linha desativa", () => {
+    expect(render({ aba: "locais" })).toMatch(/aria-label="Desativar, [^"]+"/);
+  });
+
+  it("o axe não acusa nada na lista, nas abas e na falha", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ aba: "locais" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ aba: "contatos" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ aba: "locais", locais: "erro" }))).toEqual([]);
   });
 });

@@ -530,8 +530,9 @@ function MontarOrcamento({ numero }: { numero: string }) {
     sujo,
     descartavel: posEnvio.secundarias.includes("descartar_rv"),
   });
+  // O Ctrl+S é o mesmo Salvar do clique: o botão diz "Salvando…" (parte 13g).
   atalhoDeSalvar.current = () => {
-    if (acoes.editavel && !travado) void salvar();
+    if (acoes.editavel && !travado) comAcao("salvar", () => salvar());
   };
   const listaDeContatos = contatos.itens ?? [];
   const empresas = Array.from(new Set([item.cliente, ...listaDeContatos.map((contato) => contato.empresa ?? "")].filter(Boolean)));
@@ -548,6 +549,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         contatos={listaDeContatos}
         locais={ordenarLocais(locais.itens ?? [])}
         catalogo={catalogo}
+        leituraDoCatalogo={tabela}
         ocupado={travado || depois.ocupado}
         emAndamento={emAndamento}
         aviso={aviso ?? (depois.aviso?.numero === numero ? { tipo: "erro", texto: depois.aviso.mensagem } : null)}
@@ -559,7 +561,8 @@ function MontarOrcamento({ numero }: { numero: string }) {
         podeAtualizarTabela={Boolean(contratoId && !tabelaId)}
         handlers={{
           salvar: () => comAcao("salvar", () => salvar()),
-          previaSalva: () => void previaSalva(),
+          // A prévia salva antes de abrir o documento: o Salvar diz "Salvando…" enquanto grava.
+          previaSalva: () => comAcao("salvar", previaSalva),
           enviar: () => comAcao("enviar", enviar),
           duplicar: () => comAcao("duplicar", duplicar),
           editar: () => {

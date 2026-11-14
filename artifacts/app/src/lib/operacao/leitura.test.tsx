@@ -157,3 +157,96 @@ describe("a nova tentativa de várias leituras", () => {
     expect(outra.tentar).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("a nova tentativa não apaga o que já foi lido (necessidade 8)", () => {
+  it("tentar na leitura já lida não assina de novo nem volta a carregando, também junto com outra que falhou", () => {
+    let faturas: ReturnType<typeof useLeitura<string>> | null = null;
+    let emissoes: ReturnType<typeof useLeitura<string>> | null = null;
+    function Sonda() {
+      faturas = useLeitura("financeiro:faturas", () => ({}) as never, (id) => id);
+      emissoes = useLeitura("financeiro:emissoes", () => ({}) as never, (id) => id);
+      return null;
+    }
+    act(() => raiz!.render(<Sonda />));
+    act(() => estado.assinaturas[0]!.proximo(lista(["NF 1"])));
+    act(() => estado.assinaturas[1]!.falha(new Error("unavailable")));
+    expect(faturas).toMatchObject({ itens: ["NF 1"], erro: false });
+
+    // O "Tentar de novo" do Início junta as duas: só a que falhou assina de novo.
+    act(() => juntarTentativas({ tentando: false, tentar: faturas!.tentar }, { tentando: false, tentar: emissoes!.tentar }).tentar());
+    expect(estado.assinaturas).toHaveLength(3);
+    expect(estado.assinaturas[0]!.ativa).toBe(true);
+    expect(faturas).toMatchObject({ itens: ["NF 1"], erro: false, tentando: false });
+    expect(emissoes).toMatchObject({ itens: null, erro: true, tentando: true });
+
+    act(() => faturas!.tentar());
+    expect(estado.assinaturas).toHaveLength(3);
+    expect(faturas).toMatchObject({ itens: ["NF 1"], erro: false });
+  });
+
+  it("a nova tentativa chega às outras leituras da mesma chave que falharam (o menu do shell volta com o Início)", () => {
+    let inicio: ReturnType<typeof useLeitura<string>> | null = null;
+    let menu: ReturnType<typeof useLeitura<string>> | null = null;
+    function Inicio() {
+      inicio = useLeitura("demands", () => ({}) as never, (id) => id);
+      return null;
+    }
+    function Menu() {
+      menu = useLeitura("demands", () => ({}) as never, (id) => id);
+      return null;
+    }
+    act(() =>
+      raiz!.render(
+        <>
+          <Menu />
+          <Inicio />
+        </>,
+      ),
+    );
+    act(() => {
+      for (const assinatura of estado.assinaturas) assinatura.falha(new Error("permission-denied"));
+    });
+    expect(menu).toMatchObject({ erro: true });
+    expect(inicio).toMatchObject({ erro: true });
+
+    act(() => inicio!.tentar());
+    const novas = estado.assinaturas.filter((assinatura) => assinatura.ativa);
+    expect(estado.assinaturas).toHaveLength(4);
+    expect(novas).toHaveLength(2);
+    expect(menu).toMatchObject({ erro: true, tentando: true });
+
+    act(() => {
+      for (const assinatura of novas) assinatura.proximo(lista(["10045"]));
+    });
+    expect(menu).toMatchObject({ itens: ["10045"], erro: false, tentando: false });
+    expect(inicio).toMatchObject({ itens: ["10045"], erro: false, tentando: false });
+  });
+
+  it("a leitura da mesma chave que já leu não assina de novo pela nova tentativa da outra", () => {
+    let lida: ReturnType<typeof useLeitura<string>> | null = null;
+    let falhou: ReturnType<typeof useLeitura<string>> | null = null;
+    function Lida() {
+      lida = useLeitura("service_orders", () => ({}) as never, (id) => id);
+      return null;
+    }
+    function Falhou() {
+      falhou = useLeitura("service_orders", () => ({}) as never, (id) => id);
+      return null;
+    }
+    act(() =>
+      raiz!.render(
+        <>
+          <Lida />
+          <Falhou />
+        </>,
+      ),
+    );
+    act(() => estado.assinaturas[0]!.proximo(lista(["10045-01"])));
+    act(() => estado.assinaturas[1]!.falha(new Error("permission-denied")));
+    act(() => falhou!.tentar());
+    expect(estado.assinaturas).toHaveLength(3);
+    expect(estado.assinaturas[0]!.ativa).toBe(true);
+    expect(lida).toMatchObject({ itens: ["10045-01"], erro: false });
+    expect(falhou).toMatchObject({ erro: true, tentando: true });
+  });
+});

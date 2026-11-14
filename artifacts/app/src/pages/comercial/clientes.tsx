@@ -183,6 +183,7 @@ export default function ComercialClientesPage() {
         onAba={setAba}
         locais={carga(locais)}
         contatos={carga(contatos)}
+        releituras={{ locais, contatos, contratos }}
         responsavel={responsavel}
         ocupado={ocupado}
         acoes={{

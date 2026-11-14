@@ -3,6 +3,7 @@ import { useQueries } from "@tanstack/react-query";
 import { doc, type DocumentData } from "firebase/firestore";
 import { useSearch } from "wouter";
 
+import { useConsultasComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { faturaDoFinanceiro, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { lerDocumento } from "@/lib/financeiro/ler-documento";
 import { ROTA_FATURAS, hrefDaNf, nfDaBusca } from "@/lib/financeiro/navegacao";
@@ -44,8 +45,10 @@ export default function FinanceiroNfPage() {
     queries: fontes.map((fonte) => ({ queryKey: ["financeiro", "via-comercial", fonte.caminho], queryFn: () => lerDocumento(fonte.caminho), staleTime: 60_000, retry: 1 })),
   });
 
+  // A nova tentativa das fontes fica na falha até elas responderem (o aviso não sai com o foco nele).
+  const consultas = useConsultasComFalha(lidas);
+  const erroNasFontes = consultas.erro;
   const carregandoFontes = lidas.some((consulta) => consulta.isPending);
-  const erroNasFontes = lidas.some((consulta) => consulta.isError);
   const estado: EstadoDaVia = !id || leitura.item === null ? "nao_encontrada" : leitura.erro || erroNasFontes ? "erro" : leitura.item === undefined || carregandoFontes ? "carregando" : "pronto";
 
   const mapas: FontesDoDemonstrativo = { demandas: new Map(), revisoes: new Map(), medicoes: new Map(), autorizacoes: new Map() };
@@ -62,12 +65,7 @@ export default function FinanceiroNfPage() {
     };
   }, [documento?.nomeDoArquivo]);
 
-  const novaTentativa = juntarTentativas(novaTentativaDe([leitura]), {
-    tentando: erroNasFontes && lidas.some((consulta) => consulta.isFetching),
-    tentar: () => {
-      for (const consulta of lidas) if (consulta.isError) void consulta.refetch();
-    },
-  });
+  const novaTentativa = juntarTentativas(novaTentativaDe([leitura]), consultas);
 
   return <NfView estado={estado} leitura={novaTentativa} documento={documento} voltar={id ? hrefDaNf(ROTA_FATURAS, id) : ROTA_FATURAS} onImprimir={() => window.print()} />;
 }

@@ -64,6 +64,8 @@ export type ContratosViewProps = {
   ocupado: boolean;
   /** A nova tentativa da leitura dos contratos (parte 13g). */
   leitura?: NovaTentativa;
+  /** A nova tentativa das leituras do contrato aberto (as tabelas e os aditivos). */
+  releituras?: Partial<Record<"tabelas" | "aditivos", NovaTentativa>>;
   acoes: AcoesDosContratos;
   /** Telas do Comercial que já existem (barra de abas); o padrão é a do app. */
   telas?: readonly string[];
@@ -109,15 +111,13 @@ function Vazio({ children }: { children: ReactNode }) {
 /**
  * Carregando ou erro no lugar da lista: a tela não afirma vazio sem ter lido
  * (carregamento v2, parte 13g). Lendo, a caixa e "Carregando as tabelas…" aos
- * 300 ms; na falha, a frase como alerta.
+ * 300 ms, com "Tentar de novo" aos 10 s; na falha, a frase e "Tentar de
+ * novo", que assina de novo a leitura ao vivo (o `onSnapshot` que falha não
+ * volta sozinho).
  */
-function SemLeitura({ carga, objeto }: { carga: "carregando" | "erro"; objeto: string }) {
-  if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} className="px-5 py-7" />;
-  return (
-    <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
-      Não foi possível carregar {objeto}.
-    </p>
-  );
+function SemLeitura({ carga, objeto, leitura = SEM_NOVA_TENTATIVA }: { carga: "carregando" | "erro"; objeto: string; leitura?: NovaTentativa }) {
+  if (carga === "carregando") return <CarregandoNaRegiao rotulo={`Carregando ${objeto}…`} onTentar={leitura.tentar} className="px-5 py-7" />;
+  return <FalhaNaSecao mensagem={`Não foi possível carregar ${objeto}.`} tentando={leitura.tentando} onTentar={leitura.tentar} className="justify-center px-5 py-7" />;
 }
 
 function Rotulo({ children }: { children: ReactNode }) {
@@ -385,7 +385,19 @@ function Condicoes({ contrato, hoje }: { contrato: Contrato; hoje: string }) {
   );
 }
 
-function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<TabelaDoContrato>; hoje: string; ocupado: boolean; onAdicionar?: () => void }) {
+function Tabelas({
+  tabelas,
+  leitura,
+  hoje,
+  ocupado,
+  onAdicionar,
+}: {
+  tabelas: Carga<TabelaDoContrato>;
+  leitura?: NovaTentativa;
+  hoje: string;
+  ocupado: boolean;
+  onAdicionar?: () => void;
+}) {
   return (
     <section aria-label="Tabelas de preço" className="overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao
@@ -401,7 +413,7 @@ function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<Tabel
         ) : null}
       </CabecalhoDoCartao>
       {!Array.isArray(tabelas) ? (
-        <SemLeitura carga={tabelas} objeto="as tabelas" />
+        <SemLeitura carga={tabelas} objeto="as tabelas" leitura={leitura} />
       ) : tabelas.length === 0 ? (
         <Vazio>Nenhuma tabela</Vazio>
       ) : (
@@ -445,7 +457,7 @@ function Tabelas({ tabelas, hoje, ocupado, onAdicionar }: { tabelas: Carga<Tabel
   );
 }
 
-function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
+function Aditivos({ aditivos, leitura }: { aditivos: Carga<Aditivo>; leitura?: NovaTentativa }) {
   return (
     <section aria-label="Aditivos" className="min-w-0 flex-1 basis-80 overflow-hidden rounded-lg border border-border bg-card">
       <CabecalhoDoCartao
@@ -454,7 +466,7 @@ function Aditivos({ aditivos }: { aditivos: Carga<Aditivo> }) {
         contagem={Array.isArray(aditivos) ? aditivos.length : undefined}
       />
       {!Array.isArray(aditivos) ? (
-        <SemLeitura carga={aditivos} objeto="os aditivos" />
+        <SemLeitura carga={aditivos} objeto="os aditivos" leitura={leitura} />
       ) : aditivos.length === 0 ? (
         <Vazio>Nenhum aditivo</Vazio>
       ) : (
@@ -548,9 +560,9 @@ function Ficha(props: ContratosViewProps & { selecionado: Contrato }) {
       <Cabecalho contrato={contrato} cliente={cliente} aditivos={aditivos} hoje={hoje} ocupado={ocupado} acoes={acoes} somenteLeitura={somenteLeitura} />
       <Alertas contrato={contrato} hoje={hoje} />
       <Condicoes contrato={contrato} hoje={hoje} />
-      <Tabelas tabelas={tabelas} hoje={hoje} ocupado={ocupado} onAdicionar={somenteLeitura ? undefined : acoes.adicionarTabela} />
+      <Tabelas tabelas={tabelas} leitura={props.releituras?.tabelas} hoje={hoje} ocupado={ocupado} onAdicionar={somenteLeitura ? undefined : acoes.adicionarTabela} />
       <div className="flex flex-wrap items-start gap-5">
-        <Aditivos aditivos={aditivos} />
+        <Aditivos aditivos={aditivos} leitura={props.releituras?.aditivos} />
         <Documentos contrato={contrato} />
       </div>
     </div>

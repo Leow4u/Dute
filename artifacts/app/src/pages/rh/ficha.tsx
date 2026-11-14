@@ -155,7 +155,8 @@ export default function RhFicha() {
     },
   };
 
-  const estado: EstadoDaFicha = !colaboradorId || leitura.erro ? "erro" : leitura.ficha ? "pronto" : "carregando";
+  // A ficha lida fica na tela quando a releitura de depois de gravar falha: só o aviso entra em cima dela.
+  const estado: EstadoDaFicha = !colaboradorId ? "erro" : leitura.ficha ? "pronto" : leitura.erro ? "erro" : "carregando";
   return (
     <FichaView
       estado={estado}
@@ -168,6 +169,7 @@ export default function RhFicha() {
       ocupado={ocupado}
       emAndamento={emAndamento}
       leitura={colaboradorId ? leitura.releitura : undefined}
+      falhaNaReleitura={Boolean(colaboradorId && leitura.ficha && leitura.erro)}
       falha={falha}
       acoes={acoes}
     />

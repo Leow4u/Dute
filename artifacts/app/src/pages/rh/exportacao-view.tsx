@@ -55,6 +55,8 @@ export type PropsDaExportacao = {
   emAndamento?: string | null;
   /** A nova tentativa da leitura das versões (parte 13g). */
   leitura?: NovaTentativa;
+  /** As versões já lidas não se atualizaram: elas ficam, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   aviso: string | null;
   falha: string | null;
   acoes: AcoesDaExportacao;
@@ -145,7 +147,7 @@ function Versao({
             key={arquivo}
             variant="outline"
             size="sm"
-            aria-label={`${ROTULO_DO_ARQUIVO[arquivo]}, ${titulo}`}
+            objeto={titulo}
             estado={emAndamento === `baixar:${exportacao.id}:${arquivo}` ? "andamento" : "repouso"}
             bloqueado={ocupado && emAndamento !== `baixar:${exportacao.id}:${arquivo}`}
             rotulo={ROTULO_DO_ARQUIVO[arquivo]}
@@ -158,7 +160,21 @@ function Versao({
   );
 }
 
-export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, competencia, ocupado, aviso, falha, acoes, emAndamento = null, leitura = SEM_NOVA_TENTATIVA }: PropsDaExportacao) {
+export function ExportacaoView({
+  estado,
+  exportacoes,
+  grava,
+  semAdmissao,
+  hoje,
+  competencia,
+  ocupado,
+  aviso,
+  falha,
+  acoes,
+  emAndamento = null,
+  leitura = SEM_NOVA_TENTATIVA,
+  falhaNaReleitura = false,
+}: PropsDaExportacao) {
   // O resultado da ação fica escrito; o Anunciador o diz uma vez, sem região viva solta.
   useAnunciarAoMudar(aviso);
   let lista;
@@ -173,6 +189,13 @@ export function ExportacaoView({ estado, exportacoes, grava, semAdmissao, hoje, 
           <Versao key={exportacao.id} exportacao={exportacao} primeira={indice === 0} ocupado={ocupado} emAndamento={emAndamento} acoes={acoes} />
         ))}
       </ul>
+    );
+  if (estado === "pronto" && falhaNaReleitura)
+    lista = (
+      <>
+        <FalhaNaSecao mensagem="Não foi possível atualizar as exportações." alerta={false} tentando={leitura.tentando} onTentar={leitura.tentar} className="border-b border-border px-5 py-3" />
+        {lista}
+      </>
     );
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">

@@ -301,3 +301,16 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(await violacoesDeAcessibilidade(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: receitaPorCliente([], new Map()), erro: false } }))).toEqual([]);
   });
 });
+
+describe("Faturas: os pagamentos que falham têm saída (revisão da parte 13g)", () => {
+  it("a falha dos pagamentos da NF aberta não vira espera sem fim: a frase e o Tentar de novo", () => {
+    const html = render({ pagamentos: null, leituraDosPagamentos: { erro: true, tentando: false, tentar: () => undefined } });
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar os pagamentos\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+    expect(html).not.toContain("data-carregando-na-regiao");
+  });
+
+  it("a falha da receita do mês também tem o Tentar de novo", () => {
+    const html = render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true, leitura: { tentando: false, tentar: () => undefined } } });
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar os pagamentos\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});

@@ -82,6 +82,8 @@ export type MedicoesViewProps = {
   emAndamento?: string | null;
   /** A nova tentativa das leituras (parte 13g). */
   leitura?: NovaTentativa;
+  /** A nova tentativa da leitura das medições do contrato. */
+  leituraDaMedicao?: NovaTentativa;
   /** A medição mudou enquanto a pessoa agia: a mensagem do servidor, com os dados já recarregados. */
   aviso: string | null;
   acoes: AcoesDasMedicoes;
@@ -255,6 +257,8 @@ function Cabecalho(props: MedicoesViewProps & { medicao: Medicao | null; cliente
         icone={opcoes.icone}
         rotulo={rotulo}
         andamento={opcoes.andamento}
+        // A ação muda o status, e o botão dela sai da tela: o foco vai ao título da medição.
+        focoAoSair
         onClick={aoClicar}
       />
     ) : (
@@ -381,6 +385,8 @@ function LinhaDaTabela({
               bloqueado={ocupado && emAndamento !== `aplicar:${linha.id}`}
               rotulo={rotuloDoAplicar(linha)}
               andamento="Aplicando a tarifa…"
+              objeto={linha.os}
+              focoAoSair
               onClick={() => acoes.aplicar(linha.id, aplicar.lpu_item_id as string)}
             />
           </div>
@@ -619,11 +625,14 @@ export function MedicoesView(props: MedicoesViewProps) {
             {aviso}
           </div>
         ) : null}
-        {medicao === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a medição…" className="px-5 py-7" /> : null}
+        {medicao === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a medição…" onTentar={props.leituraDaMedicao?.tentar} className="px-5 py-7" /> : null}
         {medicao === "erro" ? (
-          <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
-            Não foi possível carregar a medição.
-          </p>
+          <FalhaNaSecao
+            mensagem="Não foi possível carregar a medição."
+            tentando={props.leituraDaMedicao?.tentando ?? false}
+            onTentar={props.leituraDaMedicao?.tentar ?? SEM_NOVA_TENTATIVA.tentar}
+            className="justify-center px-5 py-7"
+          />
         ) : null}
         {medicao === null || (typeof medicao === "object" && medicao !== null) ? (
           <>

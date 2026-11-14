@@ -77,7 +77,8 @@ export default function RhExportacao() {
       }, `baixar:${id}:${arquivo}`),
   };
 
-  const estado: EstadoDaLista = leitura.erro ? "erro" : leitura.exportacoes ? "pronto" : "carregando";
+  // As versões lidas ficam na tela quando a releitura de depois de gerar falha: só o aviso entra em cima delas.
+  const estado: EstadoDaLista = leitura.exportacoes ? "pronto" : leitura.erro ? "erro" : "carregando";
   return (
     <ExportacaoView
       estado={estado}
@@ -89,6 +90,7 @@ export default function RhExportacao() {
       ocupado={ocupado}
       emAndamento={emAndamento}
       leitura={leitura.releitura}
+      falhaNaReleitura={Boolean(leitura.exportacoes && leitura.erro)}
       aviso={aviso}
       falha={falha}
       acoes={acoes}

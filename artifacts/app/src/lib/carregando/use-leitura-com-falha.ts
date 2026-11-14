@@ -1,5 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { usePedidosDaPessoa } from "./pedido-da-pessoa";
 
@@ -54,4 +54,39 @@ export function useFalhaNaReleituraAutomatica<L extends LeituraQueFalha>(leitura
   if (leitura.error != null) pedidosNaFalha.current = pedidos;
   const pediu = pedidosNaFalha.current !== null && pedidos !== pedidosNaFalha.current;
   return pediu ? leitura : comFalha;
+}
+
+/** O pedaço de cada consulta de um `useQueries` que a nova tentativa precisa. */
+export type ConsultaQueTenta = Pick<UseQueryResult<unknown>, "isError" | "refetch">;
+
+/**
+ * A nova tentativa das consultas de um `useQueries` (as fontes da via da NF, o
+ * rateio dos Relatórios), como a `useLeituraComFalha` faz com uma consulta: o
+ * react-query 5 volta a consulta sem dado a "pending" e zera o erro na nova
+ * leitura, e o aviso sairia da tela com o foco nele. Aqui `erro` fica até as
+ * consultas que falharam responderem de novo, com `tentando`; só as que
+ * falharam relêem.
+ */
+export function useConsultasComFalha(consultas: ReadonlyArray<ConsultaQueTenta>): { erro: boolean; tentando: boolean; tentar: () => void } {
+  const [tentando, setTentando] = useState(false);
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+  const falhou = consultas.some((consulta) => consulta.isError);
+  return {
+    erro: falhou || tentando,
+    tentando,
+    tentar: () => {
+      const falharam = consultas.filter((consulta) => consulta.isError);
+      if (!falharam.length || tentando) return;
+      setTentando(true);
+      void Promise.allSettled(falharam.map((consulta) => consulta.refetch())).then(() => {
+        if (montado.current) setTentando(false);
+      });
+    },
+  };
 }

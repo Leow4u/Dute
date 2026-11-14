@@ -207,7 +207,7 @@ describe("A faturar", () => {
     expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
     const textos = textosVisiveis(html);
     expect(textos.slice(0, 3)).toEqual(["A faturar", "Registrar NF", "NF 1234 registrada: 1 demanda faturada · R$ 12.345,00"]);
-    // Sem região viva solta: a confirmação fica escrita, e quem fala é o Anunciador (parte 13g).
+    // Sem região viva solta: a confirmação fica escrita, e quem fala é o toast, uma vez (revisão da parte 13g).
     expect(html).not.toContain('role="status"');
     expect(html).toMatch(/<div class="[^"]*bg-success-soft[^"]*"[^>]*>[\s\S]*NF 1234 registrada/);
   });

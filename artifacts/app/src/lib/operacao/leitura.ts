@@ -24,19 +24,58 @@ export type NovaTentativa = { tentando: boolean; tentar: () => void };
 export const SEM_NOVA_TENTATIVA: NovaTentativa = { tentando: false, tentar: () => undefined };
 
 /**
+ * As leituras ao vivo de cada chave na tela agora (a do Início, a do menu do
+ * shell, a da Entrada): a nova tentativa que uma pede chega a todas as que
+ * ainda não leram, e o contador do menu volta junto com o Início (a mesma
+ * regra de contagem nas duas).
+ */
+const ouvintesDaChave = new Map<string, Set<() => void>>();
+
+function ouvirNovaTentativa(chave: string, ouvinte: () => void): () => void {
+  let ouvintes = ouvintesDaChave.get(chave);
+  if (!ouvintes) ouvintesDaChave.set(chave, (ouvintes = new Set()));
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+    if (!ouvintes.size) ouvintesDaChave.delete(chave);
+  };
+}
+
+function pedirNovaTentativa(chave: string) {
+  for (const ouvinte of [...(ouvintesDaChave.get(chave) ?? [])]) ouvinte();
+}
+
+/**
  * A tentativa da chave: a assinatura muda a cada `tentar`, e a chave que
  * falhou por último fica na falha até a nova assinatura responder.
+ *
+ * Só a leitura sem resposta (a que falhou, ou a que ainda não chegou) assina
+ * de novo: a já lida fica com o que leu, e a tela não volta a "carregando"
+ * quando a nova tentativa é de outra leitura (a lateral do Início do
+ * Financeiro, as faturas dos Relatórios). O pedido chega também às outras
+ * leituras da mesma chave na tela que ainda não leram.
  */
 export function useNovaTentativa(chave: string | null) {
   const [tentativa, setTentativa] = useState(0);
   const falhou = useRef<string | null>(null);
-  const tentar = useCallback(() => setTentativa((atual) => atual + 1), []);
+  // A resposta da assinatura de agora, como a tela a viu no último render.
+  const semResposta = useRef(true);
+  useEffect(() => {
+    if (chave === null) return undefined;
+    return ouvirNovaTentativa(chave, () => {
+      if (semResposta.current) setTentativa((atual) => atual + 1);
+    });
+  }, [chave]);
+  const tentar = useCallback(() => {
+    if (chave !== null && semResposta.current) pedirNovaTentativa(chave);
+  }, [chave]);
   return {
     assinatura: chave === null ? null : `${chave}#${tentativa}`,
     /** A resposta da assinatura de agora: devolve se a nova tentativa ainda espera. */
     tentando: (erro: boolean, respondeu: boolean) => {
       if (erro) falhou.current = chave;
       else if (respondeu) falhou.current = null;
+      semResposta.current = erro || !respondeu;
       return chave !== null && tentativa > 0 && falhou.current === chave && !erro && !respondeu;
     },
     tentar,
@@ -135,7 +174,11 @@ export function novaTentativaDe(leituras: ReadonlyArray<LeituraQueTenta>): NovaT
   };
 }
 
-/** Várias novas tentativas como uma (a tela que junta leituras de origens diferentes, como o Financeiro). */
+/**
+ * Várias novas tentativas como uma (a tela que junta leituras de origens
+ * diferentes, como o Financeiro). Cada `tentar` relê só o que não respondeu:
+ * a leitura ao vivo já lida não assina de novo, e a consulta lida não relê.
+ */
 export function juntarTentativas(...tentativas: ReadonlyArray<NovaTentativa>): NovaTentativa {
   return {
     tentando: tentativas.some((tentativa) => tentativa.tentando),

@@ -1,11 +1,12 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { CloudOff, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { AccountMenu } from "@/components/layout/account-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppAuth, useAppUser } from "@/lib/auth";
-import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { FilaDoCampoProvider, useFilaDoCampo } from "@/lib/campo/fila-do-campo";
 import { ROTA_CAMPO } from "@/lib/campo/navegacao";
 import { rememberReturnPath } from "@/lib/settings-nav";
@@ -18,24 +19,44 @@ import { cn } from "@/lib/utils";
  * recusou. É dado, não legenda.
  *
  * Enviando o que a fila guardou, a caixa do carregamento gira no lugar do
- * ícone (parte 13g). A faixa não é região viva: o Anunciador diz uma vez que
- * a fila começou a enviar; a falta de sinal ele já diz ("Sem conexão").
+ * ícone (parte 13g), no relógio da espera: o registro que vai na hora (com
+ * sinal, cada toque passa uns milissegundos na fila) não mostra a faixa nem
+ * fala; a que envia mostra a faixa aos 300 ms, por pelo menos 500 ms, e a
+ * volta calma depois de 10 s. Quando o sinal volta, a faixa "Sem sinal" fica
+ * até o envio aparecer, sem piscar entre uma e outra. A faixa não é região
+ * viva: o Anunciador diz uma vez, quando ela aparece, que a fila envia, e
+ * retira o anúncio que ainda esperava a vez se o envio acabou antes; a falta
+ * de sinal ele já diz ("Sem conexão").
  */
 
 function AvisoDaFila() {
   const { aviso, online, falhas, dispensarFalha } = useFilaDoCampo();
-  useAnunciarAoMudar(aviso && online ? "Enviando os registros guardados" : null);
+  const enviando = aviso !== null && online;
+  const espera = useEspera(enviando, { segurarMinimo: true });
+  // O texto da faixa enquanto ela segura o mínimo de 500 ms depois do envio.
+  const textoDoEnvio = useRef<string | null>(null);
+  if (enviando) textoDoEnvio.current = aviso;
+  // A faixa "Sem sinal" que estava na tela fica até o envio aparecer (ou acabar antes dos 300 ms).
+  const semSinal = useRef<string | null>(null);
+  if (aviso !== null && !online) semSinal.current = aviso;
+  else if (!enviando || espera.visivel) semSinal.current = null;
+  const anunciar = useAnuncio();
+  useEffect(() => {
+    if (!espera.visivel) return undefined;
+    return anunciar("Enviando os registros guardados");
+  }, [espera.visivel, anunciar]);
+  const faixa = espera.visivel ? { texto: textoDoEnvio.current, online: true } : semSinal.current ? { texto: semSinal.current, online: false } : null;
   return (
     <>
-      {aviso ? (
+      {faixa ? (
         <p
           className={cn(
             "flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold",
-            online ? "bg-info-soft text-info-soft-foreground" : "bg-amber-soft text-amber-soft-foreground",
+            faixa.online ? "bg-info-soft text-info-soft-foreground" : "bg-amber-soft text-amber-soft-foreground",
           )}
         >
-          {online ? <Spinner /> : <CloudOff aria-hidden="true" className="size-4" />}
-          {aviso}
+          {faixa.online ? <Spinner calmo={espera.calmo} /> : <CloudOff aria-hidden="true" className="size-4" />}
+          {faixa.texto}
         </p>
       ) : null}
       {falhas.map((falha) => (

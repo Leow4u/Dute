@@ -362,3 +362,11 @@ describe("tela de contratos", () => {
     expect(texts(render({ selecionado: BTG }))).toEqual(expect.arrayContaining(["Novo contrato", "Editar", "Registrar aditivo"]));
   });
 });
+
+describe("Contratos: as tabelas e os aditivos que falham têm saída (revisão da parte 13g)", () => {
+  it("cada falha diz o que não carregou com Tentar de novo", () => {
+    const html = render({ tabelas: "erro", aditivos: "erro", releituras: { tabelas: { tentando: false, tentar: () => undefined }, aditivos: { tentando: false, tentar: () => undefined } } });
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar as tabelas\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+    expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar os aditivos\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});

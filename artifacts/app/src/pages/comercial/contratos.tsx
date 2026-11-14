@@ -170,6 +170,7 @@ export default function ComercialContratosPage({ somenteLeitura = false, rotaBas
         onSelecionar={selecionar}
         tabelas={carga(tabelas)}
         aditivos={carga(aditivos)}
+        releituras={{ tabelas, aditivos }}
         ocupado={ocupado}
         acoes={{
           novoContrato: () => abrir({ tipo: "novo", chave: novaChave() }),

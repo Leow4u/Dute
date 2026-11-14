@@ -39,7 +39,7 @@ export function usePagamentosDaNf(faturaId: string | null): { pagamentos: Pagame
 }
 
 /** Os pagamentos com o dia dentro do mês ("2026-10"), ao vivo; null enquanto carregam. */
-export function usePagamentosDoMes(role: ProfileRole | null | undefined, mes: string, ligado = true): { pagamentos: PagamentoDaNf[] | null; erro: boolean } {
+export function usePagamentosDoMes(role: ProfileRole | null | undefined, mes: string, ligado = true): { pagamentos: PagamentoDaNf[] | null; erro: boolean } & NovaTentativa {
   const dias = diasDoMes(mes);
   const abre = ligado && abreFinanceiro(role) && dias !== null;
   const leitura = useLeitura(
@@ -47,5 +47,5 @@ export function usePagamentosDoMes(role: ProfileRole | null | undefined, mes: st
     (db) => query(collection(db, "pagamentos"), where("recebido_em", ">=", dias!.de), where("recebido_em", "<=", dias!.ate)),
     pagamentoDaNf,
   );
-  return { pagamentos: leitura.itens, erro: leitura.erro };
+  return { pagamentos: leitura.itens, erro: leitura.erro, tentando: leitura.tentando, tentar: leitura.tentar };
 }

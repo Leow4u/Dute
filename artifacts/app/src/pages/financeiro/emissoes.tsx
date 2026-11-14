@@ -83,7 +83,9 @@ export default function FinanceiroEmissoes() {
   const baixaDaLista = (id: string) => leituraDasBaixas.baixas?.find((item) => item.id === id);
 
   const falhas = [...leitura.falhas, ...leituraDasBaixas.falhas];
-  const estado: EstadoDasEmissoes = falhas.length ? "erro" : leitura.emissoes && leituraDasBaixas.baixas ? "pronto" : "carregando";
+  // As listas lidas ficam na tela quando a releitura (a do minuto, a de depois de cada ação) falha.
+  const lidas = Boolean(leitura.emissoes && leituraDasBaixas.baixas);
+  const estado: EstadoDasEmissoes = lidas ? "pronto" : falhas.length ? "erro" : "carregando";
   return (
     <EmissoesView
       estado={estado}
@@ -94,6 +96,7 @@ export default function FinanceiroEmissoes() {
       ocupado={ocupado}
       emAndamento={emAndamento}
       leitura={juntarTentativas(leitura.releitura, leituraDasBaixas.releitura)}
+      falhaNaReleitura={lidas && falhas.length > 0}
       aviso={aviso}
       falha={falha}
       acoes={{

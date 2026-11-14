@@ -106,9 +106,16 @@ describe("Relatórios da Operação", () => {
 
   it("só o relatório vai para o PDF: os filtros, a lista e os botões ficam fora da impressão", () => {
     const html = render();
-    expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="print-area/);
+    expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*\bprint-area\b/);
     expect(html).toMatch(/<header class="no-print/);
     expect(html).toMatch(/<nav aria-label="Relatórios da Operação" class="no-print/);
+  });
+
+  it("lendo e na falha, o relatório fica nas cores do tema: o papel claro da impressão é só do relatório lido (no escuro, o rótulo da espera e o Tentar de novo não somem)", () => {
+    for (const html of [render({ estado: "carregando", tabela: null }), render({ estado: "erro", tabela: null })]) {
+      expect(html).toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*"/);
+      expect(html).not.toMatch(/<section aria-labelledby="titulo-do-relatorio" class="[^"]*\bprint-area\b/);
+    }
   });
 
   it("filtro errado diz o que corrigir e não exporta; carregando e erro também não", () => {

@@ -227,6 +227,7 @@ export default function ComercialMedicoesPage() {
         ocupado={ocupado}
         emAndamento={emAndamento}
         leitura={novaTentativaDe([contratosLidos])}
+        leituraDaMedicao={medicoes}
         aviso={aviso}
         acoes={{
           abrir: () => {

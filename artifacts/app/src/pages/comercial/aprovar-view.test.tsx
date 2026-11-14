@@ -7,6 +7,7 @@ import { linhasGravadas } from "@/lib/comercial/documento";
 
 import { AprovarView, type AprovarViewProps, type CartaoDaAprovacao } from "./aprovar-view";
 import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
+import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 /**
  * Aprovar no celular (docs/mockups/ComAprovarCelular.dc.html), só a
@@ -236,5 +237,17 @@ describe("aprovar no celular", () => {
       "Não foi possível carregar os orçamentos.",
       "Tentar de novo",
     ]);
+  });
+});
+
+describe("aprovar no celular: acessibilidade (revisão da parte 13g)", () => {
+  it("o axe não acusa nada no cartão, aprovando e com a confirmação no lugar dos botões", async () => {
+    expect(await violacoesDeAcessibilidade(render())).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ ocupado: true, emAndamento: "aprovar" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(render({ confirmacao: "Aprovado 14:20" }))).toEqual([]);
+  });
+
+  it("a confirmação toma o lugar dos botões: o Próximo é o destino do foco que estava no Aprovar", () => {
+    expect(render({ confirmacao: "Aprovado 14:20" })).toMatch(/<button[^>]*data-depois-de-aprovar=""[^>]*>Próximo/);
   });
 });

@@ -539,3 +539,10 @@ describe("tela de autorizações", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+describe("Autorizações: a leitura das autorizadas que falha tem saída (revisão da parte 13g)", () => {
+  it("a falha diz o que não carregou com Tentar de novo, e lendo a região tem a saída dos 10 s", () => {
+    expect(render({ autorizadas: "erro", leituraDasAutorizadas: { tentando: false, tentar: () => undefined } })).toMatch(/<p role="alert"[^>]*>Não foi possível carregar as autorizações\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+    expect(render({ autorizadas: "carregando", leituraDasAutorizadas: { tentando: false, tentar: () => undefined } })).toMatch(/<div tabindex="-1"[^>]*data-carregando-na-regiao=""/);
+  });
+});

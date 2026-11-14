@@ -51,6 +51,8 @@ export type AcoesDasEmissoes = {
 
 export type EmissoesViewProps = {
   estado: EstadoDasEmissoes;
+  /** As listas já lidas não se atualizaram: elas ficam, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   emissoes: readonly EmissaoDoFinanceiro[];
   baixas: readonly BaixaDoFinanceiro[];
   /** A emissão com a desistência aberta para confirmar. */
@@ -136,6 +138,8 @@ function Linha({ emissao, primeira, props }: { emissao: EmissaoDoFinanceiro; pri
                 {...estadoDaAcao(props, `${emissao.id}:desistir`)}
                 rotulo="Confirmar desistência"
                 andamento="Desistindo…"
+                objeto={emissao.cliente}
+                focoAoSair
                 onClick={acoes.confirmarDesistencia}
               />
               <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistirDeDesistir}>
@@ -149,7 +153,8 @@ function Linha({ emissao, primeira, props }: { emissao: EmissaoDoFinanceiro; pri
                 variant="outline"
                 size="sm"
                 {...estadoDaAcao(props, `${emissao.id}:${acao}`)}
-                aria-label={`${acao === "retomar" ? "Tentar de novo" : "Desistir"}, ${emissao.cliente}`}
+                objeto={emissao.cliente}
+                focoAoSair
                 rotulo={acao === "retomar" ? "Tentar de novo" : "Desistir"}
                 andamento={acao === "retomar" ? "Retomando…" : "Desistindo…"}
                 onClick={() => acoes.pedir(emissao.id, acao)}
@@ -192,6 +197,8 @@ function LinhaDaBaixa({ baixa, primeira, props }: { baixa: BaixaDoFinanceiro; pr
                 {...estadoDaAcao(props, `${baixa.id}:dispensar`)}
                 rotulo="Confirmar dispensa"
                 andamento="Dispensando…"
+                objeto={titulo}
+                focoAoSair
                 onClick={acoes.confirmarDispensa}
               />
               <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistirDeDispensar}>
@@ -205,7 +212,8 @@ function LinhaDaBaixa({ baixa, primeira, props }: { baixa: BaixaDoFinanceiro; pr
                 variant="outline"
                 size="sm"
                 {...estadoDaAcao(props, `${baixa.id}:${acao}`)}
-                aria-label={`${acao === "retomar" ? "Tentar de novo" : "Dispensar"}, ${titulo}`}
+                objeto={titulo}
+                focoAoSair
                 rotulo={acao === "retomar" ? "Tentar de novo" : "Dispensar"}
                 andamento={acao === "retomar" ? "Retomando…" : "Dispensando…"}
                 onClick={() => acoes.pedirNaBaixa(baixa.id, acao)}
@@ -292,6 +300,15 @@ export function EmissoesView(props: EmissoesViewProps) {
         <p role="alert" className="text-sm font-bold text-destructive-soft-foreground">
           {falha}
         </p>
+      ) : null}
+      {estado === "pronto" && props.falhaNaReleitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as emissões."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
       ) : null}
       {conteudo}
     </div>

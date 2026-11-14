@@ -5,7 +5,9 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 import { useDialogoEmAcao } from "@/components/ui/dialogo-em-acao";
 import { Spinner } from "@/components/ui/spinner";
 import { toqueRepetido } from "@/lib/campo/toque-unico";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { lugarDaSecao, segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /** Os cinco estados do botão de ação (carregamento v2, seção 5.4 e momento 3). */
@@ -40,6 +42,21 @@ export interface BotaoDeAcaoProps extends Omit<ButtonProps, "children" | "disabl
    * e travado ele não muda com o ponteiro em cima.
    */
   perigo?: boolean;
+  /**
+   * A ação de uma linha entre várias iguais ("Tentar de novo" de cada
+   * emissão): o objeto ("Itaú Unibanco") entra no nome acessível depois do
+   * rótulo atual, que continua sendo o começo do nome ("Retomando…, Itaú
+   * Unibanco"; WCAG 2.5.3), e, quando o em andamento aparece, aos 300 ms, o
+   * Anunciador diz o gerúndio com ele (momento 4). No lugar do `aria-label`
+   * fixo, que diria a ação parada durante a espera.
+   */
+  objeto?: string;
+  /**
+   * O botão sai da tela com o fim da ação (o formulário que fecha, a linha
+   * que perde a ação): com o foco nele, o foco vai ao título da seção
+   * (`true`) ou ao destino dado, nunca ao `body` (WCAG 2.4.3).
+   */
+  focoAoSair?: boolean | (() => HTMLElement | null | undefined);
 }
 
 /**
@@ -58,6 +75,18 @@ const CHECK = "M8 12.3l2.6 2.6 5.2-5.5";
 const EXCLAMACAO = "M12 7.6v4.9M12 16.2v.2";
 
 const CAMADAS: readonly EstadoDaAcao[] = ["repouso", "andamento", "sucesso", "erro", "sem-resposta"];
+
+/** O texto à vista em cada camada: o começo do nome acessível da ação de linha. */
+function textoDaCamada(
+  camada: EstadoDaAcao,
+  textos: { rotulo: string; andamento: string; sucesso?: string; erro?: string; conferir: string },
+): string {
+  if (camada === "andamento") return textos.andamento;
+  if (camada === "sucesso") return textos.sucesso ?? textos.rotulo;
+  if (camada === "erro") return textos.erro ?? textos.rotulo;
+  if (camada === "sem-resposta") return textos.conferir;
+  return textos.rotulo;
+}
 
 /**
  * A caixa chanfrada com o "!": o ícone do erro no botão e no selo da linha
@@ -190,6 +219,8 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     bloqueado = false,
     tinta = false,
     perigo = false,
+    objeto,
+    focoAoSair,
     variant: varianteDada,
     size,
     className,
@@ -241,6 +272,27 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     },
     [ref],
   );
+
+  // A ação de linha diz o que faz e com quê, quando o em andamento aparece; a espera que acaba antes de ser dita sai da
+  // fila do Anunciador.
+  const anunciar = useAnuncio();
+  const andamentoNaTela = troca.atual === "andamento" && estado === "andamento";
+  React.useEffect(() => {
+    if (!objeto || !andamentoNaTela) return undefined;
+    return anunciar(`${gerundio.current.replace(/…$/, "")}, ${objeto}`);
+  }, [objeto, andamentoNaTela, anunciar]);
+
+  // O botão que sai com o foco (o formulário fechou): o foco vai ao lugar pedido, lido antes de ele sair.
+  const destinoAoSair = React.useRef(focoAoSair);
+  destinoAoSair.current = focoAoSair;
+  React.useLayoutEffect(() => {
+    const elemento = botao.current;
+    return () => {
+      const destino = destinoAoSair.current;
+      if (!elemento || !destino) return;
+      segurarOFocoQueSai(elemento, destino === true ? lugarDaSecao(elemento) : destino);
+    };
+  }, []);
 
   const ultimoToque = React.useRef<number | undefined>(undefined);
   const dialogo = useDialogoEmAcao();
@@ -362,6 +414,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
       data-cobre={cobre ? "" : undefined}
       aria-busy={troca.atual === "andamento" ? true : undefined}
       aria-disabled={travado ? true : undefined}
+      {...(objeto ? { "aria-label": `${textoDaCamada(troca.atual, { rotulo, andamento: gerundio.current, sucesso, erro, conferir })}, ${objeto}` } : {})}
       onClick={aoClicar}
     >
       <span aria-hidden="true" data-recorte="">

@@ -48,7 +48,13 @@ export function useBaixasDoFinanceiro(role: ProfileRole | null | undefined, liga
     baixas: comFalha.data,
     carregando: comFalha.isPending && !comFalha.isError,
     falhas: comFalha.isError ? ["baixas"] : [],
-    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+    releitura: {
+      tentando: comFalha.isError && comFalha.isFetching,
+      // Só a leitura que falhou relê: a lida fica como está.
+      tentar: () => {
+        if (comFalha.isError) void leitura.refetch();
+      },
+    },
   };
 }
 
@@ -79,6 +85,12 @@ export function useBaixasDaNf(role: ProfileRole | null | undefined, faturaId: st
     baixas: comFalha.data,
     carregando: comFalha.isPending && !comFalha.isError,
     falhas: comFalha.isError ? ["baixas"] : [],
-    releitura: { tentando: comFalha.isError && comFalha.isFetching, tentar: () => void leitura.refetch() },
+    releitura: {
+      tentando: comFalha.isError && comFalha.isFetching,
+      // Só a leitura que falhou relê: a lida fica como está.
+      tentar: () => {
+        if (comFalha.isError) void leitura.refetch();
+      },
+    },
   };
 }

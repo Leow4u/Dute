@@ -145,9 +145,9 @@ async function montar() {
   await esperar();
 }
 
-/** Pelo nome acessível: o aria-label da linha ou o texto do botão. */
+/** Pelo nome acessível da linha ("Tentar de novo, Itaú Unibanco") ou pelo texto do botão ("Confirmar desistência"). */
 async function clicar(nome: string) {
-  const botao = [...container!.querySelectorAll("button")].find((item) => (item.getAttribute("aria-label") ?? rotuloDoBotao(item)) === nome);
+  const botao = [...container!.querySelectorAll("button")].find((item) => item.getAttribute("aria-label") === nome || rotuloDoBotao(item) === nome);
   if (!botao) throw new Error(`Botão "${nome}" não encontrado.`);
   relogios.push(depoisDoToqueDuplo());
   await act(async () => {
@@ -208,6 +208,18 @@ describe("as emissões com as callables", () => {
     // Outra intenção, outra chave.
     await clicar("Tentar de novo, Banco Safra");
     expect(acoes().at(-1)).toEqual({ idempotency_key: "k-2", id: PARADA, acao: "retomar", expected_edicao: 7 });
+  });
+
+  it("a confirmação que sai com o foco nela, no fim da gravação, leva o foco ao título da seção, nunca ao body (revisão da parte 13g)", async () => {
+    await montar();
+    await clicar("Desistir, Banco Safra");
+    const confirmar = [...container!.querySelectorAll("button")].find((item) => rotuloDoBotao(item) === "Confirmar desistência")!;
+    confirmar.focus();
+    await clicar("Confirmar desistência");
+    await esperar();
+    expect(container!.textContent).not.toContain("Confirmar desistência");
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.tagName).toMatch(/^H[1-6]$/);
   });
 
   it("desistir só chama depois da confirmação; voltar fecha sem chamar", async () => {

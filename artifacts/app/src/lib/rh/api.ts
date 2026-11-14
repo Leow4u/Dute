@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
-import { PRAZO_ESGOTADO, prazoEsgotado } from "../conexao";
+import { PRAZO_ESGOTADO, callableSemResposta, mensagemDaFalta, prazoEsgotado } from "../conexao";
 
 /**
  * O RH só pelas callables de functions/rh (docs/plataforma/fase-8-rh.md): o
@@ -48,6 +48,8 @@ export async function chamarRh<T = Record<string, unknown>>(nome: CallableDoRh, 
   try {
     return (await callable(dados)).data;
   } catch (error) {
-    throw new Error(mensagemDoErro(error));
+    // A falta de conexão fica dita como falta ("Sem conexão."): a leitura que falhou por ela é relida sozinha quando a
+    // rede volta (lib/carregando/estado-da-conexao.ts), e a gravação repete com a mesma chave.
+    throw new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error));
   }
 }

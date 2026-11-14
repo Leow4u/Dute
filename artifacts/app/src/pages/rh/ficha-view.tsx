@@ -6,6 +6,7 @@ import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Spinner } from "@/components/ui/spinner";
+import { useEspera } from "@/lib/carregando/use-espera";
 import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +74,8 @@ export type FichaViewProps = {
   estado: EstadoDaFicha;
   ficha: FichaDoRh | undefined;
   erro: string | null;
+  /** A ficha já lida não se atualizou: ela fica, e a frase fica escrita em cima, sem falar, com "Tentar de novo". */
+  falhaNaReleitura?: boolean;
   /** Quem grava no RH (só o rh): vê as ações de incluir, alterar, arquivar, anexar e gravar as datas do vínculo. */
   grava: boolean;
   formulario: FormularioDoRegistro | null;
@@ -142,6 +145,8 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
           bloqueado={ocupado && emAndamento !== `arquivar:${registro.id}`}
           rotulo="Confirmar arquivamento"
           andamento="Arquivando…"
+          objeto={nomeDoRegistro(registro)}
+          focoAoSair
           onClick={acoes.confirmarArquivamento}
         />
         <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistir}>
@@ -151,7 +156,6 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
     );
   }
   if (!registro.arquivo && !editavel) return null;
-  const entrada = `arquivo-${registro.id}`;
   return (
     <div className="col-span-2 flex flex-wrap gap-2">
       {registro.arquivo ? (
@@ -164,44 +168,65 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
           <Button type="button" variant="ghost" size="sm" onClick={() => acoes.alterar(registro)} disabled={travado}>
             Alterar
           </Button>
-          <label
-            htmlFor={entrada}
-            className={cn(
-              "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
-              travado && "pointer-events-none",
-              travado && !anexando && "opacity-50",
-            )}
-          >
-            {anexando ? (
-              // O arquivo que sobe: a caixa e o gerúndio no lugar do rótulo (parte 13g); a espera tem forma, nunca só 50%.
-              <span className="inline-flex items-center gap-2">
-                <Spinner />
-                Enviando o arquivo…
-              </span>
-            ) : registro.arquivo ? (
-              "Trocar arquivo"
-            ) : (
-              "Anexar arquivo"
-            )}
-            <input
-              id={entrada}
-              type="file"
-              accept={TIPOS_DE_ARQUIVO.join(",")}
-              className="sr-only"
-              disabled={travado}
-              onChange={(evento) => {
-                const arquivo = evento.target.files?.[0];
-                evento.target.value = "";
-                if (arquivo) acoes.anexar(registro, arquivo);
-              }}
-            />
-          </label>
+          <AnexarArquivo registro={registro} anexando={anexando} travado={travado} acoes={acoes} />
           <Button type="button" variant="ghost" size="sm" onClick={() => acoes.pedirArquivamento(registro.id)} disabled={travado}>
             Arquivar
           </Button>
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Anexar ou trocar o arquivo do registro: o seletor de arquivo é o controle da
+ * própria ação. Enquanto o arquivo sobe, ele nunca fica `disabled` (o foco de
+ * quem escolheu pelo teclado cairia no `body`): `aria-disabled`, com a trava
+ * no código, e `aria-busy` quando a espera aparece. A caixa e "Enviando o
+ * arquivo…" seguem o relógio da espera: só aos 300 ms, e pelo menos 500 ms
+ * (o envio rápido não pisca).
+ */
+function AnexarArquivo({ registro, anexando, travado, acoes }: { registro: RegistroDoRh; anexando: boolean; travado: boolean; acoes: AcoesDaFicha }) {
+  const espera = useEspera(anexando, { segurarMinimo: true });
+  const entrada = `arquivo-${registro.id}`;
+  return (
+    <label
+      htmlFor={entrada}
+      className={cn(
+        "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
+        travado && "pointer-events-none",
+        travado && !anexando && !espera.visivel && "opacity-50",
+      )}
+    >
+      {espera.visivel ? (
+        // O arquivo que sobe: a caixa e o gerúndio no lugar do rótulo (parte 13g); a espera tem forma, nunca só 50%.
+        <span className="inline-flex items-center gap-2">
+          <Spinner calmo={espera.calmo} />
+          Enviando o arquivo…
+        </span>
+      ) : registro.arquivo ? (
+        "Trocar arquivo"
+      ) : (
+        "Anexar arquivo"
+      )}
+      <input
+        id={entrada}
+        type="file"
+        accept={TIPOS_DE_ARQUIVO.join(",")}
+        className="sr-only"
+        aria-disabled={travado || undefined}
+        aria-busy={espera.visivel || undefined}
+        onClick={(evento) => {
+          // Travado, o seletor não abre (pelo teclado ou pelo toque): a trava é no código, não o `disabled`.
+          if (travado) evento.preventDefault();
+        }}
+        onChange={(evento) => {
+          const arquivo = evento.target.files?.[0];
+          evento.target.value = "";
+          if (arquivo && !travado) acoes.anexar(registro, arquivo);
+        }}
+      />
+    </label>
   );
 }
 
@@ -327,7 +352,7 @@ function Formulario({ formulario, ocupado, acoes }: { formulario: FormularioDoRe
         </Campo>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" />
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" focoAoSair />
         <DialogCancelar ocupado={ocupado} onClick={acoes.fechar} />
       </div>
     </form>
@@ -363,7 +388,7 @@ function FormularioDasDatas({ vinculo, ocupado, acoes }: { vinculo: FormularioDo
         />
       </Campo>
       <div className="flex flex-wrap gap-2">
-        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando as datas…" />
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando as datas…" focoAoSair />
         <DialogCancelar ocupado={ocupado} onClick={acoes.fecharVinculo} />
       </div>
     </form>
@@ -416,6 +441,15 @@ export function FichaView(props: FichaViewProps) {
         </p>
         {datas.length ? <p className="w-full text-sm font-bold">{datas.join(" · ")}</p> : null}
       </header>
+      {props.falhaNaReleitura && leitura ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar a ficha."
+          alerta={false}
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      ) : null}
       {falha ? (
         <p role="alert" className="text-sm font-bold text-destructive-soft-foreground">
           {falha}
