@@ -361,7 +361,8 @@ os testes do `.github/workflows/ci.yml` passarem no mesmo commit e de o job
 O frontend só sobe depois que este job termina verde, com a conferência do
 invoker; uma publicação por ambiente de cada vez, sem cancelar a que está
 rodando (ver "Ordem e fila" em `docs/deploy-manual.md`). Roda na homologação
-(`dute-homolog`) a cada push em `main`, pelo `.github/workflows/homologacao.yml`,
+(`dute-homolog`) quando o CI do push na `main` fica verde, pelo
+`.github/workflows/homologacao.yml`,
 e na produção (`dute-prod`) só por disparo
 manual com `publicar_producao` marcado. Ele sempre publica o lote inteiro
 (`firebase deploy --only functions`, nunca `--only functions:nome`) e termina

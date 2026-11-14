@@ -1,25 +1,25 @@
-"""Espera o CI do commit ficar verde antes de publicar na homologação.
+"""Decide o que a homologação publica depois que o CI termina.
 
-Chamado pelo primeiro job do .github/workflows/homologacao.yml, que já está na
-fila "publicar-homologacao". A fila é do workflow inteiro, em ordem de push;
-por isso os testes rodam no ci.yml, em paralelo, e aqui só se espera o
-resultado deles.
+A espera ativa (um runner parado até o CI acabar) saiu. O homologacao.yml
+dispara com workflow_run quando o CI completa. Este módulo ainda sabe duas
+coisas:
+
+- `esperar` / `main`: o laço antigo, coberto por teste. O workflow não chama
+  mais. Ficou porque o incidente de 22/10/2026 está descrito aqui.
+- `sha_para_homologacao` / `main --sha`: o que o workflow chama. O CI que
+  disparou publica o próprio commit se ele ainda é o HEAD. Se a main andou e
+  o CI de push mais novo do HEAD já está verde, publica o HEAD — o
+  workflow_run desse commit pode ter sido tirado da fila por este, que chegou
+  depois (o GitHub só guarda um pendente no grupo). Se o CI do HEAD ainda
+  corre ou falhou, não publica: o workflow_run dele publica, ou nada sobe.
 
 Até 22/10/2026 a fila era do job de publicação do ci.yml, que só entrava nela
 quando os testes do commit acabavam. Os testes de pushes seguidos terminam fora
-de ordem (a instalação do Chromium leva de 20 s a 12 min), e o GitHub mantém só
-o último a chegar na espera: o #172 entrou depois do #170, tirou o #170 da fila
-e, quando chegou a vez dele, não publicou porque o HEAD da main era o #170. A
-homologação ficou dois PRs atrás até alguém rodar o #170 de novo à mão.
+de ordem, e o GitHub mantém só o último a chegar na espera.
 
-Resultado (em $GITHUB_OUTPUT, publicar=true|false):
-- CI verde e o commit ainda é o HEAD da main: publicar=true.
-- A main andou: publicar=false e sai verde. O push mais novo tem a própria
-  execução na fila, que roda depois desta.
-- CI vermelho ou cancelado, ou sem resposta no prazo: sai vermelho, nada sobe.
-
-Rodar da raiz do repositório, com GITHUB_REPOSITORY, GITHUB_SHA e GITHUB_TOKEN
-(permissões actions: read e contents: read).
+`main` (sem argumento) grava publicar=true|false em $GITHUB_OUTPUT.
+`main --sha` grava sha=<commit>|sha= e exige CI_SHA, GITHUB_REPOSITORY e
+GITHUB_TOKEN (actions: read e contents: read).
 """
 
 from __future__ import annotations
@@ -70,6 +70,22 @@ class GitHub:
     def execucoes_ci(self, sha: str) -> list[dict[str, Any]]:
         consulta = urllib.parse.urlencode({"head_sha": sha, "event": "push", "branch": "main", "per_page": 10})
         return self._get(f"/repos/{self.repo}/actions/workflows/{self.workflow}/runs?{consulta}")["workflow_runs"]
+
+
+def sha_para_homologacao(head: str, ci_sha: str, execucoes_do_head: list[dict[str, Any]]) -> str | None:
+    """Commit a publicar, ou None.
+
+    ci_sha é o commit do CI que disparou o workflow_run (já verde). execucoes_do_head
+    são as execuções de push do CI do HEAD, ignoradas quando os dois SHAs coincidem.
+    """
+    if head == ci_sha:
+        return ci_sha
+    if not execucoes_do_head:
+        return None
+    execucao = max(execucoes_do_head, key=lambda item: item["id"])
+    if execucao.get("status") == "completed" and execucao.get("conclusion") == "success":
+        return head
+    return None
 
 
 def decidir(head_main: str, sha: str, execucoes: list[dict[str, Any]]) -> tuple[str, dict[str, Any] | None]:
@@ -128,6 +144,40 @@ def escrever_saida(caminho: str | None, publicar: bool) -> None:
         saida.write(f"publicar={'true' if publicar else 'false'}\n")
 
 
+def main_sha(env: dict[str, str] | None = None, api: Any = None) -> int:
+    env = dict(os.environ) if env is None else env
+    ci_sha = env["CI_SHA"]
+    if api is None:
+        api = GitHub(env["GITHUB_REPOSITORY"], env["GITHUB_TOKEN"], env.get("GITHUB_API_URL", "https://api.github.com"))
+    try:
+        head = api.head_main()
+        execucoes = [] if head == ci_sha else api.execucoes_ci(head)
+    except ErroTransitorio as erro:
+        print(f"::error::API do GitHub falhou ({erro}); nada sobe. Rode de novo a Homologação quando a API responder.")
+        _gravar_sha(env.get("GITHUB_OUTPUT"), None)
+        return 1
+    except urllib.error.HTTPError as erro:
+        print(f"::error::GitHub respondeu {erro.code} em {erro.filename}. Confira as permissões do job (actions: read, contents: read).")
+        _gravar_sha(env.get("GITHUB_OUTPUT"), None)
+        return 1
+    sha = sha_para_homologacao(head, ci_sha, execucoes)
+    _gravar_sha(env.get("GITHUB_OUTPUT"), sha)
+    if sha == ci_sha:
+        print(f"CI de {sha[:7]} verde e ainda é o HEAD; publicando.")
+    elif sha:
+        print(f"::notice::{ci_sha[:7]} não é mais o HEAD; o CI de {sha[:7]} está verde, publicando esse.")
+    else:
+        print(f"::notice::{ci_sha[:7]} não é o HEAD ({head[:7]}) e o CI desse HEAD ainda não está verde; a publicação fica para o workflow_run dele.")
+    return 0
+
+
+def _gravar_sha(caminho: str | None, sha: str | None) -> None:
+    if not caminho:
+        return
+    with open(caminho, "a", encoding="utf-8") as saida:
+        saida.write(f"sha={sha or ''}\n")
+
+
 def main(env: dict[str, str] | None = None, api: Any = None, **opcoes: Any) -> int:
     env = dict(os.environ) if env is None else env
     sha = env["GITHUB_SHA"]
@@ -158,4 +208,4 @@ def main(env: dict[str, str] | None = None, api: Any = None, **opcoes: Any) -> i
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main_sha() if "--sha" in sys.argv[1:] else main())
