@@ -51,6 +51,11 @@
      em volta do preenchimento (lib/carregando/trava.test.ts). */
   --background-color-primary: hsl(var(--primary-fundo));
   --border-color-primary-fundo: hsl(var(--primary-fundo));
+  /* O primário como texto, em todo text-primary (também com opacidade e no
+     hover): o --primary-texto, pelo namespace da cor do texto, que vem antes
+     do --color-*. Era 4,39:1 no cartão escuro e 4,2:1 no fundo da v3; o
+     fundo, a borda e o preenchimento seguem o --primary. */
+  --text-color-primary: hsl(var(--primary-texto));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));

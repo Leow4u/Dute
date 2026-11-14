@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 
+import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
 import { CURVA_DO_REFLUXO } from "./palco-sem-saltos";
@@ -653,20 +654,43 @@ describe("o primário como texto, em cada contexto", () => {
   it("o --primary do escuro, como texto no cartão, ficava abaixo de 4,5:1", () => {
     expect(contraste(temas.escuro.cor("--primary"), temas.escuro.cor("--card"))).toBeLessThan(4.5);
   });
+
+  /**
+   * Todo text-primary é texto (ou ícone ao lado dele): lê o --primary-texto,
+   * pelo namespace da cor do texto do Tailwind, que vem antes do --color-*,
+   * também com opacidade e no hover. O fundo, a borda e o preenchimento
+   * seguem como estavam. Antes, cerca de 70 text-primary fora dos links da
+   * parte 13m ficavam em 4,39:1 no cartão escuro e em 4,2:1 no fundo da v3.
+   */
+  it("o text-primary lê o --primary-texto no Tailwind de verdade; o bg, a borda e o preenchimento, não", async () => {
+    const doTema = variaveis("@theme inline");
+    const linhas = ["--color-primary", "--background-color-primary", "--text-color-primary"]
+      .filter((nome) => doTema.has(nome))
+      .map((nome) => `${nome}: ${doTema.get(nome)};`);
+    const tailwind = await compile(`@theme inline { ${linhas.join(" ")} } @tailwind utilities;`);
+    const css = tailwind.build(["text-primary", "text-primary/80", "hover:text-primary", "bg-primary", "border-primary", "fill-primary"]);
+    const cor = (classe: string) => regras(css).find((regra) => seletores(regra).includes(classe))?.corpo ?? "";
+    expect(cor(".text-primary")).toContain("hsl(var(--primary-texto))");
+    expect(css).toMatch(/\.text-primary\\\/80[^}]*color-mix\(in oklab, hsl\(var\(--primary-texto\)\) 80%/);
+    expect(css).toMatch(/\.hover\\:text-primary[^}]*hsl\(var\(--primary-texto\)\)/);
+    expect(cor(".bg-primary")).toContain("hsl(var(--primary-fundo))");
+    expect(cor(".border-primary")).toContain("hsl(var(--primary))");
+    expect(cor(".fill-primary")).toContain("hsl(var(--primary))");
+  });
 });
 
 /**
  * O fundo do primário (parte 13k): o branco sobre o botão primário do escuro
  * tinha 4,30:1 (o #2B75EE, o --primary), abaixo dos 4,5:1. O fundo do
  * primário é o --primary-fundo: o bg-primary o lê pelo `--background-color-primary`
- * do tema, sem trocar classe nenhuma, e o text-primary, a borda e o anel
- * seguem o --primary. No claro e na v3, é o próprio --primary (o vermelho da
+ * do tema, sem trocar classe nenhuma; a borda e o anel seguem o --primary
+ * (o text-primary lê o --primary-texto, mais abaixo). No claro e na v3, é o próprio --primary (o vermelho da
  * marca na v3); no escuro, o mesmo azul, mais fundo.
  */
 describe("o fundo do primário, em cada contexto", () => {
   const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
 
-  it("o bg-primary lê o --primary-fundo, e o text-primary segue o --primary", () => {
+  it("o bg-primary lê o --primary-fundo, e a borda e o anel seguem o --primary", () => {
     const doTema = variaveis("@theme inline");
     expect(doTema.get("--background-color-primary")).toBe("hsl(var(--primary-fundo))");
     expect(doTema.get("--color-primary")).toBe("hsl(var(--primary))");
