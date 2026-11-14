@@ -2534,3 +2534,238 @@ Fica aberto:
 - a entrega dos pedidos e os Retornos da Operação não têm medição no
   navegador: o harness simula a leitura ao vivo; os testes cobrem;
 - a conferência com leitor de tela de verdade e num Android médio.
+
+**Parte 13d, o Faturamento, os Relatórios, os Documentos e o Catálogo (PR 610,
+13/11/2026).** A migração das seções 4.8 e 4.9 que as partes 6 a 13c não
+cobriram: o Fechamento do mês, a fatura, a Tabela de preços com a Cobrança, a
+aba Contratos do Faturamento, os Relatórios, os Documentos, Produtos, SKUs e o
+"Numerar pedidos e envios antigos" (em Configurações › Sistema). A foto e o
+estúdio de foto ficaram com a parte 11. As necessidades 2, 3, 5, 8 e 10 da
+seção 5, conferidas contra o código atual. As chamadas, as callables e as
+escritas seguem as de antes.
+
+- **O que já estava feito**, e ficou: a `CarregandoTela` nos `Suspense` do
+  Faturamento e do Catálogo (parte 9); a troca de mês, período e página com a
+  lista anterior, e a releitura que falha na linha de estado, no Fechamento,
+  nos Relatórios, em Produtos e em SKUs (parte 10); a confirmação de Emitir e
+  a do Remover item, e os diálogos de item, produto, SKU e documento (parte
+  13a); as etapas de "Adicionar documento" (parte 11); a tabela de preços que
+  falha sem nada lido (PR 581); os Relatórios com o perfil não lido (o
+  `ProtectedRoute` já espera o usuário).
+- **A forma final na primeira leitura** (necessidade 3):
+  - o Fechamento deixa o "Calculando…": o esqueleto do mês (o cobrado
+    automaticamente, os serviços e o cartão do total), com as linhas lembradas
+    por cliente, e "Carregando outubro de 2026…" na linha de estado, logo
+    abaixo dos meses, que continua a espera também enquanto o cliente ativo
+    lê. Os meses mostram o bloco no lugar do estado antes da lista e "—" na
+    falha, nunca "Em aberto";
+  - a Tabela de preços tem a linha de estado sob "Serviços e valores" e as
+    linhas-fantasma; a Cobrança mostra o esqueleto dos campos até a
+    configuração chegar (antes, os campos vazios e um "Salvar" que gravava a
+    taxa 0);
+  - nos Relatórios, a linha diz o objeto de cada relatório ("Carregando a
+    posição de estoque…"), a prévia tem a forma final (o resumo, as linhas
+    lembradas, até 8, e o rodapé) e a lateral guarda a casa do número;
+  - os Documentos têm a linha de estado e as linhas-fantasma, na tabela e nos
+    cartões do celular;
+  - Produtos e SKUs mostram o bloco no lugar dos números e do resumo da
+    página antes de ler, e "—" na falha, sem "0 produto(s)" nem "Exibindo 0 de
+    0". Nos SKUs, o endereço fica neutro até os saldos chegarem (antes, "Sem
+    endereço" em todas as linhas);
+  - a fatura tem a espera em bloco, "Carregando a fatura…", e a aba Contratos
+    mostra a `CarregandoTela` enquanto o cliente ativo lê, no lugar da aba em
+    branco.
+- **Erro nunca vira vazio nem some** (necessidade 2): a fatura, a tabela, a
+  cobrança, os Documentos e os saldos dos SKUs que falham sem nada lido
+  mostram a `FalhaNaLeitura`, com "Tentar de novo"; a falha dos avisos de
+  chegada tem aviso próprio e não afirma mais "Nenhum documento ainda".
+- **A releitura que falha não apaga a lista** (necessidade 8): nos Documentos,
+  ela trocava a lista pelo texto do erro; agora a lista fica, e a linha de
+  estado diz.
+- **As ações** (necessidade 5): "Salvar quantidades", "Marcar como paga",
+  "Salvar cobrança", "Ver o que muda" e "Numerar agora" são o `BotaoDeAcao`,
+  ocupados sem `disabled`; quando o botão do Fechamento sai, o foco vai ao
+  link da fatura, e o Emitir devolve o foco a ele ao fechar a confirmação. As
+  ações do menu "⋯" de cada documento são por linha (`useAcaoNaLinha`): a
+  linha tocada mostra a espera dela, as outras seguem livres, e o segundo
+  toque na linha ocupada não grava de novo.
+- **A trava da área** (`pages/carregamento-do-faturamento.test.ts`): nos
+  arquivos da área, nenhum `animate-spin`, `animate-pulse` ou `Loader2`,
+  nenhuma região viva solta, nenhum "Carregando" seco, nenhum texto com três
+  pontos e nenhum botão que só apaga durante a ação.
+- **Testes**: novos no Fechamento e na fatura (`billing.carregamento`), na
+  Tabela de preços, nos Relatórios, nos Documentos, no Catálogo, no Numerar e
+  no Faturamento com a aba Contratos, com a lista de textos e o axe. Contra o
+  `c4066b4`, 33 dos 39 testes dos 9 arquivos novos ou mudados falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `c4066b4`), o quanto a tela cresce na chegada, a 1440 px: o Fechamento, de
+  365 px a 0, e a Tabela de preços, 0 antes e depois; na segunda visita, os
+  Documentos, de 228 a 0, e os Relatórios, de 184 a −1. Produtos e SKUs
+  crescem menos (de 703 a 475 px e de 575 a 355), pela regra das cinco
+  linhas lembradas. A 390 px, o Fechamento, de 767 a 78.
+- **A revisão (14/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **O cliente ativo é a fronteira também enquanto lê.** Com a lista dos
+    clientes demorando, o "Tentar de novo" da demora do Fechamento lia o mês
+    do cliente padrão e o mostrava como se fosse o escolhido, com as ações
+    ligadas: "Salvar quantidades", "Emitir" e "Marcar como paga" gravariam no
+    cliente errado. Agora, enquanto o cliente ativo lê, nenhum mês nem fatura
+    do cliente padrão entra na tela, e o "Tentar de novo" do Fechamento e da
+    fatura lê de novo a lista dos clientes (`recarregar`, do
+    `ActiveCustomerProvider`), cancelando a que ficou presa: sem isso, o
+    react-query só esperava a mesma leitura. O esqueleto do mês usa as linhas
+    lembradas do cliente que a tela vai operar (o provável), como Pedidos e
+    Receber;
+  - **O menu "⋯" do documento não reabre sozinho.** Ele passou a ser
+    controlado e ficava aberto por dentro quando a linha ficava ocupada antes
+    de o menu fechar: quando a ação terminava, no sucesso ou no erro, o menu
+    abria sozinho e puxava o foco, e o que a pessoa digitava depois caía nele
+    (um "o" e Enter ocultavam o documento). Agora a escolha fecha o menu, e o
+    ocupado só impede que ele abra;
+  - **A linha diz o fim.** Do fim da chamada até a lista relida chegar, a
+    linha diz o que mudou ("Arquivado", "Oculto do cliente", "Enviado para o
+    Conhecimento"), com o check verde, no lugar da origem do documento (antes,
+    a linha não dizia nada, e o "⋯" parecia livre sem abrir). A espera, a
+    demora, o "Sem confirmação do servidor" e o motivo da falha também ficam
+    nesse lugar, na mesma linha de 16 px: a linha não cresce nem empurra as de
+    baixo;
+  - **O "Conferir" relê e diz que relê.** Ele fica na tela com "Conferindo…",
+    `aria-busy` e o foco, e o "⋯" se chama "Conferindo NF 48213…"; antes, a
+    linha voltava a "Arquivando…" e o Anunciador dizia de novo "Arquivando NF
+    48213", como se a escrita fosse refeita. A lista que diz que não valeu
+    devolve a linha e leva o foco ao "⋯" dela. A resposta da escrita que chega
+    depois disso relê a lista, e o documento arquivado sai;
+  - **A chave da tentativa vai ao servidor** no "Enviar para o Conhecimento",
+    no Aprovar e no Recusar: a repetição depois do resultado incerto leva a
+    mesma `idempotency_key` e devolve o recibo. O Mostrar, o Ocultar e o
+    Arquivar vão por rotas que não recebem a chave;
+  - **O relógio é da ação, não da linha na tela.** A linha que sai da lista
+    (a busca, o filtro) e volta no meio da ação segue a demora de onde estava,
+    e o Anunciador não repete o que já disse dessa espera, nem pela linha da
+    tabela e pelo cartão do celular, que existem os dois;
+  - **Os botões mostram o fim.** "Salvar quantidades", "Marcar como paga",
+    "Salvar cobrança" e "Numerar agora" seguem o relógio da ação: o sucesso
+    ("Quantidades salvas", "Marcada como paga", "Cobrança salva", "Numerado")
+    fica pelo menos 1 s e até a releitura chegar (antes, o gerúndio ficava até
+    a releitura, depois do toast de sucesso), e o erro ("Quantidades não
+    salvas", "Não marcada como paga", "Cobrança não salva", "Não numerado")
+    fica 2 s. Aos 70 s sem resposta, "Conferir" relê o mês ou a configuração e
+    nunca grava de novo;
+  - **Os meses.** A lista dos meses que falha diz "Não consegui carregar os
+    meses.", com "Tentar de novo" (antes, o "—" nos cartões e a linha dizendo
+    "Atualizado às"). A faixa nasce com a forma final: os meses que a lista
+    vai trazer entram como cartões-fantasma à esquerda, quantos a última lista
+    deste cliente trouxe (sem lembrança, a faixa cheia, com quatro); antes, o
+    mês escolhido saltava 330 px para a direita na chegada e, no celular,
+    tudo abaixo descia;
+  - **O que lê à parte tem estado.** A Cobrança tem a linha de estado dela,
+    sob o título ("Carregando a cobrança…", a demora com "Tentar de novo",
+    "Atualizado às"), que descreve a seção ocupada, e o "Tentar de novo" da
+    falha leva o foco a ela quando a cobrança chega (antes, ao `body`). Nos
+    SKUs, a linha diz "Carregando os endereços…" até os saldos chegarem, com a
+    demora aos 10 s; com o filtro "Sem endereço", a tabela espera os
+    endereços com as linhas-fantasma, sem "0 SKU(s) exibido(s)" nem a tabela
+    vazia, e a falha deles fica no aviso;
+  - **A Tabela de preços no celular.** A linha de estado fica na largura do
+    cartão, abaixo da fileira do título e do "Novo item": a demora não cobre
+    mais o botão nem sai do cartão;
+  - **A fatura presa tem saída.** A espera em bloco (`CarregandoNaRegiao`)
+    ganhou o "Tentar de novo" aos 10 s, quando quem lê sabe ler de novo, com
+    44 px e "Tentando de novo…"; a leitura presa é cancelada e lida de novo, e
+    o foco vai à volta para o Fechamento quando a fatura chega;
+  - **A aba Contratos é uma espera só.** A espera do cliente ativo e a do
+    arquivo da aba usam o mesmo relógio, desde que a aba abriu: a caixa não
+    some na troca, e a demora vem aos 10 s do começo;
+  - **Um brilho por cartão e a chegada em cascata.** O brilho saiu de cada
+    bloco e ficou no cartão (o corpo das linhas-fantasma, a prévia, a
+    Cobrança, cada cartão do Fechamento, a 120 ms um do outro); nas tabelas, o
+    `corpoDaTabela` do `stock-workbench` liga o brilho, o `aria-busy` e a
+    chegada. Na chegada, as linhas reais entram por opacidade, subindo 4 px,
+    em cascata (`useChegada`), em todas as telas da parte;
+  - **"Adicionar documento" diz que espera.** Com o cliente ativo lendo, a
+    caixa entra no lugar do ícone aos 300 ms, com `aria-busy` (antes, só a
+    opacidade de 0,45). O "⋯" dos documentos tem 48 px no celular;
+  - **A segunda visita aos Documentos não cresce.** As linhas-fantasma lembram
+    quantos documentos têm o selo do Conhecimento ("Aguardando aprovação para
+    o Conhecimento"), que dá à linha uma terceira linha de texto;
+  - **Os testes.** A lista de textos passou a valer também nos estados das
+    ações (o gerúndio, o fim, o erro, "Sem confirmação do servidor" e
+    "Conferir") e na espera da aba Contratos. A tabela que falhou e é relida
+    sem a pessoa pedir ganhou o teste que faltava. Contra o `3078d17`, 33 dos
+    68 testes dos 9 arquivos novos ou mudados reprovam.
+- **Medição da revisão no Chromium**, no harness com a API falsa (só
+  127.0.0.1):
+  - o menu "⋯" com Mostrar, Aprovar e a falha do servidor, pelo clique a 1440
+    px, pelo toque a 390 px e pelo teclado: fechado nos 4 a 6 s seguintes, com
+    o foco no "⋯" (antes, aberto de novo cerca de 1 s depois da resposta);
+  - Arquivar com o servidor a 1,2 s e a releitura a 2,5 s: "Arquivando…" de
+    690 ms a 1,5 s e "Arquivado" de 1,57 s a 4 s; a linha de baixo parada em
+    todos os quadros (antes, descia 14 px e voltava); quando a linha sai, o
+    foco vai à linha de estado. A 390 px, o "⋯" com 48 × 48 e o cartão de
+    baixo parado (antes, 40 × 40 e 18 px de salto);
+  - o "Conferir" dos 70 s pelo teclado, a 1440 e a 390 px: "Conferindo…" com
+    `aria-busy` e o foco nele, o toque de 44 px, um GET só, a linha na mesma
+    altura e, quando a lista diz que não valeu, o foco no "⋯"; o Anunciador
+    diz "Conferindo NF 48213", nunca "Arquivando" de novo;
+  - o Fechamento com o cliente ativo preso: aos 10,8 s, o "Tentar de novo"
+    relê a lista dos clientes, e nenhum mês é lido nem aparece;
+  - a chegada do Fechamento: o mês escolhido anda 13,5 px (antes, 329,5) e o
+    "Outro mês" 34 px (antes, 350); a 390 px, a linha de estado e o cartão do
+    total não descem (antes, 62 px);
+  - "Salvar quantidades" com o servidor a 3 s: "Salvando…" aos 357 ms,
+    "Quantidades salvas" de 3,1 s até o mês relido (4,55 s) e o foco em "Ver
+    prévia da fatura (PDF)", sem nenhum quadro no `body`;
+  - a Cobrança a 90 s: "Carregando a cobrança…" aos 300 ms e, aos 10,5 s, a
+    demora com "Tentar de novo" (antes, nada); a fatura presa: o "Tentar de
+    novo" aos 10,8 s lê de novo, e o foco vai a "Fechamento do mês";
+  - SKUs com os saldos a 8 s e "Sem endereço": as linhas-fantasma e
+    "Carregando os endereços…", sem "0 SKU(s)"; lidos, "4 SKU(s) exibido(s)";
+  - a Tabela de preços a 390 e 360 px com a demora: a linha não cobre o "Novo
+    item" nem sai do cartão, e nada rola de lado;
+  - em laço depois do primeiro segundo, 4 animações no Fechamento e na Tabela
+    de preços e 2 nas outras telas (antes, de 19 a 31); o brilho para entre
+    4,27 e 4,49 s; só `transform` e `opacity`. Na chegada, a cascata em todas;
+    no movimento reduzido, só por opacidade;
+  - a segunda visita aos Documentos: 0 px de salto a 1440 e a 390 px (antes,
+    14 e 20);
+  - o axe-core em 26 estados no claro e no escuro a 1440 px e em 17 a 390 px:
+    só as violações de antes desta parte.
+
+Fica aberto:
+
+- as colunas das tabelas mudam de largura na chegada (o layout automático da
+  tabela segue o conteúdo, que os blocos não conhecem): nos Documentos, os
+  títulos andam até 63 px de lado. Fixar as larguras muda a tabela lida;
+  fica para decidir;
+- Produtos e SKUs ainda crescem na chegada: a contagem lembrada vai de 1 a 5
+  linhas, e a página tem até 50 (na segunda visita, 475 e 355 px a 1440 px); é
+  a regra do Pedidos legado e vale confirmar com o Leonardo. Na primeira
+  visita, sem lembrança, os Relatórios crescem 184 px e os Documentos 130 px.
+  Na chegada do Fechamento, o cartão do mês escolhido se alarga 21 px com o
+  estado;
+- no computador, a demora da Cobrança passa o "Tentar de novo" à linha de
+  baixo na coluna de 340 px e empurra os campos 28 px aos 10 s;
+- as linhas dos Documentos não têm a `BarraDeEspera` da linha;
+- o Mostrar, o Ocultar e o Arquivar não levam a chave da tentativa: as rotas
+  deles não a recebem, e mudar é mudar a escrita;
+- "Ver o que muda" é uma leitura: o fim dela é o texto da seção ("Vai numerar
+  2 solicitação(ões)"), e o botão não tem o sucesso;
+- se a releitura do mês falha depois de "Salvar quantidades", o botão volta a
+  "Salvar quantidades" com as quantidades na tela (a linha de estado diz que
+  não atualizou); gravar de novo grava as mesmas quantidades;
+- a fatura lida rola de lado a 390 px (o `InvoiceDocument`, de antes desta
+  parte);
+- as violações do axe de antes desta parte: o cabeçalho das tabelas a 3,01:1
+  (que o esqueleto dos Documentos repete), o primário no escuro a 4,3:1, os
+  códigos em `text-primary` no escuro a 4,38:1, a pílula do estado do mês a
+  4,4:1, o toast de erro no escuro a 3,3:1, o `scrollable-region-focusable`
+  das tabelas no celular e o `aria-controls` das abas do Faturamento;
+- o Numerar mora em `pages/settings-system.tsx`, a área da 13e: o merge desse
+  bloco pode dar conflito. O resto da tela não foi tocado;
+- o Remover da Tabela de preços devolve o foco ao título da página pelo
+  foco-de-volta, sem medição no navegador;
+- com a suíte inteira carregada, testes de outras partes falham às vezes e
+  passam sozinhos (`inventory-carregamento`, `opening-line-correction`,
+  `agent-knowledge`);
+- a conferência num Android médio, com leitor de tela de verdade e na
+  homologação.
