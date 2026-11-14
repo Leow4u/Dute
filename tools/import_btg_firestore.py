@@ -36,37 +36,17 @@ CLIENT_SCOPED_SKUS = {
     if sku.strip()
 }
 HTTP_TIMEOUT_SECONDS = 60
-ROOT = Path(__file__).resolve().parents[1]
 REAL_INVENTORY_XLSX = Path(
     r"C:\Users\leona\OneDrive - Dutelog\Pasta Profissional\Empresas\DUTELOG\Operacional\Armazenamento\BTG Pactual - Store\Armazenamento\Inventário_BTG_Consolidado.xlsx"
 )
 REAL_BILLING_XLSX = Path(
     r"C:\Users\leona\OneDrive - Dutelog\Pasta Profissional\Empresas\DUTELOG\Operacional\Armazenamento\BTG Pactual - Store\Armazenamento\Armazenamento BTG_Fechamento mensal.xlsx"
 )
-INVENTORY_XLSX = Path(
-    os.environ.get(
-        "BTG_INVENTORY_XLSX",
-        str(
-            REAL_INVENTORY_XLSX
-            if REAL_INVENTORY_XLSX.exists()
-            else ROOT
-            / "attached_assets"
-            / "Inventário_BTG_Consolidado_1783512047835.xlsx"
-        ),
-    )
-)
-BILLING_XLSX = Path(
-    os.environ.get(
-        "BTG_BILLING_XLSX",
-        str(
-            REAL_BILLING_XLSX
-            if REAL_BILLING_XLSX.exists()
-            else ROOT
-            / "attached_assets"
-            / "Armazenamento_BTG_Fechamento_mensal_1783520952576.xlsx"
-        ),
-    )
-)
+# As cópias que estavam em attached_assets/ saíram do git (custo e quantidade
+# de cliente). A ferramenta lê o arquivo local ou a variável; não há planilha
+# no repositório.
+INVENTORY_XLSX = Path(os.environ.get("BTG_INVENTORY_XLSX", str(REAL_INVENTORY_XLSX)))
+BILLING_XLSX = Path(os.environ.get("BTG_BILLING_XLSX", str(REAL_BILLING_XLSX)))
 GCLOUD = (
     os.environ.get("GCLOUD")
     or shutil.which("gcloud")

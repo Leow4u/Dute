@@ -1,23 +1,23 @@
 name: Homologação
 
-# Cada push na main vai para a homologação (dute-homolog), depois que o CI do
-# mesmo commit (ci.yml, com os testes) termina verde.
+# Cada push na main publica na homologação (dute-homolog) quando o CI desse
+# commit termina verde. O gatilho é workflow_run, não uma espera com runner
+# parado: o CI roda sozinho e este workflow só nasce no fim.
 #
-# A fila é do workflow inteiro, não de um job: o GitHub põe cada execução na
-# fila no momento do push, então ela anda em ordem de commit. Uma publicação de
-# cada vez, sem cancelar a que está rodando (cancel-in-progress: false; um
-# "firebase deploy" cortado no meio deixa functions pela metade). Na espera fica
-# só a execução do push mais novo: as mais antigas aparecem como canceladas sem
-# ter publicado nada, e o que elas traziam sobe junto com a mais nova. Dá para
-# mergear vários PRs seguidos sem esperar a publicação anterior terminar.
+# Uma publicação por vez, sem cancelar a que está rodando (cancel-in-progress:
+# false; um "firebase deploy" cortado no meio deixa functions pela metade). O
+# GitHub guarda só uma execução pendente no grupo. Se o CI de um commit mais
+# antigo termina por último e tira da fila o do HEAD, o passo --sha publica o
+# HEAD se o CI dele já está verde (tools/esperar_ci.py). Commit que não é o
+# HEAD e cujo HEAD ainda não tem CI verde sai sem publicar.
 #
-# Até 22/10/2026 a fila era do job "Publicar na homologação" do ci.yml, que só
-# entrava nela quando os testes do commit acabavam, e os testes terminam fora de
-# ordem. O #172 entrou depois do #170, tirou o #170 da espera e, na vez dele,
-# não publicou porque o HEAD da main era o #170: a homologação ficou dois PRs
-# atrás até alguém rodar o #170 de novo à mão (ver tools/esperar_ci.py).
+# Até 22/10/2026 a fila era do job de publicação do ci.yml, que só entrava nela
+# quando os testes acabavam, fora de ordem. Até esta troca, o homologacao.yml
+# nascia no push e ficava até 50 min parado em tools/esperar_ci.py.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -25,30 +25,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Os testes rodam no ci.yml assim que o push chega, em paralelo com a
-  # publicação anterior; aqui só se espera o resultado. Se a main andar durante
-  # a espera, este job sai verde sem publicar e libera a vaga para o push novo.
-  ci-verde:
-    name: CI deste commit verde
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
+  escolher:
+    name: Commit a publicar
+    # workflow_run também nasce de PR e de CI vermelho. Só o push na main,
+    # verde, segue. Disparo manual do CI não publica (o evento não é push).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     permissions:
       actions: read
       contents: read
     outputs:
-      publicar: ${{ steps.esperar.outputs.publicar }}
+      sha: ${{ steps.decidir.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - id: esperar
+      - id: decidir
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/esperar_ci.py
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python3 tools/esperar_ci.py --sha
 
   publicar:
     name: Publicar na homologação
-    needs: ci-verde
-    if: needs.ci-verde.outputs.publicar == 'true'
+    needs: escolher
+    if: needs.escolher.outputs.sha != ''
     permissions:
       contents: read
       id-token: write
@@ -61,3 +66,4 @@ jobs:
       repository: dute
       firebase_api_key: "AIzaSyBPaH5X0wHbF_geH1zit0rwyJWmdb3Q7Ds"
       firebase_app_id: "1:368642218894:web:13790f72c76fbb21af22df"
+      commit_sha: ${{ needs.escolher.outputs.sha }}

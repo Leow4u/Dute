@@ -235,9 +235,8 @@ do `publicar.yml`); o roteiro manual delas está em `docs/deploy-functions-manua
 
 ### Ordem e fila (desde 20/10/2026)
 
-Os jobs rodam em série: na homologação, primeiro `CI deste commit verde`; depois
-`Commit ainda é o HEAD da main`, `Regras e índices`, `Cloud Functions` e por
-último `Frontend (Cloud Run)`. Se um falha, os seguintes
+Os jobs rodam em série: `Commit ainda é o HEAD da main`, `Regras e índices`,
+`Cloud Functions` e por último `Frontend (Cloud Run)`. Se um falha, os seguintes
 não sobem. O frontend vem depois das functions para a tela nova nunca chegar antes
 da callable que ela chama; antes os dois subiam juntos e o frontend novo ficava uns
 5 minutos no ar com as functions antigas.
@@ -252,15 +251,14 @@ cada job tinha o próprio grupo com `cancel-in-progress: true`, e em 20/10/2026 
 push seguinte cortou duas vezes o `firebase deploy --only functions` da homologação
 no meio (merges dos PRs 106 e 110), pulando a conferência do invoker.
 
-**Pode mergear vários PRs seguidos sem esperar a homologação.** Cada push entra
-na fila da homologação na hora, em ordem de commit, e os testes dele rodam no CI
-em paralelo com a publicação que estiver em andamento. Quando chega a vez, o
-primeiro job (`CI deste commit verde`, `tools/esperar_ci.py`) espera o CI do commit
-terminar e só segue se ele ficar verde e o commit ainda for o HEAD da main. Se a
-main andou, sai verde com o aviso "não é mais o HEAD da main" sem publicar, e quem
-publica é a execução do commit novo, que está na espera. Se o CI ficar vermelho,
-nada sobe e a homologação fica no último commit publicado até o próximo push
-verde.
+**Pode mergear vários PRs seguidos sem esperar a homologação.** O CI de cada
+push na main roda sozinho. Quando ele fica verde, o `homologacao.yml` nasce por
+`workflow_run` e publica esse commit se ele ainda for o HEAD. Se a main andou
+e o CI do HEAD já está verde, publica o HEAD (`tools/esperar_ci.py --sha`): o
+workflow dele pode ter sido tirado da fila por um CI mais antigo que terminou
+depois. Se o CI do HEAD ainda não está verde, nada sobe nessa execução; a
+publicação fica para o `workflow_run` do HEAD. CI vermelho não dispara
+publicação, e a homologação fica no último commit publicado.
 
 Até 22/10/2026 a fila da homologação era do job do `ci.yml`, que só entrava nela
 quando os testes acabavam. Os testes terminam fora de ordem (a instalação do
@@ -268,7 +266,8 @@ Chromium leva de 20 s a 12 min), e o GitHub mantém o último a chegar, não o
 commit mais novo: com cinco merges em 21 minutos (PRs 167, 169, 171, 172 e 170), o
 172 entrou na fila depois do 170 e tirou o 170 da espera; na vez dele, não publicou
 porque o HEAD era o 170. A homologação ficou no 169 até alguém rodar o 170 de novo
-à mão.
+à mão. Entre essa data e a troca para `workflow_run`, um runner ficava parado
+(até 50 min) em `tools/esperar_ci.py` esperando o CI.
 
 Na **produção**, o job `Commit ainda é o HEAD da main` falha se a main andou
 entre o disparo e a publicação. Confira o commit novo na homologação e dispare de
@@ -276,7 +275,8 @@ novo.
 
 **Não cancele uma publicação no meio** (botão Cancel do Actions): é o mesmo corte
 que a fila evita. Para repetir uma publicação da homologação que falhou, use
-"Re-run failed jobs" na execução dela em Actions > Homologação; se o CI do commit
-tinha falhado, rode o CI de novo primeiro e depois a homologação. Só rode de novo
-a execução do commit que ainda é o HEAD da main: uma mais antiga entra na fila,
-tira da espera a do commit novo e não publica nada, porque não é o HEAD.
+"Re-run failed jobs" na execução dela em Actions > Homologação. Se o CI do
+commit tinha falhado, rode o CI de novo na main: ao ficar verde, a homologação
+dispara sozinha. Só rode de novo a execução do commit que ainda é o HEAD da
+main: uma mais antiga entra na fila, tira da espera a do commit novo e, se o
+CI do HEAD já está verde, publica o HEAD em vez do commit antigo.

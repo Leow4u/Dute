@@ -1,10 +1,28 @@
 name: CI
 
+# Runner: variável de repositório RUNNER_LABEL (Settings → Secrets and
+# variables → Actions → Variables). Vazia, o job com Playwright fica em
+# ubuntu-24.04 (o 1.56.1 não sobe no ubuntu-latest 26.04) e o resto em
+# ubuntu-latest. Um self-hosted entra nos dois sem editar este arquivo.
+#
+# A main roda a suíte inteira de novo. O merge deste repositório cria um
+# commit novo ("Merge pull request"); o CI verde do PR é de outro SHA e não
+# cobre o resultado do merge nem um push direto. A homologação só publica
+# depois deste CI (workflow_run). Pular o CI da main, ou deixar só um smoke,
+# publicaria um commit que a integração nunca viu.
+#
+# No PR, pushes novos cancelam o CI anterior (concurrency). Na main cada
+# commit tem o próprio grupo: um não cancela o outro.
 on:
-  # Push na main: os testes que o homologacao.yml espera antes de publicar.
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   # Disparo manual (Actions > CI > Run workflow): sempre roda o diagnóstico do
   # Cloud Run da produção. Marcar "publicar_producao" publica a main na produção.
   # Marcar "liberar_trafego" solta o tráfego do Cloud Run para a última revisão
@@ -24,10 +42,15 @@ on:
         type: string
         default: ""
 
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  frontend-typecheck:
+  checagens:
+    name: Checagens (typecheck e unitários)
     # Playwright 1.56.1 suporta Ubuntu 24.04; ubuntu-latest já usa 26.04.
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     defaults:
       run:
         working-directory: artifacts/app
@@ -58,6 +81,58 @@ jobs:
           pnpm --filter @workspace/dutelog-site run test
           pnpm --filter @workspace/dutelog-site run build
           pnpm --filter @workspace/dutelog-site run test:build
+      - name: Unitários do WMS
+        working-directory: functions/wms
+        run: npm ci && npm run test:unit
+      - name: Testes do check_functions_invoker.ps1
+        working-directory: .
+        shell: pwsh
+        run: ./tools/check_functions_invoker.tests.ps1
+      - name: Testes do congelar_projeto.ps1
+        working-directory: .
+        shell: pwsh
+        run: ./tools/congelar_projeto.tests.ps1
+      - name: Testes do trocar_registro_a_hostinger.ps1
+        working-directory: .
+        shell: pwsh
+        run: ./tools/trocar_registro_a_hostinger.tests.ps1
+      - name: Unitários do Comercial
+        working-directory: functions/comercial
+        run: npm ci && npm run test:unit
+      - name: Unitários da Operação
+        working-directory: functions/operacao
+        run: npm ci && npm run test:unit
+      - name: Unitários do Financeiro
+        working-directory: functions/financeiro
+        run: npm ci && npm run test:unit
+      - name: Unitários do núcleo
+        working-directory: functions/core
+        run: npm ci && npm run test:unit
+      - name: Unitários do RH
+        working-directory: functions/rh
+        run: npm ci && npm run test:unit
+      - name: Testes das ferramentas Python (tools/)
+        working-directory: .
+        run: python -m unittest discover -s tools -p "test_*.py" -v
+      - name: Testes do padronizar-nomes (node --test)
+        working-directory: .
+        run: node --test "tools/padronizar-nomes/*.test.mjs"
+      - name: Testes do corrigir-codigo-do-produto (node --test)
+        working-directory: .
+        run: node --test "tools/corrigir-codigo-do-produto/*.test.mjs"
+      - name: Install Java (emulador do blog)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install Firebase CLI
+        working-directory: .
+        run: npm install -g firebase-tools
+      - name: Transações editoriais do Blog
+        working-directory: artifacts/dutelog-site
+        env:
+          BLOG_TEST_FIRESTORE_PROJECT: demo-site-blog-tests
+        run: firebase emulators:exec --project demo-site-blog-tests --config tests/firebase.json --only firestore "pnpm exec tsx --test tests/blog-repository.test.ts"
       # Só o Chromium, sem --with-deps: o runner já tem as bibliotecas (vem com
       # o Google Chrome), e o --with-deps baixava pelo apt fontes e xvfb que o
       # teste headless não usa. Em 22/10/2026 esse apt levou 12 min a 25 kB/s;
@@ -97,374 +172,105 @@ jobs:
             ${{ runner.temp }}/dute-preview.log
           retention-days: 7
 
-  functions-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+  integracao:
+    name: Integração (emulador)
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            functions/wms/package-lock.json
+            functions/comercial/package-lock.json
+            functions/operacao/package-lock.json
+            functions/financeiro/package-lock.json
+            functions/core/package-lock.json
+            functions/rh/package-lock.json
+      - name: Install Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      - name: Dependências do WMS
         working-directory: functions/wms
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/wms/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-      - name: Testes do check_functions_invoker.ps1
-        working-directory: .
-        shell: pwsh
-        run: ./tools/check_functions_invoker.tests.ps1
-      - name: Testes do congelar_projeto.ps1
-        working-directory: .
-        shell: pwsh
-        run: ./tools/congelar_projeto.tests.ps1
-      - name: Testes do trocar_registro_a_hostinger.ps1
-        working-directory: .
-        shell: pwsh
-        run: ./tools/trocar_registro_a_hostinger.tests.ps1
-
-  tools-python-tests:
-    name: Testes das ferramentas Python (tools/)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      # Zeragem total (tools/full_reset_btg.py) e helpers de backup: só stdlib.
-      - name: Unit tests
-        run: python -m unittest discover -s tools -p "test_*.py" -v
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      # Padronização dos nomes do catálogo (tools/padronizar-nomes): a cópia em
-      # JavaScript da regra de lib/dominio e o relatório, só com o Node.
-      - name: Testes do padronizar-nomes (node --test)
-        run: node --test "tools/padronizar-nomes/*.test.mjs"
-      # Correção do código do cliente no mesmo SKU (tools/corrigir-codigo-do-produto):
-      # o nome da família e as linhas da caixa, só com o Node.
-      - name: Testes do corrigir-codigo-do-produto (node --test)
-        run: node --test "tools/corrigir-codigo-do-produto/*.test.mjs"
-
-  blog-firestore:
-    name: Transações editoriais do Blog
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install workspace
-        run: pnpm install --frozen-lockfile
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Draft conflicts, publication and withdrawal in isolated Firestore
-        working-directory: artifacts/dutelog-site
-        env:
-          BLOG_TEST_FIRESTORE_PROJECT: demo-site-blog-tests
-        run: firebase emulators:exec --project demo-site-blog-tests --config tests/firebase.json --only firestore "pnpm exec tsx --test tests/blog-repository.test.ts"
-
-  functions-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração do WMS
         working-directory: functions/wms
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/wms/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      # As consultas que as Functions fazem nos testes vão para um arquivo
-      # (tools/registrar_consultas.cjs), e o passo seguinte confere o índice de
-      # cada uma: o emulador não exige índice composto, a produção exige. Igual
-      # nos outros jobs de integração.
-      - name: Integration + rules tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-wms.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
-
-  # Functions do Comercial (codebase "comercial", docs/plataforma/fase-6-comercial.md):
-  # pacote npm próprio, como o WMS.
-  comercial-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Índice das consultas do WMS
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-wms.jsonl"
+      - name: Dependências do Comercial
         working-directory: functions/comercial
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/comercial/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-
-  comercial-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração do Comercial
         working-directory: functions/comercial
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/comercial/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Integration tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-comercial.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
-
-  # Functions da Operação (codebase "operacao", docs/plataforma/fase-3-operacao.md).
-  operacao-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Índice das consultas do Comercial
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-comercial.jsonl"
+      - name: Dependências da Operação
         working-directory: functions/operacao
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/operacao/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-
-  operacao-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração da Operação
         working-directory: functions/operacao
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/operacao/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Integration tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-operacao.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
-
-  # Functions do Financeiro (codebase "financeiro", docs/plataforma/fase-4-financeiro.md).
-  financeiro-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Índice das consultas da Operação
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-operacao.jsonl"
+      - name: Dependências do Financeiro
         working-directory: functions/financeiro
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/financeiro/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-
-  financeiro-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração do Financeiro
         working-directory: functions/financeiro
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/financeiro/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Integration tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-financeiro.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
-
-  # Functions do núcleo (codebase "core", docs/plataforma/fase-5-memoria.md).
-  core-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Índice das consultas do Financeiro
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-financeiro.jsonl"
+      - name: Dependências do núcleo
         working-directory: functions/core
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/core/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-
-  core-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração do núcleo
         working-directory: functions/core
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/core/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Integration tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-core.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
-
-  # O RH (docs/plataforma/fase-8-rh.md): os testes rodam desde a parte 8.1a; a
-  # codebase entra na publicação só na 8.1b, depois de o banco dute-rh
-  # existir.
-  rh-unit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Índice das consultas do núcleo
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-core.jsonl"
+      - name: Dependências do RH
         working-directory: functions/rh
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/rh/package-lock.json
-      - name: Install functions deps
         run: npm ci
-      - name: Unit tests
-        run: npm run test:unit
-
-  rh-integration:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Integração do RH
         working-directory: functions/rh
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/rh/package-lock.json
-      - name: Install Java (Firestore emulator)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Install functions deps
-        run: npm ci
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Integration tests
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
-          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-rh.jsonl
         run: npm run test:integration
-      - name: Índice de cada consulta das Functions
-        working-directory: .
-        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"
+      - name: Índice das consultas do RH
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-rh.jsonl"
 
-  # A homologação (dute-homolog) recebe cada push na main pelo homologacao.yml,
-  # que espera este workflow terminar verde no mesmo commit. Aqui ela não entra:
-  # a fila de um job só pega a vaga quando os testes acabam, fora da ordem dos
-  # commits, e em 22/10/2026 perdeu o commit mais novo (ver homologacao.yml).
+  # A homologação não mora aqui. O homologacao.yml nasce quando este workflow
+  # termina verde na main (workflow_run) e publica só o HEAD.
 
   # Produção só por disparo manual a partir da main, com "publicar_producao"
   # marcado. Desde o corte da Fase 1 (docs/plataforma/fase-1-corte.md) a
   # produção é o dute-prod; o dute-btg ficou congelado.
   publicar-producao:
     name: Publicar na produção
-    needs: [frontend-typecheck, functions-unit, functions-integration, comercial-unit, comercial-integration, operacao-unit, operacao-integration, financeiro-unit, financeiro-integration, core-unit, core-integration, rh-unit, rh-integration, tools-python-tests]
+    needs: [checagens, integracao]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publicar_producao
     concurrency:
       group: publicar-producao
@@ -485,7 +291,7 @@ jobs:
 
   cloud-run-diagnostico:
     name: Diagnóstico do Cloud Run (só leitura)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     # Disparo manual (Actions > CI > Run workflow), de qualquer branch. Mostra
     # geração, tráfego, template, revisões e o que as URLs servem, com a mesma
     # credencial do deploy. Não altera nada no serviço.
@@ -534,7 +340,7 @@ jobs:
 
   liberar-trafego:
     name: Mudar tráfego do serviço
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     # Só roda no disparo manual a partir da main, com "liberar_trafego" marcado.
     # Muda a produção: 100% do tráfego passa para a última revisão pronta do
     # serviço. Reversível com --to-revisions NOME=100 (ver docs/deploy-manual.md).

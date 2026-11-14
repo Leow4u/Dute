@@ -18,7 +18,9 @@ em 10/11/2026. **Na produção desde 10/11/2026** (19:52 UTC, commit
 Tela só depois do mockup aprovado (decisão 8). **Dividir a linha em mais de
 um volume (seção 11; pranchas na página 4 do canvas):** perguntas
 respondidas e pranchas aprovadas pelo Leonardo em 11/11/2026 (decisões 27 a
-30); as partes 7a e 7b vêm a seguir.
+30); as partes 7a e 7b entraram na `main` pelo PR 603 e estão **na produção
+desde 12/11/2026** (13:39 UTC, commit `2dd01de`), pela publicação manual do
+Leonardo.
 
 Relação com os outros desenhos: este roteiro retoma a regra 8 e a seção 5.4 do
 mapa (`docs/mapa-do-armazem-enderecamento-dirigido.md`) e revê a P8 de
@@ -647,6 +649,28 @@ o item sem linha e o cancelamento), a linha nova na tabela de papéis,
 `warehouse-labels.test.ts`, `label-sheet.test.tsx` (a lista dos textos e o
 `axe`) e `cloud-api-warehouse.test.ts`.
 
+**O tamanho do campo Tamanho no volume (12/11/2026).** Só o app. A linha da
+separação (`pick_lines`) e o item do volume (`package_items`) não gravam o
+tamanho, e o nome no volume só levava o do fim do código do cliente: o copo
+`B.0572.003.U.B`, com Tamanho "475ML", saía "Copo Beercup em Inox" na
+bancada, na etiqueta e no romaneio. O tamanho passa a vir do cadastro do SKU
+(`lib/warehouse-ops/tamanho-do-catalogo.ts`), pela mesma leitura e pelo mesmo
+cache das fotos dos itens (`useCatalogoDeSkus`, a chave do Estoque): quem
+vem da fila de Pedidos ou da bancada não lê de novo. A bancada aplica o
+tamanho às linhas lidas ao vivo, e a linha e o volume saem com ele;
+`useVolumesDoPedido` o aplica às linhas e aos `package_items` e espera o
+cadastro, para a etiqueta e o romaneio nunca saírem sem o tamanho (se a
+leitura falha, saem como antes). A etiqueta do volume separa o tamanho do
+nome como a da caixa (`volumeLabels` com o campo Tamanho): a folha A4
+encurta o nome sem cortar o "475ML". Vale para os pedidos já abertos e os já
+concluídos, sem mudar as Functions e sem backfill. O tamanho do fim do
+código continua valendo antes do campo (`nomeComTamanho`). A lista de
+separação da fila de Pedidos e a folha impressa (`/pedidos/lista`) ainda
+mostram só o tamanho do código. Os testes passam pelo caminho de verdade,
+com os documentos no formato que o servidor grava:
+`use-volumes-do-pedido.test.ts`, `warehouse-labels.volumes.test.tsx`,
+`pedidos-romaneio.test.tsx` e `pedidos-separar.test.tsx`.
+
 ### 5.2 Na produção
 
 **10/11/2026, 19:35 a 19:52 UTC.** O Leonardo publicou o commit `7512f101`
@@ -675,11 +699,12 @@ peso (sempre, no celular) e "Separar menos" sem detalhe voltavam "Entrada
 inválida para a separação.". Os testes de integração chamam o domínio
 direto, sem o SDK, e não pegavam. A correção é a bancada não mandar o campo
 sem valor (`semCamposVazios`, em `artifacts/app/src/lib/wms/separacao.ts`,
-com o teste que falhava antes). Até ela chegar à produção: fechar os
-volumes no computador, com o peso, e escrever o detalhe no "Separar menos".
-O mesmo defeito estava no "Confirmar destino" do Receber por caixa; a
-correção é de 12/11/2026 (`recebimento-com-caixas.md`, parte 5c, com o que
-fazer até ela chegar à produção).
+com o teste que falhava antes). A correção está na produção desde a
+publicação de 12/11/2026 (commit `2dd01de`); antes dela, o caminho era
+fechar os volumes no computador, com o peso, e escrever o detalhe no
+"Separar menos". O mesmo defeito estava no "Confirmar destino" do Receber
+por caixa, corrigido na mesma publicação (`recebimento-com-caixas.md`, parte
+5c).
 
 ## 6. Perguntas
 
@@ -824,8 +849,9 @@ coordenação.
 
 **Situação:** as perguntas foram respondidas pelo Leonardo em 11/11/2026
 (decisões 27 a 30, seção 11.6), e as pranchas, atualizadas com as respostas,
-foram aprovadas por ele no mesmo dia; as partes 7a e 7b vêm a seguir. As
-pranchas estão na página 4 do
+foram aprovadas por ele no mesmo dia. As partes 7a e 7b entraram na `main`
+pelo PR 603 e estão na produção desde 12/11/2026 (13:39 UTC, commit
+`2dd01de`). As pranchas estão na página 4 do
 canvas (https://claude.ai/artifact/EUrq7Fwu9Xt4BpGRiz1mJz), com as fontes em
 `docs/mockups/WmsDividir*.dc.html` (tabela no README dos mockups).
 
@@ -970,6 +996,13 @@ testes: `divisao-em-volumes.test.ts`, `dividir-em-volumes.test.tsx` e
 foco depois de tirar um volume), `volumes-do-pedido.test.ts` e
 `pedidos-separar-view.test.tsx`.
 
+**Na produção (12/11/2026).** As partes 7a e 7b entraram na `main` pelo PR
+603, com as correções do campo vazio na separação e no Receber, e subiram na
+publicação manual do Leonardo (13:39 UTC, commit `2dd01de`, com todas as
+conferências verdes). Na homologação, a primeira tentativa bateu no limite
+de leituras por minuto do Cloud Run e ficou verde ao rodar de novo os jobs
+que falharam (`docs/deploy-functions-manual.md`, 12/11/2026).
+
 ### 11.6 Perguntas e respostas
 
 Respondidas pelo Leonardo em 11/11/2026.
@@ -981,11 +1014,13 @@ Respondidas pelo Leonardo em 11/11/2026.
 | 3 | No computador, o peso de cada volume que fecha vai no próprio diálogo, opcional; no celular, sem peso, como no "Fechar volume"? | Ok (decisão 29). |
 | 4 | "Dividir em volumes" também na linha já separada, enquanto ela está no volume aberto? | Sim (decisão 30). |
 
-### 11.7 Enquanto não entra
+### 11.7 Antes da divisão (até 12/11/2026)
 
-A linha que não cabe num volume fica por último: a bancada não exige ordem.
-As peças vão nas caixas de expedição que couberem, anotadas à mão, e a linha
-se marca quando a divisão chegar à produção. Se o pedido precisar sair
-antes, a linha vai sozinha num volume (fechar o aberto antes, separar e
-fechar), e a etiqueta desse volume sai duas vezes, com as quantidades à mão.
-O romaneio dirá um volume a menos do que as caixas, e a BTG precisa saber.
+Até a parte 7 chegar à produção, em 12/11/2026, o caminho era deixar a
+linha que não cabe num volume por último (a bancada não exige ordem), com
+as peças nas caixas de expedição que coubessem, anotadas à mão, e marcar a
+linha quando a divisão chegasse. Se o pedido precisasse sair antes, a linha
+ia sozinha num volume (fechar o aberto antes, separar e fechar), e a
+etiqueta desse volume saía duas vezes, com as quantidades à mão; o romaneio
+dizia um volume a menos do que as caixas, e a BTG precisava saber. Desde a
+publicação, a linha se divide pelo "Dividir em volumes".

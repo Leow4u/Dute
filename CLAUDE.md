@@ -287,10 +287,12 @@ documentação de produto e operação está em `docs/`.
   Firebase Hosting **não** é produção nem fallback.
 - **Publicação pelo GitHub Actions, em dois ambientes.** Cada push em `main`
   publica regras e índices, frontend e functions na homologação
-  (`dute-homolog`) pelo `.github/workflows/homologacao.yml`, que espera o CI do
-  commit ficar verde (`tools/esperar_ci.py`); a fila dele é do workflow inteiro,
-  em ordem de push, então dá para mergear PRs seguidos sem esperar (em
-  22/10/2026 a fila de job do `ci.yml` perdeu o commit mais novo). A produção
+  (`dute-homolog`) pelo `.github/workflows/homologacao.yml`, que nasce quando o
+  CI desse commit termina verde (`workflow_run`; o SHA sai de
+  `tools/esperar_ci.py --sha`). A fila é do workflow, uma publicação por vez,
+  sem cancelar a que está rodando, então dá para mergear PRs seguidos sem
+  esperar (em 22/10/2026 a fila de job do `ci.yml` perdeu o commit mais novo).
+  A produção
   só recebe por disparo manual (Actions > CI > Run
   workflow com `publicar_producao` marcado), depois de conferir na homologação.
   Nenhum passo da publicação depende da máquina de alguém. O fluxo fica em
@@ -480,7 +482,9 @@ documentação de produto e operação está em `docs/`.
   sempre fecha. No servidor, `setPickLineSeparated` com `split_volumes`, o
   volume aberto e a linha como a tela os viu (a tela desatualizada recusa com
   `SEPARATION_VOLUMES_CHANGED`), e um `picking.volume_closed` por volume
-  fechado. Tela só entra com mockup aprovado. Desenho, partes e
+  fechado. A parte 7 entrou na `main` pelo PR 603 e está no `dute-prod` desde
+  a publicação manual de 12/11/2026 (commit `2dd01de`, 13:39 UTC, com todas
+  as conferências verdes). Tela só entra com mockup aprovado. Desenho, partes e
   registro em `docs/plataforma/separacao-com-caixas.md`.
 - **Multicliente: modelo de operação e pacote são código; o cadastro só aponta
   (19/10/2026).** `artifacts/app/src/lib/operations` registra os
@@ -587,7 +591,9 @@ Definidas em `docs/roadmap-producao.md` e `docs/manual-producao.md`:
 
 `attached_assets/*.xlsx` (`Inventário_BTG_Consolidado`,
 `Armazenamento_BTG_Fechamento_mensal`) foi **referência inicial do projeto e não
-deve ser usada**. Não derive lógica, preço, taxonomia ou dado dela.
+deve ser usada**. Não derive lógica, preço, taxonomia ou dado dela. As duas
+planilhas saíram da árvore e o `.gitignore` recusa `attached_assets/*.xlsx`;
+o histórico do git ainda as contém.
 
 O sistema foi zerado e recarregado no go-live de 30/07/2026 a partir do inventário
 de abertura e **zerado por completo em 16/10/2026** para um novo go-live
@@ -643,14 +649,19 @@ reorganização de 19/10/2026 (`artifacts/btg-inventory` hoje é `artifacts/app`
 ## Como trabalhamos
 
 - Um problema por PR, com teste que falha antes e passa depois.
+- Chamada de callable não manda campo `undefined`: o SDK do Firebase o troca
+  por `null`, e o servidor recusa `null` no campo só `.optional()` (o defeito
+  de 11 e 12/11/2026, `docs/plataforma/separacao-com-caixas.md`, seção 5.2).
+  Onde o `null` tem sentido para o servidor (a caixa de apoio da confirmação
+  do destino é "no piso, sem empilhar"), ele vai de propósito.
 - Comando para rodar na máquina do Leonardo vai sempre com a pasta na frente:
   `cd C:\DEV\Dute` (PowerShell) antes de `firebase deploy`, dos scripts de
   `tools/` e de qualquer `git`. Comando sem a pasta já foi rodado no lugar errado.
 - Sistema visual do WMS: ver `docs/sistema-visual.md`. O teste
   `src/lib/theme-colors.test.ts` trava cor fixa e valor fora da escala
   (raio, vidro, sombra e tamanho de texto arbitrários).
-- CI verde antes de publicar (`frontend-typecheck`, `functions-unit`,
-  `functions-integration`, `comercial-unit`, `comercial-integration`).
+- CI verde antes de publicar (jobs `checagens` e `integracao` do
+  `ci.yml`; a suíte de cada codebase continua nos dois).
 - Não refatorar os arquivos grandes (`functions/wms/src/domain/operations.ts` e
   `functions/wms/src/index.ts`, ~6.700 linhas cada) antes de haver teste nas trilhas
   de dinheiro e estoque. A porta das callables do WMS (login, perfil ativo,

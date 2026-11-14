@@ -181,8 +181,7 @@ node --test "tools/padronizar-nomes/*.test.mjs"
 corepack pnpm --filter "@workspace/app" exec vitest run src/lib/nome-do-produto.test.ts
 ```
 
-O CI roda os dois: o `node --test` no job das ferramentas e o vitest no
-`frontend-typecheck`. O `node --test` cobre o plano do passo 3
+O CI roda os dois no job `checagens`: o `node --test` e o vitest. O `node --test` cobre o plano do passo 3
 (`aplicar.test.mjs`); a gravação roda no cenário do emulador abaixo.
 
 Para ver a leitura do Firestore de ponta a ponta, o cenário no emulador
