@@ -558,8 +558,8 @@ describe("a última escuta que sai da tela com a falta (parte 13l)", () => {
     fim();
   });
 
-  it("uma consulta do react-query na tela com a falta: o estado fica em Reconectando", async () => {
-    const { m, conexao, queryClient, provedor, fim } = await comConexao();
+  it("uma consulta do react-query na tela com a falta: o estado fica em Reconectando, até ela sair também", async () => {
+    const { m, conexao, queryClient, acordar, provedor, fim } = await comConexao();
     const { SemResposta } = await import("../conexao");
     const { QueryObserver } = await import("@tanstack/react-query");
     const observador = new QueryObserver(queryClient, { queryKey: ["callable"], queryFn: () => Promise.reject(new SemResposta()) });
@@ -573,8 +573,71 @@ describe("a última escuta que sai da tela com a falta (parte 13l)", () => {
     trocar([]);
     await passar(2_000);
     expect(conexao.estado()).toBe("reconectando");
-    // A consulta sai da tela também: nada mais tem a falta.
-    deixar();
+    // A consulta sai da tela depois, sem ter dado certo (revisão da parte 13l): nada mais tem a falta, e o estado volta,
+    // em vez de ficar em "Reconectando" com a releitura sozinha parada.
+    act(() => deixar());
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    const vezes = acordar.mock.calls.length;
+    await passar(120_000);
+    expect(acordar.mock.calls.length).toBe(vezes);
+    fim();
+  });
+
+  it("a tela nova que ainda lê pelo react-query segura o Reconectando: a saída da escuta não passa pelo conectado", async () => {
+    const { m, conexao, queryClient, estados, provedor, fim } = await comConexao();
+    const { SemResposta } = await import("../conexao");
+    const { QueryObserver } = await import("@tanstack/react-query");
+    const { trocar } = montarListas(m, ["ordens"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    expect(conexao.estado()).toBe("reconectando");
+    // A tela nova lê a fila pelo react-query (a bancada de Separar), e as escutas dela só abrem com a fila lida: a
+    // escuta sai no mesmo commit em que a fila começa a ler (revisão da parte 13l).
+    let falhar: (erro: unknown) => void = () => undefined;
+    const fila = new QueryObserver(queryClient, { queryKey: ["fila"], queryFn: () => new Promise((_, rejeitar) => (falhar = rejeitar)) });
+    let deixar: () => void = () => undefined;
+    act(() => {
+      deixar = fila.subscribe(() => undefined);
+      trocar([]);
+    });
+    await passar(2_000);
+    expect(estados).not.toContain("conectado");
+    // A fila fica sem resposta: segue em "Reconectando".
+    await act(async () => {
+      falhar(new SemResposta());
+      await Promise.resolve();
+    });
+    await passar(2_000);
+    expect(estados).not.toContain("conectado");
+    expect(conexao.estado()).toBe("reconectando");
+    // A pessoa deixa a tela: nada mais tem a falta.
+    act(() => deixar());
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    fim();
+  });
+
+  it("a tela nova que lê pelo react-query e chega do servidor devolve o conectado", async () => {
+    const { m, conexao, queryClient, estados, provedor, fim } = await comConexao();
+    const { QueryObserver } = await import("@tanstack/react-query");
+    const { trocar } = montarListas(m, ["ordens"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    let chegar: (dados: unknown) => void = () => undefined;
+    const fila = new QueryObserver(queryClient, { queryKey: ["fila"], queryFn: () => new Promise((resolver) => (chegar = resolver)) });
+    act(() => {
+      fila.subscribe(() => undefined);
+      trocar([]);
+    });
+    await passar(2_000);
+    expect(estados).not.toContain("conectado");
+    await act(async () => {
+      chegar({ itens: [] });
+      await Promise.resolve();
+    });
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
     fim();
   });
 

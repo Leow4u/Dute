@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { faltaDaConsulta, useLeituraComFalha } from "../carregando/use-leitura-com-falha";
+import { faltaDaConsulta, useLeituraComFalha, useTentativaPedida } from "../carregando/use-leitura-com-falha";
 import { OMIE_LIBERADA } from "../liberacao";
 import type { ProfileRole } from "../modules";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "../operacao/leitura";
@@ -43,17 +43,17 @@ export function useEmissoesDoFinanceiro(role: ProfileRole | null | undefined, li
   // Fora da liberação, não há emissão: a lista vazia deixa o Início contar o resto.
   // A nova tentativa sem dado volta o react-query a "pending": a falha fica na tela até a resposta.
   const comFalha = useLeituraComFalha(leitura);
+  // Só a nova tentativa que a pessoa pede diz "Tentando de novo…": a releitura do intervalo não (revisão da parte 13l).
+  const pedida = useTentativaPedida(comFalha);
   if (!abre) return { emissoes: [], carregando: false, falhas: [], releitura: SEM_NOVA_TENTATIVA };
   return {
     emissoes: comFalha.data,
     carregando: comFalha.isPending && !comFalha.isError,
     falhas: comFalha.isError ? ["emissões"] : [],
     releitura: {
-      tentando: comFalha.isError && comFalha.isFetching,
       // Só a leitura que falhou relê: a lida fica como está.
-      tentar: () => {
-        if (comFalha.isError) void leitura.refetch();
-      },
+      tentando: pedida.tentando,
+      tentar: pedida.tentar,
       // A conexão ou o servidor, e a hora da lista lida (parte 13l).
       ...faltaDaConsulta(comFalha),
     },

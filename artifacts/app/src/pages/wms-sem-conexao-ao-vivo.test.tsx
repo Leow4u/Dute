@@ -4,7 +4,9 @@ import { Router } from "wouter";
 
 import { RetornosView } from "@/features/warehouse-ops/order-returns";
 import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
-import { folhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
+import { folhaDaLista, gruposDaSeparacao, hrefDaListaDeSeparacao } from "@/lib/warehouse-ops/lista-de-separacao";
+import type { WarehouseTaskItem } from "@/lib/warehouse-ops/model";
+import { progressoDoPedido } from "@/lib/warehouse-ops/separacao";
 import { folhaDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import type { VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
@@ -17,6 +19,7 @@ vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseApp: {}, firebaseAuth:
 import { PedidoSeparadoView } from "./pedido-separado-view";
 import { PedidosListaView } from "./pedidos-lista-view";
 import { PedidosRomaneioView } from "./pedidos-romaneio-view";
+import { PedidosSepararView } from "./pedidos-separar-view";
 import SettingsCustomerNotifications from "./settings-customer-notifications";
 
 /**
@@ -74,9 +77,9 @@ function naConexao(estado: EstadoDaConexao, elemento: React.ReactElement) {
 }
 
 describe("Pedidos › Romaneio sem conexão", () => {
-  const romaneio = (leitura: LeituraNaFalta, situacao: "erro" | "pronto") => (
+  const romaneio = (leitura: LeituraNaFalta, situacao: "erro" | "pronto", avisos: string[] = []) => (
     <Router ssrPath="/pedidos/romaneio">
-      <PedidosRomaneioView estado={situacao} folha={situacao === "pronto" ? ROMANEIO : null} onImprimir={noop} onTentar={tentarComPromessa} leitura={leitura} />
+      <PedidosRomaneioView estado={situacao} folha={situacao === "pronto" ? ROMANEIO : null} avisos={avisos} onImprimir={noop} onTentar={tentarComPromessa} leitura={leitura} />
     </Router>
   );
 
@@ -84,15 +87,17 @@ describe("Pedidos › Romaneio sem conexão", () => {
     expect(await estadosDaFalta(romaneio)).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar o pedido.", objeto: "romaneio" }));
   });
 
-  it("o prazo que não chegou sem conexão: o aviso da conexão, e não a frase da falha", async () => {
+  it("o prazo que não chegou sem conexão: o aviso da conexão diz por quê, e a frase, o que falta (revisão da parte 13l)", async () => {
     const semPrazo = { tentando: false, tentar: noop, falta: "conexao" as const, lidaEm: null };
-    const html = naConexao("sem-conexao", romaneio(semPrazo, "pronto"));
+    const avisos = ["Não foi possível carregar o prazo do pedido."];
+    const html = naConexao("sem-conexao", romaneio(semPrazo, "pronto", avisos));
     expect(html).toContain("Sem conexão.");
-    expect(html).not.toContain("Não foi possível carregar o prazo do pedido.");
+    expect(html).toContain("Não foi possível carregar o prazo do pedido.");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
-    // Com o romaneio lido e sem o servidor, a faixa já diz a falta: o aviso não se repete.
-    const lido = naConexao("sem-conexao", romaneio({ ...semPrazo, lidaEm: DEZ_E_QUARENTA_E_DOIS }, "pronto"));
+    // Com o romaneio lido e sem o servidor, a faixa já diz a falta: o aviso da conexão não se repete, e a frase fica.
+    const lido = naConexao("sem-conexao", romaneio({ ...semPrazo, lidaEm: DEZ_E_QUARENTA_E_DOIS }, "pronto", avisos));
     expect(lido).toContain("Sem conexão · romaneio de 10:42");
+    expect(lido).toContain("Não foi possível carregar o prazo do pedido.");
     expect(lido).not.toContain("Sem conexão.");
   });
 });
@@ -106,6 +111,67 @@ describe("Pedidos › Lista de separação sem conexão", () => {
 
   it("os estados da falta", async () => {
     expect(await estadosDaFalta(lista)).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar o pedido." }));
+  });
+});
+
+describe("Pedidos › Separar, a bancada, sem conexão (revisão da parte 13l)", () => {
+  const SEPARADA = { separated_at: "2026-11-10T13:00:00.000Z", separated_by: "Guilherme Dantas" };
+  const linha = (numero: number, location: string, nome: string, codigo: string, sku: string, quantidade: number, extra: Partial<WarehouseTaskItem> = {}): WarehouseTaskItem => ({
+    id: `pli_ord_1_${String(numero).padStart(2, "0")}`,
+    line_number: numero,
+    location,
+    product_name: nome,
+    client_item_code: codigo,
+    sku_code: sku,
+    expected_quantity: quantidade,
+    quantity: quantidade,
+    ...extra,
+  });
+  const ITENS = [
+    linha(1, "A-03", "Polo Masculino Piquet Preto · P", "A.01.0806.005.P", "BTG-000122", 60, { ...SEPARADA, separated_qty: 60 }),
+    linha(2, "A-05", "Calça Social Masculino Preta · 42", "A.01.0712.001.42", "BTG-000084", 40),
+  ];
+  const POSICOES = [
+    { code: "A-03", sequence: 3 },
+    { code: "A-05", sequence: 5 },
+  ];
+  const bancada = (leitura: LeituraNaFalta | undefined, situacao: "erro" | "pronto") => (
+    <Router ssrPath="/pedidos/separar">
+      <PedidosSepararView
+        estado={situacao}
+        numero="PED-0001"
+        resumo="BTG Pactual · 2 itens · 100 un."
+        comecouEm="2026-11-10T13:00:00.000Z"
+        comecou
+        progresso={progressoDoPedido(ITENS)}
+        grupos={gruposDaSeparacao(ITENS, POSICOES, { caixas: [], cliente: "BTG" })}
+        listaHref={hrefDaListaDeSeparacao("ord_1")}
+        operador
+        coordenacao={false}
+        onSeparar={noop}
+        onDesfazer={noop}
+        onSepararMenos={noop}
+        onConcluir={noop}
+        onTentar={tentarComPromessa}
+        leitura={leitura}
+      />
+    </Router>
+  );
+
+  it("os estados da falta", async () => {
+    expect(await estadosDaFalta(bancada)).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar o pedido.", objeto: "pedido" }));
+  });
+
+  it("a leitura de apoio sem conexão e sem hora, com a bancada na tela: o aviso da conexão acima dela, e só ele", async () => {
+    const emDia = new Set(textosDaTela(naConexao("conectado", bancada(undefined, "pronto"))));
+    for (const [estado, aviso] of [
+      ["sem-conexao", "Sem conexão."],
+      ["reconectando", "Reconectando…"],
+    ] as const) {
+      const html = naConexao(estado, bancada({ tentando: false, tentar: noop, falta: "conexao", lidaEm: null }, "pronto"));
+      expect(textosDaTela(html).filter((texto) => !emDia.has(texto))).toEqual([aviso, "Tentar de novo"]);
+      expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    }
   });
 });
 

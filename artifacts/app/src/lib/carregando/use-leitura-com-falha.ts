@@ -109,3 +109,28 @@ export function faltaDaConsulta(consulta: Pick<UseQueryResult<unknown>, "isError
   if (!ehFaltaDeConexao(consulta.error)) return { falta: "servidor", lidaEm: null, falhou: !lida };
   return { falta: "conexao", lidaEm: lida ? consulta.dataUpdatedAt : null, falhou: !lida };
 }
+
+/**
+ * A nova tentativa que a pessoa pede de uma consulta do react-query que
+ * falhou (a callable das emissões, a das baixas; revisão da parte 13l). Só
+ * ela é "tentando": a releitura automática (o intervalo da tela, a releitura
+ * sozinha do app) não muda o "Tentar de novo" do aviso da conexão nem trava o
+ * toque. O `tentar` relê só a que falhou (a lida fica como está) e devolve a
+ * promessa da leitura, para o aviso contar até ela responder. Recebe a
+ * consulta como a tela a vê (a `useLeituraComFalha`, que segura o erro na
+ * nova tentativa).
+ */
+export function useTentativaPedida(consulta: Pick<UseQueryResult<unknown>, "isError" | "refetch">): {
+  tentando: boolean;
+  tentar: () => Promise<unknown> | undefined;
+} {
+  const [pedidas, setPedidas] = useState(0);
+  return {
+    tentando: pedidas > 0,
+    tentar: () => {
+      if (!consulta.isError) return undefined;
+      setPedidas((quantas) => quantas + 1);
+      return consulta.refetch().finally(() => setPedidas((quantas) => quantas - 1));
+    },
+  };
+}

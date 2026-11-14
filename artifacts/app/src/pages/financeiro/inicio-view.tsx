@@ -1,7 +1,7 @@
 import { formatarReais } from "@workspace/dominio";
 import { Link } from "wouter";
 
-import { InicioDoModulo, LinhaDeNumero, TituloDaSecao } from "@/components/inicio/inicio-do-modulo";
+import { InicioDoModulo, LinhaDeNumero, TituloDaSecao, semConexaoDoInicio } from "@/components/inicio/inicio-do-modulo";
 import { Button } from "@/components/ui/button";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { numerosDaFila, type NumerosDaFila } from "@/lib/financeiro/a-faturar";
@@ -88,6 +88,9 @@ export function InicioDoFinanceiroView({ nome, hoje, inicio }: { nome: string; h
       carregando={inicio.carregando}
       falhas={inicio.falhas}
       lateral={lateral}
+      // As faturas, as emissões e as baixas levam a falta (parte 13l): sem conexão, o aviso da conexão, e não a falha das
+      // fontes, como no Início da Operação (revisão da parte 13l).
+      semConexao={semConexaoDoInicio(inicio.releitura, inicio.falhas)}
       tentarFalhas={inicio.releitura ? { tentando: inicio.releitura.tentando, onTentar: inicio.releitura.tentar } : undefined}
     />
   );

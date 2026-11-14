@@ -11,6 +11,7 @@ import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { fraseDoInicio, type ItemDoInicio, type TomDoItem } from "@/lib/inicio-do-modulo";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { formatToday, greeting } from "@/lib/saudacao";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,22 @@ export type InicioDoModuloProps = {
    */
   tentarFalhas?: { tentando: boolean; onTentar: () => unknown; alerta?: boolean };
 };
+
+/**
+ * A falta de conexão das leituras do Início, do jeito que o `semConexao` a
+ * pede (carregamento v2, parte 13j na Operação; revisão da parte 13l no
+ * Financeiro): sem nada lido (uma fonte falhou), o aviso no lugar do "Precisa
+ * de você"; com tudo lido, o que estava fica, com a hora da lista. Sem a falta
+ * de conexão, nada: o erro do servidor segue no aviso das fontes (`falhas`).
+ */
+export function semConexaoDoInicio(releitura: NovaTentativa | undefined, falhas: readonly string[]): InicioDoModuloProps["semConexao"] {
+  if (!releitura || releitura.falta !== "conexao") return null;
+  return {
+    lidaEm: falhas.length ? null : (releitura.lidaEm ?? null),
+    tentando: releitura.tentando,
+    onTentar: () => void releitura.tentar(),
+  };
+}
 
 /** O id da linha que diz que o Início lê, para o "Precisa de você" apontar para ela (momento 2). */
 const ID_DA_ESPERA = "inicio-lendo";

@@ -65,8 +65,10 @@ export interface Conexao {
   acordar(): Promise<void> | null;
   /**
    * Quem diz se alguma leitura do react-query na tela ainda está com a falta
-   * (no app, as consultas ativas com a falta de conexão): a saída da última
-   * escuta com a falta não apaga a delas (parte 13l).
+   * ou à espera da resposta (no app, as consultas ativas com a falta de
+   * conexão ou lendo): a saída da última escuta com a falta não apaga a delas
+   * (parte 13l), nem passa pelo "conectado" antes de a tela nova ler (revisão
+   * da parte 13l).
    */
   aoConferirFaltas(conferir: (() => boolean) | null): void;
   /**
@@ -350,7 +352,9 @@ function esperandoDe(conexao: Conexao): Set<object> {
 /**
  * A volta devida sem ninguém para pagá-la: nenhuma leitura de fora com a falta
  * nem à espera da primeira resposta. Conferida depois do commit (a limpeza da
- * escuta que sai roda antes de a nova assinatura abrir).
+ * escuta que sai roda antes de a nova assinatura abrir) e, de novo, quando uma
+ * consulta do react-query que a segurava responde ou sai da tela (revisão da
+ * parte 13l).
  */
 function conferirAVoltaDevida(conexao: Conexao) {
   queueMicrotask(() => {
@@ -549,14 +553,23 @@ export function ligarConexaoDoApp(
   };
   conexao.aoAcordar(opcoes.acordar ?? null);
   conexao.aoReler(reler);
-  // A saída da última escuta com a falta não apaga a de uma consulta na tela (parte 13l).
-  conexao.aoConferirFaltas(() => queryClient.getQueryCache().findAll({ type: "active", predicate: temAFalta }).length > 0);
+  // A saída da última escuta com a falta não apaga a de uma consulta na tela (parte 13l), nem a espera de uma que ainda
+  // lê: a tela nova que lê pelo react-query (a fila da bancada) diz se o servidor voltou (revisão da parte 13l).
+  conexao.aoConferirFaltas(
+    () => queryClient.getQueryCache().findAll({ type: "active", predicate: (leitura) => temAFalta(leitura) || leitura.state.fetchStatus === "fetching" }).length > 0,
+  );
   const deixarAVolta = opcoes.aoVoltar?.(() => {
     // O SDK voltou a ouvir o servidor: é a volta que a escuta que saiu da tela com a falta não chegou a ver.
     if (devendoAVolta.has(conexao)) conexao.leuDoServidor();
     void reler();
   });
   const deixar = queryClient.getQueryCache().subscribe((evento) => {
+    // A consulta que segurava a volta devida de uma escuta que saiu (a falta, ou a leitura a caminho) saiu da tela:
+    // confere de novo (revisão da parte 13l).
+    if (evento.type === "observerRemoved" || evento.type === "removed") {
+      if (devendoAVolta.has(conexao)) conferirAVoltaDevida(conexao);
+      return;
+    }
     if (evento.type !== "updated") return;
     const acao = evento.action;
     if (acao.type === "fetch") inicios.set(evento.query, agora());
@@ -569,6 +582,8 @@ export function ligarConexaoDoApp(
         conexao.ficouSemResposta(inicios.get(evento.query));
       } else semResposta.delete(evento.query);
     }
+    // A consulta que lia respondeu: a volta devida de uma escuta que saiu confere de novo (revisão da parte 13l).
+    if ((acao.type === "success" || acao.type === "error") && devendoAVolta.has(conexao)) conferirAVoltaDevida(conexao);
   });
   const mudou = () => conexao.redeMudou();
   const tocou = () => {

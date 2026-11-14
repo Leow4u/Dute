@@ -29,8 +29,9 @@ export default function PaginaPedidosRomaneio() {
     (_id, data) => ({ paraQuando: data.due_at as unknown }),
   );
   const esperandoSolicitacao = Boolean(solicitacaoId) && solicitacao.item === undefined && !solicitacao.erro;
-  // "Tentar de novo" (na demora, na desistência e na falha): assina de novo o que ainda não chegou, os volumes ou o prazo.
-  const tentar = () => Promise.all([leitura.tentar(), esperandoSolicitacao ? solicitacao.tentar() : undefined]);
+  // "Tentar de novo" (na demora, na desistência e na falha, e no aviso da conexão): assina de novo o que ainda não
+  // chegou, os volumes ou o prazo, também o prazo que falhou (revisão da parte 13l).
+  const tentar = () => Promise.all([leitura.tentar(), solicitacaoId && solicitacao.item === undefined ? solicitacao.tentar() : undefined]);
 
   const estado: EstadoDoRomaneio =
     leitura.estado !== "pronto" ? leitura.estado : !pedido?.concluido ? "em_separacao" : esperandoSolicitacao ? "carregando" : "pronto";
@@ -53,8 +54,8 @@ export default function PaginaPedidosRomaneio() {
       estado={estado}
       folha={folha}
       voltar={pedido && pedidoId ? { href: hrefDaBancada(pedidoId), rotulo: pedido.numero || "Pedidos" } : null}
-      // Sem conexão, o prazo que não chegou é dito pelo aviso da conexão (parte 13l).
-      avisos={solicitacao.erro && solicitacao.falta !== "conexao" ? ["Não foi possível carregar o prazo do pedido."] : []}
+      // A frase diz o que falta, em qualquer falta; sem conexão, o aviso da conexão diz por quê (revisão da parte 13l).
+      avisos={solicitacao.erro ? ["Não foi possível carregar o prazo do pedido."] : []}
       onImprimir={() => window.print()}
       onTentar={tentar}
       leitura={{ ...juntarTentativas(leitura.aoVivo, novaTentativaDe([solicitacao])), tentar }}

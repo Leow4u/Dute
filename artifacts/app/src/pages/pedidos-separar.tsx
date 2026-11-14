@@ -17,7 +17,7 @@ import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { prazoEsgotado } from "@/lib/conexao";
 import { juntarTentativas, novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
-import { faltaDaConsulta } from "@/lib/carregando/use-leitura-com-falha";
+import { faltaDaConsulta, useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { textoDoParaQuando } from "@/lib/order-queue";
 import { canDecideRequests, canOperateWarehouse } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
@@ -122,6 +122,9 @@ export default function PaginaPedidosSeparar() {
     queryFn: () => fetchJson<WarehouseOpsResponse>("/api/warehouse/ops"),
     refetchOnWindowFocus: false,
   });
+  // A fila que falhou sem nada lido fica na falha enquanto tenta de novo: o aviso não sai e volta no mesmo quadro, e o
+  // foco fica no "Tentar de novo" (revisão da parte 13l).
+  const opsNaTela = useLeituraComFalha(ops);
   const pedido = useMemo(() => (chave ? groupWarehouseOrders(ops.data).find((order) => order.key === chave) : undefined), [chave, ops.data]);
   const tarefa = pedido?.pick;
   const pickTaskId = idDaTarefaDeSeparacao(tarefa);
@@ -373,9 +376,9 @@ export default function PaginaPedidosSeparar() {
 
   const estado: EstadoDaBancada = !chave
     ? "nao_encontrado"
-    : ops.isLoading
+    : opsNaTela.isLoading
       ? "carregando"
-      : ops.isError && !ops.data
+      : opsNaTela.isError && !opsNaTela.data
         ? "erro"
         : !pedido || !pickTaskId
           ? "nao_encontrado"
@@ -422,9 +425,9 @@ export default function PaginaPedidosSeparar() {
   const leituraDaBancada = juntarTentativas(novaTentativaDe([linhasAoVivo, tarefaAoVivo, caixasAoVivo, entradaAoVivo, solicitacao]), {
     tentando: false,
     tentar: () => {
-      if (ops.isError) void relerDoZero(queryClient, [["warehouse-ops"]]);
+      if (opsNaTela.isError) void relerDoZero(queryClient, [["warehouse-ops"]]);
     },
-    ...faltaDaConsulta(ops),
+    ...faltaDaConsulta(opsNaTela),
   });
 
   // Enquanto a divisão da linha do diálogo vai ao servidor, ele mostra o que foi mandado: a leitura ao vivo pode chegar antes da resposta.

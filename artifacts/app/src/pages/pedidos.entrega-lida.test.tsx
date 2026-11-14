@@ -192,6 +192,26 @@ describe("as entregas sem conexão", () => {
     expect(linhaDeEstado()!.textContent).toContain("· lista de 10:42");
   });
 
+  it("a linha que já disse o erro do servidor fica com ele quando a nova tentativa cai sem conexão: o botão e o foco não saem", async () => {
+    // A escuta recusada pelo servidor; a rede cai, e a pessoa toca no "Tentar de novo" da linha (revisão da parte 13l).
+    estado.entregas = { itens: null, erro: true, falta: "servidor", lidaEm: null } as never;
+    await montar();
+    expect(naTela()).toContain("Não consegui carregar a entrega.");
+    const tentar = () =>
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (botao) => botao.querySelector(".botao-acao-camada[data-atual]")?.textContent === "Tentar de novo",
+      );
+    tentar()!.focus();
+    estado.daNovaAssinatura = { itens: null, erro: true, falta: "conexao", lidaEm: null } as never;
+    await act(async () => tentar()!.click());
+    await esperar(() => estado.chaves.includes("orders:em_aberto#1"), "a nova assinatura");
+    await esperar(() => linhaDeEstado()?.dataset.estado === "reconectando", "a falta na linha de estado");
+    // A frase e o botão ficam no lugar (nada sobe sob o dedo), e o foco fica no botão que a pessoa tocou.
+    expect(naTela()).toContain("Não consegui carregar a entrega.");
+    expect(tentar()).toBeDefined();
+    expect(document.activeElement).toBe(tentar());
+  });
+
   it("o erro do servidor segue na linha do pedido, e a linha de estado diz a hora da lista", async () => {
     estado.entregas = { itens: null, erro: true, falta: "servidor", lidaEm: null } as never;
     await montar();

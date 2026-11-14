@@ -491,6 +491,24 @@ describe("as listas dos formulários sem conexão", () => {
     ).toEqual([]);
   });
 
+  it("na resposta do orçamento e na Nova demanda, só os rótulos da falta (revisão da parte 13l)", () => {
+    const dialogo = ["Fechado · 10045 – RV01", "Respondido em", "Contato", "Escolher…", "Link do e-mail", "Cancelar", "Confirmar", "Gravando…", "Conferir", "Fechar"];
+    for (const estado of ["sem-conexao", "reconectando"] as const) {
+      const falta = [estado === "sem-conexao" ? "Sem conexão." : "Reconectando…", "Tentar de novo"];
+      act(() => raiz!.render(<></>));
+      act(() => raiz!.render(na(estado, respostaCom(semConexao()))));
+      const resposta = document.querySelector('[role="dialog"]')!.outerHTML;
+      expect(textosForaDaLista(resposta, [...dialogo, ...falta])).toEqual([]);
+      expect(resposta).toContain(falta[0]);
+      act(() => raiz!.render(<></>));
+      act(() => raiz!.render(na(estado, novaDemandaCom(semConexao()))));
+      // A busca do catálogo: o aviso da conexão no lugar dos resultados, e só ele.
+      const regiao = document.querySelector("[data-falha-na-leitura]")!.outerHTML;
+      expect(textosForaDaLista(regiao, falta)).toEqual([]);
+      expect(regiao).toContain(falta[0]);
+    }
+  });
+
   it("a leitura ao vivo leva a falta à lista pendente; lendo, nenhuma", () => {
     expect(leituraPendente({ itens: null, erro: true, falta: "conexao" })).toMatchObject({ estado: "erro", falta: "conexao" });
     expect(leituraPendente({ itens: null, erro: true, falta: "servidor" })).toMatchObject({ estado: "erro", falta: "servidor" });

@@ -296,6 +296,12 @@ export default function Pedidos() {
     (id, data) => ({ id, entrega: entregaDoPedido(data) }),
   );
   const entregasFalharam = entregas.erro;
+  // A linha que já disse o erro do servidor fica com ele até as entregas chegarem, também quando a nova tentativa cai
+  // sem conexão: a frase e o "Tentar de novo" não saem de baixo do dedo, nem o foco do botão tocado (revisão da parte
+  // 13l). A falta de conexão que chega sem esse erro antes fica só na linha de estado.
+  const [falhaNaLinha, setFalhaNaLinha] = useState(false);
+  if (entregas.itens !== null && falhaNaLinha) setFalhaNaLinha(false);
+  else if (entregas.itens === null && entregasFalharam && entregas.falta !== "conexao" && !falhaNaLinha) setFalhaNaLinha(true);
   const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
   const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
@@ -695,8 +701,9 @@ export default function Pedidos() {
     // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
     // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
     if (entregas.itens === null) {
-      // Sem conexão, a linha de estado diz a falta e tenta de novo (parte 13l): a linha não repete a falha do servidor.
-      if (!entregasFalharam || entregas.falta === "conexao") return {};
+      // Sem conexão, a linha de estado diz a falta e tenta de novo (parte 13l): a linha não repete a falha do servidor,
+      // a não ser a que ela já mostrava.
+      if (!entregasFalharam || (entregas.falta === "conexao" && !falhaNaLinha)) return {};
       return {
         detail: "Não consegui carregar a entrega.",
         secondary: operador ? (
