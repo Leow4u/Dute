@@ -373,21 +373,35 @@ escuta segue sem o servidor, a volta de outra leitura (a callable) não tira
 o estado único de "Reconectando"; a escuta trocada pelo "Tentar de novo", ou
 que saiu da tela com a falta, deixa a conexão esperando a próxima resposta do
 servidor a uma escuta aberta (ou a volta do SDK) para voltar a "conectado";
-sem escuta à espera e sem outra leitura com a falta (outra escuta, uma
-consulta na tela), a saída da última com a falta limpa o que ela pôs no
-estado, que volta a "conectado" (com o aparelho sem rede, o "Sem conexão" é
-do aparelho e fica). Onde a tela já mostra a falha no cartão do lugar da
-lista (a bancada de Separar, a lista de separação, o romaneio, o pedido
-separado, as devoluções, os volumes das Etiquetas), a falta de conexão vira o
-aviso da conexão pela `FalhaNaLeitura` (`erroDaLeituraAoVivo`), e o erro do
-servidor segue com o cartão e a frase da tela; com o que está lido, a
-`FaixaAoVivo` ("romaneio de", "pedido de"); a leitura de apoio sem conexão e
-sem hora (o prazo do romaneio, o destino da lista) diz o aviso da conexão no
-lugar da frase dela. Onde a tela tem a `LinhaDeEstado` (Pedidos), a leitura
-ao vivo que a lista mostra junto (as entregas) entra por `aoVivo`: a linha
-diz a falta, com a hora mais antiga do que está na tela, e o "Tentar de novo"
-dela assina de novo; o pedido não repete a falha. No Financeiro, a consulta
-do react-query (as emissões, as baixas) leva a falta pela `faltaDaConsulta`.
+sem escuta à espera e sem outra leitura com a falta ou a caminho (outra
+escuta, uma consulta na tela com a falta ou lendo), a saída da última com a
+falta limpa o que ela pôs no estado, que volta a "conectado"; a consulta que
+segurava a volta confere de novo quando responde e quando sai da tela (com o
+aparelho sem rede, o "Sem conexão" é do aparelho e fica). Onde a tela já
+mostra a falha no cartão do lugar da lista (a bancada de Separar, a lista de
+separação, o romaneio, o pedido separado, as devoluções, os volumes das
+Etiquetas), a falta de conexão vira o aviso da conexão pela `FalhaNaLeitura`
+(`erroDaLeituraAoVivo`), e o erro do servidor segue com o cartão e a frase da
+tela; a fila que falhou sem nada lido fica na falha enquanto tenta de novo
+(`useLeituraComFalha`), e o foco fica no "Tentar de novo"; com o que está
+lido, a `FaixaAoVivo` ("romaneio de", "pedido de"). A leitura de apoio que não
+chegou (o prazo do romaneio, o destino da lista) segue com a frase que diz o
+que falta, em qualquer falta, e o aviso da conexão (ou a faixa) diz por quê,
+com o "Tentar de novo" que assina de novo o que não chegou. Onde a tela tem a
+`LinhaDeEstado` (Pedidos), a leitura ao vivo que a lista mostra junto (as
+entregas) entra por `aoVivo`: a linha diz a falta, com a hora mais antiga do
+que está na tela, e o "Tentar de novo" dela assina de novo; o pedido não
+repete a falta de conexão, mas a linha que já dizia o erro do servidor fica
+com a frase e o botão até as entregas chegarem (nada sai de baixo do dedo nem
+leva o foco). No Financeiro, a consulta do react-query (as emissões, as
+baixas) leva a falta pela `faltaDaConsulta`, e só a nova tentativa que a
+pessoa pede diz "Tentando de novo…" (`useTentativaPedida`): a releitura do
+intervalo não mexe no aviso. Os Inícios com leituras ao vivo (a Operação e o
+Financeiro) dizem a falta de conexão pela mesma regra (`semConexaoDoInicio`):
+sem nada lido, o aviso no lugar do "Precisa de você"; com tudo lido, a faixa.
+Com o aparelho conectado e o servidor sem resposta, o aviso fica em
+"Reconectando…" sem falar, como o momento 8 manda; dizer a falta que dura é
+uma escolha que espera o Leonardo.
 As listas dos formulários (`LeituraPendenteNaRegiao`) dizem a falta de
 conexão na peça empilhada das seções estreitas (nos diálogos; em linha onde
 a lista tem a largura da página, como a busca da Nova demanda), sem desenho
