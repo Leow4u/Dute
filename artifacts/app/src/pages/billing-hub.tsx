@@ -3,7 +3,7 @@
  * executa: um conceito só, uma rota só. As telas existentes renderizam
  * intactas sob abas.
  */
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useLocation } from "wouter";
 
 import { CarregandoTela } from "@/components/ui/carregando-tela";
@@ -68,15 +68,26 @@ export default function BillingHub() {
         {tab === "competencia" ? <Billing /> : null}
         {tab === "tabela" ? <PriceList /> : null}
         {tab === "contratos" && podeManterContratos ? (
-          // A aba é do cliente ativo: enquanto ele lê, a espera da tela que abre, nunca a aba em branco (carregamento
-          // v2, parte 13d).
-          isLoading ? (
-            <CarregandoTela titulo={nomeDaTela(location)} />
-          ) : (
-            <Contratos key={code} rotaBase="/faturamento/contratos" clienteCodigo={code} />
-          )
+          <AbaDosContratos titulo={nomeDaTela(location)} code={code} carregandoCliente={isLoading} />
         ) : null}
       </Suspense>
     </div>
+  );
+}
+
+/**
+ * A aba Contratos é do cliente ativo: enquanto ele lê, a espera da tela que
+ * abre, nunca a aba em branco; depois, o arquivo da aba, se ainda chega. As
+ * duas são uma espera só (carregamento v2, parte 13d): o mesmo relógio, desde
+ * que a aba abriu, sem a caixa sumir na troca nem a demora recomeçar do zero,
+ * e sem anunciar a entrada de novo.
+ */
+function AbaDosContratos({ titulo, code, carregandoCliente }: { titulo: string | null; code: string; carregandoCliente: boolean }) {
+  const [desde] = useState(() => performance.now());
+  if (carregandoCliente) return <CarregandoTela titulo={titulo} desde={desde} />;
+  return (
+    <Suspense fallback={<CarregandoTela titulo={titulo} desde={desde} />}>
+      <Contratos key={code} rotaBase="/faturamento/contratos" clienteCodigo={code} />
+    </Suspense>
   );
 }

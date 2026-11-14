@@ -158,3 +158,16 @@ describe("Relatórios, antes de ler", () => {
     expect(texto()).not.toContain("Carregando...");
   });
 });
+
+describe("Relatórios depois da revisão (parte 13d)", () => {
+  it("um brilho só, o da prévia, nunca um por bloco; e o dado chega em cascata", async () => {
+    estado.atraso = 2_000;
+    await montar();
+    await passar(350);
+    expect(container.querySelectorAll(".carregando-com-brilho")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-esqueleto].carregando-com-brilho")).toHaveLength(0);
+    await passar(1_700);
+    expect(container.querySelector("[data-fantasmas]")).toBeNull();
+    expect(container.querySelector("[data-chegada]")).not.toBeNull();
+  });
+});

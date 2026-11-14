@@ -1411,6 +1411,13 @@
     animation-delay: calc(var(--ordem, 0) * 120ms);
   }
 
+  /* Na tabela, o brilho é o do corpo das linhas-fantasma (o tbody, um por cartão): o recorte não vale ali, e a faixa
+     fica na altura dele, sem passar pelos títulos das colunas. */
+  tbody.carregando-com-brilho::after {
+    top: 0;
+    bottom: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .carregando-com-brilho::after {
       animation: none;

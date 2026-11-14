@@ -293,27 +293,53 @@ export type ColunaFantasma = string;
 /**
  * A linha-fantasma da primeira leitura das tabelas do Catálogo (carregamento
  * v2, parte 13d; momento 2): os blocos na altura da linha real, que entram aos
- * 300 ms com o brilho (o `data-visivel`); fora da árvore de acessibilidade.
- * Quem diz o que lê é a linha de estado sob o título.
+ * 300 ms (o `data-visivel`); fora da árvore de acessibilidade. O brilho é um
+ * só, o do corpo da tabela (`corpoDaTabelaLendo`), nunca um por bloco. Quem
+ * diz o que lê é a linha de estado sob o título.
  */
 export function LinhaFantasmaDaTabela({ visivel, larguras }: { visivel: boolean; larguras: readonly ColunaFantasma[] }) {
-  const brilho = visivel ? "carregando-com-brilho" : undefined;
   return (
     <tr aria-hidden="true" data-fantasmas="" data-visivel={visivel ? "" : undefined}>
       {larguras.map((largura, coluna) => (
         <td key={coluna} className={coluna < 2 ? "px-5 py-3" : "px-4 py-2"}>
           {largura === "acoes" ? (
             <span className="flex h-9 items-center justify-center gap-2">
-              <Esqueleto forma="bloco" className={cn("size-8", brilho)} />
-              <Esqueleto forma="bloco" className={cn("size-8", brilho)} />
+              <Esqueleto forma="bloco" className="size-8" />
+              <Esqueleto forma="bloco" className="size-8" />
             </span>
           ) : (
             <span className="flex h-9 items-center">
-              <Esqueleto forma="texto" className={cn(largura, brilho)} />
+              <Esqueleto forma="texto" className={largura} />
             </span>
           )}
         </td>
       ))}
     </tr>
   );
+}
+
+/**
+ * As props do corpo da tabela do Catálogo (carregamento v2, parte 13d;
+ * momento 2): lendo, ocupado e descrito pela linha de estado (`idDaLinha`),
+ * com um brilho só, o do corpo, a partir dos 300 ms (`visivel`); na chegada,
+ * as linhas reais entram em cascata (`chegando`, o `useChegada`).
+ */
+export function corpoDaTabela({
+  lendo,
+  visivel,
+  chegando,
+  idDaLinha,
+  className,
+}: {
+  lendo: boolean;
+  visivel: boolean;
+  chegando: boolean;
+  idDaLinha: string;
+  className?: string;
+}) {
+  return {
+    className: cn(className, lendo && visivel && "carregando-com-brilho"),
+    ...(lendo ? { "aria-busy": true as const, "aria-describedby": idDaLinha } : {}),
+    ...(chegando ? { "data-chegada": "" } : {}),
+  };
 }

@@ -7,6 +7,7 @@ import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
   StockTablePagination,
   StockToolbar,
   LinhaFantasmaDaTabela,
+  corpoDaTabela,
   type ColunaFantasma,
 } from "@/components/stock/stock-workbench";
 import { atributosDoProblema, problemaDoNomeNoCadastro, seguirSugestao } from "@/features/warehouse-ops/product-identity";
@@ -104,6 +106,8 @@ export default function Products() {
   const numeroLido = (valor: ReactNode) => (lido ? valor : lista.falhou ? "—" : <Esqueleto forma="contagem" />);
   // As linhas-fantasma entram aos 300 ms, quantas a última página trouxe (de 1 a 5; sem ela, 2), com o brilho.
   const fantasmas = useEspera(isLoading);
+  // Na chegada, as linhas reais entram no lugar das fantasmas por opacidade, subindo 4 px, em cascata (momento 2).
+  const chegando = useChegada(isLoading);
   const contagem = useContagemLembrada("produtos", "todos", lido && !lista.trocando ? { linhas: products.length } : null);
   const categoryOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -209,7 +213,12 @@ export default function Products() {
           {lista.falhou ? (
             <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os produtos." className="rounded-none border-0" focoAoSair={idDaLinha} />
           ) : (
-          <div className="overflow-x-auto" {...troca.props}>
+          <div
+            // Lendo, a faixa do brilho anda além do corpo da tabela (o tbody não recorta): quem recorta é a caixa, sem
+            // abrir a rolagem lateral.
+            className={isLoading ? "overflow-hidden" : "overflow-x-auto"}
+            {...troca.props}
+          >
             <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
@@ -225,7 +234,7 @@ export default function Products() {
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
+              <tbody {...corpoDaTabela({ lendo: isLoading, visivel: fantasmas.visivel, chegando, idDaLinha, className: "divide-y divide-border" })}>
                 {isLoading ? (
                   // As linhas-fantasma da primeira leitura, na altura da linha real; quem diz é a linha de estado.
                   Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => (

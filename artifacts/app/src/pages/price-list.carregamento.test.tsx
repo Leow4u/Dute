@@ -25,6 +25,8 @@ const estado = vi.hoisted(() => ({
   atrasos: {} as Record<string, number>,
   falhas: new Set<string>(),
   postAtraso: 1_000,
+  postFalha: false,
+  configSalva: null as null | Record<string, unknown>,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
@@ -44,12 +46,14 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   const json = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { "content-type": "application/json" } });
   if (metodo !== "GET") {
     await new Promise((pronto) => setTimeout(pronto, estado.postAtraso));
-    return json(CONFIG);
+    if (estado.postFalha) return json({ message: "Falha interna no servidor." }, 500);
+    estado.configSalva = { ...CONFIG, ...(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>) };
+    return json(estado.configSalva);
   }
   await new Promise((pronto) => setTimeout(pronto, estado.atrasos[url.pathname] ?? 30));
   if (estado.falhas.has(url.pathname)) return json({ message: "Falha interna no servidor." }, 500);
   if (url.pathname === "/api/billing/price-list") return json({ items: PRECOS });
-  if (url.pathname === "/api/billing/config") return json(CONFIG);
+  if (url.pathname === "/api/billing/config") return json(estado.configSalva ?? CONFIG);
   return json({ items: [] });
 }
 
@@ -65,6 +69,8 @@ beforeEach(() => {
   estado.atrasos = {};
   estado.falhas = new Set();
   estado.postAtraso = 1_000;
+  estado.postFalha = false;
+  estado.configSalva = null;
   window.localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
@@ -142,7 +148,7 @@ describe("a Tabela de preços antes de ler", () => {
     expect(
       textosForaDaLista(semAnunciador(), [
         "Serviços e valores", "Novo item", "Carregando serviços…", "Serviço", "Grupo", "Unidade", "Valor unit.", "Quantidade", "Cobrança",
-        "Taxa ad valorem (%)", "Nome do cliente", "E-mail para envio da fatura",
+        "Carregando a cobrança…", "Taxa ad valorem (%)", "Nome do cliente", "E-mail para envio da fatura",
       ]),
     ).toEqual([]);
     paraOAxe.push(semAnunciador());
@@ -197,5 +203,110 @@ describe("Salvar cobrança", () => {
     expect(salvar.getAttribute("aria-busy")).toBeNull();
     expect(document.activeElement).toBe(salvar);
     await axeDoQueVimos();
+  });
+});
+
+const linhaDaCobranca = () => container.querySelectorAll("[data-linha-de-estado]")[1] ?? null;
+const camadaAtual = (item: HTMLButtonElement | undefined) => item?.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? null;
+/** Os textos da Cobrança e da tabela lidas, e de cada estado da ação (a trava contra legenda, também nos estados). */
+const TEXTOS_LIDOS = [
+  "Serviços e valores", "Novo item", /^Atualizado às \d{2}:\d{2}$/, "Serviço", "Grupo", "Unidade", "Valor unit.", "Quantidade", "Posição palete",
+  "Etiquetagem", "Armazenamento", "Serviços de Valor Agregado", "posição", "peça", /^R\$/, "Manual", "Cobrança", "Taxa ad valorem (%)",
+  "Aplicada sobre o valor total do estoque.", "Nome do cliente", "E-mail para envio da fatura", "Salvar cobrança", "Salvando…", "Cobrança salva",
+  "Cobrança não salva", "Conferir",
+];
+
+describe("a Tabela de preços depois da revisão (parte 13d)", () => {
+  it("a tabela que falhou e é relida sem a pessoa pedir mantém o aviso, nunca volta a \"Carregando\" nem diz \"Tentando de novo…\"", async () => {
+    estado.falhas = new Set(["/api/billing/price-list"]);
+    await montar();
+    await passar(300);
+    expect(texto()).toContain("Não consegui carregar a tabela.");
+    estado.atrasos = { "/api/billing/price-list": 3_000 };
+    await act(async () => {
+      void cliente.invalidateQueries({ queryKey: ["/api/billing/price-list"] });
+    });
+    await passar(1_000);
+    expect(texto()).toContain("Não consegui carregar a tabela.");
+    expect(botao("Tentar de novo")).toBeDefined();
+    expect(texto()).not.toMatch(/Tentando de novo|Carregando serviços/);
+  });
+
+  it("a linha de estado da tabela fica na largura do cartão, fora da fileira do \"Novo item\": a demora no celular não o cobre", async () => {
+    await montar();
+    await passar(300);
+    const novo = Array.from(container.querySelectorAll("button")).find((item) => item.textContent?.includes("Novo item"))!;
+    expect(linha()?.parentElement?.contains(novo)).toBe(true);
+    expect(novo.parentElement?.contains(linha())).toBe(false);
+  });
+
+  it("a cobrança que lê tem a casa do estado dela: \"Carregando a cobrança…\" aos 300 ms, a demora com \"Tentar de novo\" aos 10 s", async () => {
+    estado.atrasos = { "/api/billing/config": 60_000 };
+    await montar();
+    await passar(350);
+    expect(linhaDaCobranca()?.textContent).toContain("Carregando a cobrança…");
+    const secao = container.querySelector('section[aria-busy="true"]');
+    expect(secao?.getAttribute("aria-describedby")).toBe(linhaDaCobranca()?.id);
+    await passar(10_200);
+    expect(linhaDaCobranca()?.textContent).toContain("Demorando mais que o normal");
+    expect(linhaDaCobranca()?.querySelector(".linha-de-estado-tentar")?.textContent).toBe("Tentar de novo");
+  });
+
+  it("o \"Tentar de novo\" da cobrança que falhou leva o foco à linha dela quando a cobrança chega, nunca ao body", async () => {
+    estado.falhas = new Set(["/api/billing/config"]);
+    await montar();
+    await passar(300);
+    expect(texto()).toContain("Não consegui carregar a cobrança.");
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>("section button")).find((item) => item.textContent?.trim() === "Tentar de novo" && item.closest("section")?.querySelector("h2")?.textContent === "Cobrança");
+    expect(tentar).toBeDefined();
+    estado.falhas = new Set();
+    tentar!.focus();
+    await act(async () => tentar!.click());
+    await passar(1_000);
+    expect(container.querySelector("#billing-rate")).not.toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(linhaDaCobranca());
+  });
+
+  it("Salvar cobrança diz \"Cobrança salva\" até a configuração relida chegar; no erro, \"Cobrança não salva\" por 2 s", async () => {
+    await montar();
+    await passar(300);
+    const salvar = botao("Salvar cobrança")!;
+    estado.atrasos = { "/api/billing/config": 4_000 };
+    salvar.focus();
+    await act(async () => salvar.click());
+    await passar(350);
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_LIDOS)).toEqual([]);
+    await passar(1_200);
+    expect(camadaAtual(salvar)).toBe("Cobrança salva");
+    expect(salvar.getAttribute("aria-disabled")).toBe("true");
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_LIDOS)).toEqual([]);
+    paraOAxe.push(semAnunciador());
+    await passar(2_000);
+    expect(camadaAtual(salvar)).toBe("Cobrança salva");
+    await passar(2_000);
+    expect(camadaAtual(salvar)).toBe("Salvar cobrança");
+    expect(document.activeElement).toBe(salvar);
+    estado.atrasos = {};
+    estado.postFalha = true;
+    await act(async () => salvar.click());
+    await passar(1_600);
+    expect(camadaAtual(salvar)).toBe("Cobrança não salva");
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_LIDOS)).toEqual([]);
+    await passar(2_100);
+    expect(camadaAtual(salvar)).toBe("Salvar cobrança");
+    await axeDoQueVimos();
+  });
+
+  it("um brilho por cartão (o corpo da tabela e a cobrança), nunca um por bloco; e a chegada entra em cascata", async () => {
+    estado.atrasos = { "/api/billing/price-list": 2_000, "/api/billing/config": 2_000 };
+    await montar();
+    await passar(350);
+    expect(container.querySelector("tbody")?.classList.contains("carregando-com-brilho")).toBe(true);
+    expect(container.querySelectorAll(".carregando-com-brilho")).toHaveLength(2);
+    expect(container.querySelectorAll("[data-esqueleto].carregando-com-brilho")).toHaveLength(0);
+    await passar(1_700);
+    expect(texto()).toContain("Etiquetagem");
+    expect(container.querySelector("tbody[data-chegada]")).not.toBeNull();
   });
 });

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, getDocs } from "firebase/firestore";
 
 import {
@@ -56,6 +56,12 @@ export type ActiveCustomerState = {
    * (lib/carregando/contagem-lembrada.ts): nunca para ler ou gravar dado.
    */
   codeProvavel: string;
+  /**
+   * Lê a lista dos clientes de novo, cancelando a que ficou presa: o "Tentar
+   * de novo" da tela que espera o cliente ativo (o Fechamento do mês). A tela
+   * não lê o próprio dado com o cliente padrão enquanto o ativo não chegou.
+   */
+  recarregar?: () => Promise<unknown>;
 };
 
 const FALLBACK_OPTIONS = activeCustomerOptions([]);
@@ -94,8 +100,10 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   const commercial = role === "comercial" && AGENTE_LIBERADO;
   const storageKey = activeCustomerStorageKey(user?.uid);
 
+  const queryClient = useQueryClient();
+  const chaveDosClientes = commercial ? COMMERCIAL_CUSTOMERS_QUERY_KEY : CLIENT_PROFILES_QUERY_KEY;
   const profiles = useQuery({
-    queryKey: commercial ? COMMERCIAL_CUSTOMERS_QUERY_KEY : CLIENT_PROFILES_QUERY_KEY,
+    queryKey: chaveDosClientes,
     enabled: internal || commercial,
     staleTime: 5 * 60_000,
     queryFn: async () => {
@@ -128,6 +136,12 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
 
   const isLoading = (internal || commercial) && profiles.isPending;
   const guardado = stored?.trim() || null;
+  const { refetch: lerOsClientes } = profiles;
+  // Sem nada lido, o refetch do react-query só espera a leitura presa: ela é cancelada antes, e a nova sai.
+  const recarregar = useCallback(
+    () => queryClient.cancelQueries({ queryKey: chaveDosClientes }).then(() => lerOsClientes()),
+    [chaveDosClientes, lerOsClientes, queryClient],
+  );
   const value = useMemo<ActiveCustomerState>(
     () => ({
       options,
@@ -136,8 +150,9 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
       setCode,
       isLoading,
       codeProvavel: isLoading && guardado ? guardado : active.code,
+      recarregar,
     }),
-    [active, guardado, isLoading, options, setCode],
+    [active, guardado, isLoading, options, recarregar, setCode],
   );
 
   return <ActiveCustomerContext.Provider value={value}>{children}</ActiveCustomerContext.Provider>;

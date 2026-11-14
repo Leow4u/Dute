@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -206,6 +207,11 @@ export default function SettingsSystem() {
       }),
   });
 
+  // "Numerar agora" no relógio da ação (carregamento v2, momento 3): "Numerando…", "Numerado" pelo menos 1 s, e no erro
+  // "Não numerado" por 2 s. A chamada é a de sempre.
+  const numerar = useAcaoNaLinha<"numeracao">();
+  const estadoDoNumerar = numerar.estado("numeracao", "aplicar");
+
   const check = health.data;
   const serverValue = health.isFetching && !check
     ? "Verificando"
@@ -323,23 +329,27 @@ export default function SettingsSystem() {
               size="sm"
               variant="outline"
               estado={assignNumbers.isPending && assignNumbers.variables === false ? "andamento" : "repouso"}
-              bloqueado={assignNumbers.isPending && assignNumbers.variables === true}
+              bloqueado={numerar.ocupada("numeracao")}
               rotulo="Ver o que muda"
               andamento="Vendo o que muda…"
               onClick={() => {
-                if (!assignNumbers.isPending) assignNumbers.mutate(false);
+                if (!assignNumbers.isPending && !numerar.ocupada("numeracao")) assignNumbers.mutate(false);
               }}
             />
             <BotaoDeAcao
               size="sm"
-              estado={assignNumbers.isPending && assignNumbers.variables === true ? "andamento" : "repouso"}
+              estado={estadoDoNumerar}
               bloqueado={
-                (assignNumbers.isPending && assignNumbers.variables === false) || !numbering?.dry_run || !numbering.assigned_count
+                estadoDoNumerar === "repouso" &&
+                ((assignNumbers.isPending && assignNumbers.variables === false) || !numbering?.dry_run || !numbering.assigned_count)
               }
               rotulo="Numerar agora"
               andamento="Numerando…"
+              sucesso="Numerado"
+              erro="Não numerado"
               onClick={() => {
-                if (!assignNumbers.isPending && numbering?.dry_run && numbering.assigned_count) assignNumbers.mutate(true);
+                if (assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count) return;
+                void numerar.executar("numeracao", "aplicar", () => assignNumbers.mutateAsync(true));
               }}
             />
           </div>

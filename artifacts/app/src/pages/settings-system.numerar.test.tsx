@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
 
 /**
  * "Numerar pedidos e envios antigos" no carregamento v2 (parte 13d;
@@ -16,7 +17,7 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
  * Relógio simulado. Dados sintéticos.
  */
 
-const estado = vi.hoisted(() => ({ chamadas: [] as Array<{ apply: boolean }> }));
+const estado = vi.hoisted(() => ({ chamadas: [] as Array<{ apply: boolean }>, falharAplicar: false }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u-1", publicMetadata: { role: "owner" } }, isLoaded: true }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
@@ -31,6 +32,9 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
     const corpo = JSON.parse(String(init?.body ?? "{}")) as { apply: boolean };
     estado.chamadas.push(corpo);
     await new Promise((pronto) => setTimeout(pronto, 1_000));
+    if (corpo.apply && estado.falharAplicar) {
+      return new Response(JSON.stringify({ message: "Falha interna no servidor." }), { status: 500, headers: { "content-type": "application/json" } });
+    }
     return json({ dry_run: !corpo.apply, assigned_count: 2, assigned: [{ id: "r1", request_number: "PED-0001" }, { id: "r2", request_number: "ENV-0002" }] });
   }
   return json({ ok: true, checked_at: "2026-11-13T13:42:00Z", firestore_ms: 40, last_event: null, incidents: [] });
@@ -46,6 +50,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", vi.fn(servir));
   estado.chamadas = [];
+  estado.falharAplicar = false;
   container = document.createElement("div");
   document.body.append(container);
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always", refetchOnWindowFocus: false } } });
@@ -123,6 +128,52 @@ describe("Numerar pedidos e envios antigos", () => {
     await passar(1_000);
     expect(container.textContent).toContain("Numerou 2 solicitação(ões)");
     expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }]);
+    await axeDoQueVimos();
+  });
+});
+
+const camada = (item: HTMLButtonElement) => item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? null;
+const TEXTOS = [
+  /^Numerar pedidos e envios antigos$/, /^Dá número PED-\/ENV-/, /^(Vai numerar|Numerou) 2 solicitação\(ões\)/, "Ver o que muda", "Vendo o que muda…",
+  "Numerar agora", "Numerando…", "Numerado", "Não numerado", "Conferir",
+];
+const textosDoNumerar = () => {
+  const secao = Array.from(container.querySelectorAll("section")).find((item) => item.querySelector("h2")?.textContent === "Numerar pedidos e envios antigos");
+  return textosForaDaLista(secao?.outerHTML ?? "", TEXTOS);
+};
+
+describe("Numerar agora, depois da revisão (parte 13d)", () => {
+  it("mostra o fim: \"Numerado\" pelo menos 1 s; no erro, \"Não numerado\" por 2 s, e volta", async () => {
+    raiz = createRoot(container);
+    await act(async () => {
+      raiz!.render(
+        <QueryClientProvider client={cliente}>
+          <Anunciador />
+          <SettingsSystem />
+        </QueryClientProvider>,
+      );
+    });
+    await passar(100);
+    await tocar(botao("Ver o que muda"));
+    await passar(1_100);
+    estado.falharAplicar = true;
+    const numerar = botao("Numerar agora");
+    await tocar(numerar);
+    await passar(1_100);
+    expect(camada(numerar)).toBe("Não numerado");
+    expect(textosDoNumerar()).toEqual([]);
+    await passar(2_100);
+    expect(camada(numerar)).toBe("Numerar agora");
+    estado.falharAplicar = false;
+    await tocar(numerar);
+    await passar(1_100);
+    expect(camada(numerar)).toBe("Numerado");
+    expect(numerar.getAttribute("aria-disabled")).toBe("true");
+    expect(textosDoNumerar()).toEqual([]);
+    paraOAxe.push(container.innerHTML);
+    await passar(1_200);
+    expect(camada(numerar)).toBe("Numerar agora");
+    expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }, { apply: true }]);
     await axeDoQueVimos();
   });
 });

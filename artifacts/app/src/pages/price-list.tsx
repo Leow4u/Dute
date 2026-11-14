@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type CSSProperties } from "react";
 import {
   useListPriceList,
   getListPriceListQueryKey,
@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { cn } from "@/lib/utils";
@@ -71,9 +73,14 @@ export default function PriceList() {
   const lendoATabela = data === undefined && !tabela.isError;
   const lendoACobranca = config === undefined && !cobranca.isError;
   const idDaLinha = useId();
+  // A cobrança tem a casa do estado dela, sob o título: "Carregando a cobrança…" aos 300 ms, a demora aos 10 s com
+  // "Tentar de novo" e o foco que volta a ela quando o aviso da falha sai.
+  const idDaCobranca = useId();
   // As linhas-fantasma e os blocos da cobrança entram aos 300 ms, quantas linhas a última leitura trouxe (de 1 a 5).
   const fantasmas = useEspera(lendoATabela);
   const fantasmasDaCobranca = useEspera(lendoACobranca);
+  // Na chegada, as linhas reais entram no lugar das fantasmas por opacidade, subindo 4 px, em cascata (momento 2).
+  const chegando = useChegada(lendoATabela);
   const contagem = useContagemLembrada("tabela-de-precos", "todos", data ? { linhas: data.items?.length ?? 0 } : null);
 
   const create = useCreatePriceListItem();
@@ -87,8 +94,10 @@ export default function PriceList() {
   const [editLigado, setEditLigado] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [removing, setRemoving] = useState<PriceListItem | null>(null);
-  // "Salvar cobrança" segue ocupado até a configuração voltar lida: os campos se refazem com ela.
-  const [relendoACobranca, setRelendoACobranca] = useState(false);
+  // "Salvar cobrança" no relógio da ação (momento 3): "Salvando…" até o servidor responder; "Cobrança salva" pelo
+  // menos 1 s e até a configuração voltar lida (os campos se refazem com ela); no erro, "Cobrança não salva" por 2 s.
+  // Aos 70 s sem resposta, "Conferir" relê a configuração e nunca grava de novo.
+  const acoes = useAcaoNaLinha<"cobranca">();
 
   // Config form
   const [rate, setRate] = useState("");
@@ -149,16 +158,30 @@ export default function PriceList() {
   };
 
   const handleSaveConfig = () => {
-    if (saveConfig.isPending || relendoACobranca) return;
-    saveConfig.mutate(
-      { data: { ad_valorem_rate: Number(rate || 0) / 100, cliente_nome: nome, cliente_email: email } },
+    const dados = { ad_valorem_rate: Number(rate || 0) / 100, cliente_nome: nome, cliente_email: email };
+    // A chamada é a de sempre; o segundo toque com a cobrança ocupada não grava de novo.
+    void acoes.executar(
+      "cobranca",
+      "salvar",
+      () =>
+        saveConfig.mutateAsync({ data: dados }).then(
+          () => toast({ title: "Configurações salvas" }),
+          (erro: unknown) => {
+            toast({ title: "Erro ao salvar configurações", variant: "destructive" });
+            throw erro;
+          },
+        ),
       {
-        onSuccess: () => {
-          toast({ title: "Configurações salvas" });
-          setRelendoACobranca(true);
-          void qc.invalidateQueries({ queryKey: getGetBillingConfigQueryKey() }).finally(() => setRelendoACobranca(false));
+        releitura: () => qc.invalidateQueries({ queryKey: getGetBillingConfigQueryKey() }),
+        conferir: async () => {
+          const lida = (await leituraDaConfig.refetch()).data;
+          return (
+            lida !== undefined &&
+            lida.ad_valorem_rate === dados.ad_valorem_rate &&
+            (lida.cliente_nome || "") === dados.cliente_nome &&
+            (lida.cliente_email || "") === dados.cliente_email
+          );
         },
-        onError: () => toast({ title: "Erro ao salvar configurações", variant: "destructive" }),
       },
     );
   };
@@ -168,19 +191,23 @@ export default function PriceList() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-3">
-          <div className="min-w-0">
+        <div className="border-b border-border/60 px-5 py-3">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Serviços e valores</h2>
-            {/* A casa do estado da tabela, sob o título: "Carregando serviços…" na primeira leitura, com as
-                linhas-fantasma no lugar dela; "Atualizado às" e a releitura que falha, sem apagar a tabela. */}
-            <LinhaDeEstado id={idDaLinha} leitura={lista} objeto="serviços" className="mt-1" />
+            <Button size="sm" onClick={openNew}>
+              <Plus className="h-4 w-4" />
+              Novo item
+            </Button>
           </div>
-          <Button size="sm" onClick={openNew}>
-            <Plus className="h-4 w-4" />
-            Novo item
-          </Button>
+          {/* A casa do estado da tabela, sob o título e na largura do cartão: "Carregando serviços…" na primeira
+              leitura, com as linhas-fantasma no lugar dela; "Atualizado às" e a releitura que falha, sem apagar a
+              tabela. No celular, o que não cabe passa à linha de baixo, sem cobrir o "Novo item". */}
+          {/* A cópia da falha: a releitura automática da tabela que falhou não diz "Carregando" ao lado do aviso. */}
+          <LinhaDeEstado id={idDaLinha} leitura={tabela} objeto="serviços" className="mt-1" />
         </div>
-        <div className="overflow-x-auto">
+        {/* Lendo, a faixa do brilho anda além do corpo da tabela (o tbody não recorta): quem recorta é a caixa, sem abrir a
+            rolagem lateral. */}
+        <div className={lendoATabela ? "overflow-hidden" : "overflow-x-auto"}>
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-foreground/50">
@@ -192,7 +219,12 @@ export default function PriceList() {
                 <th className="w-12 px-3 py-2.5" />
               </tr>
             </thead>
-            <tbody {...(lendoATabela ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
+            <tbody
+              // Um brilho por cartão (seção 5.2): o corpo das linhas-fantasma inteiro, nunca cada bloco.
+              className={lendoATabela && fantasmas.visivel ? "carregando-com-brilho" : undefined}
+              {...(lendoATabela ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}
+              {...(chegando ? { "data-chegada": "" } : {})}
+            >
               {tabela.isError && data === undefined ? (
                 <tr>
                   <td colSpan={6} className="p-3">
@@ -202,16 +234,15 @@ export default function PriceList() {
               ) : data === undefined ? (
                 // As linhas-fantasma da primeira leitura, com a altura da linha real; quem diz é a linha de estado.
                 Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => {
-                  const brilho = fantasmas.visivel ? "carregando-com-brilho" : undefined;
                   const celula = "flex h-10 items-center";
                   return (
                     <tr key={ordem} aria-hidden="true" data-fantasmas="" data-visivel={fantasmas.visivel ? "" : undefined} className="border-b border-border/40 last:border-0">
-                      <td className="px-5 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-36", brilho)} /></span></td>
-                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-24", brilho)} /></span></td>
-                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-14", brilho)} /></span></td>
-                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
-                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className={cn("w-16", brilho)} /></span></td>
-                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="bloco" className={cn("size-8", brilho)} /></span></td>
+                      <td className="px-5 py-3"><span className={celula}><Esqueleto forma="texto" className="w-36" /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className="w-24" /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className="w-14" /></span></td>
+                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="texto" className="w-16" /></span></td>
+                      <td className="px-3 py-3"><span className={celula}><Esqueleto forma="texto" className="w-16" /></span></td>
+                      <td className="px-3 py-3"><span className={cn(celula, "justify-end")}><Esqueleto forma="bloco" className="size-8" /></span></td>
                     </tr>
                   );
                 })
@@ -273,11 +304,25 @@ export default function PriceList() {
 
       {/* A cobrança só se mostra lida: antes, os campos vazios e apagados pareciam uma taxa vazia, e um clique gravava
           a taxa 0. Lendo, o esqueleto dos campos e a seção ocupada; na falha, o aviso com "Tentar de novo". */}
-      <section className="h-fit rounded-lg border border-border bg-card" aria-busy={lendoACobranca || undefined}>
-        <h2 className="border-b border-border/60 px-5 py-3.5 text-sm font-semibold">Cobrança</h2>
+      <section
+        className="h-fit rounded-lg border border-border bg-card"
+        aria-busy={lendoACobranca || undefined}
+        aria-describedby={lendoACobranca ? idDaCobranca : undefined}
+      >
+        <div className="border-b border-border/60 px-5 py-3">
+          <h2 className="text-sm font-semibold">Cobrança</h2>
+          {/* A casa do estado da cobrança, que lê à parte da tabela: o leitor de tela e quem olha sabem que ela lê. */}
+          <LinhaDeEstado id={idDaCobranca} leitura={cobranca} objeto="a cobrança" className="mt-1" />
+        </div>
         {cobranca.isError && config === undefined ? (
           <div className="p-3">
-            <FalhaNaLeitura className="sm:flex-col sm:items-start" leitura={leituraDaConfig} erro={cobranca.error} mensagem="Não consegui carregar a cobrança." />
+            <FalhaNaLeitura
+              className="sm:flex-col sm:items-start"
+              leitura={leituraDaConfig}
+              erro={cobranca.error}
+              mensagem="Não consegui carregar a cobrança."
+              focoAoSair={idDaCobranca}
+            />
           </div>
         ) : config === undefined ? (
           <EsqueletoDaCobranca visivel={fantasmasDaCobranca.visivel} />
@@ -299,9 +344,11 @@ export default function PriceList() {
           <BotaoDeAcao
             variant="outline"
             className="w-full"
-            estado={saveConfig.isPending || relendoACobranca ? "andamento" : "repouso"}
+            estado={acoes.estado("cobranca", "salvar")}
             rotulo="Salvar cobrança"
             andamento="Salvando…"
+            sucesso="Cobrança salva"
+            erro="Cobrança não salva"
             onClick={handleSaveConfig}
           />
         </div>
@@ -389,14 +436,18 @@ export default function PriceList() {
  * seção em volta diz que está ocupada.
  */
 function EsqueletoDaCobranca({ visivel }: { visivel: boolean }) {
-  const brilho = visivel ? "carregando-com-brilho" : undefined;
   const bloco = (largura: string) => (
     <span data-fantasmas="" data-visivel={visivel ? "" : undefined} className="block">
-      <Esqueleto forma="bloco" className={cn("h-10", largura, brilho)} />
+      <Esqueleto forma="bloco" className={cn("h-10", largura)} />
     </span>
   );
+  // Um brilho no cartão da cobrança, nunca um por bloco (seção 5.2); o segundo cartão da tela, a 120 ms da tabela.
   return (
-    <div className="space-y-4 p-5" aria-hidden="true">
+    <div
+      className={cn("space-y-4 p-5", visivel && "carregando-com-brilho")}
+      style={visivel ? ({ "--ordem": "1" } as CSSProperties) : undefined}
+      aria-hidden="true"
+    >
       <div className="space-y-1.5">
         <span className="text-sm font-medium leading-none">Taxa ad valorem (%)</span>
         {bloco("w-full")}

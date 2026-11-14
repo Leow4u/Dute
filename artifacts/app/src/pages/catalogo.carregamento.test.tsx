@@ -219,3 +219,60 @@ describe("SKUs e saldos", () => {
     await axeDoQueVimos();
   });
 });
+
+const chip = (rotulo: string) =>
+  Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.trim().startsWith(rotulo));
+const resumoDaPagina = () => Array.from(container.querySelectorAll("p")).find((p) => /SKU\(s\) exibido/.test(p.textContent ?? ""))?.textContent ?? null;
+
+describe("o Catálogo depois da revisão (parte 13d)", () => {
+  it("\"Sem endereço\" com os saldos ainda lendo espera os endereços: as linhas-fantasma e a linha de estado, nunca a tabela vazia nem \"0 SKU(s)\"", async () => {
+    estado.atrasos = { "/api/stock-balances": 5_000 };
+    await montar(Skus);
+    await passar(300);
+    expect(texto()).toContain("BTG-000003");
+    await act(async () => chip("Sem endereço")!.click());
+    await passar(350);
+    expect(resumoDaPagina()).toBeNull();
+    expect(texto()).not.toMatch(/0 SKU\(s\)/);
+    const corpo = container.querySelector("tbody");
+    expect(corpo?.getAttribute("aria-busy")).toBe("true");
+    expect(corpo?.getAttribute("aria-describedby")).toBe(linha()?.id);
+    expect(container.querySelectorAll("tr[data-fantasmas][data-visivel]").length).toBeGreaterThan(0);
+    expect(linha()?.textContent).toContain("Carregando os endereços…");
+    await passar(5_000);
+    expect(resumoDaPagina()).toBe("2 SKU(s) exibido(s) nesta página.");
+    expect(celulasSemEndereco()).toBe(2);
+  });
+
+  it("\"Sem endereço\" com os saldos que falharam: o aviso diz, e nenhum falso zero da página", async () => {
+    estado.falhas = new Set(["/api/stock-balances"]);
+    await montar(Skus);
+    await passar(300);
+    await act(async () => chip("Sem endereço")!.click());
+    await passar(50);
+    expect(texto()).toContain("Não consegui carregar os endereços.");
+    expect(texto()).not.toMatch(/0 SKU\(s\)/);
+  });
+
+  it("os saldos que demoram: a linha diz \"Carregando os endereços…\" e, aos 10 s, a demora com \"Tentar de novo\"", async () => {
+    estado.atrasos = { "/api/stock-balances": 60_000 };
+    await montar(Skus);
+    await passar(350);
+    expect(texto()).toContain("BTG-000003");
+    expect(linha()?.textContent).toContain("Carregando os endereços…");
+    await passar(10_000);
+    expect(linha()?.textContent).toContain("Demorando mais que o normal");
+    expect(linha()?.querySelector(".linha-de-estado-tentar")?.textContent).toBe("Tentar de novo");
+  });
+
+  it("um brilho por cartão nas tabelas do Catálogo: o corpo lendo, nunca cada bloco; e a chegada entra em cascata", async () => {
+    estado.atrasos = { "/api/products": 2_000 };
+    await montar(Products);
+    await passar(350);
+    expect(container.querySelector("tbody")?.classList.contains("carregando-com-brilho")).toBe(true);
+    expect(container.querySelectorAll("[data-esqueleto].carregando-com-brilho")).toHaveLength(0);
+    await passar(1_700);
+    expect(texto()).toContain("Polo Masculino Piquet Preto");
+    expect(container.querySelector("tbody[data-chegada]")).not.toBeNull();
+  });
+});

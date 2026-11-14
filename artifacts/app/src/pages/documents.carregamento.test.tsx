@@ -31,6 +31,9 @@ const estado = vi.hoisted(() => ({
   postAtraso: 1_000,
   documentos: [] as Array<Record<string, unknown>>,
   chamadas: [] as string[],
+  corpos: [] as string[],
+  toasts: [] as string[],
+  falharPost: 0,
   carregandoCliente: false,
 }));
 
@@ -43,7 +46,7 @@ vi.mock("@/lib/active-customer-context", () => ({
     isLoading: estado.carregandoCliente,
   }),
 }));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: (aviso: { title: string }) => estado.toasts.push(aviso.title) }) }));
 
 import Documents from "./documents";
 
@@ -62,7 +65,12 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   estado.chamadas.push(`${metodo} ${url.pathname}`);
   const json = (corpo: unknown, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { "content-type": "application/json" } });
   if (metodo !== "GET") {
+    estado.corpos.push(`${metodo} ${url.pathname} ${String(init?.body ?? "")}`);
     await new Promise((pronto) => setTimeout(pronto, estado.postAtraso));
+    if (estado.falharPost > 0) {
+      estado.falharPost -= 1;
+      return json({ message: "Falha interna no servidor." }, 500);
+    }
     const id = decodeURIComponent(url.pathname.split("/")[3] ?? "");
     const documento = estado.documentos.find((item) => item.id === id);
     if (metodo === "DELETE" && documento) Object.assign(documento, { status: "archived", archived_at: "2026-11-13T13:43:00Z" });
@@ -70,7 +78,7 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   }
   await new Promise((pronto) => setTimeout(pronto, estado.atrasos[url.pathname] ?? 30));
   if (estado.falhas.has(url.pathname)) return json({ message: "Falha interna no servidor." }, 500);
-  if (url.pathname === "/api/documents") return json({ items: estado.documentos });
+  if (url.pathname === "/api/documents") return json({ items: estado.documentos.map((documento) => ({ ...documento })) });
   if (url.pathname === "/api/customer-requests") return json({ items: AVISOS });
   return json({ items: [] });
 }
@@ -89,6 +97,9 @@ beforeEach(() => {
   estado.postAtraso = 1_000;
   estado.documentos = DOCUMENTOS();
   estado.chamadas = [];
+  estado.corpos = [];
+  estado.toasts = [];
+  estado.falharPost = 0;
   estado.carregandoCliente = false;
   window.localStorage.clear();
   container = document.createElement("div");
@@ -263,5 +274,207 @@ describe("as ações de cada documento", () => {
     expect(adicionar.getAttribute("aria-disabled")).toBe("true");
     await act(async () => adicionar.click());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+const anuncio = () => container.querySelector("[data-anunciador]")?.textContent ?? "";
+/** O texto da célula do documento (o nome e a linha de apoio). */
+const celulaDoNome = (titulo: string) => (linhaDaTabela(titulo)?.querySelector("td")?.textContent ?? "").replace(/\s+/g, " ");
+const conferirDa = (titulo: string) =>
+  Array.from(linhaDaTabela(titulo)?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((item) => /^Conferi/.test(item.textContent?.trim() ?? ""));
+async function buscar(valor: string) {
+  const campo = container.querySelector<HTMLInputElement>('input[placeholder="Buscar por nome, NF ou pedido"]')!;
+  await act(async () => {
+    const definir = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    definir.call(campo, valor);
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+/** Os textos que a linha do documento pode mostrar: os dados e cada estado da ação (a trava contra legenda). */
+const TEXTOS_DA_LINHA = [
+  "NF 48213", "nf-48213.pdf", "Contrato de armazenagem", "contrato.pdf", "NF 4521", "nf-4521.pdf", "Anexado ao aviso de chegada",
+  "Arquivando…", "Arquivando NF 48213…", "Ocultando do cliente…", "Enviando para o Conhecimento…", "Demorando mais que o normal", "·",
+  /^\d+:\d{2}$/, "Sem confirmação do servidor", "Conferir", "Conferindo…", "Arquivado", "Oculto do cliente", "Enviado para o Conhecimento",
+  "Falha interna no servidor.", "NF de entrada", "Contrato", "NF", "Só Dutelog", "Cliente vê", "Enviado pelo cliente", /^\d{2}\/\d{2}\/\d{2}$/, "—",
+  /^(NF )?4521/, /Malharia Sul/, /Ana/,
+];
+const textosDasLinhas = () =>
+  textosForaDaLista(Array.from(container.querySelectorAll("tbody tr")).map((tr) => tr.outerHTML).join(""), TEXTOS_DA_LINHA);
+
+describe("as ações de cada documento, depois da revisão (parte 13d)", () => {
+  it("o menu não reabre sozinho quando a linha solta, no sucesso nem na falha, e o foco fica no \"⋯\"", async () => {
+    await montar();
+    await passar(300);
+    await escolherNoMenu("NF 48213", "Ocultar do cliente");
+    await passar(4_000);
+    const menu = menuDa("NF 48213")!;
+    expect(menu.getAttribute("aria-disabled")).toBeNull();
+    expect(menu.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="menuitem"]')).toBeNull();
+    expect(document.activeElement).toBe(menu);
+    estado.falharPost = 1;
+    await escolherNoMenu("NF 48213", "Enviar para o Conhecimento");
+    await passar(1_500);
+    expect(linhaDaTabela("NF 48213")?.textContent).toContain("Falha interna no servidor.");
+    expect(menuDa("NF 48213")!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="menuitem"]')).toBeNull();
+    await passar(3_000);
+    expect(document.querySelector('[role="menuitem"]')).toBeNull();
+  });
+
+  it("no sucesso, a linha diz o que mudou (\"Arquivado\") até a lista relida chegar, no lugar da origem, sem crescer", async () => {
+    await montar();
+    await passar(300);
+    const filhos = linhaDaTabela("NF 48213")!.querySelector("td")!.childElementCount;
+    estado.atrasos = { "/api/documents": 3_000 };
+    await escolherNoMenu("NF 48213", "Arquivar");
+    await passar(350);
+    // O apoio entra no lugar da origem: a célula tem as mesmas linhas.
+    expect(celulaDoNome("NF 48213")).toContain("Arquivando…");
+    expect(celulaDoNome("NF 48213")).not.toContain("nf-48213.pdf");
+    expect(linhaDaTabela("NF 48213")!.querySelector("td")!.childElementCount).toBe(filhos);
+    expect(textosDasLinhas()).toEqual([]);
+    await passar(1_000);
+    expect(estado.toasts).toContain("Documento arquivado");
+    expect(celulaDoNome("NF 48213")).toContain("Arquivado");
+    expect(linhaDaTabela("NF 48213")!.querySelector("td")!.childElementCount).toBe(filhos);
+    const menu = menuDa("NF 48213")!;
+    expect(menu.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(menu.getAttribute("aria-describedby")!)?.textContent).toContain("Arquivado");
+    expect(textosDasLinhas()).toEqual([]);
+    paraOAxe.push(semAnunciador());
+    await passar(3_000);
+    expect(linhaDaTabela("NF 48213")).toBeUndefined();
+    await axeDoQueVimos();
+  });
+
+  it("o \"Conferir\" dos 70 s relê e diz \"Conferindo…\", nunca \"Arquivando…\" de novo; o botão fica com o foco e nada é reenviado", async () => {
+    estado.postAtraso = 200_000;
+    await montar();
+    await passar(300);
+    await escolherNoMenu("NF 48213", "Arquivar");
+    await passar(70_100);
+    expect(celulaDoNome("NF 48213")).toContain("Sem confirmação do servidor");
+    expect(celulaDoNome("NF 48213")).not.toContain("Sem confirmação do servidor.");
+    expect(textosDasLinhas()).toEqual([]);
+    const conferir = conferirDa("NF 48213")!;
+    expect(conferir.textContent?.trim()).toBe("Conferir");
+    estado.atrasos = { "/api/documents": 3_000 };
+    const antes = estado.chamadas.length;
+    conferir.focus();
+    await act(async () => conferir.click());
+    await passar(400);
+    expect(celulaDoNome("NF 48213")).not.toContain("Arquivando");
+    expect(conferirDa("NF 48213")?.textContent?.trim()).toBe("Conferindo…");
+    expect(conferirDa("NF 48213")?.getAttribute("aria-busy")).toBe("true");
+    expect(document.activeElement).toBe(conferirDa("NF 48213"));
+    expect(menuDa("NF 48213")?.getAttribute("aria-label")).toBe("Conferindo NF 48213…");
+    expect(textosDasLinhas()).toEqual([]);
+    await passar(2_000);
+    expect(anuncio()).not.toContain("Arquivando");
+    expect(estado.chamadas.slice(antes)).toEqual(["GET /api/documents"]);
+    // A lista relida diz que não arquivou: a linha volta, e o foco vai ao "⋯" dela, nunca ao body.
+    await passar(1_500);
+    expect(conferirDa("NF 48213")).toBeUndefined();
+    expect(document.activeElement).toBe(menuDa("NF 48213"));
+  });
+
+  it("a resposta que chega depois do \"Conferir\" que disse que não valeu relê a lista: o documento arquivado sai", async () => {
+    estado.postAtraso = 75_000;
+    await montar();
+    await passar(300);
+    await escolherNoMenu("NF 48213", "Arquivar");
+    await passar(70_100);
+    await act(async () => conferirDa("NF 48213")!.click());
+    await passar(500);
+    expect(conferirDa("NF 48213")).toBeUndefined();
+    const lidas = estado.chamadas.filter((chamada) => chamada === "GET /api/documents").length;
+    await passar(5_000);
+    expect(estado.toasts).toContain("Documento arquivado");
+    expect(estado.chamadas.filter((chamada) => chamada === "GET /api/documents").length).toBeGreaterThan(lidas);
+    expect(linhaDaTabela("NF 48213")).toBeUndefined();
+  });
+
+  it("a linha que sai da lista e volta no meio da ação segue o mesmo relógio, sem anunciar de novo", async () => {
+    estado.postAtraso = 40_000;
+    await montar();
+    await passar(300);
+    await escolherNoMenu("NF 48213", "Arquivar");
+    await passar(12_000);
+    expect(celulaDoNome("NF 48213")).toContain("Demorando mais que o normal");
+    expect(celulaDoNome("NF 48213")).toContain("0:12");
+    await passar(2_100);
+    const falados = anuncio();
+    await buscar("Contrato");
+    await passar(100);
+    expect(linhaDaTabela("NF 48213")).toBeUndefined();
+    await buscar("");
+    await passar(350);
+    expect(celulaDoNome("NF 48213")).toContain("Demorando mais que o normal");
+    expect(celulaDoNome("NF 48213")).not.toContain("Arquivando…");
+    await passar(2_100);
+    expect(anuncio()).toBe(falados);
+  });
+
+  it("a repetição do \"Enviar para o Conhecimento\" depois da falha incerta leva a mesma chave ao servidor", async () => {
+    estado.falharPost = 1;
+    await montar();
+    await passar(300);
+    await escolherNoMenu("NF 48213", "Enviar para o Conhecimento");
+    await passar(4_000);
+    await escolherNoMenu("NF 48213", "Enviar para o Conhecimento");
+    await passar(2_000);
+    const chaves = estado.corpos
+      .filter((corpo) => corpo.startsWith("POST /api/documents/doc1/extract"))
+      .map((corpo) => (JSON.parse(corpo.slice(corpo.indexOf("{"))) as { idempotency_key?: string }).idempotency_key);
+    expect(chaves).toHaveLength(2);
+    expect(chaves[0]).toBeTruthy();
+    expect(chaves[1]).toBe(chaves[0]);
+  });
+
+  it("o \"⋯\" tem 48 px no celular, e \"Adicionar documento\" esperando o cliente mostra a caixa, nunca só a opacidade", async () => {
+    estado.carregandoCliente = true;
+    await montar();
+    await passar(350);
+    const adicionar = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent?.includes("Adicionar documento"))!;
+    expect(adicionar.getAttribute("aria-busy")).toBe("true");
+    expect(adicionar.querySelector("[data-spinner]")).not.toBeNull();
+    expect(adicionar.className).not.toContain("opacity-45");
+    expect(menuDa("NF 48213")?.className).toContain("max-md:size-12");
+  });
+
+  it("um brilho por cartão: o corpo da tabela lendo, nunca cada bloco; e a chegada entra em cascata", async () => {
+    estado.atrasos = { "/api/documents": 2_000, "/api/customer-requests": 2_000 };
+    await montar();
+    await passar(350);
+    expect(container.querySelector("tbody[aria-busy]")?.classList.contains("carregando-com-brilho")).toBe(true);
+    expect(container.querySelectorAll("[data-esqueleto].carregando-com-brilho")).toHaveLength(0);
+    await passar(1_700);
+    expect(texto()).toContain("NF 48213");
+    expect(container.querySelector("tbody[data-chegada]")).not.toBeNull();
+    await passar(1_000);
+    expect(container.querySelector("tbody[data-chegada]")).toBeNull();
+  });
+});
+
+describe("a segunda visita a Documentos", () => {
+  it("as linhas-fantasma lembram quantos documentos têm o selo do Conhecimento: a linha com o selo tem a terceira linha de texto", async () => {
+    estado.documentos = [...DOCUMENTOS(), { id: "doc4", title: "NF 48190", file_name: "nf-48190.pdf", document_type: "nf_entrada", storage_path: "d/4.pdf", file_url: "https://storage.example/4.pdf", status: "internal", knowledge_status: "pending_approval", created_at: "2026-11-08T12:00:00Z" }];
+    await montar();
+    await passar(300);
+    expect(texto()).toContain("Aguardando aprovação para o Conhecimento");
+    act(() => raiz?.unmount());
+    raiz = null;
+    cliente.clear();
+    estado.atrasos = { "/api/documents": 5_000, "/api/customer-requests": 5_000 };
+    await montar();
+    await passar(350);
+    const fantasmas = Array.from(container.querySelectorAll("tbody tr[data-fantasmas]"));
+    expect(fantasmas).toHaveLength(4);
+    // A célula do nome: o nome e a origem; com o selo, a terceira linha.
+    const linhasDoNome = fantasmas.map((tr) => tr.querySelector("td")!.querySelectorAll("[data-esqueleto]").length);
+    expect(linhasDoNome.filter((linhas) => linhas === 3)).toHaveLength(1);
+    const cartoes = Array.from(container.querySelectorAll("ul li[data-fantasmas]"));
+    expect(cartoes.filter((li) => li.querySelector("[data-selo]"))).toHaveLength(1);
   });
 });

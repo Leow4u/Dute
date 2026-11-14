@@ -8,6 +8,7 @@ import { Esqueleto } from "@/components/ui/esqueleto";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
 import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
@@ -37,6 +38,7 @@ import {
   StockTablePagination,
   StockToolbar,
   LinhaFantasmaDaTabela,
+  corpoDaTabela,
   type ColunaFantasma,
 } from "@/components/stock/stock-workbench";
 
@@ -107,7 +109,6 @@ export default function Skus() {
   // Antes da primeira leitura, o bloco no lugar de cada número e do resumo da página; com ela falhando, "—": nunca
   // zero antes de ler (carregamento v2, parte 13d; necessidade 3).
   const lido = data !== undefined && !lista.falhou;
-  const fantasmas = useEspera(isLoading);
   const contagem = useContagemLembrada("skus", "todos", lido && !lista.trocando ? { linhas: skus.length } : null);
 
   // Endereço mora no SALDO (stock_balances.location_id) — é lá que a
@@ -197,6 +198,15 @@ export default function Skus() {
     );
   }, [skus, balancesBySku, enderecosLidos]);
 
+  // "Sem endereço" antes dos saldos lidos não sabe quais são: a tabela espera os endereços (as linhas-fantasma, com a
+  // linha de estado dizendo "Carregando os endereços…"), e na falha deles o aviso diz; nunca o falso zero da página.
+  const filtroEsperaOsEnderecos = quickFilter === "sem-local" && !enderecosLidos;
+  const lendoOsEnderecos = lido && filtroEsperaOsEnderecos && !falhaDosEnderecos;
+  const lendoAsLinhas = isLoading || lendoOsEnderecos;
+  // As linhas-fantasma entram aos 300 ms, e na chegada as reais tomam o lugar delas em cascata (momento 2).
+  const fantasmas = useEspera(lendoAsLinhas);
+  const chegando = useChegada(isLoading);
+
   const filteredSkus = skus.filter((sku) => {
     const current = Number(sku.estoque_atual ?? 0);
     const hasLocation = (locationsForSku(sku)?.length ?? 0) > 0;
@@ -214,7 +224,15 @@ export default function Skus() {
       actions={catalogWriter ? <SkuModal /> : undefined}
       // A casa do estado da lista, sob o título, sem empurrar a lista: "Carregando SKUs…" na primeira leitura, com as
       // linhas-fantasma no lugar da tabela (carregamento v2, parte 13d).
-      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="SKUs" />}
+      // Os saldos (os endereços) são da primeira leitura da tela: até chegarem, a linha diz que lê, com a demora aos 10 s e
+      // o "Tentar de novo"; na falha deles, o aviso fica sobre a tabela e a linha fica vazia (a cópia da falha).
+      estado={
+        <LinhaDeEstado
+          id={idDaLinha}
+          leitura={enderecosLidos ? leitura : [leitura, saldos]}
+          objeto={data !== undefined && !enderecosLidos ? "os endereços" : "SKUs"}
+        />
+      }
     >
       {/* "SKUs carregados" era contagem técnica da página, não decisão de
           estoque — o total já aparece na paginação da tabela. */}
@@ -250,7 +268,7 @@ export default function Skus() {
         placeholder="Buscar por cod. cliente, SKU interno, produto ou localização"
         // A página que não chegou não tem contagem: o aviso está no lugar da lista, e "0" seria um falso zero.
         resultText={
-          lista.falhou ? undefined : lido ? (
+          lista.falhou || (filtroEsperaOsEnderecos && falhaDosEnderecos) ? undefined : lido && !filtroEsperaOsEnderecos ? (
             `${formatStockNumber(filteredSkus.length)} SKU(s) exibido(s) nesta página.`
           ) : (
             <span className="flex h-5 items-center"><Esqueleto forma="texto" className="w-48" /></span>
@@ -279,7 +297,12 @@ export default function Skus() {
           {falhaDosEnderecos ? (
             <FalhaNaLeitura leitura={falhaDosEnderecos.leitura} erro={falhaDosEnderecos.erro} mensagem="Não consegui carregar os endereços." className="m-3" focoAoSair={idDaLinha} />
           ) : null}
-          <div className="overflow-x-auto" {...troca.props}>
+          <div
+            // Lendo, a faixa do brilho anda além do corpo da tabela (o tbody não recorta): quem recorta é a caixa, sem
+            // abrir a rolagem lateral.
+            className={lendoAsLinhas ? "overflow-hidden" : "overflow-x-auto"}
+            {...troca.props}
+          >
             <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
@@ -293,8 +316,8 @@ export default function Skus() {
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border" {...(isLoading ? { "aria-busy": true, "aria-describedby": idDaLinha } : {})}>
-                {isLoading ? (
+              <tbody {...corpoDaTabela({ lendo: lendoAsLinhas, visivel: fantasmas.visivel, chegando, idDaLinha, className: "divide-y divide-border" })}>
+                {lendoAsLinhas ? (
                   // As linhas-fantasma da primeira leitura, na altura da linha real; quem diz é a linha de estado.
                   Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => (
                     <LinhaFantasmaDaTabela key={ordem} visivel={fantasmas.visivel} larguras={FANTASMA_DOS_SKUS} />

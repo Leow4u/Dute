@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   useGetBillingPeriod,
   getGetBillingPeriodQueryKey,
@@ -8,7 +8,7 @@ import {
   usePayBillingInvoice,
   useListBillingPeriods,
 } from "@workspace/api-client-react";
-import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, FileText, Save, Send, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
 
@@ -24,7 +24,11 @@ import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import type { LeituraDaLista } from "@/lib/carregando/use-atualizar-lista";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
 import { BarraDaLista, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { acaoDaArmazenagem } from "@/lib/financeiro/armazenagem";
@@ -111,7 +115,7 @@ export default function Billing() {
   const { user } = useAppUser();
   // O mês na tela e o que se grava são do cliente ativo desta aba: a chave
   // da leitura leva o cliente, e cada chamada o diz no cabeçalho.
-  const { code: cliente, isLoading: carregandoCliente } = useActiveCustomer();
+  const { code: cliente, isLoading: carregandoCliente, codeProvavel, recarregar } = useActiveCustomer();
   const doCliente = useMemo(() => ({ headers: { [CABECALHO_DO_CLIENTE]: cliente } }), [cliente]);
 
   // Trocar o mês ou o cliente lê no servidor: o mês anterior fica, a 50% e inert, até o novo chegar (carregamento
@@ -121,7 +125,9 @@ export default function Billing() {
     request: doCliente,
   });
   const { data: raw, isLoading } = leitura;
-  const data = raw as unknown as Period | undefined;
+  // Enquanto o cliente ativo lê, o `code` ainda é o do cliente padrão: nenhum mês dele entra na tela, nem as ações que
+  // gravariam nele (o customer_code é a fronteira).
+  const data = carregandoCliente ? undefined : (raw as unknown as Period | undefined);
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
   // O mês do que está na tela: na troca, ainda o anterior, que a tela continua dizendo qual é.
@@ -130,10 +136,23 @@ export default function Billing() {
   const idDaLinha = useId();
   const idDaFatura = useId();
   // Com o cliente ativo ainda lendo, a leitura do mês ainda não começou: para a linha de estado ela já lê, e a espera
-  // é uma só, do toque até o mês chegar (carregamento v2, parte 13d; antes, "Calculando Outubro de 2026...").
-  const leituraDaLinha = carregandoCliente && data === undefined ? { ...leitura, isLoading: true } : leitura;
+  // é uma só, do toque até o mês chegar (carregamento v2, parte 13d; antes, "Calculando Outubro de 2026..."). O
+  // "Tentar de novo" da demora lê de novo a lista dos clientes, nunca o mês: o mês lido agora seria o do cliente padrão.
+  const leituraDaLinha: LeituraDaLista =
+    carregandoCliente && data === undefined
+      ? {
+          ...leitura,
+          isLoading: true,
+          isError: false,
+          error: null,
+          refetch: (() => Promise.resolve(recarregar?.()).then(() => ({ isError: false, error: null }))) as unknown as UseQueryResult<unknown>["refetch"],
+        }
+      : leitura;
   // O esqueleto do mês entra aos 300 ms, como a linha (momento 2); a leitura rápida não pisca nada.
-  const fantasmas = useEspera(data === undefined && !lista.falhou);
+  const lendoOMes = data === undefined && !lista.falhou;
+  const fantasmas = useEspera(lendoOMes);
+  // Na chegada, o mês entra no lugar do esqueleto por opacidade, subindo 4 px, em cascata (momento 2).
+  const chegando = useChegada(lendoOMes);
   // O botão que sai com o foco (Salvar quantidades, Marcar como paga) o deixa no link da fatura, nunca no body.
   const focoQueSegue = useFocoQueSegue();
   const periodos = useListBillingPeriods({
@@ -141,17 +160,23 @@ export default function Billing() {
     request: doCliente,
   });
   const periodsData = periodos.data;
-  // Sem a lista dos meses, o estado de cada mês é desconhecido: nunca "Em aberto" antes de ler, nem na falha.
-  const periodosFalharam = periodos.isError && periodsData === undefined;
+  // Sem a lista dos meses, o estado de cada mês é desconhecido: nunca "Em aberto" antes de ler, nem na falha. A falha
+  // fica na tela enquanto a pessoa tenta de novo (a cópia), com o aviso sob os meses: o "—" nunca fica calado.
+  const meses = useLeituraComFalha(periodos);
+  const periodosFalharam = meses.isError && periodsData === undefined;
+  const fantasmasDosMeses = useEspera(periodsData === undefined && !periodosFalharam);
 
   const [qty, setQty] = useState<Record<string, string>>({});
   const [obs, setObs] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
   // A confirmação de Emitir espera a resposta: fecha só no sucesso (decisão 6 de 06/11/2026).
   const [confirmarEmissao, setConfirmarEmissao] = useState(false);
-  // "Salvar quantidades" e "Marcar como paga" seguem ocupados até a releitura do mês chegar: até lá, o mês na tela é o
-  // de antes, e o botão voltaria ativo com as quantidades ou o estado antigos.
-  const [relendo, setRelendo] = useState<"salvar" | "pagar" | null>(null);
+  // "Salvar quantidades" e "Marcar como paga" no relógio da ação (carregamento v2, momento 3): "Salvando…" até o
+  // servidor responder; depois, "Quantidades salvas" pelo menos 1 s e até a releitura do mês chegar (até lá, o mês na
+  // tela é o de antes, e o botão voltaria ativo com as quantidades ou o estado antigos); no erro, "Quantidades não
+  // salvas" por 2 s. Aos 70 s sem resposta, "Conferir" relê o mês e nunca grava de novo.
+  // Cada mês tem a sua ação: o "Quantidades salvas" de outubro não aparece em novembro.
+  const acoes = useAcaoNaLinha<string>();
 
   const lines = useMemo(() => data?.grupos.flatMap((group) => group.itens) ?? [], [data]);
   const autoLines = lines.filter((line) => line.auto);
@@ -160,9 +185,11 @@ export default function Billing() {
     [lines],
   );
   // O esqueleto do mês tem as linhas que o último mês lido deste cliente teve (de 1 a 5; sem lembrança, 2).
+  // O cliente que a tela vai operar: enquanto o ativo lê, o escolhido neste aparelho (só para a altura do esqueleto).
+  const clienteProvavel = codeProvavel ?? cliente;
   const contagem = useContagemLembrada(
     "fechamento",
-    cliente,
+    clienteProvavel,
     data && !lista.trocando ? { automaticos: autoLines.length, servicos: manualLines.length } : null,
   );
   const aberto = !data || data.status === "aberto";
@@ -208,6 +235,14 @@ export default function Billing() {
         ...(known.get(value) ?? (periodsData ? { status: "aberto", total: 0 } : { status: null, total: 0 })),
       }));
   }, [periodsData, competencia]);
+  // A faixa dos meses na forma final: antes da lista, só o mês corrente e o anterior são conhecidos; os que a última
+  // lista deste cliente trouxe a mais entram como cartões-fantasma à esquerda, até ela chegar (sem lembrança, a faixa
+  // cheia, com quatro).
+  const contagemDosMeses = useContagemLembrada("fechamento-meses", clienteProvavel, periodsData ? { meses: months.length } : null);
+  const mesesFantasma =
+    periodsData === undefined && !periodosFalharam
+      ? Math.max(0, Math.min(4, contagemDosMeses.lembrada("meses") ?? 4) - months.length)
+      : 0;
 
   const save = useSaveBillingManual({ request: doCliente });
   const emit = useEmitBillingInvoice({ request: doCliente });
@@ -218,11 +253,8 @@ export default function Billing() {
       qc.invalidateQueries({ queryKey: getGetBillingPeriodQueryKey(competencia) }),
       qc.invalidateQueries({ queryKey: getListBillingPeriodsQueryKey() }),
     ]);
-  /** Relê o mês e a lista, com o botão da ação ocupado até a releitura chegar. */
-  const releDepoisDe = (acao: "salvar" | "pagar") => {
-    setRelendo(acao);
-    void refetch().finally(() => setRelendo((atual) => (atual === acao ? null : atual)));
-  };
+  /** O mês relido, para o "Conferir" dos 70 s: relê e nunca grava de novo. */
+  const mesRelido = async () => (await leitura.refetch()).data as unknown as Period | undefined;
 
   const failure = (title: string) => (err: unknown) =>
     toast({
@@ -232,20 +264,32 @@ export default function Billing() {
     });
 
   const handleSave = () => {
-    if (save.isPending || relendo) return;
     const items = manualLines.map((line) => ({
       price_list_id: line.price_list_id as number,
       qtde: Number(qty[String(line.price_list_id)] || 0),
       observacao: obs[String(line.price_list_id)] || null,
     }));
-    save.mutate(
-      { competencia, data: { items } },
+    // A chamada é a de sempre; a linha ocupada não grava de novo.
+    void acoes.executar(
+      competencia,
+      "salvar",
+      () =>
+        save.mutateAsync({ competencia, data: { items } }).then(
+          () => toast({ title: "Quantidades salvas" }),
+          (erro: unknown) => {
+            failure("Quantidades não salvas")(erro);
+            throw erro;
+          },
+        ),
       {
-        onSuccess: () => {
-          toast({ title: "Quantidades salvas" });
-          releDepoisDe("salvar");
+        releitura: refetch,
+        conferir: async () => {
+          const lido = await mesRelido();
+          const lancadas = new Map(
+            (lido?.grupos ?? []).flatMap((grupo) => grupo.itens).map((line) => [String(line.price_list_id), line.qtde]),
+          );
+          return items.every((item) => lancadas.get(String(item.price_list_id)) === item.qtde);
         },
-        onError: failure("Quantidades não salvas"),
       },
     );
   };
@@ -268,18 +312,22 @@ export default function Billing() {
     );
 
   const handlePay = () => {
-    if (pay.isPending || relendo) return;
-    pay.mutate(
-      { competencia },
-      {
-        onSuccess: () => {
-          toast({ title: "Fatura marcada como paga" });
-          releDepoisDe("pagar");
-        },
-        onError: failure("Não foi possível marcar como paga"),
-      },
+    void acoes.executar(
+      competencia,
+      "pagar",
+      () =>
+        pay.mutateAsync({ competencia }).then(
+          () => toast({ title: "Fatura marcada como paga" }),
+          (erro: unknown) => {
+            failure("Não foi possível marcar como paga")(erro);
+            throw erro;
+          },
+        ),
+      { releitura: refetch, conferir: async () => (await mesRelido())?.status === "pago" },
     );
   };
+  const estadoDoSalvar = acoes.estado(competencia, "salvar");
+  const estadoDoPagar = acoes.estado(competencia, "pagar");
 
   const status = data?.status ?? "aberto";
   // Onde o Financeiro está ligado, a emitida se fatura e se recebe lá (parte 7.2c).
@@ -291,6 +339,23 @@ export default function Billing() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
+        {Array.from({ length: mesesFantasma }, (_, ordem) => (
+          // O mês que a lista ainda vai trazer: o cartão na forma do real, fora da árvore, que entra aos 300 ms.
+          <span
+            key={`fantasma-${ordem}`}
+            aria-hidden="true"
+            data-fantasmas=""
+            data-visivel={fantasmasDosMeses.visivel ? "" : undefined}
+            className="inline-flex min-w-[150px] flex-col rounded-2xl border border-border bg-card px-4 py-2"
+          >
+            <span className="flex h-5 items-center">
+              <Esqueleto forma="texto" className="w-28" />
+            </span>
+            <span className="flex h-4 items-center">
+              <Esqueleto forma="texto" className="h-2.5 w-20" />
+            </span>
+          </span>
+        ))}
         {months.map((month) => {
           const meta = month.status === null ? null : (STATUS_META[month.status] ?? STATUS_META.aberto);
           return (
@@ -335,6 +400,11 @@ export default function Billing() {
         </label>
       </div>
 
+      {periodosFalharam ? (
+        // A lista dos meses que não veio: o "—" nos cartões e o aviso, com "Tentar de novo"; o mês na tela segue.
+        <FalhaNaLeitura leitura={periodos} erro={meses.error} mensagem="Não consegui carregar os meses." focoAoSair={idDaLinha} />
+      ) : null}
+
       {/* A casa do estado do mês, logo abaixo dos meses, sempre reservada: "Carregando outubro de 2026…" na primeira
           leitura, com o esqueleto do mês no lugar dele; "Atualizado às", a troca que passa de 5 s, a releitura que falha
           e a falta de conexão, sem empurrar o mês (carregamento v2, parte 13d). */}
@@ -351,7 +421,7 @@ export default function Billing() {
         />
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" {...troca.props}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" {...troca.props} {...(chegando ? { "data-chegada": "" } : {})}>
           <section className="relative overflow-hidden rounded-lg border border-border bg-card">
             <BarraDaLista ativa={lista.trocando} />
             <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
@@ -532,14 +602,17 @@ export default function Billing() {
               </ul>
 
               <div className="mt-4 flex flex-col gap-2">
-                {aberto && dirty ? (
+                {aberto && (dirty || estadoDoSalvar !== "repouso") ? (
                   // Ocupado não é desabilitado: o foco fica no botão até a releitura, e vai ao link da fatura quando ele sai.
+                  // Salvo, ele fica com "Quantidades salvas" até o mês relido chegar, e só então sai.
                   <SaiComOFoco alvo={idDaFatura} pedido={focoQueSegue}>
                     <BotaoDeAcao
-                      estado={save.isPending || relendo === "salvar" ? "andamento" : "repouso"}
+                      estado={estadoDoSalvar}
                       icone={<Save aria-hidden="true" />}
                       rotulo="Salvar quantidades"
                       andamento="Salvando…"
+                      sucesso="Quantidades salvas"
+                      erro="Quantidades não salvas"
                       onClick={handleSave}
                     />
                   </SaiComOFoco>
@@ -576,14 +649,16 @@ export default function Billing() {
                     />
                   </>
                 ) : null}
-                {acao?.tipo === "pagar_no_wms" ? (
+                {acao?.tipo === "pagar_no_wms" || estadoDoPagar !== "repouso" ? (
                   <SaiComOFoco alvo={idDaFatura} pedido={focoQueSegue}>
                     <BotaoDeAcao
                       variant="outline"
-                      estado={pay.isPending || relendo === "pagar" ? "andamento" : "repouso"}
+                      estado={estadoDoPagar}
                       icone={<CheckCircle2 aria-hidden="true" />}
                       rotulo="Marcar como paga"
                       andamento="Marcando como paga…"
+                      sucesso="Marcada como paga"
+                      erro="Não marcada como paga"
                       onClick={handlePay}
                     />
                   </SaiComOFoco>
@@ -629,68 +704,74 @@ function EsqueletoDoMes({
   automaticos: number;
   servicos: number;
 }) {
-  const brilho = visivel ? "carregando-com-brilho" : undefined;
   const fantasmas = { "aria-hidden": true, "data-fantasmas": "", "data-visivel": visivel ? "" : undefined } as const;
+  // Um brilho por cartão, nunca um por bloco (seção 5.2): as linhas automáticas, os serviços e o total, a 120 ms um do
+  // outro; só depois dos 300 ms, para os dois ciclos caberem nos 5 s do movimento.
+  const cartao = (ordem: number, classes: string) => ({
+    ...fantasmas,
+    className: cn(classes, visivel && "carregando-com-brilho"),
+    style: visivel ? ({ "--ordem": String(ordem) } as CSSProperties) : undefined,
+  });
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" aria-busy="true" aria-describedby={idDaLinha}>
       <section className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="px-5 pb-2 pt-4">
           <h2 className="text-sm font-semibold">Cobrado automaticamente</h2>
         </div>
-        <div className="space-y-2 px-5 pb-4" {...fantasmas}>
+        <div {...cartao(0, "space-y-2 px-5 pb-4")}>
           {Array.from({ length: automaticos }, (_, ordem) => (
             <div key={ordem} className="flex min-h-[66px] items-center gap-4 rounded-xl border border-border px-4 py-3">
               <span className="flex min-w-0 flex-1 flex-col gap-2">
-                <Esqueleto forma="texto" className={cn("w-40", brilho)} />
-                <Esqueleto forma="texto" className={cn("h-2.5 w-56 max-w-full", brilho)} />
+                <Esqueleto forma="texto" className="w-40" />
+                <Esqueleto forma="texto" className="h-2.5 w-56 max-w-full" />
               </span>
-              <Esqueleto forma="texto" className={cn("h-5 w-24", brilho)} />
+              <Esqueleto forma="texto" className="h-5 w-24" />
             </div>
           ))}
         </div>
         <div className="border-t border-border/60 px-5 pb-2 pt-4">
           <h2 className="text-sm font-semibold">Serviços do mês</h2>
         </div>
-        <div className="divide-y divide-border/40 px-5" {...fantasmas}>
+        <div {...cartao(1, "divide-y divide-border/40 px-5")}>
           {/* O cabeçalho da tabela dos serviços (Serviço, Qtde, Valor unit., Total, Observação). */}
           <div className="flex h-8 items-center gap-4">
-            <Esqueleto forma="texto" className={cn("h-2.5 w-16", brilho)} />
-            <Esqueleto forma="texto" className={cn("ml-auto h-2.5 w-24", brilho)} />
+            <Esqueleto forma="texto" className="h-2.5 w-16" />
+            <Esqueleto forma="texto" className="ml-auto h-2.5 w-24" />
           </div>
           {Array.from({ length: servicos }, (_, ordem) => (
             <div key={ordem} className="flex h-[53px] items-center gap-4">
-              <Esqueleto forma="texto" className={cn("w-40", brilho)} />
-              <Esqueleto forma="bloco" className={cn("ml-auto h-9 w-24", brilho)} />
-              <Esqueleto forma="texto" className={cn("w-20", brilho)} />
+              <Esqueleto forma="texto" className="w-40" />
+              <Esqueleto forma="bloco" className="ml-auto h-9 w-24" />
+              <Esqueleto forma="texto" className="w-20" />
             </div>
           ))}
         </div>
       </section>
       {/* O cartão do total, na anatomia do real: o mês e o estado, o total, a nota, as duas conferências e as ações. */}
       <aside className="order-first lg:order-none lg:self-start">
-        <div className="rounded-lg border-2 border-border bg-card p-5" {...fantasmas}>
+        <div {...cartao(2, "rounded-lg border-2 border-border bg-card p-5")}>
           <div className="flex h-[22px] items-center justify-between gap-2">
-            <Esqueleto forma="texto" className={cn("w-44", brilho)} />
-            <Esqueleto forma="bloco" className={cn("h-5 w-20 rounded-full", brilho)} />
+            <Esqueleto forma="texto" className="w-44" />
+            <Esqueleto forma="bloco" className="h-5 w-20 rounded-full" />
           </div>
           <div className="mt-1 flex h-9 items-center">
-            <Esqueleto forma="bloco" className={cn("h-7 w-40", brilho)} />
+            <Esqueleto forma="bloco" className="h-7 w-40" />
           </div>
           <div className="flex h-4 items-center">
-            <Esqueleto forma="texto" className={cn("h-2.5 w-52 max-w-full", brilho)} />
+            <Esqueleto forma="texto" className="h-2.5 w-52 max-w-full" />
           </div>
           <div className="mt-4 space-y-2.5">
             {/* As duas conferências: a primeira só com o título, a segunda com o detalhe, como no mês aberto. */}
             {[false, true].map((comDetalhe, ordem) => (
               <div key={ordem} className="flex gap-2.5">
-                <Esqueleto forma="bloco" className={cn("mt-0.5 size-4 shrink-0 rounded-full", brilho)} />
+                <Esqueleto forma="bloco" className="mt-0.5 size-4 shrink-0 rounded-full" />
                 <div className="min-w-0 flex-1">
                   <div className="flex h-5 items-center">
-                    <Esqueleto forma="texto" className={cn("w-32", brilho)} />
+                    <Esqueleto forma="texto" className="w-32" />
                   </div>
                   {comDetalhe ? (
                     <div className="flex h-4 items-center">
-                      <Esqueleto forma="texto" className={cn("h-2.5 w-40", brilho)} />
+                      <Esqueleto forma="texto" className="h-2.5 w-40" />
                     </div>
                   ) : null}
                 </div>
@@ -698,8 +779,8 @@ function EsqueletoDoMes({
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-2">
-            <Esqueleto forma="botao" className={cn("w-full", brilho)} />
-            <Esqueleto forma="botao" className={cn("w-full", brilho)} />
+            <Esqueleto forma="botao" className="w-full" />
+            <Esqueleto forma="botao" className="w-full" />
           </div>
         </div>
       </aside>

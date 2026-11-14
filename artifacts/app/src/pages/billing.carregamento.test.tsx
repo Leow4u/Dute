@@ -29,11 +29,21 @@ const estado = vi.hoisted(() => ({
   status: {} as Record<string, string>,
   qtd: {} as Record<string, number>,
   carregandoCliente: false,
+  codeProvavel: undefined as string | undefined,
+  recarregar: null as null | (() => Promise<unknown>),
+  chamadas: [] as string[],
+  postFalha: false,
+  primeiroAtraso: {} as Record<string, number>,
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u-1", publicMetadata: { role: "admin" } }, isLoaded: true }) }));
 vi.mock("@/lib/active-customer-context", () => ({
-  useActiveCustomer: () => ({ code: "BTG", isLoading: estado.carregandoCliente }),
+  useActiveCustomer: () => ({
+    code: "BTG",
+    isLoading: estado.carregandoCliente,
+    codeProvavel: estado.codeProvavel ?? "BTG",
+    recarregar: estado.recarregar ?? undefined,
+  }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
 
@@ -65,8 +75,12 @@ function periodo(competencia: string) {
 async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   const url = new URL(String(entrada instanceof Request ? entrada.url : entrada), "http://localhost");
   const metodo = (init?.method ?? "GET").toUpperCase();
+  estado.chamadas.push(`${metodo} ${url.pathname}`);
   if (metodo !== "GET") {
     await new Promise((pronto) => setTimeout(pronto, estado.postAtraso));
+    if (estado.postFalha) {
+      return new Response(JSON.stringify({ message: "Falha interna no servidor." }), { status: 500, headers: { "content-type": "application/json" } });
+    }
     const pago = url.pathname.match(/\/periods\/(\d{4}-\d{2})\/pay$/);
     if (pago) estado.status[pago[1]] = "pago";
     const manual = url.pathname.match(/\/periods\/(\d{4}-\d{2})\/manual$/);
@@ -76,7 +90,9 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
   }
-  const atraso = Object.entries(estado.atrasos).find(([caminho]) => url.pathname === caminho)?.[1] ?? 30;
+  const primeiro = estado.primeiroAtraso[url.pathname];
+  if (primeiro !== undefined) delete estado.primeiroAtraso[url.pathname];
+  const atraso = primeiro ?? Object.entries(estado.atrasos).find(([caminho]) => url.pathname === caminho)?.[1] ?? 30;
   await new Promise((pronto) => setTimeout(pronto, atraso));
   if (estado.falhas.has(url.pathname)) {
     return new Response(JSON.stringify({ message: "Falha interna no servidor." }), { status: 500, headers: { "content-type": "application/json" } });
@@ -105,6 +121,12 @@ beforeEach(() => {
   estado.status = { "2026-09": "pago", "2026-10": "emitido", "2026-11": "aberto" };
   estado.qtd = {};
   estado.carregandoCliente = false;
+  estado.codeProvavel = undefined;
+  estado.recarregar = null;
+  estado.chamadas = [];
+  estado.postFalha = false;
+  estado.primeiroAtraso = {};
+  window.localStorage.clear();
   window.history.replaceState(null, "", "/faturamento");
   container = document.createElement("div");
   document.body.append(container);
@@ -262,7 +284,7 @@ describe("as ações do Fechamento", () => {
     expect(salvar!.getAttribute("aria-busy")).toBe("true");
     expect(salvar!.textContent).toContain("Salvando…");
     expect(document.activeElement).toBe(salvar);
-    await esperar(() => !botao(/Salvar quantidades|Salvando…/), "o botão sai depois da releitura");
+    await esperar(() => !botao(/Salvar quantidades|Salvando…|Quantidades salvas/), "o botão sai depois da releitura");
     expect(document.activeElement?.textContent).toContain("Ver prévia da fatura (PDF)");
     expect(estado.qtd["2026-11"]).toBe(7);
   });
@@ -278,7 +300,7 @@ describe("as ações do Fechamento", () => {
     expect(pagar!.textContent).toContain("Marcando como paga…");
     expect(document.activeElement).toBe(pagar);
     paraOAxe.push(semAnunciador());
-    await esperar(() => !botao(/Marcar como paga|Marcando como paga…/), "o botão sai depois da releitura");
+    await esperar(() => !botao(/Marcar como paga|Marcando como paga…|Marcada como paga/), "o botão sai depois da releitura");
     expect(document.activeElement?.textContent).toContain("Ver fatura (PDF)");
     expect(estado.status["2026-10"]).toBe("pago");
     await axeDoQueVimos();
@@ -311,5 +333,188 @@ describe("a fatura", () => {
     estado.falhas = new Set();
     await tocar(tentar, "Tentar de novo");
     await esperar(() => texto().includes("Posição palete"), "a fatura relida");
+  });
+});
+
+/** Os textos do mês aberto com alterações e de cada estado das ações (a trava contra legenda, também nos estados da ação). */
+const TEXTOS_DO_MES = [
+  "Outubro de 2026", "Novembro de 2026", "Setembro de 2026", "Agosto de 2026", "Outro mês", /^Atualizado às \d{2}:\d{2}$/, "Cobrado automaticamente",
+  "calculado pelo sistema", "Posição palete", /^120 posição × R\$/, /^R\$/, "Serviços do mês", "quantidade lançada por você", "quantidades congeladas",
+  "Serviço", "Qtde", "Valor unit.", "Total", "Observação", "Etiquetagem", "peça", /total previsto$/, /· total$/, "Em aberto", "Emitida", "Paga",
+  /^Pago|^Emitid/, "Inclui alterações ainda não salvas.", "Mesmo cálculo que será congelado na emissão.", "Valores congelados na emissão.",
+  "Alterações não salvas", "Salve antes de emitir.", "Quantidades salvas", /encerrado$|ainda não terminou$/, "Pronto para emitir.",
+  /^Emissão liberada a partir de/, /^Emitida em/, "Disponível para a cliente em Faturas.", "Aguardando pagamento", /^Paga em/,
+  "Salvar quantidades", "Salvando…", "Quantidades não salvas", "Ver prévia da fatura (PDF)", "Ver fatura (PDF)", "Emitir e publicar para a cliente",
+  "Marcar como paga", "Marcando como paga…", "Marcada como paga", "Não marcada como paga", "Conferir", /·/, /^\d+$/,
+];
+
+async function digitarQuantidade(valor: string) {
+  const campo = container.querySelector<HTMLInputElement>('input[aria-label="Quantidade de Etiquetagem"]')!;
+  await act(async () => {
+    const definir = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    definir.call(campo, valor);
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+describe("o Fechamento depois da revisão (parte 13d)", () => {
+  it("com o cliente ativo preso, o \"Tentar de novo\" da demora lê de novo os clientes, nunca o mês do cliente padrão", async () => {
+    estado.carregandoCliente = true;
+    let releu = 0;
+    estado.recarregar = () => {
+      releu += 1;
+      return Promise.resolve();
+    };
+    await montar(Billing);
+    await passar(10_500);
+    expect(linha()?.textContent).toContain("Demorando mais que o normal");
+    const tentar = Array.from(container.querySelectorAll<HTMLButtonElement>(".linha-de-estado-tentar")).find((item) => item.textContent === "Tentar de novo");
+    expect(tentar).toBeDefined();
+    await tocar(tentar, "Tentar de novo");
+    await passar(2_000);
+    expect(releu).toBe(1);
+    expect(estado.chamadas.filter((chamada) => chamada.startsWith("GET /api/billing"))).toEqual([]);
+    expect(texto()).not.toContain("Posição palete");
+    expect(container.querySelector('input[aria-label="Quantidade de Etiquetagem"]')).toBeNull();
+    expect(botao("Marcar como paga")).toBeUndefined();
+  });
+
+  it("o esqueleto do mês, com o cliente ativo lendo, tem as linhas lembradas do cliente que a tela vai operar", async () => {
+    window.localStorage.setItem("dute:contagem-lembrada:fechamento:BTG", JSON.stringify({ automaticos: 1, servicos: 1 }));
+    window.localStorage.setItem("dute:contagem-lembrada:fechamento:ACME", JSON.stringify({ automaticos: 4, servicos: 1 }));
+    estado.carregandoCliente = true;
+    estado.codeProvavel = "ACME";
+    await montar(Billing);
+    await passar(350);
+    const automaticos = container.querySelector("section [data-fantasmas]");
+    expect(automaticos?.childElementCount).toBe(4);
+  });
+
+  it("a lista dos meses que falha diz que não veio, com \"Tentar de novo\", que relê; o mês na tela segue", async () => {
+    estado.falhas = new Set(["/api/billing/periods"]);
+    await montar(Billing);
+    await passar(300);
+    expect(texto()).toContain("Posição palete");
+    expect(texto()).toContain("Não consegui carregar os meses.");
+    const tentar = botao("Tentar de novo");
+    expect(tentar).toBeDefined();
+    estado.falhas = new Set();
+    await tocar(tentar, "Tentar de novo");
+    await esperar(() => Boolean(cartaoDoMes("Outubro de 2026")?.textContent?.includes("Emitida")), "os meses relidos");
+    expect(texto()).not.toContain("Não consegui carregar os meses.");
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("a faixa dos meses nasce com a forma final: os meses que a lista vai trazer entram como cartões-fantasma, sem salto na chegada", async () => {
+    estado.atrasos = { "/api/billing/periods": 2_000 };
+    estado.status = { "2026-08": "pago", "2026-09": "pago", "2026-10": "emitido", "2026-11": "aberto" };
+    await montar(Billing);
+    const faixa = () => cartaoDoMes("Novembro de 2026")!.parentElement!;
+    expect(faixa().childElementCount).toBe(5);
+    await passar(350);
+    expect(faixa().querySelectorAll("[data-fantasmas][data-visivel]")).toHaveLength(2);
+    await passar(2_000);
+    expect(faixa().querySelectorAll("[data-fantasmas]")).toHaveLength(0);
+    expect(faixa().childElementCount).toBe(5);
+    // Com a lembrança de três meses deste cliente, um cartão-fantasma só.
+    act(() => raiz?.unmount());
+    raiz = null;
+    cliente.clear();
+    window.localStorage.setItem("dute:contagem-lembrada:fechamento-meses:BTG", JSON.stringify({ meses: 3 }));
+    await montar(Billing);
+    expect(faixa().querySelectorAll("[data-fantasmas]")).toHaveLength(1);
+  });
+
+  it("Salvar quantidades diz \"Quantidades salvas\" do fim da chamada até o mês relido chegar; no erro, \"Quantidades não salvas\" por 2 s", async () => {
+    window.history.replaceState(null, "", "/faturamento?competencia=2026-11");
+    await montar(Billing);
+    await esperar(() => texto().includes("Etiquetagem"), "o mês");
+    await digitarQuantidade("7");
+    estado.atrasos = { "/api/billing/periods/2026-11": 4_000 };
+    const salvar = botao("Salvar quantidades");
+    await tocar(salvar, "Salvar quantidades");
+    await passar(350);
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_DO_MES)).toEqual([]);
+    await passar(1_200);
+    // O servidor já disse que salvou; o mês relido ainda não chegou.
+    expect(salvar!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Quantidades salvas");
+    expect(salvar!.getAttribute("aria-disabled")).toBe("true");
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_DO_MES)).toEqual([]);
+    paraOAxe.push(semAnunciador());
+    await passar(2_000);
+    expect(salvar!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Quantidades salvas");
+    await esperar(() => !botao(/Salvar quantidades|Quantidades salvas/), "o botão sai com o mês relido");
+    expect(document.activeElement?.textContent).toContain("Ver prévia da fatura (PDF)");
+    // No erro, o botão diz que não salvou e volta.
+    estado.atrasos = {};
+    await digitarQuantidade("9");
+    estado.postFalha = true;
+    const deNovo = botao("Salvar quantidades");
+    await tocar(deNovo, "Salvar quantidades");
+    await passar(1_600);
+    expect(deNovo!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Quantidades não salvas");
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_DO_MES)).toEqual([]);
+    await passar(2_100);
+    expect(deNovo!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Salvar quantidades");
+    await axeDoQueVimos();
+  });
+
+  it("Marcar como paga diz \"Marcada como paga\" até o mês relido chegar", async () => {
+    await montar(Billing);
+    await esperar(() => Boolean(botao("Marcar como paga")), "o mês emitido");
+    estado.atrasos = { "/api/billing/periods/2026-10": 4_000 };
+    const pagar = botao("Marcar como paga");
+    await tocar(pagar, "Marcar como paga");
+    await passar(1_600);
+    expect(pagar!.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Marcada como paga");
+    expect(textosForaDaLista(semAnunciador(), TEXTOS_DO_MES)).toEqual([]);
+    await esperar(() => !botao(/Marcar como paga|Marcada como paga/), "o botão sai com o mês relido");
+    expect(document.activeElement?.textContent).toContain("Ver fatura (PDF)");
+  });
+
+  it("um brilho por cartão no esqueleto do mês, nunca um por bloco; e a chegada entra em cascata", async () => {
+    estado.atrasos = { "/api/billing/periods/2026-10": 2_000 };
+    await montar(Billing);
+    await passar(350);
+    expect(container.querySelectorAll(".carregando-com-brilho")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-esqueleto].carregando-com-brilho")).toHaveLength(0);
+    await passar(1_700);
+    expect(texto()).toContain("Posição palete");
+    expect(container.querySelector("[data-chegada]")).not.toBeNull();
+  });
+});
+
+describe("a fatura depois da revisão (parte 13d)", () => {
+  it("aos 10 s, \"Demorando mais que o normal\" vem com \"Tentar de novo\", que lê de novo a fatura presa", async () => {
+    window.history.replaceState(null, "", "/faturamento/fatura?competencia=2026-10");
+    estado.primeiroAtraso = { "/api/billing/periods/2026-10": 600_000 };
+    await montar(BillingInvoice);
+    await passar(10_500);
+    expect(texto()).toContain("Demorando mais que o normal");
+    const tentar = botao("Tentar de novo");
+    expect(tentar).toBeDefined();
+    expect(textosForaDaLista(semAnunciador(), ["Fechamento do mês", "Carregando a fatura…", "Demorando mais que o normal", "Tentar de novo"])).toEqual([]);
+    paraOAxe.push(semAnunciador());
+    await tocar(tentar, "Tentar de novo");
+    await esperar(() => texto().includes("Posição palete"), "a fatura relida");
+    // A espera sai com o foco no "Tentar de novo": ele vai à volta para o Fechamento, nunca ao body.
+    expect(document.activeElement?.textContent).toContain("Fechamento do mês");
+    await axeDoQueVimos();
+  });
+
+  it("com o cliente ativo preso, o \"Tentar de novo\" lê de novo os clientes, nunca a fatura do cliente padrão", async () => {
+    window.history.replaceState(null, "", "/faturamento/fatura?competencia=2026-10");
+    estado.carregandoCliente = true;
+    let releu = 0;
+    estado.recarregar = () => {
+      releu += 1;
+      return Promise.resolve();
+    };
+    await montar(BillingInvoice);
+    await passar(10_500);
+    await tocar(botao("Tentar de novo"), "Tentar de novo");
+    await passar(1_000);
+    expect(releu).toBe(1);
+    expect(estado.chamadas).toEqual([]);
   });
 });

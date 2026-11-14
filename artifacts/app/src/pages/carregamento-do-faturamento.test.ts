@@ -76,4 +76,14 @@ describe("o carregamento no Faturamento, nos Relatórios, nos Documentos e no Ca
   it("nenhum botão que só apaga durante a ação: ocupado não é desabilitado", () => {
     expect(achados(/disabled=\{[^}]*isPending/)).toEqual([]);
   });
+
+  it("o brilho é do cartão, nunca de cada bloco do esqueleto (seção 5.2: no máximo um laço por cartão)", () => {
+    const comBrilho = /<Esqueleto\b[^>]*(\bbrilho\b|carregando-com-brilho)/;
+    expect(achados(comBrilho)).toEqual([]);
+    expect(
+      codigoDa("components/stock/stock-workbench.tsx")
+        .split("\n")
+        .filter((linha) => comBrilho.test(linha)),
+    ).toEqual([]);
+  });
 });

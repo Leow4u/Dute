@@ -35,6 +35,7 @@ import {
   type ReportResult,
 } from "@/lib/reports";
 import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
@@ -377,6 +378,8 @@ export default function Reports() {
   // leitura de cada relatório mostrou (até as 8 da prévia; sem lembrança, 2): a caixa da prévia não encolhe e cresce
   // na chegada (parte 13d).
   const fantasmas = useEspera(state.loading);
+  // Na chegada, o resumo e as linhas da prévia entram no lugar dos fantasmas por opacidade, em cascata (momento 2).
+  const chegando = useChegada(state.loading);
   const linhasDaPrevia = state.report && !trocando && selected ? { [selected.id]: Math.min(PREVIEW_ROWS, state.report.rows.length) } : null;
   const contagem = useContagemLembrada("relatorios", "todos", linhasDaPrevia);
 
@@ -565,7 +568,7 @@ export default function Reports() {
           <div className="flex flex-1 flex-col" {...troca.props}>
           <ConteudoEmTroca trocando={trocando}>
           {report ? (
-            <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3">
+            <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3" {...(chegando ? { "data-chegada": "" } : {})}>
               {report.summary.map((entry) => (
                 <div key={entry.label} className="border-b border-border/60 px-5 py-3 last:border-0 sm:border-b-0 sm:border-r">
                   <div className="text-xs text-muted-foreground">{entry.label}</div>
@@ -617,7 +620,7 @@ export default function Reports() {
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody {...(chegando ? { "data-chegada": "" } : {})}>
                   {report.rows.slice(0, PREVIEW_ROWS).map((row, index) => (
                     <tr key={index} className="border-b border-border/40 last:border-0">
                       {columns.map((column) => {
@@ -684,18 +687,18 @@ export default function Reports() {
  * descreve a região ocupada; os blocos ficam fora da árvore de acessibilidade.
  */
 function PreviaLendo({ visivel, linhas, colunas, idDaLinha }: { visivel: boolean; linhas: number; colunas: number; idDaLinha: string }) {
-  const brilho = visivel ? "carregando-com-brilho" : undefined;
   const fantasmas = { "aria-hidden": true, "data-fantasmas": "", "data-visivel": visivel ? "" : undefined } as const;
   return (
-    <div className="flex flex-col" aria-busy="true" aria-describedby={idDaLinha}>
+    // Um brilho na prévia inteira, o cartão dela, nunca um por bloco (seção 5.2).
+    <div className={cn("flex flex-col", visivel && "carregando-com-brilho")} aria-busy="true" aria-describedby={idDaLinha}>
       <div className="grid grid-cols-1 border-y border-border/60 sm:grid-cols-3" {...fantasmas}>
         {[0, 1, 2].map((ordem) => (
           <div key={ordem} className="border-b border-border/60 px-5 py-3 last:border-0 sm:border-b-0 sm:border-r">
             <span className="flex h-4 items-center">
-              <Esqueleto forma="texto" className={cn("h-2.5 w-24", brilho)} />
+              <Esqueleto forma="texto" className="h-2.5 w-24" />
             </span>
             <span className="mt-0.5 flex h-7 items-center">
-              <Esqueleto forma="texto" className={cn("h-5 w-16", brilho)} />
+              <Esqueleto forma="texto" className="h-5 w-16" />
             </span>
           </div>
         ))}
@@ -703,20 +706,20 @@ function PreviaLendo({ visivel, linhas, colunas, idDaLinha }: { visivel: boolean
       <div {...fantasmas}>
         <div className="flex h-9 items-center gap-6 bg-muted/40 px-4">
           {Array.from({ length: colunas }, (_, coluna) => (
-            <Esqueleto key={coluna} forma="texto" className={cn("h-2.5 w-14", brilho)} />
+            <Esqueleto key={coluna} forma="texto" className="h-2.5 w-14" />
           ))}
         </div>
         {Array.from({ length: linhas }, (_, ordem) => (
           <div key={ordem} className="flex h-[41px] items-center gap-6 border-b border-border/40 px-4 last:border-0">
             {Array.from({ length: colunas }, (_, coluna) => (
-              <Esqueleto key={coluna} forma="texto" className={cn(coluna === 1 ? "w-32" : "w-14", brilho)} />
+              <Esqueleto key={coluna} forma="texto" className={coluna === 1 ? "w-32" : "w-14"} />
             ))}
           </div>
         ))}
       </div>
       {/* O rodapé da prévia ("Prévia: 8 de 12 linhas…"), na altura dele. */}
       <div className="flex h-[41px] items-center border-t border-border/60 px-5" {...fantasmas}>
-        <Esqueleto forma="texto" className={cn("h-2.5 w-64 max-w-full", brilho)} />
+        <Esqueleto forma="texto" className="h-2.5 w-64 max-w-full" />
       </div>
     </div>
   );
