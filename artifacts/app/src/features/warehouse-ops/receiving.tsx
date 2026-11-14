@@ -32,6 +32,8 @@ import { DialogCancelar } from "@/components/ui/dialog";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import {
   Card,
   CardContent,
@@ -785,16 +787,20 @@ export function UnplannedReceiptDialog({
       intent.current = { signature: draftSignature, payload: { ...draft, received_at: new Date().toISOString(), idempotency_key: crypto.randomUUID() } };
     }
     const submittedSession = session.current;
+    const submittedIntent = intent.current!;
     sending.current = true;
     setSubmitting(true);
     setSubmitError("");
     try {
-      await onCreate(intent.current!.payload);
+      await onCreate(submittedIntent.payload);
       if (mounted.current && session.current === submittedSession) {
         clearDraft();
         onOpenChange(false);
       }
     } catch (error) {
+      // A recusa do servidor encerra a intenção (nada foi gravado): o próximo envio revalida e leva chave nova. O
+      // resultado incerto a guarda, e a repetição manda o mesmo pedido (carregamento v2, parte 13k).
+      if (desfechoDoErro(error) === "recusado" && intent.current === submittedIntent) intent.current = null;
       if (mounted.current && session.current === submittedSession) setSubmitError(getErrorMessage(error));
     } finally {
       if (mounted.current && session.current === submittedSession) {
@@ -1574,15 +1580,19 @@ export function ReceivingConferenceSection({
     );
   }
 
+  // A conferência com uma chave nova a cada toque gravava de novo, na repetição depois de um resultado incerto, as
+  // quantidades e o evento (a chegada já em conferência aceita outra). A tentativa é a chegada e as linhas como a
+  // pessoa as deixou; o corpo é o da primeira, com o status que a tela viu, e o servidor devolve o recibo dela, mesmo
+  // com a ficha relida (carregamento v2, parte 13k).
+  const tentativaDaConferencia = useTentativaDaEscrita();
   const saveConference = useMutation<unknown, Error>({
     mutationKey: chaveDaConferencia(task.id),
-    mutationFn: () =>
-      fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptIdFromTask(task))}/conference`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationFn: () => {
+      const receiptId = receiptIdFromTask(task);
+      return tentativaDaConferencia.enviar(
+        { receiptId, lines },
+        () => ({
           expected_status: normalizeStatus(task.status),
-          idempotency_key: crypto.randomUUID(),
           lines: lines
             .filter((line) => line.id)
             .map((line) => ({
@@ -1594,7 +1604,14 @@ export function ReceivingConferenceSection({
               client_item_code: line.code.trim() || undefined,
             })),
         }),
-      }),
+        (corpo) =>
+          fetchJson(`/api/warehouse/receipts/${encodeURIComponent(receiptId)}/conference`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      );
+    },
     onSuccess: () => {
       toast({
         title: "Conferência salva",

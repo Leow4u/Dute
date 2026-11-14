@@ -42,6 +42,11 @@
   --color-primary-pressed: hsl(var(--primary-pressed));
   /* O primário como texto no cartão (o "Ver itens" da fila). */
   --color-primary-texto: hsl(var(--primary-texto));
+  /* O fundo do primário (parte 13k): o bg-primary (também com opacidade, no
+     hover:bg-primary e no toque) lê o --primary-fundo, pelo namespace do fundo
+     do Tailwind, que vem antes do --color-*; o text-primary, a borda e o anel
+     seguem o --primary. No escuro, o branco do botão primário ia a 4,30:1. */
+  --background-color-primary: hsl(var(--primary-fundo));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -322,8 +327,10 @@
 
   --primary: 217 85% 55%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 217 85% 49%;
-  --primary-pressed: 217 85% 43%;
+  /* O hover e o toque do botão, a partir do --primary-fundo (51%): 6 e 12
+     pontos mais fundos, como no claro (parte 13k). */
+  --primary-hover: 217 85% 45%;
+  --primary-pressed: 217 85% 39%;
   --primary-soft: 217 32% 14%;
   --primary-soft-hover: 217 32% 18%;
   --primary-soft-pressed: 217 32% 22%;
@@ -449,16 +456,20 @@
 
 /* O primário como texto no cartão (o "Ver itens" da fila): no claro, o
    próprio --primary (4,58:1 no branco da v3); no escuro, o azul do botão
-   daria 4,4:1 no cartão, e o texto vai mais claro (6,3:1). O branco sobre o
-   botão do escuro (4,3:1) pediria o azul mais escuro: um token só não serve
-   aos dois (diagnóstico, seção 10.5, parte 13h). */
+   daria 4,4:1 no cartão, e o texto vai mais claro (6,3:1). O fundo do
+   primário (o bg-primary, parte 13k): no claro e na v3, o próprio --primary;
+   no escuro, o mesmo azul mais fundo, com 4,9:1 para o branco do botão (o
+   --primary dava 4,3:1). Um token só não servia aos dois (diagnóstico, seção
+   10.5, partes 13h e 13k). Relidos na v3, onde o --primary muda. */
 :root,
 :root:not(.dark) .v3 {
   --primary-texto: var(--primary);
+  --primary-fundo: var(--primary);
 }
 
 .dark {
   --primary-texto: 217 85% 65%;
+  --primary-fundo: 217 85% 51%;
 }
 
 /* Documento de impressão (fatura, relatório do portal) é papel: fica claro

@@ -30,6 +30,7 @@ import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
+import { useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
@@ -773,23 +774,31 @@ export function OpeningInventoryWorkspace() {
     },
   });
 
+  // A caixa nasce com o código tirado do contador, e o recibo é pela chave (createWarehouseBox): com uma chave nova a
+  // cada toque, a repetição depois de um resultado incerto cadastrava a segunda caixa na mesma prateleira. A tentativa
+  // é a caixa, a prateleira e a recusa que a pessoa escolheu; a sugestão do motor vai no corpo da primeira e não muda
+  // a tentativa (carregamento v2, parte 13k).
+  const tentativaDaCaixa = useTentativaDaEscrita();
   const createBox = useMutation<CreateBoxResult, Error, { candidate: SlottingCandidate }>({
     mutationFn: ({ candidate }) => {
       if (!boxPayload) {
         throw new Error("Informe comprimento, largura e altura da caixa em centímetros.");
       }
-      return fetchJson<CreateBoxResult>("/api/warehouse/boxes", {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          customer_code: customerCode,
-          session_id: session?.session_id,
-          ...boxPayload,
-          location_id: candidate.code,
-          allow_tilt: allowTilt,
-          allow_stacking: allowStacking,
-          orientation: candidate.placement.orientation,
-          support_box_code: candidate.placement.support_box_code ?? null,
+      const pedido = {
+        customer_code: customerCode,
+        session_id: session?.session_id,
+        ...boxPayload,
+        location_id: candidate.code,
+        allow_tilt: allowTilt,
+        allow_stacking: allowStacking,
+        orientation: candidate.placement.orientation,
+        support_box_code: candidate.placement.support_box_code ?? null,
+        refusal,
+      };
+      return tentativaDaCaixa.enviar(
+        pedido,
+        () => ({
+          ...pedido,
           suggestion: automaticSuggestion
             ? {
                 position: automaticSuggestion.position?.code ?? null,
@@ -797,10 +806,14 @@ export function OpeningInventoryWorkspace() {
                 alternatives: automaticSuggestion.alternatives.map((item) => item.code),
               }
             : undefined,
-          refusal,
-          idempotency_key: crypto.randomUUID(),
         }),
-      });
+        (corpo) =>
+          fetchJson<CreateBoxResult>("/api/warehouse/boxes", {
+            method: "POST",
+            headers: JSON_HEADERS,
+            body: JSON.stringify(corpo),
+          }),
+      );
     },
     onSuccess: (result) => {
       const box = warehouseBoxFromRecord(result.box);
@@ -2435,12 +2448,16 @@ export function ExistingCycleCountWorkspace() {
     parsedCount >= 0 &&
     reason.trim().length >= 3;
 
+  // A contagem com uma chave nova a cada toque gravava, na repetição depois de um resultado incerto, outra contagem e
+  // outro evento, e por cima do que mudou no saldo entre as duas. A tentativa guarda a chave e o corpo da primeira (o
+  // `occurred_at` dela) até o servidor responder ou recusar, ou até a pessoa mudar o formulário; a contagem que muda
+  // e volta ao valor de antes é outra (carregamento v2, parte 13k).
+  const tentativaDaContagem = useTentativaDaEscrita();
   const cycleCount = useMutation<CycleCountResult, Error>({
     mutationFn: () =>
-      fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      tentativaDaContagem.enviar(
+        { customerCode, clientCode, skuCode, productName, locationId, countedQty, unitCost, reason, reference },
+        () => ({
           customer_code: customerCode,
           sku_code: existingProduct?.skuCode || skuCode.trim(),
           client_item_code: existingProduct?.clientCode || clientCode.trim(),
@@ -2453,9 +2470,14 @@ export function ExistingCycleCountWorkspace() {
           reason: reason.trim(),
           reference: reference.trim() || undefined,
           occurred_at: new Date().toISOString(),
-          idempotency_key: crypto.randomUUID(),
         }),
-      }),
+        (corpo) =>
+          fetchJson<CycleCountResult>("/api/warehouse/cycle-counts", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      ),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
       queryClient.invalidateQueries({ queryKey: ["ai-overview"] });

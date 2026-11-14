@@ -70,6 +70,7 @@ import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, useFalh
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type MotivoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useTentativaDaEscrita } from "@/lib/carregando/tentativa-da-escrita";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
@@ -682,35 +683,42 @@ export function ReturnWorkspace() {
     });
   }
 
+  // A devolução nasce com o id tirado da chave (createReturnReceipt): com uma chave nova a cada toque, a repetição
+  // depois de um resultado incerto criava a segunda devolução. A tentativa guarda a chave e o corpo da primeira (o
+  // `received_at` dela) até o servidor responder ou recusar, ou até a pessoa mudar o formulário (carregamento v2,
+  // parte 13k).
+  const tentativaDaDevolucao = useTentativaDaEscrita();
   const createReturn = useMutation<ReturnReceiptResult, Error>({
-    mutationFn: () => {
-      const items = lines.map((line) => {
-        const existing = findExistingProduct(line, productLookup);
-        return {
-          sku_code: existing?.skuCode,
-          client_item_code: existing?.clientCode,
-          product_name: existing?.productName,
-          quantity: Number(line.quantity),
-          unit_cost: line.unitCost.trim()
-            ? Number(line.unitCost)
-            : existing?.unitCost || undefined,
-          condition: "return_received",
-        };
-      });
-      return fetchJson<ReturnReceiptResult>("/api/warehouse/returns", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationFn: () =>
+      tentativaDaDevolucao.enviar(
+        { customerCode, source, reference, notes, lines },
+        () => ({
           customer_code: customerCode,
           source: source.trim() || defaultSource,
           reference: reference.trim() || undefined,
           notes: notes.trim() || undefined,
           received_at: new Date().toISOString(),
-          idempotency_key: crypto.randomUUID(),
-          items,
+          items: lines.map((line) => {
+            const existing = findExistingProduct(line, productLookup);
+            return {
+              sku_code: existing?.skuCode,
+              client_item_code: existing?.clientCode,
+              product_name: existing?.productName,
+              quantity: Number(line.quantity),
+              unit_cost: line.unitCost.trim()
+                ? Number(line.unitCost)
+                : existing?.unitCost || undefined,
+              condition: "return_received",
+            };
+          }),
         }),
-      });
-    },
+        (corpo) =>
+          fetchJson<ReturnReceiptResult>("/api/warehouse/returns", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(corpo),
+          }),
+      ),
     onSuccess: (result) => {
       const returnId = result.return_id || "";
       const receivedAt = new Date().toISOString();

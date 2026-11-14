@@ -626,6 +626,52 @@ describe("o primário como texto, em cada contexto", () => {
 });
 
 /**
+ * O fundo do primário (parte 13k): o branco sobre o botão primário do escuro
+ * tinha 4,30:1 (o #2B75EE, o --primary), abaixo dos 4,5:1. O fundo do
+ * primário é o --primary-fundo: o bg-primary o lê pelo `--background-color-primary`
+ * do tema, sem trocar classe nenhuma, e o text-primary, a borda e o anel
+ * seguem o --primary. No claro e na v3, é o próprio --primary (o vermelho da
+ * marca na v3); no escuro, o mesmo azul, mais fundo.
+ */
+describe("o fundo do primário, em cada contexto", () => {
+  const temas = Object.fromEntries(Object.entries(CONTEXTOS).map(([nome, cadeia]) => [nome, tema(cadeia)]));
+
+  it("o bg-primary lê o --primary-fundo, e o text-primary segue o --primary", () => {
+    const doTema = variaveis("@theme inline");
+    expect(doTema.get("--background-color-primary")).toBe("hsl(var(--primary-fundo))");
+    expect(doTema.get("--color-primary")).toBe("hsl(var(--primary))");
+    for (const nome of ["claro", "v3"]) expect(temas[nome].valor("--primary-fundo"), nome).toBe(temas[nome].valor("--primary"));
+    // O vermelho da marca na v3 clara fica o mesmo.
+    expect(temas.v3.valor("--primary-fundo")).toBe("358 81% 51%");
+  });
+
+  it("o texto do primário tem 4,5:1 sobre o fundo, no repouso, no hover e no toque, em todos os contextos", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--primary-fundo", "--primary-hover", "--primary-pressed"]) {
+        expect(contraste(t.cor("--primary-foreground"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("o botão cheio se destaca do fundo e do cartão (3:1), e o azul do escuro continua o do --primary", () => {
+    for (const [nome, t] of Object.entries(temas)) {
+      for (const fundo of ["--background", "--card"]) {
+        expect(contraste(t.cor("--primary-fundo"), t.cor(fundo)), `${nome} ${fundo}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+    for (const nome of ["escuro", "v3Escuro", "tv", "tvEscuro"]) {
+      const [matiz, saturacao] = temas[nome].valor("--primary-fundo").split(/\s+/);
+      const [matizDoTexto, saturacaoDoTexto] = temas[nome].valor("--primary").split(/\s+/);
+      expect([matiz, saturacao], nome).toEqual([matizDoTexto, saturacaoDoTexto]);
+    }
+  });
+
+  it("o --primary do escuro, com o branco, ficava abaixo de 4,5:1 (o que a parte 13k corrige)", () => {
+    expect(contraste(temas.escuro.cor("--primary-foreground"), temas.escuro.cor("--primary"))).toBeLessThan(4.5);
+  });
+});
+
+/**
  * A capa de entrada (components/auth-shell.tsx, `.auth-cover`): sempre escura,
  * nos dois temas, com as cores dela (o cartão #101112). As peças do
  * carregamento leem os tokens do tema; dentro da capa, a tinta e o aviso da
