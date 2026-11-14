@@ -104,6 +104,18 @@ class TesteRestauracaoTest(unittest.TestCase):
         self.assertIn("service_account: github-actions-functions@${{ env.PROJECT_ID }}.iam.gserviceaccount.com", self.texto)
 
 
+class RunnerLabelTest(unittest.TestCase):
+    """O runner sai da variável RUNNER_LABEL; vazio, o fallback deste arquivo."""
+
+    def test_todo_runs_on_le_a_variavel(self) -> None:
+        for workflow in sorted(WORKFLOWS.glob("*.yml")):
+            for numero, linha in enumerate(workflow.read_text(encoding="utf-8").splitlines(), start=1):
+                if "runs-on:" not in linha or linha.lstrip().startswith("#"):
+                    continue
+                with self.subTest(workflow=workflow.name, linha=numero):
+                    self.assertIn("vars.RUNNER_LABEL", linha)
+
+
 class WmsIntegrationEmulatorsTest(unittest.TestCase):
     def test_reconvite_inicia_auth_local_sem_credenciais_reais(self) -> None:
         import json

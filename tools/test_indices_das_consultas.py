@@ -154,22 +154,33 @@ class MainTest(unittest.TestCase):
 
 
 class WorkflowTest(unittest.TestCase):
-    """Cada job de integração das Functions grava as consultas e confere o índice delas."""
+    """Cada suíte de integração grava as consultas e confere o índice delas."""
 
     texto = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    def test_cada_job_de_integracao_grava_e_confere(self) -> None:
-        jobs = re.findall(r"(?ms)^  ([a-z-]+-integration):\n(.*?)(?=^  \S|\Z)", self.texto)
-        self.assertEqual(
-            sorted(nome for nome, _ in jobs),
-            ["comercial-integration", "core-integration", "financeiro-integration", "functions-integration", "operacao-integration", "rh-integration"],
-        )
-        for nome, corpo in jobs:
-            with self.subTest(job=nome):
-                testes = corpo.index("run: npm run test:integration")
-                self.assertIn("NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs", corpo[:testes])
-                self.assertIn("CONSULTAS_SAIDA: ${{ runner.temp }}/consultas.jsonl", corpo[:testes])
-                self.assertIn('python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas.jsonl"', corpo[testes:])
+    def test_cada_suite_de_integracao_grava_e_confere(self) -> None:
+        for pasta, arquivo in (
+            ("functions/wms", "consultas-wms.jsonl"),
+            ("functions/comercial", "consultas-comercial.jsonl"),
+            ("functions/operacao", "consultas-operacao.jsonl"),
+            ("functions/financeiro", "consultas-financeiro.jsonl"),
+            ("functions/core", "consultas-core.jsonl"),
+            ("functions/rh", "consultas-rh.jsonl"),
+        ):
+            with self.subTest(pasta=pasta):
+                bloco = (
+                    f"working-directory: {pasta}\n"
+                    "        env:\n"
+                    "          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs\n"
+                    f"          CONSULTAS_SAIDA: ${{{{ runner.temp }}}}/{arquivo}\n"
+                    "        run: npm run test:integration\n"
+                )
+                indice = self.texto.find(bloco)
+                self.assertNotEqual(indice, -1, bloco)
+                self.assertIn(
+                    f'python3 tools/indices_das_consultas.py "${{{{ runner.temp }}}}/{arquivo}"',
+                    self.texto[indice:],
+                )
 
 
 if __name__ == "__main__":

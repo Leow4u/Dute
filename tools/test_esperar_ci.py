@@ -133,22 +133,47 @@ class MainTest(unittest.TestCase):
         self.assertEqual(self.rodar(ApiFalsa([(SHA, negado)])), (1, "publicar=false\n"))
 
 
+class ShaParaHomologacaoTest(unittest.TestCase):
+    def test_o_proprio_commit_ainda_no_head_publica(self) -> None:
+        self.assertEqual(e.sha_para_homologacao(SHA, SHA, []), SHA)
+
+    def test_head_com_ci_verde_publica_o_head_mesmo_se_o_disparo_e_antigo(self) -> None:
+        self.assertEqual(
+            e.sha_para_homologacao(OUTRO, SHA, [execucao("completed", "failure", run_id=1), execucao("completed", "success", run_id=2)]),
+            OUTRO,
+        )
+
+    def test_head_sem_ci_ou_com_ci_aberto_ou_vermelho_nao_publica(self) -> None:
+        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, []))
+        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [execucao("in_progress", run_id=3)]))
+        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [execucao("completed", "failure", run_id=4)]))
+
+    def test_vale_a_execucao_mais_nova_do_head(self) -> None:
+        self.assertIsNone(
+            e.sha_para_homologacao(OUTRO, SHA, [execucao("completed", "success", run_id=1), execucao("completed", "failure", run_id=9)]),
+        )
+
+
 class WorkflowsTest(unittest.TestCase):
-    """Trava o desenho da fila da homologação (incidente de 22/10/2026)."""
+    """Trava o gatilho da homologação (incidente de 22/10/2026, sem a espera ativa)."""
 
     raiz = Path(__file__).resolve().parent.parent
 
     def ler(self, nome: str) -> str:
         return (self.raiz / ".github" / "workflows" / nome).read_text(encoding="utf-8")
 
-    def test_fila_da_homologacao_e_do_workflow_e_em_ordem_de_push(self) -> None:
+    def test_homologacao_nasce_quando_o_ci_da_main_fica_verde(self) -> None:
         texto = self.ler("homologacao.yml")
-        self.assertRegex(texto, r"(?m)^on:\n  push:\n    branches: \[main\]\n")
-        # No nível do workflow (coluna 0), não do job: a vaga é pega no push,
-        # não quando os testes acabam.
+        self.assertIn("workflow_run:", texto)
+        self.assertIn('workflows: ["CI"]', texto)
+        self.assertIn("types: [completed]", texto)
         self.assertRegex(texto, r"(?m)^concurrency:\n  group: publicar-homologacao\n  cancel-in-progress: false\n")
-        self.assertIn("python3 tools/esperar_ci.py", texto)
-        self.assertIn("needs.ci-verde.outputs.publicar == 'true'", texto)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", texto)
+        self.assertIn("github.event.workflow_run.event == 'push'", texto)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'", texto)
+        self.assertIn("python3 tools/esperar_ci.py --sha", texto)
+        self.assertNotIn("\n        run: python3 tools/esperar_ci.py\n", texto)
+        self.assertIn("commit_sha: ${{ needs.escolher.outputs.sha }}", texto)
 
     def test_ci_nao_publica_a_homologacao(self) -> None:
         self.assertNotIn("ambiente: homologacao", self.ler("ci.yml"))

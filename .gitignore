@@ -73,3 +73,11 @@ functions/*/src/api/shared/
 
 # Execução e relatórios locais das skills
 .superpowers/
+
+# Planilhas de cliente (custo, quantidade, fechamento). Não são fonte de
+# verdade e não voltam para o git. O histórico anterior a esta regra ainda
+# contém as duas planilhas da BTG que saíram de attached_assets/.
+attached_assets/*.xlsx
+attached_assets/*.xls
+attached_assets/**/*.xlsx
+attached_assets/**/*.xls

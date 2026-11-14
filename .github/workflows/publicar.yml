@@ -1,10 +1,14 @@
 name: Publicar
 
 # Publica um ambiente (homologação ou produção), sempre depois dos testes do
-# commit: a homologação pelo homologacao.yml a cada push na main, a produção
-# pelo ci.yml só por disparo manual. Em série: confere se o commit ainda é o da
-# main, regras e índices, functions e por último o frontend, para a tela nova
-# nunca chegar antes da callable que ela chama.
+# commit: a homologação pelo homologacao.yml quando o CI da main fica verde, a
+# produção pelo ci.yml só por disparo manual. Em série: confere se o commit
+# ainda é o da main, regras e índices, functions e por último o frontend, para
+# a tela nova nunca chegar antes da callable que ela chama.
+#
+# commit_sha vazio usa github.sha (produção, disparo na main). A homologação
+# manda o SHA do CI: no workflow_run, github.sha é o da branch padrão, não o
+# do commit que passou no CI.
 #
 # Uma publicação por ambiente de cada vez, nos grupos "publicar-homologacao"
 # (do workflow homologacao.yml inteiro) e "publicar-producao" (do job do
@@ -45,6 +49,10 @@ on:
       firebase_app_id:
         type: string
         required: true
+      commit_sha:
+        description: "Commit a publicar. Vazio = github.sha."
+        type: string
+        default: ""
 
 env:
   REGION: southamerica-east1
@@ -58,7 +66,7 @@ jobs:
   # commit novo.
   head-da-main:
     name: Commit ainda é o HEAD da main
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     permissions:
       contents: read
     outputs:
@@ -68,18 +76,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           AMBIENTE: ${{ inputs.ambiente }}
+          COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
         run: |
           set -euo pipefail
           HEAD_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          if [ "${HEAD_MAIN}" = "${GITHUB_SHA}" ]; then
+          if [ "${HEAD_MAIN}" = "${COMMIT_SHA}" ]; then
             echo "publicar=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
           if [ "${AMBIENTE}" = "producao" ]; then
-            echo "::error::A main está em ${HEAD_MAIN:0:7}, não mais em ${GITHUB_SHA:0:7}. Confira ${HEAD_MAIN:0:7} na homologação e dispare a produção de novo."
+            echo "::error::A main está em ${HEAD_MAIN:0:7}, não mais em ${COMMIT_SHA:0:7}. Confira ${HEAD_MAIN:0:7} na homologação e dispare a produção de novo."
             exit 1
           fi
-          echo "::notice::${GITHUB_SHA:0:7} não é mais o HEAD da main (${HEAD_MAIN:0:7}); a homologação fica para a execução de ${HEAD_MAIN:0:7}."
+          echo "::notice::${COMMIT_SHA:0:7} não é mais o HEAD da main (${HEAD_MAIN:0:7}); a homologação fica para a execução de ${HEAD_MAIN:0:7}."
           echo "publicar=false" >> "${GITHUB_OUTPUT}"
 
   # Regras do Firestore e do Storage e índices do Firestore. As functions e o
@@ -92,7 +101,7 @@ jobs:
     name: Regras e índices (Firestore e Storage)
     needs: head-da-main
     if: needs.head-da-main.outputs.publicar == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     permissions:
       contents: read
       id-token: write
@@ -102,6 +111,8 @@ jobs:
       GCP_SERVICE_ACCOUNT: github-actions-functions@${{ inputs.project_id }}.iam.gserviceaccount.com
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -140,7 +151,7 @@ jobs:
   functions:
     name: Cloud Functions
     needs: regras
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     permissions:
       contents: read
       id-token: write
@@ -150,6 +161,8 @@ jobs:
       GCP_SERVICE_ACCOUNT: github-actions-functions@${{ inputs.project_id }}.iam.gserviceaccount.com
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -243,8 +256,9 @@ jobs:
   frontend:
     name: Frontend (Cloud Run)
     needs: [regras, functions]
-    # Mesmo ambiente do smoke test no CI: Playwright 1.56.1 não suporta 26.04.
-    runs-on: ubuntu-24.04
+    # Playwright 1.56.1 não suporta o ubuntu-latest 26.04. RUNNER_LABEL troca
+    # os dois de uma vez, quando o runner self-hosted entrar.
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
       contents: read
       id-token: write
@@ -255,8 +269,11 @@ jobs:
       PUBLIC_URL: ${{ inputs.public_url }}
       WORKLOAD_IDENTITY_PROVIDER: projects/${{ inputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
       GCP_SERVICE_ACCOUNT: github-actions-deploy@${{ inputs.project_id }}.iam.gserviceaccount.com
+      COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -328,7 +345,7 @@ jobs:
           cp deploy/cloud-run/nginx.conf "${STAGE_DIR}/deploy/cloud-run/"
           cp -r artifacts/app/dist/public "${STAGE_DIR}/artifacts/app/dist/"
 
-          SHORT_SHA="${GITHUB_SHA:0:7}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${SHORT_SHA}"
 
           docker build --tag "${IMAGE}" "${STAGE_DIR}"
