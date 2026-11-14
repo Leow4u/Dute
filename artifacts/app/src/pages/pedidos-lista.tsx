@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { useDocumento } from "@/lib/operacao/leitura";
 import { folhaDaLista, pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
@@ -78,10 +79,18 @@ export default function PaginaPedidosLista() {
     lista.semCaixas ? "Não foi possível carregar as caixas." : null,
     solicitacao.erro ? "Não foi possível carregar o destino do pedido." : null,
   ].filter((aviso): aviso is string => Boolean(aviso));
+  // "Tentar de novo" (na demora, na desistência e na falha): lê do zero a fila, as prateleiras e as caixas que ainda
+  // leem (o react-query não recomeça a leitura presa sem dado), e assina de novo a solicitação que não chegou.
+  const queryClient = useQueryClient();
+  const tentar = () =>
+    Promise.all([
+      relerDoZero(queryClient, [["warehouse-ops"], ["warehouse-positions"], ["warehouse-boxes"], ["opening-inventory-lines"]]),
+      esperandoSolicitacao ? solicitacao.tentar() : undefined,
+    ]);
   const imprimir = () => {
     // A hora entra na folha antes de o navegador abrir a impressão.
     flushSync(() => setAgora(new Date()));
     window.print();
   };
-  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} />;
+  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} onTentar={tentar} />;
 }

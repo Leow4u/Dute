@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { leituraDosVolumes } from "./use-volumes-do-pedido";
+import { leituraDosVolumes, tentarOsQueFaltam } from "./use-volumes-do-pedido";
 
 /**
  * De onde vêm os volumes de um pedido (separação com caixas, parte 4): da
@@ -84,5 +84,31 @@ describe("a leitura dos volumes do pedido", () => {
   it("o pedido sem tarefa de separação lida (o legado) sai sem volumes, sem travar", () => {
     const leitura = leituraDosVolumes({ ...BASE, tarefa: null, linhas: [] });
     expect([leitura.estado, leitura.volumes, leitura.pedido?.separadoDe]).toEqual(["pronto", [], null]);
+  });
+});
+
+describe("a nova tentativa dos volumes do pedido (carregamento v2, junção das partes 10 e 13)", () => {
+  it("assina de novo só as leituras ativas que falharam ou não chegaram, e acaba quando todas respondem", async () => {
+    let responder: () => void = () => undefined;
+    const presa = vi.fn(() => new Promise<void>((pronto) => (responder = pronto)));
+    const lida = vi.fn(async () => undefined);
+    const semChave = vi.fn(async () => undefined);
+    let acabou = false;
+    const tentativa = tentarOsQueFaltam([
+      { ativa: true, semResposta: true, tentar: presa },
+      { ativa: true, semResposta: false, tentar: lida },
+      { ativa: false, semResposta: true, tentar: semChave },
+    ]).then(() => {
+      acabou = true;
+    });
+    await Promise.resolve();
+    expect(presa).toHaveBeenCalledTimes(1);
+    expect(lida).not.toHaveBeenCalled();
+    // A leitura sem chave nunca responderia: a nova tentativa não a espera.
+    expect(semChave).not.toHaveBeenCalled();
+    expect(acabou).toBe(false);
+    responder();
+    await tentativa;
+    expect(acabou).toBe(true);
   });
 });

@@ -7,9 +7,11 @@ type OpcaoDoSegmentado<T extends string> = {
   /**
    * A contagem depois do rótulo ("Em aberto · 6"). Nula antes de ler
    * (carregamento v2, momento 2): o bloco no lugar do número ("Em aberto ·
-   * ▪"), fora da árvore; nunca "0". Zero ou sem ela, só o rótulo.
+   * ▪"), fora da árvore; nunca "0". `"falhou"` com a leitura que falhou: "—",
+   * também fora da árvore, como a `NumeroLido` (junção das partes 10 e 13).
+   * Zero ou sem ela, só o rótulo.
    */
-  count?: number | null;
+  count?: number | null | "falhou";
 };
 
 type SegmentedProps<T extends string> = {
@@ -35,6 +37,17 @@ type SegmentedProps<T extends string> = {
 const CASA_DA_CONTAGEM = "inline-grid min-w-4 justify-items-start tabular-nums";
 
 function rotuloDa<T extends string>(option: OpcaoDoSegmentado<T>) {
+  if (option.count === "falhou") {
+    return (
+      <>
+        {option.label}
+        <span aria-hidden="true">
+          {" · "}
+          <span className={CASA_DA_CONTAGEM}>—</span>
+        </span>
+      </>
+    );
+  }
   if (option.count === null) {
     return (
       <>

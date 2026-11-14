@@ -201,7 +201,10 @@ export default function Documents() {
   // O documento novo é do cliente ativo; a biblioteca lista todos.
   // O documento novo vai para o cliente ativo: enquanto ele lê, "Adicionar documento" espera (o código ainda seria o
   // do cliente padrão; o customer_code é a fronteira).
-  const { code: customerCode, active: activeCustomer, isLoading: carregandoCliente } = useActiveCustomer();
+  const { code: customerCode, active: activeCustomer, isLoading: carregandoCliente, falhou: clienteFalhou } = useActiveCustomer();
+  // Com a lista dos clientes que falhou, o `code` também é o do cliente padrão: "Adicionar documento" espera, travado
+  // (o seletor diz a falha e tenta de novo; junção das partes 10 e 13).
+  const semCliente = carregandoCliente || clienteFalhou;
   // "Adicionar documento" esperando o cliente ativo: a caixa no lugar do ícone aos 300 ms, nunca só a opacidade.
   const esperaDoCliente = useEspera(carregandoCliente);
 
@@ -529,10 +532,10 @@ export default function Documents() {
         estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="documentos" />}
         actions={
           <Button
-            aria-disabled={carregandoCliente || undefined}
+            aria-disabled={semCliente || undefined}
             aria-busy={esperaDoCliente.visivel || undefined}
             onClick={() => {
-              if (!carregandoCliente) setAdding(true);
+              if (!semCliente) setAdding(true);
             }}
           >
             {esperaDoCliente.visivel ? <Spinner calmo={esperaDoCliente.calmo} className="mr-2" /> : <Plus className="mr-2 h-4 w-4" aria-hidden="true" />}
@@ -673,7 +676,7 @@ export default function Documents() {
             onSubmit={(event) => {
               event.preventDefault();
               if (estadoDoDocumento === "sem-resposta") void conferirDocumento();
-              else if (!enviandoDocumento && file && !carregandoCliente) add.mutate();
+              else if (!enviandoDocumento && file && !semCliente) add.mutate();
             }}
           >
             <button
@@ -777,7 +780,7 @@ export default function Documents() {
               andamento={conferindoDocumento ? "Conferindo…" : "Adicionando…"}
               sucesso="Adicionado"
               erro="Não adicionado"
-              bloqueado={estadoDoDocumento === "repouso" && (!file || carregandoCliente)}
+              bloqueado={estadoDoDocumento === "repouso" && (!file || semCliente)}
             />
           </DialogFooter>
         </DialogContent>

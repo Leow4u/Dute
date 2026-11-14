@@ -17,7 +17,18 @@ import { textosForaDaLista } from "@/test/textos";
  * Relógio simulado. Dados sintéticos.
  */
 
-const estado = vi.hoisted(() => ({ chamadas: [] as Array<{ apply: boolean }>, falharAplicar: false }));
+const estado = vi.hoisted(() => ({
+  chamadas: [] as Array<{ apply: boolean }>,
+  falharAplicar: false,
+  /** "Numerar agora" sem resposta: a chamada fica presa. */
+  prenderAplicar: false,
+  /** "Numerar agora" que cai no prazo do servidor, sem dizer se valeu. */
+  prazoDoAplicar: 0,
+  /** Quanto o "Numerar agora" demora a responder. */
+  demoraDoAplicar: 1_000,
+  /** O que a prévia ainda acha para numerar. */
+  restantes: 2,
+}));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u-1", publicMetadata: { role: "owner" } }, isLoaded: true }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
@@ -31,11 +42,17 @@ async function servir(entrada: RequestInfo | URL, init?: RequestInit) {
   if (url.pathname === "/api/system/request-numbers") {
     const corpo = JSON.parse(String(init?.body ?? "{}")) as { apply: boolean };
     estado.chamadas.push(corpo);
-    await new Promise((pronto) => setTimeout(pronto, 1_000));
+    if (corpo.apply && estado.prenderAplicar) return new Promise<Response>(() => undefined);
+    if (corpo.apply && estado.prazoDoAplicar) {
+      await new Promise((pronto) => setTimeout(pronto, estado.prazoDoAplicar));
+      return new Response(JSON.stringify({ message: "O servidor não respondeu a tempo." }), { status: 504, headers: { "content-type": "application/json" } });
+    }
+    await new Promise((pronto) => setTimeout(pronto, corpo.apply ? estado.demoraDoAplicar : 1_000));
     if (corpo.apply && estado.falharAplicar) {
       return new Response(JSON.stringify({ message: "Falha interna no servidor." }), { status: 500, headers: { "content-type": "application/json" } });
     }
-    return json({ dry_run: !corpo.apply, assigned_count: 2, assigned: [{ id: "r1", request_number: "PED-0001" }, { id: "r2", request_number: "ENV-0002" }] });
+    const assigned = [{ id: "r1", request_number: "PED-0001" }, { id: "r2", request_number: "ENV-0002" }].slice(0, corpo.apply ? 2 : estado.restantes);
+    return json({ dry_run: !corpo.apply, assigned_count: assigned.length, assigned });
   }
   return json({ ok: true, checked_at: "2026-11-13T13:42:00Z", firestore_ms: 40, last_event: null, incidents: [] });
 }
@@ -51,6 +68,10 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(servir));
   estado.chamadas = [];
   estado.falharAplicar = false;
+  estado.prenderAplicar = false;
+  estado.prazoDoAplicar = 0;
+  estado.demoraDoAplicar = 1_000;
+  estado.restantes = 2;
   container = document.createElement("div");
   document.body.append(container);
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always", refetchOnWindowFocus: false } } });
@@ -175,5 +196,118 @@ describe("Numerar agora, depois da revisão (parte 13d)", () => {
     expect(camada(numerar)).toBe("Numerar agora");
     expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }, { apply: true }]);
     await axeDoQueVimos();
+  });
+});
+
+/**
+ * O "Numerar agora" sem resposta (carregamento v2, junção das partes 10 e 13):
+ * a junção juntou o botão da 13d, que vira "Conferir" aos 70 s, ao aviso da
+ * escrita da 13e. O "Conferir" ficava mudo enquanto a chamada não respondia
+ * (o toque saía no `isPending`) e, depois, só voltava ao repouso, sem reler,
+ * com a prévia velha na tela. Agora ele relê a prévia, nunca numera de novo:
+ * sem nada a numerar, valeu; com o que falta, a prévia nova e o "Numerar
+ * agora" travado enquanto a primeira chamada não responde. E a numeração que
+ * acaba depois dos 10 s não faz o Anunciador dizer a demora de novo.
+ */
+describe("Numerar agora aos 70 s, na junção", () => {
+  async function abrirComPrevia() {
+    raiz = createRoot(container);
+    await act(async () => {
+      raiz!.render(
+        <QueryClientProvider client={cliente}>
+          <Anunciador />
+          <SettingsSystem />
+        </QueryClientProvider>,
+      );
+    });
+    await passar(100);
+    await tocar(botao("Ver o que muda"));
+    await passar(1_100);
+  }
+  const TEXTOS_DA_DESISTENCIA = [...TEXTOS, "Demorando mais que o normal", /^\d:\d\d$/, "Sem confirmação do servidor", "Conferindo…", /^Vai numerar 0 solicitação\(ões\)\.$/];
+  /** O texto da seção, sem a região do Anunciador. */
+  const naSecao = () =>
+    Array.from(container.querySelectorAll("section")).find((item) => item.querySelector("h2")?.textContent === "Numerar pedidos e envios antigos")?.textContent ?? "";
+  const textosDaDesistencia = () => {
+    const secao = Array.from(container.querySelectorAll("section")).find((item) => item.querySelector("h2")?.textContent === "Numerar pedidos e envios antigos");
+    return textosForaDaLista(secao?.outerHTML ?? "", TEXTOS_DA_DESISTENCIA);
+  };
+
+  it("o Conferir, com a chamada ainda sem resposta, relê a prévia e nunca numera de novo; sem nada a numerar, valeu", async () => {
+    await abrirComPrevia();
+    estado.prenderAplicar = true;
+    const numerar = botao("Numerar agora");
+    await tocar(numerar);
+    await passar(70_100);
+    expect(camada(numerar)).toBe("Conferir");
+    // O Conferir age: não é o ocupado, mudo.
+    expect(numerar.getAttribute("aria-disabled")).toBeNull();
+    expect(naSecao()).toContain("Sem confirmação do servidor");
+    expect(textosDaDesistencia()).toEqual([]);
+    paraOAxe.push(container.innerHTML);
+    // O servidor numerou: a prévia relida não acha mais nada.
+    estado.restantes = 0;
+    await tocar(numerar);
+    await passar(350);
+    expect(camada(numerar)).toBe("Conferindo…");
+    expect(numerar.getAttribute("aria-busy")).toBe("true");
+    // Conferindo, o aviso fica.
+    expect(naSecao()).toContain("Sem confirmação do servidor");
+    await passar(1_000);
+    expect(camada(numerar)).toBe("Numerado");
+    // O fim que o Conferir achou tira a desistência, mesmo com a primeira chamada ainda sem resposta.
+    expect(naSecao()).not.toContain("Sem confirmação do servidor");
+    expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }, { apply: false }]);
+    expect(textosDaDesistencia()).toEqual([]);
+    await axeDoQueVimos();
+  });
+
+  it("o Conferir que acha o que falta numerar mostra a prévia nova, e o Numerar agora espera a primeira chamada, travado", async () => {
+    await abrirComPrevia();
+    estado.prenderAplicar = true;
+    const numerar = botao("Numerar agora");
+    await tocar(numerar);
+    await passar(70_100);
+    estado.restantes = 1;
+    await tocar(numerar);
+    await passar(1_400);
+    expect(camada(numerar)).toBe("Numerar agora");
+    expect(container.textContent).toContain("Vai numerar 1 solicitação(ões): PED-0001");
+    expect(numerar.getAttribute("aria-disabled")).toBe("true");
+    await tocar(numerar);
+    await passar(1_400);
+    expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }, { apply: false }]);
+  });
+
+  it("a chamada que cai no prazo depois dos 70 s não tira a desistência: \"Sem confirmação do servidor\" fica com o Conferir", async () => {
+    await abrirComPrevia();
+    estado.prazoDoAplicar = 71_000;
+    const numerar = botao("Numerar agora");
+    await tocar(numerar);
+    await passar(70_100);
+    expect(camada(numerar)).toBe("Conferir");
+    await passar(2_000);
+    expect(camada(numerar)).toBe("Conferir");
+    expect(naSecao()).toContain("Sem confirmação do servidor");
+    expect(estado.chamadas).toEqual([{ apply: false }, { apply: true }]);
+  });
+
+  it("a numeração que acaba depois dos 10 s não faz o Anunciador dizer a demora de novo", async () => {
+    await abrirComPrevia();
+    estado.demoraDoAplicar = 15_000;
+    const falas: string[] = [];
+    const regiao = document.querySelector("[data-anunciador]")!;
+    const observador = new MutationObserver(() => {
+      const texto = regiao.textContent?.trim();
+      if (texto) falas.push(texto);
+    });
+    observador.observe(regiao, { subtree: true, childList: true, characterData: true });
+    await tocar(botao("Numerar agora"));
+    await passar(10_500);
+    await passar(5_000);
+    await passar(5_000);
+    observador.disconnect();
+    expect(container.textContent).toContain("Numerou 2 solicitação(ões)");
+    expect(falas.filter((fala) => fala === "Demorando mais que o normal")).toHaveLength(1);
   });
 });

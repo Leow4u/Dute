@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "lucide-react";
 
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BlocoSemConexao, useFocoAoSair } from "@/components/ui/erro-na-leitura";
@@ -83,7 +84,7 @@ import { formatRequestAge } from "./customer-requests";
 export default function Receber() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { code: customerCode, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
+  const { code: customerCode, isLoading: clienteCarregando, falhou: clienteFalhou, erro: erroDoCliente, codeProvavel } = useActiveCustomer();
   // O suporte consulta: sem chegada avulsa, sem conferir, concluir ou guardar.
   const { user } = useAppUser();
   const operador = canOperateWarehouse(user?.publicMetadata.role);
@@ -136,6 +137,9 @@ export default function Receber() {
       fetchJson<{ items?: Array<Record<string, unknown>> }>(
         `/api/customer-requests?customer_code=${encodeURIComponent(customerCode)}&status=open&limit=200`,
       ),
+    // Com a lista dos clientes que falhou, o `code` é o do cliente padrão: os avisos dele não são lidos, e a tela diz a
+    // falha do cliente ativo (o customer_code é a fronteira; junção das partes 10 e 13).
+    enabled: !clienteFalhou,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
@@ -149,9 +153,12 @@ export default function Receber() {
   // "Tentar de novo". Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
   const opsNaTela = useFalhaNaReleituraAutomatica(ops);
   const avisosLidos = useFalhaNaReleituraAutomatica(requests);
-  const requestsNaTela = avisos.falhou && ops.data !== undefined
-    ? { ...avisosLidos, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
-    : avisosLidos;
+  const requestsNaTela = clienteFalhou
+    ? // Sem o cliente ativo, os avisos não foram lidos: a linha de estado fica vazia, ao lado da falha do cliente.
+      { ...avisosLidos, data: undefined, error: erroDoCliente as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+    : avisos.falhou && ops.data !== undefined
+      ? { ...avisosLidos, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+      : avisosLidos;
   // Os avisos na tela são do cliente da leitura: na troca, ainda os do anterior, que somem com a lista dele.
   const clienteDosAvisos = useRef(customerCode);
   if (!trocandoDeCliente) clienteDosAvisos.current = customerCode;
@@ -258,10 +265,10 @@ export default function Receber() {
   // avisos: o aviso entra no lugar da lista na hora.
   const [listaJaLida, setListaJaLida] = useState(false);
   if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
-  const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
+  const lendo = !clienteFalhou && !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
   const idDaLinha = useId();
   // O aviso no lugar da lista: sem nada lido das filas, ou sem os avisos do cliente (a troca que falhou). A contagem
-  // do "Em aberto" fica com o bloco: sem a lista, ela seria um falso número.
+  // do "Em aberto" fica com o "—": sem a lista, ela seria um falso número, e o bloco diria que ainda lê.
   const falhaNaTela = !lendo && !semRede && ((Boolean(opsNaTela.error) && !opsNaTela.data) || avisos.falhou);
   const semAListaNaTela = falhaNaTela || (!lendo && semRede !== null && semRede.lidaEm === null);
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
@@ -411,13 +418,21 @@ export default function Receber() {
               aria-label="Situação das chegadas"
               cheioNoCelular
               options={[
-                { value: "open", label: "Em aberto", count: lendo || semAListaNaTela ? null : openCount },
+                { value: "open", label: "Em aberto", count: lendo ? null : semAListaNaTela || clienteFalhou ? "falhou" : openCount },
                 { value: "done", label: "Recebidos" },
                 { value: "cancelled", label: "Cancelados" },
               ]}
             />
             {operador ? (
-              <Button type="button" variant="outline" onClick={() => setUnplannedOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                // A chegada avulsa nasce para o cliente ativo: espera a lista dos clientes, travada, nunca com o padrão.
+                aria-disabled={clienteCarregando || clienteFalhou || undefined}
+                onClick={() => {
+                  if (!clienteCarregando && !clienteFalhou) setUnplannedOpen(true);
+                }}
+              >
                 <PackageOpen className="size-4" />
                 Chegada avulsa
               </Button>
@@ -429,7 +444,9 @@ export default function Receber() {
 
       {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
           na forma final, com as linhas-fantasma. */}
-      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
+      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : clienteFalhou ? (
+        <FalhaDoClienteAtivo focoAoSair={idDaLinha} />
+      ) : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
       ) : falhaNaTela ? (
         <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />

@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 
 import { InvoiceDocument } from "@/components/billing/invoice-document";
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
@@ -27,10 +28,12 @@ function competenciaFromUrl() {
 export default function BillingInvoice() {
   const competencia = competenciaFromUrl();
   // A fatura do cliente ativo, como no Fechamento do mês (pages/billing.tsx).
-  const { code: cliente, isLoading: carregandoCliente, tentar: lerOsClientes } = useActiveCustomer();
+  const { code: cliente, isLoading: carregandoCliente, falhou: clienteFalhou, tentar: lerOsClientes } = useActiveCustomer();
+  // Sem o cliente ativo confirmado (lendo, ou a lista dos clientes que falhou), nada do cliente padrão é lido.
+  const semCliente = carregandoCliente || clienteFalhou;
   const chave = [...getGetBillingPeriodQueryKey(competencia), cliente];
   const leitura = useGetBillingPeriod(competencia, {
-    query: { queryKey: chave, enabled: !carregandoCliente },
+    query: { queryKey: chave, enabled: !semCliente },
     request: { headers: { [CABECALHO_DO_CLIENTE]: cliente } },
   });
   const qc = useQueryClient();
@@ -42,7 +45,7 @@ export default function BillingInvoice() {
   // sem nada lido a mostra: a releitura que falha com a fatura na tela não a apaga (carregamento v2, parte 13d).
   const comFalha = useLeituraComFalha(leitura);
   // Enquanto o cliente ativo lê, o `code` ainda é o do cliente padrão: a fatura dele nunca entra na tela.
-  const data = carregandoCliente ? undefined : leitura.data;
+  const data = semCliente ? undefined : leitura.data;
   const idDaVolta = useId();
   const period = data as unknown as
     | { status?: string; emitido_em?: string | null }
@@ -58,7 +61,10 @@ export default function BillingInvoice() {
         <ArrowLeft className="h-4 w-4" />
         Fechamento do mês
       </Link>
-      {comFalha.isError && data === undefined ? (
+      {clienteFalhou ? (
+        // A lista dos clientes que falhou: a falha do cliente ativo, e "Tentar de novo" lê a lista dos clientes.
+        <FalhaDoClienteAtivo className="no-print" focoAoSair={idDaVolta} />
+      ) : comFalha.isError && data === undefined ? (
         <FalhaNaLeitura leitura={leitura} erro={comFalha.error} mensagem="Não consegui carregar a fatura." className="no-print" focoAoSair={idDaVolta} />
       ) : !data ? (
         // A espera em bloco: nada antes de 300 ms, depois a caixa e "Carregando a fatura…", com o anúncio.

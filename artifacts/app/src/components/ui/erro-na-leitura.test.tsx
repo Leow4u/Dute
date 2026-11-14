@@ -273,7 +273,8 @@ describe("a falha na leitura", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("Tentando de novo… só na nova tentativa que a pessoa pediu, até a leitura responder; ocupado, não desabilitado; axe", async () => {
+  it("Tentando de novo… só na nova tentativa que a pessoa pediu, no relógio da espera, até a leitura responder; ocupado, não desabilitado; axe", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     let responder: () => void = () => undefined;
     const refetch = vi.fn(() => new Promise<never>((pronto) => (responder = () => pronto(undefined as never))));
@@ -291,17 +292,69 @@ describe("a falha na leitura", () => {
     expect(botao.textContent).toBe("Tentar de novo");
     await act(async () => botao.click());
     expect(refetch).toHaveBeenCalledTimes(1);
+    // Antes de 300 ms, nada muda na tela; o toque repetido, com a leitura a caminho, não lê de novo.
+    expect(botao.textContent).toBe("Tentar de novo");
+    await act(async () => botao.click());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(textosDaTela(container.innerHTML)).toEqual(["Não consegui carregar os produtos.", "Tentando de novo…"]);
     expect(botao.hasAttribute("disabled")).toBe(false);
     expect(botao.getAttribute("aria-disabled")).toBe("true");
-    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
-    // O toque repetido, com a leitura a caminho, não lê de novo.
+    expect(botao.getAttribute("aria-busy")).toBe("true");
     await act(async () => botao.click());
     expect(refetch).toHaveBeenCalledTimes(1);
+    const tentando = container.innerHTML;
     await act(async () => responder());
+    // Pelo menos 500 ms na tela, mesmo que a leitura acabe logo.
+    expect(botao.textContent).toBe("Tentando de novo…");
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(botao.textContent).toBe("Tentar de novo");
     act(() => raiz.unmount());
     container.remove();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    expect(await violacoesDeAcessibilidade(tentando)).toEqual([]);
+  });
+
+  it("a nova tentativa que falha de novo antes de 300 ms não pisca o botão nem muda o alerta, que o leitor de tela releria", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    let falhar: () => void = () => undefined;
+    const refetch = vi.fn(() => new Promise<never>((pronto) => (falhar = () => pronto(undefined as never))));
+    const container = document.createElement("div");
+    document.body.append(container);
+    const raiz: Root = createRoot(container);
+    act(() =>
+      raiz.render(
+        <ProvedorDaConexao value={conexaoEm("conectado")}>
+          <FalhaNaLeitura leitura={falhou(new Error("Falha interna no servidor."), refetch)} mensagem="Não consegui carregar os produtos." />
+        </ProvedorDaConexao>,
+      ),
+    );
+    const alerta = container.querySelector('[role="alert"]')!;
+    const mudancas: string[] = [];
+    const observador = new MutationObserver(() => mudancas.push(alerta.textContent ?? ""));
+    observador.observe(alerta, { subtree: true, childList: true, characterData: true });
+    await act(async () => container.querySelector("button")!.click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    await act(async () => falhar());
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    await act(async () => undefined);
+    observador.disconnect();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(mudancas).toEqual([]);
+    expect(alerta.textContent).toBe("Não consegui carregar os produtos.Tentar de novo");
+    act(() => raiz.unmount());
+    container.remove();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 });

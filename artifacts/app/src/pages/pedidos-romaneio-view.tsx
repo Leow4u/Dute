@@ -3,6 +3,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { RomaneioDocumento } from "@/features/warehouse-ops/romaneio-documento";
 import type { FolhaDoRomaneio } from "@/lib/warehouse-ops/romaneio";
@@ -29,6 +30,7 @@ export function PedidosRomaneioView({
   voltar,
   avisos = [],
   onImprimir,
+  onTentar,
 }: {
   estado: EstadoDoRomaneio;
   folha: FolhaDoRomaneio | null;
@@ -37,6 +39,8 @@ export function PedidosRomaneioView({
   /** A leitura que falhou (o prazo): a folha sai sem esse dado, e a tela diz qual. */
   avisos?: readonly string[];
   onImprimir: () => void;
+  /** Lê de novo o que ainda não chegou: "Tentar de novo" na demora, na desistência e na falha. */
+  onTentar?: () => Promise<unknown>;
 }) {
   const mensagem = estado !== "pronto" ? MENSAGENS[estado] : !folha ? MENSAGENS.nao_encontrado : null;
   return (
@@ -57,9 +61,12 @@ export function PedidosRomaneioView({
         />
       </div>
 {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
-          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. */}
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. A leitura ao vivo relê (o `tentar`): "Tentar de
+          novo" aos 10 s e a desistência aos 70 s; a falha também tenta de novo. */}
       {estado === "carregando" ? (
-        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota onTentar={onTentar} className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+      ) : estado === "erro" && onTentar ? (
+        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem={MENSAGENS.erro} className="no-print" />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}

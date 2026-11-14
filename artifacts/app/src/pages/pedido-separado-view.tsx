@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { textoDaEtiqueta, textoDasAbertas, textoDasVazias, type CaixaVazia, type EtiquetaParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import {
   conteudoDoVolume,
@@ -43,6 +44,7 @@ export function PedidoSeparadoView({
   etiquetas = [],
   etiquetasHref,
   vazias = [],
+  onTentar,
 }: {
   /** "PED-0001" */
   numero: string;
@@ -61,6 +63,8 @@ export function PedidoSeparadoView({
   etiquetasHref?: string | null;
   /** As caixas que o pedido esvaziou. */
   vazias?: readonly CaixaVazia[];
+  /** Lê os volumes de novo (a leitura ao vivo): "Tentar de novo" na demora, na desistência e na falha. */
+  onTentar?: () => Promise<unknown>;
 }) {
   const [todos, setTodos] = useState(false);
   const visiveis = todos ? volumes : volumes.slice(0, VOLUMES_A_VISTA);
@@ -112,9 +116,12 @@ export function PedidoSeparadoView({
             </h2>
             {comVolumes ? <span className="text-sm font-semibold text-muted-foreground">{resumoDosVolumes(volumes)}</span> : null}
           </div>
-          {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c), no lugar do "Carregando" seco. */}
+          {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c), no lugar do "Carregando" seco, com a
+              saída da leitura ao vivo, que relê: "Tentar de novo" aos 10 s e a desistência aos 70 s. */}
           {estado === "carregando" ? (
-            <CarregandoNaRegiao rotulo="Carregando volumes…" className="px-5 py-6" />
+            <CarregandoNaRegiao rotulo="Carregando volumes…" onTentar={onTentar} className="px-5 py-6" />
+          ) : estado !== "pronto" && onTentar ? (
+            <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem="Não foi possível carregar os volumes." className="rounded-none border-0" />
           ) : estado !== "pronto" ? (
             <p role="alert" className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
               Não foi possível carregar os volumes.

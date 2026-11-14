@@ -6,6 +6,7 @@
 import { Suspense, useState } from "react";
 import { useLocation } from "wouter";
 
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { CarregandoTela } from "@/components/ui/carregando-tela";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
@@ -36,7 +37,7 @@ function tabFromLocation(location: string): BillingTab {
 export default function BillingHub() {
   const [location, navigate] = useLocation();
   const { user } = useAppUser();
-  const { code, isLoading } = useActiveCustomer();
+  const { code, isLoading, falhou } = useActiveCustomer();
   const role = user?.publicMetadata.role;
   // Mantém os papéis que já podem editar contratos e tabelas no backend.
   const podeManterContratos = SOMENTE_ARMAZENAGEM && (role === "owner" || role === "admin");
@@ -68,7 +69,7 @@ export default function BillingHub() {
         {tab === "competencia" ? <Billing /> : null}
         {tab === "tabela" ? <PriceList /> : null}
         {tab === "contratos" && podeManterContratos ? (
-          <AbaDosContratos titulo={nomeDaTela(location)} code={code} carregandoCliente={isLoading} />
+          <AbaDosContratos titulo={nomeDaTela(location)} code={code} carregandoCliente={isLoading} clienteFalhou={falhou} />
         ) : null}
       </Suspense>
     </div>
@@ -82,9 +83,21 @@ export default function BillingHub() {
  * que a aba abriu, sem a caixa sumir na troca nem a demora recomeçar do zero,
  * e sem anunciar a entrada de novo.
  */
-function AbaDosContratos({ titulo, code, carregandoCliente }: { titulo: string | null; code: string; carregandoCliente: boolean }) {
+function AbaDosContratos({
+  titulo,
+  code,
+  carregandoCliente,
+  clienteFalhou,
+}: {
+  titulo: string | null;
+  code: string;
+  carregandoCliente: boolean;
+  /** A lista dos clientes que falhou: o `code` é o do cliente padrão, e a aba não abre com ele. */
+  clienteFalhou: boolean;
+}) {
   const [desde] = useState(() => performance.now());
   if (carregandoCliente) return <CarregandoTela titulo={titulo} desde={desde} />;
+  if (clienteFalhou) return <FalhaDoClienteAtivo />;
   return (
     <Suspense fallback={<CarregandoTela titulo={titulo} desde={desde} />}>
       <Contratos key={code} rotaBase="/faturamento/contratos" clienteCodigo={code} />

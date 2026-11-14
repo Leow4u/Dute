@@ -22,7 +22,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -287,6 +287,9 @@ export default function SettingsCustomers() {
   const erroDaLeitura = customers.isError ? humanApiError(customers.error, "Não foi possível carregar os clientes.") : null;
   // Sem rede e sem os clientes lidos: o aviso da conexão (âmbar, ou "Reconectando…"), nunca o erro vermelho (momento 8).
   const clientesSemConexao = estado === "erro" && ehFaltaDeConexao(customers.error);
+  // A nova tentativa no relógio da espera (junção das partes 10 e 13): "Tentando de novo…" só depois de 300 ms, e a
+  // que falha de novo antes não pisca o botão nem muda o alerta. O bloco da conexão já tem o relógio dele.
+  const tentandoOsClientes = useTentandoNoRelogio(customers.isFetching);
 
   return (
     <div ref={topo} className="scroll-mt-10">
@@ -318,7 +321,13 @@ export default function SettingsCustomers() {
       ) : clientesSemConexao ? (
         <BlocoSemConexao tentando={customers.isFetching} onTentar={() => void relerOsClientes()} />
       ) : estado === "erro" ? (
-        <ErroNaLeitura mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."} tentando={customers.isFetching} onTentar={() => void relerOsClientes()} />
+        <ErroNaLeitura
+          mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."}
+          tentando={tentandoOsClientes}
+          onTentar={() => {
+            if (!customers.isFetching) void relerOsClientes();
+          }}
+        />
       ) : row ? (
         <PaginaDoCliente
           key={row.code}

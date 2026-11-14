@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { Input } from "@/components/ui/input";
 import { Confirmacao } from "@/components/ui/confirmacao";
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { useToast } from "@/hooks/use-toast";
@@ -115,19 +116,23 @@ export default function Billing() {
   const { user } = useAppUser();
   // O mês na tela e o que se grava são do cliente ativo desta aba: a chave
   // da leitura leva o cliente, e cada chamada o diz no cabeçalho.
-  const { code: cliente, isLoading: carregandoCliente, codeProvavel, tentar: lerOsClientes } = useActiveCustomer();
+  const { code: cliente, isLoading: carregandoCliente, falhou: clienteFalhou, erro: erroDoCliente, codeProvavel, tentar: lerOsClientes } =
+    useActiveCustomer();
+  // Sem o cliente ativo confirmado (a lista dos clientes lendo, ou a que falhou, também na nova tentativa), o `code` é
+  // o do cliente padrão: nada dele é lido nem gravado (o customer_code é a fronteira; junção das partes 10 e 13).
+  const semCliente = carregandoCliente || clienteFalhou;
   const doCliente = useMemo(() => ({ headers: { [CABECALHO_DO_CLIENTE]: cliente } }), [cliente]);
 
   // Trocar o mês ou o cliente lê no servidor: o mês anterior fica, a 50% e inert, até o novo chegar (carregamento
   // v2, momento 7, caso 4); a releitura que falha não o apaga (a faixa diz), e a troca que falha mostra o aviso.
   const leitura = useGetBillingPeriod(competencia, {
-    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !carregandoCliente, placeholderData: keepPreviousData },
+    query: { queryKey: [...getGetBillingPeriodQueryKey(competencia), cliente], enabled: !semCliente, placeholderData: keepPreviousData },
     request: doCliente,
   });
   const { data: raw, isLoading } = leitura;
   // Enquanto o cliente ativo lê, o `code` ainda é o do cliente padrão: nenhum mês dele entra na tela, nem as ações que
   // gravariam nele (o customer_code é a fronteira).
-  const data = carregandoCliente ? undefined : (raw as unknown as Period | undefined);
+  const data = semCliente ? undefined : (raw as unknown as Period | undefined);
   const lista = useListaComFiltro(leitura);
   const troca = useListaEmTroca(lista.trocando);
   // O mês do que está na tela: na troca, ainda o anterior, que a tela continua dizendo qual é.
@@ -138,8 +143,10 @@ export default function Billing() {
   // Com o cliente ativo ainda lendo, a leitura do mês ainda não começou: para a linha de estado ela já lê, e a espera
   // é uma só, do toque até o mês chegar (carregamento v2, parte 13d; antes, "Calculando Outubro de 2026..."). O
   // "Tentar de novo" da demora lê de novo a lista dos clientes, nunca o mês: o mês lido agora seria o do cliente padrão.
-  const leituraDaLinha: LeituraDaLista =
-    carregandoCliente && data === undefined
+  // Com a lista dos clientes que falhou, a falha do cliente ativo está no lugar do mês, e a linha fica vazia.
+  const leituraDaLinha: LeituraDaLista = clienteFalhou
+    ? { ...leitura, isLoading: false, isError: true, error: erroDoCliente as Error, dataUpdatedAt: 0 }
+    : carregandoCliente && data === undefined
       ? {
           ...leitura,
           isLoading: true,
@@ -149,12 +156,12 @@ export default function Billing() {
         }
       : leitura;
   // O esqueleto do mês entra aos 300 ms, como a linha (momento 2); a leitura rápida não pisca nada.
-  const lendoOMes = data === undefined && !lista.falhou;
+  const lendoOMes = data === undefined && !lista.falhou && !clienteFalhou;
   const fantasmas = useEspera(lendoOMes);
   // Na chegada, o mês entra no lugar do esqueleto por opacidade, subindo 4 px, em cascata (momento 2).
   const chegando = useChegada(lendoOMes);
   const periodos = useListBillingPeriods({
-    query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !carregandoCliente },
+    query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !semCliente },
     request: doCliente,
   });
   const periodsData = periodos.data;
@@ -162,7 +169,9 @@ export default function Billing() {
   // fica na tela enquanto a pessoa tenta de novo (a cópia), com o aviso sob os meses: o "—" nunca fica calado.
   const meses = useLeituraComFalha(periodos);
   const periodosFalharam = meses.isError && periodsData === undefined;
-  const fantasmasDosMeses = useEspera(periodsData === undefined && !periodosFalharam);
+  // Sem o cliente ativo, os meses também não foram lidos: "—", nunca o bloco de quem ainda lê.
+  const mesesSemLeitura = periodosFalharam || clienteFalhou;
+  const fantasmasDosMeses = useEspera(periodsData === undefined && !mesesSemLeitura);
 
   const [qty, setQty] = useState<Record<string, string>>({});
   const [obs, setObs] = useState<Record<string, string>>({});
@@ -238,7 +247,7 @@ export default function Billing() {
   // cheia, com quatro).
   const contagemDosMeses = useContagemLembrada("fechamento-meses", clienteProvavel, periodsData ? { meses: months.length } : null);
   const mesesFantasma =
-    periodsData === undefined && !periodosFalharam
+    periodsData === undefined && !mesesSemLeitura
       ? Math.max(0, Math.min(4, contagemDosMeses.lembrada("meses") ?? 4) - months.length)
       : 0;
 
@@ -372,7 +381,7 @@ export default function Billing() {
               <span className="flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">
                 {meta === null ? (
                   // Antes da lista dos meses, o bloco no lugar do estado; na falha, "—": a tela não afirma o que não leu.
-                  periodosFalharam ? "—" : <Esqueleto forma="texto" className="h-2.5 w-20" />
+                  mesesSemLeitura ? "—" : <Esqueleto forma="texto" className="h-2.5 w-20" />
                 ) : (
                   <>
                     <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[month.status ?? "aberto"] ?? "bg-amber-500")} />
@@ -408,7 +417,10 @@ export default function Billing() {
           e a falta de conexão, sem empurrar o mês (carregamento v2, parte 13d). */}
       <LinhaDeEstado id={idDaLinha} leitura={leituraDaLinha} objeto={competenciaLabel(competencia).toLowerCase()} />
 
-      {lista.falhou ? (
+      {clienteFalhou ? (
+        // A lista dos clientes que falhou: a falha no lugar do mês, e "Tentar de novo" lê a lista dos clientes.
+        <FalhaDoClienteAtivo focoAoSair={idDaLinha} />
+      ) : lista.falhou ? (
         <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem={humanApiError(lista.erro, "Não consegui calcular a competência.")} focoAoSair={idDaLinha} />
       ) : isLoading || !data ? (
         <EsqueletoDoMes

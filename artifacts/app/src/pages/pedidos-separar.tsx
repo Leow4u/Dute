@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import type { EstadoDaAcao } from "@/components/ui/botao-de-acao";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { prazoEsgotado } from "@/lib/conexao";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
@@ -403,6 +404,7 @@ export default function PaginaPedidosSeparar() {
         etiquetas={etiquetas}
         etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code), order: pedidoId }) : null}
         vazias={caixasVazias}
+        onTentar={doPedidoSeparado.tentar}
       />
     );
   }
@@ -416,6 +418,8 @@ export default function PaginaPedidosSeparar() {
     <>
       <PedidosSepararView
         estado={estado}
+        // A primeira leitura é a da fila: "Tentar de novo" a lê do zero (o react-query não recomeça a leitura presa).
+        onTentar={() => relerDoZero(queryClient, [["warehouse-ops"]])}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
         comecouEm={situacao?.separation_started_at}

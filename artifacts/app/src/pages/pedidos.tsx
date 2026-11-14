@@ -259,7 +259,7 @@ export default function Pedidos() {
   // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
-  const { active: cliente, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
+  const { active: cliente, isLoading: clienteCarregando, falhou: clienteFalhou, codeProvavel } = useActiveCustomer();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -761,10 +761,10 @@ export default function Pedidos() {
   const lendo = loading && !semLeitura;
   const idDaLinha = useId();
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
-  // escolhido neste aparelho. Só grava com o cliente confirmado, e só os grupos que quem vê tem: "Para aprovar"
-  // fica com a contagem de quem decide.
+  // escolhido neste aparelho. Só grava com o cliente confirmado (nem lendo, nem com a lista dos clientes que falhou),
+  // e só os grupos que quem vê tem: "Para aprovar" fica com a contagem de quem decide.
   const contagensLidas: ContagensDaLista | null =
-    lida && !clienteCarregando
+    lida && !clienteCarregando && !clienteFalhou
       ? {
           ...(decider ? { aprovar: chavesParaAprovar.length } : {}),
           separar: chavesParaSeparar.length,
@@ -802,7 +802,8 @@ export default function Pedidos() {
               aria-label="Pedidos em aberto ou entregues"
               cheioNoCelular
               options={[
-                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
+                // Lendo, o bloco; sem nada lido (a falha, a falta de conexão), o "—": nunca o rótulo só, como se não houvesse pedido.
+                { value: "open", label: "Em aberto", count: lendo ? null : semLeitura || (semRede && semRede.lidaEm === null) ? "falhou" : openCount },
                 { value: "delivered", label: "Entregues" },
               ]}
             />

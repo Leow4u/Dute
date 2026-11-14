@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,7 @@ export function PedidosSepararView({
   onDividir,
   onFecharVolume,
   onConcluir,
+  onTentar,
 }: {
   estado: EstadoDaBancada;
   /** "PED-0001" */
@@ -201,6 +203,8 @@ export function PedidosSepararView({
   /** "Fechar volume": com o peso, opcional. */
   onFecharVolume?: (volume: VolumeDoPedido, pesoKg?: number) => void;
   onConcluir: () => void;
+  /** Lê o pedido de novo: "Tentar de novo" na demora, na desistência e na falha da primeira leitura. */
+  onTentar?: () => Promise<unknown>;
 }) {
   // A prateleira toda separada fecha sozinha; a pessoa abre a que quiser rever.
   const [abertas, setAbertas] = useState<ReadonlySet<string>>(new Set());
@@ -257,9 +261,12 @@ export function PedidosSepararView({
       </header>
 
 {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
-          com o anúncio pelo Anunciador, no lugar do "Carregando" seco. */}
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco, com a saída: "Tentar de novo" aos 10 s e a
+          desistência aos 70 s; a falha também tenta de novo. */}
       {estado === "carregando" ? (
-        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota className="rounded-lg border border-border bg-card px-5 py-6" />
+        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota onTentar={onTentar} className="rounded-lg border border-border bg-card px-5 py-6" />
+      ) : estado === "erro" && onTentar ? (
+        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem={MENSAGENS.erro} />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}

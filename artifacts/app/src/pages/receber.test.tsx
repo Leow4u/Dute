@@ -52,7 +52,7 @@ describe("Receber na v3", () => {
   it("uma ação principal: a da primeira tarefa; a chegada avulsa é secundária", () => {
     expect(TELA).toContain("const principal = tarefaPrincipal(board);");
     expect(TELA).toMatch(/principal === entry\.task\.id \? "default" : "outline"/);
-    expect(TELA).toMatch(/<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
+    expect(TELA).toMatch(/<Button\s+type="button"\s+variant="outline"[\s\S]{0,400}?setUnplannedOpen\(true\)/);
   });
 
 
@@ -165,7 +165,7 @@ describe("o Receber para quem só consulta (o suporte)", () => {
 
   it("a tela esconde a chegada avulsa, troca a ação da linha por Ver e não liga o aviso", () => {
     expect(TELA).toContain("const operador = canOperateWarehouse(user?.publicMetadata.role);");
-    expect(TELA).toMatch(/\{operador \? \(\s*<Button type="button" variant="outline" onClick=\{\(\) => setUnplannedOpen\(true\)\}>/);
+    expect(TELA).toMatch(/\{operador \? \(\s*<Button\s+type="button"\s+variant="outline"[\s\S]{0,400}?setUnplannedOpen\(true\)/);
     expect(TELA).toContain('{operador ? label : "Ver"}');
     expect(TELA).toContain("entry={operador && !isCancelledReceipt(selected.task) ? selected : somenteConsulta(selected)}");
     expect(TELA).toContain("operador && noticeChoice?.editable");
@@ -262,7 +262,8 @@ describe("Receber sem conexão", () => {
     // Na primeira leitura, a lista com a forma final, com as linhas-fantasma (parte 8); depois, o aviso, antes do erro
     // e das filas.
     // Só a primeira leitura da tela, e a falha das filas não espera os avisos.
-    expect(TELA).toContain("const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);");
+    // Com a lista dos clientes que falhou, a falha do cliente ativo, e não a espera (a junção das partes 10 e 13).
+    expect(TELA).toContain("const lendo = !clienteFalhou && !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);");
     expect(TELA).toContain(": !lendo && semRede && semRede.lidaEm === null ? (");
     expect(TELA.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(TELA.indexOf("<FalhaDasChegadas focoAoSair={idDaLinha}"));
     // Só a leitura sem nada lido troca a lista pelo aviso: a releitura que falha fica na linha de estado (parte 10).

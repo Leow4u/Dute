@@ -517,11 +517,14 @@ describe("a revisão da troca e da releitura", () => {
     await passar(1_000);
     // A pessoa tenta de novo e dá certo: o aviso sai, e o foco vai à linha de estado, nunca ao body.
     estado.falhas.clear();
-    estado.atrasos["/api/products"] = 300;
+    estado.atrasos["/api/products"] = 600;
     const tentar = botao("Tentar de novo");
     tentar.focus();
     await act(async () => tentar.click());
+    // "Tentando de novo…" no relógio da espera (junção das partes 10 e 13): nada muda no alerta antes de 300 ms.
     await passar(100);
+    expect(alerta()).toBe("Não consegui carregar os produtos.Tentar de novo");
+    await passar(250);
     expect(alerta()).toBe("Não consegui carregar os produtos.Tentando de novo…");
     await passar(400);
     expect(texto()).not.toContain("Não consegui carregar");

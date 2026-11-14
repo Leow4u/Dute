@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { UseQueryResult } from "@tanstack/react-query";
 import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
@@ -248,8 +247,12 @@ export function FaixaSemConexao({
   );
 }
 
-/** O pedaço da leitura do react-query que a falha da lista precisa. */
-export type LeituraQueFalhou = Pick<UseQueryResult<unknown>, "error" | "refetch">;
+/**
+ * O pedaço da leitura que a falha da lista precisa: o do react-query, ou o de
+ * quem lê de outro jeito (a lista dos clientes, a leitura ao vivo), com a
+ * promessa da nova tentativa.
+ */
+export type LeituraQueFalhou = { error: unknown; refetch: () => Promise<unknown> };
 
 /**
  * A leitura que falhou sem nada da lista dela para mostrar (a primeira, ou a
@@ -260,9 +263,13 @@ export type LeituraQueFalhou = Pick<UseQueryResult<unknown>, "error" | "refetch"
  *
  * "Tentando de novo…" só na nova tentativa que a pessoa pediu: a releitura
  * automática (o tempo real, o intervalo da tela) não mexe no aviso, que é um
- * alerta e falaria de novo. Quando a nova tentativa dá certo e o aviso sai
- * com o foco nele, o foco vai à linha de estado da tela (`focoAoSair`),
- * nunca ao `body`.
+ * alerta e falaria de novo. E no relógio da espera, como o do bloco da
+ * conexão: só depois de 300 ms, e pelo menos 500 ms. A nova tentativa que
+ * responde antes, com o dado ou com a falha de novo, não pisca o botão nem
+ * muda o alerta, que o leitor de tela releria inteiro (junção das partes 10 e
+ * 13). O toque repetido com a leitura a caminho não lê de novo. Quando a nova
+ * tentativa dá certo e o aviso sai com o foco nele, o foco vai à linha de
+ * estado da tela (`focoAoSair`), nunca ao `body`.
  */
 export function FalhaNaLeitura({
   leitura,
@@ -294,6 +301,17 @@ export function FalhaNaLeitura({
     });
   };
   const tentando = tentativas > 0;
+  const mostrando = useTentandoNoRelogio(tentando);
   if (ehFaltaDeConexao(erro)) return <BlocoSemConexao tentando={tentando} onTentar={reler} className={className} focoAoSair={focoAoSair} />;
-  return <ErroNaLeitura mensagem={mensagem} tentando={tentando} onTentar={reler} className={className} focoAoSair={focoAoSair} />;
+  return (
+    <ErroNaLeitura
+      mensagem={mensagem}
+      tentando={mostrando}
+      onTentar={() => {
+        if (!tentando) reler();
+      }}
+      className={className}
+      focoAoSair={focoAoSair}
+    />
+  );
 }
