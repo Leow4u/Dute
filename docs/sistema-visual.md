@@ -47,9 +47,10 @@ Sombra só em overlay (`shadow-lg` em diálogo e menu) e no painel flutuante
   (`lib/carregando/tokens.test.ts`). O texto sobre o tom do primário (o selo
   `bg-primary/10`, o painel `bg-primary/5`), o texto do primário no portal e
   todo link do primário (o texto com o sublinhado, também o `variant="link"`
-  do botão e o link de volta das folhas) são o `text-primary-texto`; o
-  `text-primary` fica para a borda, o ícone e o hover (travado em
-  `lib/carregando/trava.test.ts`).
+  do botão e o link de volta das folhas) são o `text-primary-texto` (travado
+  em `lib/carregando/trava.test.ts`). O próprio `text-primary` também lê o
+  `--primary-texto`, pelo `--text-color-primary` do `@theme`: todo texto do
+  primário tem 4,5:1; a borda, o fundo e o preenchimento seguem o `primary`.
 - `--primary-fundo` é o fundo do primário: o `bg-primary` o lê pelo
   `--background-color-primary` do `@theme` (o namespace do fundo vem antes do
   `--color-*`), sem classe nova, e o `text-primary`, a borda e o anel seguem

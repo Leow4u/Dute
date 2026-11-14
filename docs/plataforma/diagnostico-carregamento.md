@@ -5105,8 +5105,35 @@ Fica aberto:
   sem empurrar a lista pede o lugar reservado (na lista da 10.4);
 - o `text-primary` que não é link (o número do "OK físico" na conferência, o
   "pronto para packing" no cartão e os outros textos do WMS) segue em 4,39:1
-  no cartão escuro e em 4,2:1 no fundo da v3 clara;
+  no cartão escuro e em 4,2:1 no fundo da v3 clara (*resolvido logo depois,
+  abaixo*);
 - o resto, como antes: a faixa que empurra a lista, o "Sem conexão" dentro do
   diálogo e o "Reconectando" que não se resolve (na lista da 10.4), o
   servidor que cai com a escuta aberta (o limite do SDK) e o aceite num
   Android médio e com leitor de tela de verdade.
+
+**Depois da revisão da 13m, o primário como texto e o selo da fila (PR 610,
+14/11/2026).** Dois pontos pequenos que a revisão deixou, resolvidos sem
+outra parte:
+
+- **Todo `text-primary` tem 4,5:1.** O `@theme` ganha o
+  `--text-color-primary: hsl(var(--primary-texto))`: o namespace da cor do
+  texto do Tailwind vem antes do `--color-*`, como o do fundo na parte 13k.
+  O `text-primary` (também com opacidade e no hover) passa a ler o
+  `--primary-texto`, sem trocar classe nenhuma, e os cerca de 70 usos que não
+  eram link saem de 4,39:1 no cartão escuro e de 4,2:1 no fundo da v3 clara
+  para os valores do `--primary-texto` (6,25:1 e 5,3:1). O claro fica igual
+  (lá o `--primary-texto` é o próprio `--primary`); o fundo, a borda e o
+  preenchimento seguem o `--primary`, e o ponto do `RadioGroup` ganha o
+  `stroke-primary`, para o contorno ficar da cor do preenchimento. O teste
+  compila as classes com o Tailwind de verdade, a partir do `@theme` do
+  `index.css` (`lib/carregando/tokens.test.ts`).
+- **O selo da fila não abre bloco dentro do título.** Em Pedidos › Para
+  separar, o selo "em separação desde 12/11 · 2 de 5 itens" é um `Badge`
+  dentro do parágrafo do título da `QueueRow`, e o `Badge` era um `<div>`: o
+  React avisava "<div> cannot be a descendant of <p>" no console, e o
+  navegador fechava o parágrafo antes do selo. O `Badge` passa a `<span>`
+  (já era `inline-flex`; nenhum uso tem bloco dentro dele), travado em
+  `components/ui/queue-list.test.tsx`.
+- **Testes**: dois novos, os dois falham no código anterior. A suíte do app
+  fica em 499 arquivos e 5.650 testes. Typecheck do workspace verde.
