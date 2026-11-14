@@ -109,6 +109,19 @@ export function lugarDaSecao(elemento: HTMLElement): HTMLElement | null {
 }
 
 /**
+ * O foco se perdeu com a saída de quem o tinha: está no `body`, num elemento
+ * que já saiu da tela ou no próprio diálogo onde ele estava (`dentroDe`, o
+ * lugar de quem saiu): o Radix põe o foco no diálogo quando o elemento focado
+ * sai, para ele não escapar, e o lugar certo ainda é o que quem saiu pediu
+ * (revisão da parte 13i).
+ */
+export function focoPerdido(documento: Document, dentroDe?: Element | null): boolean {
+  const ativo = documento.activeElement;
+  if (!ativo || ativo === documento.body || !ativo.isConnected) return true;
+  return Boolean(dentroDe?.isConnected && ativo !== dentroDe && ativo.matches('[role="dialog"], [role="alertdialog"]') && ativo.contains(dentroDe));
+}
+
+/**
  * O foco que estava dentro de `elemento` quando ele sai da tela não fica no
  * `body` (WCAG 2.4.3): depois do commit, se o foco caiu, ele vai ao `destino`
  * (lido agora, com o elemento ainda na tela) ou, se o destino também saiu, ao
@@ -121,9 +134,9 @@ export function segurarOFocoQueSai(
 ) {
   const documento = elemento.ownerDocument;
   if (!elemento.contains(documento.activeElement)) return;
+  const lugar = elemento.parentElement;
   queueMicrotask(() => {
-    const ativo = documento.activeElement;
-    if (ativo && ativo !== documento.body && ativo.isConnected) return;
+    if (!focoPerdido(documento, lugar)) return;
     // O destino que só entra na tela com a saída (o "Editar" que volta no lugar do formulário) é lido depois dela.
     const preferido = typeof destino === "function" ? destino() : destino;
     const alvo = [preferido, lugarPadraoDoFoco(documento)].find(podeReceberFoco);

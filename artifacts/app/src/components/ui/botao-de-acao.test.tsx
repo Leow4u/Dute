@@ -337,6 +337,36 @@ describe("ocupado não é desabilitado", () => {
     clicar();
     expect(aoClicar).not.toHaveBeenCalled();
   });
+
+  it("bloqueado sem esmaecer (a trava curta antes de a espera aparecer): aria-disabled, sem o 0,45", () => {
+    const aoClicar = vi.fn();
+    montar("repouso", { bloqueado: true, esmaecido: false, onClick: aoClicar });
+    expect(botao().getAttribute("aria-disabled")).toBe("true");
+    expect(botao().classList.contains("opacity-45")).toBe(false);
+    expect(botao().hasAttribute("data-esmaecido")).toBe(false);
+    clicar();
+    expect(aoClicar).not.toHaveBeenCalled();
+  });
+
+  /*
+   * O anel do foco do botão travado (revisão da parte 13i): o 0,45 do botão
+   * inteiro apagava o anel junto, a 2,12:1 no claro e 1,81:1 no escuro, abaixo
+   * do 3:1. Com o foco do teclado, o botão volta a 1, e o esmaecido passa a ser
+   * o véu do cartão a 0,55 por cima dele, dentro da borda: o mesmo 0,45 à vista,
+   * com o anel inteiro por fora. No alto contraste, sem o véu.
+   */
+  it("bloqueado e com o foco do teclado: o anel inteiro, por fora do véu que esmaece o botão", () => {
+    montar("repouso", { bloqueado: true });
+    expect(botao().hasAttribute("data-esmaecido")).toBe(true);
+    expect(botao().className).toContain("focus-visible:opacity-100");
+    const veu = declaradas(".botao-acao[data-esmaecido]:focus-visible::after", COMPONENTES);
+    expect(veu.get("content")).toBe('""');
+    expect(veu.get("position")).toBe("absolute");
+    expect(veu.get("inset")).toBe("calc(-1 * var(--botao-acao-borda))");
+    expect(veu.get("background-color")).toBe("hsl(var(--card) / 0.55)");
+    expect(veu.get("pointer-events")).toBe("none");
+    expect(declaradas(".botao-acao[data-esmaecido]:focus-visible::after", [...COMPONENTES, "@media (forced-colors: active)"]).get("display")).toBe("none");
+  });
 });
 
 describe("o segundo toque", () => {

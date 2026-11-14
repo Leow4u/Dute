@@ -94,6 +94,12 @@ export function useWarehouseTaskActions({
    * nova quando a exceção é registrada, quando o servidor recusa ou quando a
    * nota muda. Antes, o corpo ia sem chave, e a rota punha uma nova a cada
    * chamada: nada no servidor barrava a segunda exceção.
+   *
+   * A tentativa é a do diálogo aberto, como a conclusão da separação: o diálogo
+   * que abre de novo é outro pedido. Sem isso, a exceção nova da mesma tarefa,
+   * com a mesma nota (o diálogo abre com o bloqueio atual), sairia com a chave
+   * e o corpo de uma tentativa incerta antiga, e o servidor devolveria o recibo
+   * dela sem gravar nada.
    */
   const tentativasDaExcecao = useRef(new Map<string, Record<string, unknown>>());
 
@@ -173,6 +179,7 @@ export function useWarehouseTaskActions({
   const exceptionEntry = exceptionTaskId ? findEntry(exceptionTaskId) : undefined;
 
   function openFor(task: WarehouseTask, suggestedNote?: string) {
+    tentativasDaExcecao.current.clear();
     setExceptionTaskId(task.id);
     setExceptionNote(suggestedNote || task.blocked_reason || "");
     setExceptionOpen(true);

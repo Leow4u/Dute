@@ -1872,6 +1872,26 @@
     animation: carregando-afunda var(--carregando-t-toque) var(--ease-carregando-entrada) both;
   }
 
+  /* O travado com o foco do teclado (revisão da parte 13i): o 0,45 do botão
+     inteiro apagava também o anel do foco, a 2,12:1 no claro e 1,81:1 no
+     escuro. Com o foco, o botão volta a 1 (focus-visible:opacity-100, no
+     componente) e o véu do cartão a 0,55, dentro da borda, faz o mesmo 0,45 à
+     vista; o anel, por fora, fica inteiro. No alto contraste, sem o véu. */
+  .botao-acao[data-esmaecido]:focus-visible::after {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--botao-acao-borda));
+    border-radius: inherit;
+    background-color: hsl(var(--card) / 0.55);
+    pointer-events: none;
+  }
+
+  @media (forced-colors: active) {
+    .botao-acao[data-esmaecido]:focus-visible::after {
+      display: none;
+    }
+  }
+
   /* Movimento reduzido: sem afundar, sem soltar e sem tremor. A troca, a onda
      e o check ficam com os tempos zerados no :root (de uma vez, sem esmaecer
      nem passar pelo marrom entre o vermelho e o verde). */

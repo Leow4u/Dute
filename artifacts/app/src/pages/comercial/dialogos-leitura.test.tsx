@@ -204,3 +204,234 @@ describe("Nova demanda: a busca no catálogo", () => {
     expect(container.textContent).toContain("Nenhum item do catálogo");
   });
 });
+
+/**
+ * O foco quando a leitura pendente muda (revisão da parte 13i; WCAG 2.4.3):
+ * com o foco na espera (o "Tentar de novo" dos 10 s) e a nova leitura que
+ * falha, o foco vai ao "Tentar de novo" da falha que entra no lugar; com o
+ * foco no "Tentar de novo" da falha e a leitura que chega, ao campo de onde a
+ * pessoa vinha (a busca, o contato), perto de onde ela estava. Antes, ia ao
+ * título da página (a Nova demanda rolava ao topo, com a busca fora da tela)
+ * ou ao do diálogo. Dados sintéticos.
+ */
+describe("o foco quando a leitura pendente muda", () => {
+  const leituraDe = (estado: "carregando" | "erro" | null): LeituraPendente | undefined =>
+    estado ? { estado, tentando: false, tentar: vi.fn() } : undefined;
+
+  function novaDemanda(estado: "carregando" | "erro" | null) {
+    return (
+      <Router ssrPath="/operacao/nova-demanda">
+        <DemandaNovaView
+          agora={AGORA}
+          form={formularioVazio(AGORA)}
+          onForm={noop}
+          clientes={[]}
+          locais={[]}
+          busca="cadeira"
+          onBusca={noop}
+          resultados={[]}
+          leituraDoCatalogo={leituraDe(estado)}
+          onAdicionar={noop}
+          onAvulso={noop}
+          corrigindo={false}
+          onCorrigir={noop}
+          problemas={[]}
+          ocupado={false}
+          erro={null}
+          onAbrir={noop}
+        />
+      </Router>
+    );
+  }
+
+  function orcamento(estado: "carregando" | "erro" | null) {
+    return (
+      <NovoOrcamentoDialog
+        aberto
+        ocupado={false}
+        erro={null}
+        onCancelar={noop}
+        cadastros={[]}
+        leituraDosCadastros={leituraDe(estado)}
+        contratos={[]}
+        hoje="2026-10-23"
+        onCriar={noop}
+        onCriarProspect={async () => null}
+      />
+    );
+  }
+
+  function contato(estado: "carregando" | "erro" | null) {
+    return (
+      <DialogoDepoisDoEnvio
+        acao="fechar"
+        rotulo="10045 – RV01"
+        comprometida={false}
+        contatoId={null}
+        contatos={estado ? [] : [{ id: "c1", nome: "Ana Souza", empresa: "Acme" }]}
+        leituraDosContatos={leituraDe(estado)}
+        envioEm="2026-10-20T10:00:00.000Z"
+        agora={AGORA}
+        hoje="2026-10-23"
+        ocupado={false}
+        erro={null}
+        onCancelar={noop}
+        onConfirmar={noop}
+      />
+    );
+  }
+
+  /** Aos 10 s, o "Tentar de novo" da espera: o toque deixa o foco na região, que espera de novo. */
+  function tocarNaEspera() {
+    act(() => vi.advanceTimersByTime(CARREGANDO.demoraMs + 10));
+    const tentar = botao("Tentar de novo");
+    expect(tentar, "o Tentar de novo da espera").toBeDefined();
+    tentar!.focus();
+    act(() => tentar!.click());
+    expect(document.activeElement?.hasAttribute("data-carregando-na-regiao")).toBe(true);
+  }
+
+  async function depois() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it.each([
+    ["na Nova demanda", novaDemanda],
+    ["no Novo orçamento", orcamento],
+    ["no contato da resposta", contato],
+  ] as const)("%s, a nova leitura que falha leva o foco ao Tentar de novo da falha", async (_onde, tela) => {
+    act(() => raiz!.render(tela("carregando")));
+    tocarNaEspera();
+    act(() => raiz!.render(tela("erro")));
+    await depois();
+    const tentar = document.querySelector<HTMLElement>("[data-falha-na-secao] button");
+    expect(tentar, "o Tentar de novo da falha").not.toBeNull();
+    expect(document.activeElement).toBe(tentar);
+  });
+
+  it.each([
+    ["na Nova demanda, a busca", novaDemanda, () => document.querySelector<HTMLElement>('input[type="search"]')],
+    ["no Novo orçamento, a busca do cliente", orcamento, () => document.getElementById("novo-cliente")],
+    ["no contato da resposta, o campo do contato", contato, () => document.getElementById("resposta-contato")],
+  ] as const)("%s recebe o foco quando a leitura chega com o foco no Tentar de novo da falha", async (_onde, tela, campo) => {
+    act(() => raiz!.render(tela("erro")));
+    const tentar = document.querySelector<HTMLElement>("[data-falha-na-secao] button")!;
+    tentar.focus();
+    act(() => raiz!.render(tela(null)));
+    await depois();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(campo());
+  });
+
+  it("na Nova demanda, a espera que chega com o foco nela leva o foco à busca", async () => {
+    act(() => raiz!.render(novaDemanda("carregando")));
+    tocarNaEspera();
+    act(() => raiz!.render(novaDemanda(null)));
+    await depois();
+    expect(document.activeElement).toBe(document.querySelector('input[type="search"]'));
+  });
+});
+
+describe("os textos da leitura pendente nos formulários", () => {
+  it("o contato: só rótulos e dados, na espera e na falha", () => {
+    act(() =>
+      raiz!.render(
+        <DialogoDepoisDoEnvio
+          acao="fechar"
+          rotulo="10045 – RV01"
+          comprometida={false}
+          contatoId={null}
+          contatos={[]}
+          leituraDosContatos={lendo()}
+          envioEm="2026-10-20T10:00:00.000Z"
+          agora={AGORA}
+          hoje="2026-10-23"
+          ocupado={false}
+          erro={null}
+          onCancelar={noop}
+          onConfirmar={noop}
+        />,
+      ),
+    );
+    act(() => vi.advanceTimersByTime(CARREGANDO.demoraMs + 2_010));
+    const lista = [
+      "Fechado · 10045 – RV01",
+      "Respondido em",
+      "Contato",
+      "Escolher…",
+      "Carregando os contatos…",
+      "Demorando mais que o normal",
+      /^\d+:\d{2}$/,
+      "Não foi possível carregar os contatos.",
+      "Tentar de novo",
+      "Tentando de novo…",
+      "Link do e-mail",
+      "Cancelar",
+      "Confirmar",
+      "Gravando…",
+      "Conferir",
+      "Fechar",
+    ];
+    const dialogo = () => document.querySelector('[role="dialog"]')!.outerHTML;
+    expect(textosForaDaLista(dialogo(), lista)).toEqual([]);
+    act(() =>
+      raiz!.render(
+        <DialogoDepoisDoEnvio
+          acao="fechar"
+          rotulo="10045 – RV01"
+          comprometida={false}
+          contatoId={null}
+          contatos={[]}
+          leituraDosContatos={falhou()}
+          envioEm="2026-10-20T10:00:00.000Z"
+          agora={AGORA}
+          hoje="2026-10-23"
+          ocupado={false}
+          erro={null}
+          onCancelar={noop}
+          onConfirmar={noop}
+        />,
+      ),
+    );
+    expect(textosForaDaLista(dialogo(), lista)).toEqual([]);
+  });
+
+  it("a busca no catálogo: só rótulos e dados, na espera e na falha", () => {
+    const busca = (leitura: LeituraPendente) => (
+      <Router ssrPath="/operacao/nova-demanda">
+        <DemandaNovaView
+          agora={AGORA}
+          form={formularioVazio(AGORA)}
+          onForm={noop}
+          clientes={[]}
+          locais={[]}
+          busca="cadeira"
+          onBusca={noop}
+          resultados={[]}
+          leituraDoCatalogo={leitura}
+          onAdicionar={noop}
+          onAvulso={noop}
+          corrigindo={false}
+          onCorrigir={noop}
+          problemas={[]}
+          ocupado={false}
+          erro={null}
+          onAbrir={noop}
+        />
+      </Router>
+    );
+    const regiao = () => {
+      const achada = document.querySelector("[data-carregando-na-regiao], [data-falha-na-secao]");
+      if (!achada) throw new Error("sem a espera nem a falha do catálogo");
+      return achada.outerHTML;
+    };
+    const lista = ["Carregando o catálogo…", "Demorando mais que o normal", /^\d+:\d{2}$/, "Tentar de novo", "Tentando de novo…", "Não foi possível carregar o catálogo."];
+    act(() => raiz!.render(busca(lendo())));
+    act(() => vi.advanceTimersByTime(CARREGANDO.demoraMs + 2_010));
+    expect(textosForaDaLista(regiao(), lista)).toEqual([]);
+    act(() => raiz!.render(busca(falhou())));
+    expect(textosForaDaLista(regiao(), lista)).toEqual([]);
+  });
+});

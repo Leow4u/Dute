@@ -1,6 +1,6 @@
 /** Task detail panel and physical-flow section helpers. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { nomeComTamanho } from "@workspace/dominio";
 import {
@@ -1584,6 +1584,10 @@ export function TaskDetailPanel({
 
   // O Avançar no relógio da espera (carregamento v2, parte 13i): o botão é o BotaoDeAcao, e aos 10 s o aviso da demora.
   const esperaDoAvanco = useEspera(Boolean(activeTask && advancingTaskId === activeTask.id));
+  // O Avançar é de uma tarefa (a chave dele): trocada a tarefa, o foco que estava nele fica no da seguinte.
+  const avancarRef = useRef<HTMLButtonElement | null>(null);
+  // O motivo que trava o Avançar, que ele aponta (aria-describedby): o aviso da conferência ou dos dados pendentes.
+  const idDoMotivo = useId();
 
   if (!entry) {
     return (
@@ -1695,6 +1699,10 @@ export function TaskDetailPanel({
                 ? problemaDaJustificativaDoRecebimento(receivingAdvanceNote) ?? ""
                 : "";
   const canSubmitAdvance = advanceGate.canAdvance && !operationBlockReason;
+  // O motivo do Avançar travado, na tela: o aviso da conferência ou dos dados (fora da guarda), ou a linha da guarda.
+  const motivoDaGuardaNaTela = isPutaway && canAdvance && !canSubmitAdvance && Boolean(operationBlockReason) && !positionsQuery.isLoading;
+  const motivoNaTela =
+    !canSubmitAdvance && (isPutaway ? motivoDaGuardaNaTela : canAdvance && Boolean(advanceGate.blockedReason || operationBlockReason));
   const advanceNote = requiresReceivingJustification
     ? receivingAdvanceNote.trim()
     : undefined;
@@ -1831,7 +1839,7 @@ export function TaskDetailPanel({
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Conferência física pendente</AlertTitle>
-            <AlertDescription>{advanceGate.blockedReason}</AlertDescription>
+            <AlertDescription id={idDoMotivo}>{advanceGate.blockedReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -1839,7 +1847,7 @@ export function TaskDetailPanel({
           <Alert className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
             <AlertTriangle className="size-4" />
             <AlertTitle>Dados operacionais pendentes</AlertTitle>
-            <AlertDescription>{operationBlockReason}</AlertDescription>
+            <AlertDescription id={idDoMotivo}>{operationBlockReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -1951,7 +1959,12 @@ export function TaskDetailPanel({
               // O BotaoDeAcao, no relógio da espera (carregamento v2, seção 3; parte 13i): o toque afunda e trava na
               // hora, mas a caixa e "Avançando…" só entram aos 300 ms e ficam pelo menos 500 ms, até a bancada reler
               // (parte 10). Ocupado ou travado pelo que falta conferir, nunca `disabled`: o foco fica no botão.
+              // O botão é da tarefa (`key`): o "em andamento" que ele segura pelo mínimo de 500 ms não passa à tarefa
+              // escolhida durante o avanço, que começa com o Avançar dela, solto (revisão da parte 13i). Travado pelo
+              // que falta, ele aponta o motivo; com o foco, a troca de tarefa o deixa no Avançar da seguinte.
               <BotaoDeAcao
+                key={task.id}
+                ref={avancarRef}
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
                 estado={advancingTaskId === task.id ? "andamento" : "repouso"}
@@ -1959,13 +1972,15 @@ export function TaskDetailPanel({
                 rotulo={advanceGate.label}
                 andamento="Avançando…"
                 bloqueado={advancingTaskId !== task.id && !canSubmitAdvance}
+                aria-describedby={advancingTaskId !== task.id && motivoNaTela ? idDoMotivo : undefined}
+                focoAoSair={() => avancarRef.current}
                 onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
               />
             ) : null}
             {/* Lendo as posições, quem diz a espera é a caixa da região ("Carregando posições…" aos 300 ms): o motivo
                 do bloqueio não repete o texto seco desde 0 ms (parte 13b). O avanço continua travado até ler. */}
-            {isPutaway && canAdvance && !canSubmitAdvance && operationBlockReason && !positionsQuery.isLoading ? (
-              <p className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
+            {motivoDaGuardaNaTela ? (
+              <p id={idDoMotivo} className="text-sm font-semibold text-warning-soft-foreground sm:basis-full">{operationBlockReason}</p>
             ) : null}
             {showGenericExceptionAction ? (
               // Registrando a exceção, o botão da tarefa é o BotaoDeAcao: ocupado sem disabled (carregamento v2, parte 13b).
@@ -1981,9 +1996,19 @@ export function TaskDetailPanel({
               />
             ) : null}
             {/* Aos 10 s, a demora com o relógio, embaixo dos botões, que não saem do lugar; na escrita, sem "Tentar de
-                novo" (repetir duplicaria). */}
+                novo" (repetir duplicaria). No rodapé preso da guarda (até o lg), o aviso crescia o rodapé para cima e
+                os botões subiam 48 px sob o dedo: ali ele sai do fluxo e fica por cima do conteúdo, logo acima do
+                rodapé (revisão da parte 13i). */}
             {canAdvance && advancingTaskId === task.id && esperaDoAvanco.calmo ? (
-              <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoAvanco.decorridoMs} className="sm:basis-full" />
+              <AvisoDeEspera
+                fase="demorando"
+                tipo="escrita"
+                desdeMs={esperaDoAvanco.decorridoMs}
+                className={cn(
+                  "sm:basis-full",
+                  isPutaway && "max-lg:absolute max-lg:inset-x-0 max-lg:bottom-full max-lg:border-t max-lg:border-border max-lg:bg-card max-lg:px-6 max-lg:py-2",
+                )}
+              />
             ) : null}
             {!hasVisibleAction ? (
               <div className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

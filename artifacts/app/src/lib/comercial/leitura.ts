@@ -3,7 +3,7 @@ import { doc, getDoc, onSnapshot, type DocumentData, type Firestore, type Query 
 
 import { useAppUser } from "../auth";
 import { firestore } from "../firebase";
-import { ESCUTA_COM_METADADOS, respostaSemLeitura, useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
+import { ESCUTA_COM_METADADOS, abrirEscuta, fecharEscuta, respostaLida, useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
 
 export { SEM_NOVA_TENTATIVA, novaTentativaDe, type NovaTentativa } from "../operacao/leitura";
 import type { Carga } from "./clientes";
@@ -33,14 +33,14 @@ export function useLeitura<T>(
       setEstado({ chave: assinatura, itens: null, erro: true });
       return undefined;
     }
-    let doServidor = false;
-    return onSnapshot(
-      consulta(firestore),
+    const alvo = consulta(firestore);
+    const escuta = abrirEscuta(alvo);
+    const parar = onSnapshot(
+      alvo,
       ESCUTA_COM_METADADOS,
       (snapshot) => {
-        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
-        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, itens: null, erro: true });
-        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
+        if (!respostaLida(escuta, snapshot)) return setEstado({ chave: assinatura, itens: null, erro: true });
         setEstado({
           chave: assinatura,
           itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
@@ -49,6 +49,10 @@ export function useLeitura<T>(
       },
       () => setEstado({ chave: assinatura, itens: null, erro: true }),
     );
+    return () => {
+      fecharEscuta(escuta);
+      parar();
+    };
     // A consulta e o mapeamento dependem só da chave (e da tentativa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assinatura]);
@@ -83,18 +87,22 @@ export function useDocumento(caminho: string | null): LeituraDoDocumento & NovaT
       setEstado({ caminho: assinatura, dados: undefined, erro: true });
       return undefined;
     }
-    let doServidor = false;
-    return onSnapshot(
-      doc(firestore, caminho),
+    const alvo = doc(firestore, caminho);
+    const escuta = abrirEscuta(alvo);
+    const parar = onSnapshot(
+      alvo,
       ESCUTA_COM_METADADOS,
       (snapshot) => {
-        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
-        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ caminho: assinatura, dados: undefined, erro: true });
-        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
+        if (!respostaLida(escuta, snapshot)) return setEstado({ caminho: assinatura, dados: undefined, erro: true });
         setEstado({ caminho: assinatura, dados: snapshot.exists() ? snapshot.data() : null, erro: false });
       },
       () => setEstado({ caminho: assinatura, dados: undefined, erro: true }),
     );
+    return () => {
+      fecharEscuta(escuta);
+      parar();
+    };
     // O caminho está na assinatura (com a tentativa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assinatura]);

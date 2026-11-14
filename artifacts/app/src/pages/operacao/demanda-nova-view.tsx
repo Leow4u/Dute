@@ -460,7 +460,7 @@ export function DemandaNovaView({
               <label className="relative block flex-1">
                 <span className="sr-only">Buscar no catálogo</span>
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="search" value={busca} placeholder="Buscar no catálogo" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
+                <Input id="demanda-busca" type="search" value={busca} placeholder="Buscar no catálogo" className="pl-9" onChange={(event) => onBusca(event.target.value)} />
               </label>
               <Button type="button" variant="outline" onClick={onAvulso}>
                 <Plus aria-hidden="true" className="size-4" />
@@ -470,7 +470,14 @@ export function DemandaNovaView({
             {busca.trim() ? (
               leituraDoCatalogo && !resultados.length ? (
                 // Lendo, ou a leitura que falhou: a espera ou a falha, nunca "Nenhum item do catálogo" (carregamento v2, parte 13i).
-                <LeituraPendenteNaRegiao leitura={leituraDoCatalogo} carregando="Carregando o catálogo…" falha="Não foi possível carregar o catálogo." className="py-2" />
+                // O foco que estava na espera ou na falha volta à busca quando o catálogo chega, e não ao título da página.
+                <LeituraPendenteNaRegiao
+                  leitura={leituraDoCatalogo}
+                  carregando="Carregando o catálogo…"
+                  falha="Não foi possível carregar o catálogo."
+                  className="py-2"
+                  focoAoSair="demanda-busca"
+                />
               ) : resultados.length ? (
                 <ul aria-label="Itens do catálogo" className="flex flex-col divide-y divide-border rounded-lg border border-border">
                   {resultados.map((item) => (

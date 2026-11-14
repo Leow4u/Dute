@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { onSnapshot, type DocumentData, type DocumentReference, type Firestore, type Query } from "firebase/firestore";
+import { onSnapshot, queryEqual, refEqual, type DocumentData, type DocumentReference, type Firestore, type Query } from "firebase/firestore";
 
 import { aparelhoSemRede } from "../conexao";
 import { firestore } from "../firebase";
@@ -18,18 +18,83 @@ export type Leitura<T> = { itens: T[] | null; erro: boolean };
  */
 export const ESCUTA_COM_METADADOS = { includeMetadataChanges: true } as const;
 
+/** O que a escuta ouve: a consulta (a coleção) ou o documento. */
+export type AlvoDaEscuta = Query<DocumentData> | DocumentReference<DocumentData>;
+
 /**
- * A resposta da escuta que não vale como lida (carregamento v2, parte 13i;
- * o momento 8 e a decisão 9.4.2): sem rede, o `onSnapshot` não falha, responde
- * com o que estiver no cache, vazio na primeira visita, e a tela dizia
- * "Nenhuma OS" ou que o documento não existe. A resposta só do cache, sem
- * nenhuma resposta do servidor antes nesta escuta e com o aparelho sem rede,
- * é falta de conexão, como no `lib/cloud-api.ts`. Com o aparelho conectado,
- * o cache que chega antes do servidor vale (o servidor vem logo depois); o
- * que já veio do servidor fica na tela quando a rede cai.
+ * Uma escuta ao vivo aberta agora, e se ela já tem o que mostrar: a resposta
+ * do servidor, ou a vista que outra escuta da mesma consulta leu dele.
  */
-export function respostaSemLeitura(snapshot: { metadata?: { fromCache?: boolean } }, jaLeuDoServidor: boolean): boolean {
-  return snapshot.metadata?.fromCache === true && !jaLeuDoServidor && aparelhoSemRede();
+export type EscutaAoVivo = { alvo: AlvoDaEscuta; lida: boolean };
+
+/** As escutas abertas agora (o shell, a página, a ficha): o SDK guarda uma vista por consulta, a mesma para todas. */
+const escutasAbertas = new Set<EscutaAoVivo>();
+
+/** Abre o registro da escuta; `fecharEscuta` o tira quando ela para. */
+export function abrirEscuta(alvo: AlvoDaEscuta): EscutaAoVivo {
+  const escuta: EscutaAoVivo = { alvo, lida: false };
+  escutasAbertas.add(escuta);
+  return escuta;
+}
+
+export function fecharEscuta(escuta: EscutaAoVivo) {
+  escutasAbertas.delete(escuta);
+}
+
+function tipoDoAlvo(alvo: AlvoDaEscuta): unknown {
+  return (alvo as { type?: unknown }).type;
+}
+
+/** O mesmo alvo do SDK: a mesma consulta (`queryEqual`) ou o mesmo documento (`refEqual`). */
+function mesmoAlvo(a: AlvoDaEscuta, b: AlvoDaEscuta): boolean {
+  if (a === b) return true;
+  const tipoA = tipoDoAlvo(a);
+  const tipoB = tipoDoAlvo(b);
+  if (typeof tipoA !== "string" || typeof tipoB !== "string") return false;
+  if (tipoA === "document" || tipoB === "document") {
+    return tipoA === tipoB && refEqual(a as DocumentReference<DocumentData>, b as DocumentReference<DocumentData>);
+  }
+  return queryEqual(a as Query<DocumentData>, b as Query<DocumentData>);
+}
+
+/** Outra escuta aberta agora, do mesmo alvo, já tem a vista lida: o SDK entrega a mesma a esta. */
+function outraEscutaJaLeu(escuta: EscutaAoVivo): boolean {
+  for (const outra of escutasAbertas) if (outra !== escuta && outra.lida && mesmoAlvo(outra.alvo, escuta.alvo)) return true;
+  return false;
+}
+
+/**
+ * A resposta da escuta que vale como lida (carregamento v2, parte 13i; o
+ * momento 8 e a decisão 9.4.2). Sem rede, o `onSnapshot` não falha: responde
+ * com o que estiver no cache, vazio na primeira visita, e a tela dizia
+ * "Nenhuma OS" ou que o documento não existe. A resposta só do cache, com o
+ * aparelho sem rede e sem nada lido antes nesta escuta, é falta de conexão,
+ * como no `lib/cloud-api.ts`, salvo quando o cache é uma leitura de verdade:
+ *
+ * - outra escuta aberta da mesma consulta (o shell da Operação ouve `demands`,
+ *   e o Início e as Demandas também) já leu do servidor: o SDK guarda uma vista
+ *   por consulta e a entrega à escuta nova, marcada `fromCache` (a revisão da
+ *   13i). Só a aberta conta: a que fechou leva a vista junto;
+ * - o documento que existe no cache: o cache do app é só de memória (sem
+ *   persistência), e o SDK só guarda o documento que uma escuta aberta trouxe
+ *   do servidor (a ficha da demanda que a lista do shell já leu). O que não
+ *   está no cache não diz que ele não existe.
+ *
+ * A lista de outra consulta não conta: o cache dela pode estar pela metade.
+ * Com o aparelho conectado, o cache que chega antes do servidor vale (o
+ * servidor vem logo depois); o que já foi lido fica na tela quando a rede cai.
+ */
+export function respostaLida(escuta: EscutaAoVivo, snapshot: { metadata?: { fromCache?: boolean }; exists?: () => boolean }): boolean {
+  if (snapshot.metadata?.fromCache !== true) {
+    escuta.lida = true;
+    return true;
+  }
+  if (escuta.lida || !aparelhoSemRede()) return true;
+  if (outraEscutaJaLeu(escuta) || (tipoDoAlvo(escuta.alvo) === "document" && snapshot.exists?.() === true)) {
+    escuta.lida = true;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -152,14 +217,14 @@ export function useLeitura<T>(
       setEstado({ chave: assinatura, itens: null, erro: true });
       return undefined;
     }
-    let doServidor = false;
-    return onSnapshot(
-      consulta(firestore),
+    const alvo = consulta(firestore);
+    const escuta = abrirEscuta(alvo);
+    const parar = onSnapshot(
+      alvo,
       ESCUTA_COM_METADADOS,
       (snapshot) => {
-        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
-        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, itens: null, erro: true });
-        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
+        if (!respostaLida(escuta, snapshot)) return setEstado({ chave: assinatura, itens: null, erro: true });
         setEstado({
           chave: assinatura,
           itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
@@ -168,6 +233,10 @@ export function useLeitura<T>(
       },
       () => setEstado({ chave: assinatura, itens: null, erro: true }),
     );
+    return () => {
+      fecharEscuta(escuta);
+      parar();
+    };
     // A consulta e o mapeamento dependem só da chave (e da tentativa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assinatura]);
@@ -193,18 +262,22 @@ export function useDocumento<T>(
       setEstado({ chave: assinatura, item: undefined, erro: true });
       return undefined;
     }
-    let doServidor = false;
-    return onSnapshot(
-      referencia(firestore),
+    const alvo = referencia(firestore);
+    const escuta = abrirEscuta(alvo);
+    const parar = onSnapshot(
+      alvo,
       ESCUTA_COM_METADADOS,
       (snapshot) => {
-        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
-        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, item: undefined, erro: true });
-        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        // Só o cache, sem nada lido e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
+        if (!respostaLida(escuta, snapshot)) return setEstado({ chave: assinatura, item: undefined, erro: true });
         setEstado({ chave: assinatura, item: snapshot.exists() ? mapear(snapshot.id, snapshot.data()) : null, erro: false });
       },
       () => setEstado({ chave: assinatura, item: undefined, erro: true }),
     );
+    return () => {
+      fecharEscuta(escuta);
+      parar();
+    };
     // A referência e o mapeamento dependem só da chave (e da tentativa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assinatura]);

@@ -7,7 +7,7 @@ import { useAnuncio } from "@/lib/carregando/anunciador";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
+import { lugarDaSecao, podeReceberFoco, segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +26,9 @@ import { cn } from "@/lib/utils";
  * tem 44 px.
  *
  * Quando a nova tentativa dá certo, o aviso sai da tela; com o foco nele, o
- * foco vai ao título da seção (ou do diálogo) onde ele morava, nunca ao `body`.
+ * foco vai a `focoAoSair` (o id do campo de onde a pessoa vinha, como a busca
+ * do catálogo; revisão da parte 13i) ou, sem ele, ao título da seção (ou do
+ * diálogo) onde ele morava, nunca ao `body`.
  *
  * A frase é um alerta (`role="alert"`) quando a seção não tem nada lido. Com o
  * que já estava lido na tela (`alerta={false}`: a releitura que falhou, quase
@@ -45,6 +47,7 @@ export function FalhaNaSecao({
   className,
   tom = "erro",
   alerta = true,
+  focoAoSair,
 }: {
   mensagem: string;
   /** A leitura lê agora. Só conta para quem não devolve a promessa da releitura no `onTentar`. */
@@ -56,6 +59,8 @@ export function FalhaNaSecao({
   tom?: "erro" | "aviso";
   /** A frase é falada ao entrar; `false` com o que já estava lido na tela. */
   alerta?: boolean;
+  /** O id de quem recebe o foco quando a falha sai com ele dentro (a leitura que chegou). */
+  focoAoSair?: string;
 }) {
   const pedida = usePedidaPelaPessoa(tentando);
   const mostrando = useEspera(pedida.emCurso, { segurarMinimo: true }).visivel;
@@ -69,10 +74,16 @@ export function FalhaNaSecao({
   }, [pedida.fins, anunciar]);
   const tentarDeNovo = useTentarDeNovo();
   const raiz = useRef<HTMLDivElement>(null);
+  const destino = useRef(focoAoSair);
+  destino.current = focoAoSair;
   useLayoutEffect(() => {
     const elemento = raiz.current;
     return () => {
-      if (elemento) segurarOFocoQueSai(elemento);
+      if (!elemento) return;
+      // O título é lido agora, com a falha ainda na tela; o campo pedido, depois do commit (a leitura que chega o habilita).
+      const titulo = lugarDaSecao(elemento);
+      const id = destino.current;
+      segurarOFocoQueSai(elemento, id ? () => [elemento.ownerDocument.getElementById(id), titulo].find(podeReceberFoco) : titulo);
     };
   }, []);
   return (

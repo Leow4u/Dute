@@ -199,7 +199,8 @@ describe("o grupo sem saltos e o de sempre", () => {
   it("os controles que a espera travou têm a cara do travado do BotaoDeAcao (0,45), sem hover nem toque", () => {
     expect(regra("[data-na-lista] [data-trava-da-espera]")).toEqual({ opacity: "0.45", "pointer-events": "none" });
     const botaoDeAcao = readFileSync(new URL("./botao-de-acao.tsx", import.meta.url), "utf8");
-    expect(botaoDeAcao).toContain('bloqueado && "opacity-45"');
+    // O travado esmaecido do botão (o 0,45; com o foco do teclado, o véu da revisão da parte 13i faz o mesmo).
+    expect(botaoDeAcao).toContain('bloqueado && esmaecido && "opacity-45 focus-visible:opacity-100"');
   });
 
   it("o título que recebe o foco tem o anel do sistema visual no foco visível, o mesmo do botão", () => {

@@ -240,6 +240,7 @@ export function CorpoDoDialogo({
               carregando="Carregando os contatos…"
               falha="Não foi possível carregar os contatos."
               className="justify-start"
+              focoAoSair="resposta-contato"
             />
           ) : null}
         </Campo>

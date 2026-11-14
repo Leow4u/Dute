@@ -1314,31 +1314,48 @@ function LinhaParaAprovar({
   // travados, e o apoio diz "Conferindo saldo…" em tinta, só aos 300 ms. O ícone de alerta e o âmbar são da falta de
   // saldo, da demora e da falta de rede, nunca da espera.
   const conferindoSaldo = validation.status === "checking" && !ocupada;
-  const esperaDoSaldo = useEspera(conferindoSaldo);
+  // A espera que apareceu fica pelo menos 500 ms (seção 3), com os botões travados junto: o saldo que chega logo depois
+  // dos 300 ms não pisca o apoio nem a lista. Antes de 300 ms, a trava vale, mas o botão não esmaece.
+  const esperaDoSaldo = useEspera(conferindoSaldo, { segurarMinimo: true });
+  const esperandoSaldo = !ocupada && (conferindoSaldo || esperaDoSaldo.visivel);
+  const resumo = requestSummary(request);
+  const idade = formatRequestAge(request.created_at);
+  // No lugar do resumo, sem mudar a altura da linha: o resumo continua ocupando o lugar, escondido, e a espera fica por
+  // cima, numa linha de 20 px. Trocar um pelo outro tirava 19 px de cada linha no celular e a devolvia na chegada.
   const apoioDoSaldo =
-    conferindoSaldo && esperaDoSaldo.visivel ? (
-      <span className="inline-flex items-center gap-1.5 align-middle font-bold text-foreground">
-        <Spinner calmo={esperaDoSaldo.calmo} />
-        Conferindo saldo…
+    esperandoSaldo && esperaDoSaldo.visivel ? (
+      <span className="grid">
+        <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+          {resumo}
+          {idade ? <span> · {idade}</span> : null}
+        </span>
+        <span className="col-start-1 row-start-1 flex h-5 items-center gap-1.5 self-start font-bold text-foreground">
+          <Spinner calmo={esperaDoSaldo.calmo} />
+          Conferindo saldo…
+        </span>
       </span>
     ) : undefined;
   // A linha ocupada mantém os botões, mesmo que a releitura mude a validação do saldo.
-  const comAcoes = validation.canApprove || ocupada || conferindoSaldo;
+  const comAcoes = validation.canApprove || ocupada || esperandoSaldo;
+  // Com o foco no botão travado pelo saldo, o saldo que chega com falta tira os botões: o foco vai ao "Ver itens" que
+  // entra no lugar deles, nunca ao body (WCAG 2.4.3).
+  const daLinha = useRef<HTMLDivElement>(null);
+  const focoAoSairDoSaldo = esperandoSaldo ? () => daLinha.current?.querySelector<HTMLElement>("[data-ver-itens]") : undefined;
 
   return (
-    <div className="relative">
+    <div ref={daLinha} className="relative">
       <QueueRow
         icon={ClipboardCheck}
         tone="approve"
         title={titulo}
         badge={selo}
-        meta={requestSummary(request)}
+        meta={resumo}
         apoio={apoioDoSaldo}
         ocupada={andando !== null}
         apoioEmAndamento={apoioEmAndamento}
         aviso={aviso}
         detail={linhaDoParaQuando(request.due_at)}
-        age={formatRequestAge(request.created_at)}
+        age={idade}
         note={
           comAcoes ? undefined : (
             <>
@@ -1359,7 +1376,9 @@ function LinhaParaAprovar({
                 andamento="Recusando…"
                 sucesso="Recusado"
                 erro="Não recusado"
-                bloqueado={(ocupada && recusar === "repouso") || conferindoSaldo}
+                bloqueado={(ocupada && recusar === "repouso") || esperandoSaldo}
+                esmaecido={!esperandoSaldo || esperaDoSaldo.visivel}
+                focoAoSair={focoAoSairDoSaldo}
                 onClick={onRecusar}
               />
               <BotaoDeAcao
@@ -1372,13 +1391,17 @@ function LinhaParaAprovar({
                 andamento="Aprovando…"
                 sucesso="Aprovado"
                 erro="Não aprovado"
-                bloqueado={(ocupada && aprovar === "repouso") || conferindoSaldo}
+                bloqueado={(ocupada && aprovar === "repouso") || esperandoSaldo}
+                esmaecido={!esperandoSaldo || esperaDoSaldo.visivel}
+                focoAoSair={focoAoSairDoSaldo}
                 onClick={onAprovar}
               />
             </>
           ) : (
             <Button asChild variant="outline">
-              <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`}>Ver itens</Link>
+              <Link href={`/solicitacoes?id=${encodeURIComponent(request.id)}`} data-ver-itens="">
+                Ver itens
+              </Link>
             </Button>
           )
         }

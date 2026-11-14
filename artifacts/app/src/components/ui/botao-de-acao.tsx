@@ -30,6 +30,13 @@ export interface BotaoDeAcaoProps extends Omit<ButtonProps, "children" | "disabl
   /** Travado por outra ação (o Recusar da linha que aprova): aria-disabled a 0,45, sem disabled. */
   bloqueado?: boolean;
   /**
+   * O bloqueado esmaecido, a 0,45 (o padrão). A trava curta de uma espera (o
+   * saldo que a linha confere) vale desde 0 ms, mas só esmaece quando a espera
+   * aparece, aos 300 ms: antes, nada aparece (carregamento v2, seção 3), como
+   * no toque da própria ação, que trava sem mudar o botão.
+   */
+  esmaecido?: boolean;
+  /**
    * O primário em tinta, no lugar do vermelho, onde o desenho aprovado pede
    * (o Aprovar do painel do Agent Dute e os cartões do chat, que não disputam
    * com a ação principal da tela). Usa o primário (o indicador no branco, com
@@ -217,6 +224,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     erro,
     conferir = "Conferir",
     bloqueado = false,
+    esmaecido = true,
     tinta = false,
     perigo = false,
     objeto,
@@ -398,7 +406,8 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
       className={cn(
         "botao-acao relative isolate inline-grid place-items-center",
         grande && "[&_svg]:size-5",
-        bloqueado && "opacity-45",
+        // Com o foco do teclado, o botão volta a 1 e o véu do index.css esmaece por dentro da borda: o anel fica inteiro.
+        bloqueado && esmaecido && "opacity-45 focus-visible:opacity-100",
         tinta && TINTA,
         perigo && PERIGO,
         className,
@@ -407,6 +416,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
         voltaDoFim && "transition-none",
       )}
       data-estado={estado}
+      data-esmaecido={bloqueado && esmaecido ? "" : undefined}
       data-camada={troca.atual}
       data-de={troca.de ?? undefined}
       data-afundado={estado === "andamento" && troca.atual !== "andamento" ? "" : undefined}

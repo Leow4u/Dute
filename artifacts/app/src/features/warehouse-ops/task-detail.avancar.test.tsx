@@ -12,6 +12,7 @@ import {
   type WarehouseTask,
 } from "@/lib/warehouse-ops/model";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { textosForaDaLista } from "@/test/textos";
 import { TaskDetailPanel } from "./task-detail";
 
 /**
@@ -177,5 +178,152 @@ describe("o Avançar da bancada no relógio da espera", () => {
     const html = container!.innerHTML;
     vi.useRealTimers();
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});
+
+/**
+ * A revisão da parte 13i: o painel da bancada é um só, e a pessoa troca de
+ * tarefa nele. O "em andamento" que o Avançar segura pelo mínimo de 500 ms é
+ * da tarefa que avançou: a tarefa escolhida depois começa com o Avançar dela,
+ * solto. Antes, o Avançar da tarefa nova mostrava "Avançando…", travado, e
+ * engolia o toque. Dados sintéticos.
+ */
+describe("o Avançar quando a pessoa troca de tarefa", () => {
+  const tarefa = (n: number): WarehouseTask => ({ ...SEPARACAO, id: `picking:pick_ord_${n}`, reference: `pick_ord_${n}`, title: `PED-000${n}`, items: [{ ...SEPARACAO.items![0]!, id: `pl_${n}` }] });
+  const A = tarefa(1);
+  const B = tarefa(2);
+  const duas = normalizeQueues({ picking: { key: "picking", name: "picking", next_action: AVANCAR, tasks: [A, B] } }).find((item) => item.key === "picking")!;
+  let escolher: (id: string) => void = () => undefined;
+  let avancando: (id: string | undefined) => void = () => undefined;
+
+  function Bancada() {
+    const [escolhida, setEscolhida] = useState(A.id);
+    const [emAvanco, setEmAvanco] = useState<string | undefined>();
+    escolher = setEscolhida;
+    avancando = setEmAvanco;
+    return (
+      <TaskDetailPanel
+        entry={{ task: duas.tasks.find((item) => item.id === escolhida)!, queue: duas }}
+        alerts={[]}
+        lineConfirmations={{ [lineConfirmationKey(A.id, "pl_1")]: "confirmed", [lineConfirmationKey(B.id, "pl_2")]: "confirmed" }}
+        onLineConfirmationChange={() => undefined}
+        onAdvance={onAdvance}
+        onOpenException={() => undefined}
+        advancingTaskId={emAvanco}
+      />
+    );
+  }
+
+  beforeEach(async () => {
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Bancada />
+        </QueryClientProvider>,
+      ),
+    );
+  });
+
+  it("a tarefa escolhida durante o avanço da outra começa com o Avançar dela, solto", async () => {
+    await act(async () => botao().click());
+    act(() => avancando(A.id));
+    await passar(CARREGANDO.atrasoMs + 50);
+    expect(rotuloAtual(botao())).toBe("Avançando…");
+
+    act(() => escolher(B.id));
+    await passar(10);
+    expect(container!.textContent).toContain("PED-0002");
+    expect(rotuloAtual(botao())).toBe(AVANCAR);
+    expect(botao().getAttribute("aria-disabled")).toBeNull();
+    await act(async () => botao().click());
+    expect(onAdvance).toHaveBeenLastCalledWith(B.id, expect.anything(), undefined);
+  });
+
+  it("com o foco no Avançar, a troca de tarefa (a que avançou saiu da fila) deixa o foco no Avançar da seguinte, não no body", async () => {
+    botao().focus();
+    expect(document.activeElement).toBe(botao());
+    await act(async () => {
+      escolher(B.id);
+    });
+    expect(container!.textContent).toContain("PED-0002");
+    expect(document.activeElement).toBe(botao());
+  });
+});
+
+describe("o Avançar travado pela conferência", () => {
+  it("diz o motivo pelo aria-describedby: o aviso da conferência pendente", async () => {
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TaskDetailPanel
+            entry={{ task: fila.tasks[0]!, queue: fila }}
+            alerts={[]}
+            lineConfirmations={{}}
+            onLineConfirmationChange={() => undefined}
+            onAdvance={onAdvance}
+            onOpenException={() => undefined}
+          />
+        </QueryClientProvider>,
+      ),
+    );
+    const alvo = botao();
+    expect(alvo.getAttribute("aria-disabled")).toBe("true");
+    const descrito = alvo.getAttribute("aria-describedby");
+    expect(descrito, "aria-describedby").toBeTruthy();
+    const motivo = document.getElementById(descrito!);
+    expect(motivo?.textContent).toMatch(/Confirme/);
+  });
+});
+
+describe("o Avançar da guarda no celular, aos 10 s", () => {
+  it("o aviso da demora sai do rodapé preso (fica por cima do conteúdo, acima dele): os botões não sobem", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    const guarda: WarehouseTask = {
+      id: "putaway:put_1",
+      reference: "put_1",
+      title: "Guarda 0001",
+      customer: "BTG Pactual",
+      status: "planned",
+      quantity: 12,
+      source_location_id: "RECEBIMENTO",
+      can_advance: true,
+      items: [{ id: "pt_1", sku_code: "BTG-000201", quantity: 12 }],
+    };
+    const filaDaGuarda = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [guarda] } }).find((item) => item.key === "putaway")!;
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TaskDetailPanel
+            entry={{ task: filaDaGuarda.tasks[0]!, queue: filaDaGuarda }}
+            alerts={[]}
+            lineConfirmations={{}}
+            onLineConfirmationChange={() => undefined}
+            onAdvance={onAdvance}
+            onOpenException={() => undefined}
+            advancingTaskId={guarda.id}
+          />
+        </QueryClientProvider>,
+      ),
+    );
+    await passar(CARREGANDO.demoraMs + 10);
+    const aviso = container!.querySelector<HTMLElement>("[data-aviso-de-espera]");
+    expect(aviso, "o aviso da demora").not.toBeNull();
+    // O rodapé preso da guarda (sticky bottom-0, até o lg) é o pai: o aviso sai do fluxo dele até o lg.
+    expect(aviso!.parentElement!.className).toContain("sticky");
+    expect(aviso!.className).toContain("max-lg:absolute");
+    expect(aviso!.className).toContain("max-lg:bottom-full");
+  });
+});
+
+describe("os textos do Avançar", () => {
+  it("só rótulos e dados: as camadas do botão e o aviso da demora, com o relógio", async () => {
+    await act(async () => botao().click());
+    await act(async () => avancar(true));
+    await passar(CARREGANDO.demoraMs + 2_010);
+    const alvo = botao();
+    const aviso = container!.querySelector<HTMLElement>("[data-aviso-de-espera]")!;
+    expect(
+      textosForaDaLista(alvo.outerHTML + aviso.outerHTML, [AVANCAR, "Avançando…", "Conferir", "Demorando mais que o normal", /^\d+:\d{2}$/]),
+    ).toEqual([]);
   });
 });

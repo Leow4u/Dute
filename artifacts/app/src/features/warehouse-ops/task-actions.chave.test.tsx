@@ -34,9 +34,11 @@ let raiz: Root | null = null;
 let container: HTMLDivElement;
 let cliente: QueryClient;
 let registrar: (nota: string) => Promise<unknown> = async () => undefined;
+let acoesDaBancada: ReturnType<typeof useWarehouseTaskActions>;
 
 function Bancada() {
   const acoes = useWarehouseTaskActions({ findEntry: () => ({ task: tarefa, queue: { key: "picking" } }) as never });
+  acoesDaBancada = acoes;
   registrar = (nota) => acoes.registerException.mutateAsync({ task: tarefa, queue: "picking", note: nota }).catch(() => undefined);
   return null;
 }
@@ -111,5 +113,47 @@ describe("a chave por tentativa na exceção da tarefa", () => {
     const chaves = enviados.map((corpo) => corpo.idempotency_key);
     expect(new Set(chaves).size).toBe(3);
     expect(enviados[2]!.note).toBe("Faltam 2 unidades");
+  });
+});
+
+/**
+ * A tentativa é do diálogo aberto (revisão da parte 13i), como a conclusão da
+ * separação: fechado o diálogo, a próxima exceção é outro pedido. Antes, a
+ * tentativa incerta ficava guardada pela tarefa, pela fila e pela nota até o
+ * sucesso ou a recusa: a exceção nova da mesma tarefa, com a mesma nota (o
+ * diálogo abre com o bloqueio atual), dias depois, saía com a chave e o corpo
+ * da primeira, e o servidor devolvia o recibo dela sem gravar nada.
+ */
+describe("a tentativa da exceção é a do diálogo aberto", () => {
+  async function registrarPeloDialogo(nota: string, { fechar = true } = {}) {
+    act(() => acoesDaBancada.exception.openFor(tarefa));
+    act(() => acoesDaBancada.exception.setNote(nota));
+    await act(async () => {
+      acoesDaBancada.exception.submit({ preventDefault: () => undefined } as never, { task: tarefa, queue: { key: "picking" } } as never);
+      await new Promise((pronto) => setTimeout(pronto, 20));
+    });
+    if (fechar) act(() => acoesDaBancada.exception.onOpenChange(false));
+  }
+
+  it("com o diálogo aberto, a repetição depois do resultado incerto leva a mesma chave e o mesmo corpo", async () => {
+    respostas = ["incerto"];
+    await registrarPeloDialogo("Caixa avariada na prateleira", { fechar: false });
+    tarefa = { ...tarefa, exception_count: 1, blocked_reason: "Caixa avariada na prateleira" };
+    await act(async () => {
+      acoesDaBancada.exception.submit({ preventDefault: () => undefined } as never, { task: tarefa, queue: { key: "picking" } } as never);
+      await new Promise((pronto) => setTimeout(pronto, 20));
+    });
+    expect(enviados).toHaveLength(2);
+    expect(enviados[1]).toEqual(enviados[0]);
+  });
+
+  it("fechado o diálogo depois do resultado incerto, a exceção seguinte da mesma tarefa, com a mesma nota, é outro pedido", async () => {
+    respostas = ["incerto"];
+    await registrarPeloDialogo("Caixa avariada na prateleira");
+    // A bancada releu (a primeira valeu) e a coordenação resolveu a exceção; depois, outro problema na mesma tarefa.
+    tarefa = { ...tarefa, exception_count: 0, blocked_reason: undefined };
+    await registrarPeloDialogo("Caixa avariada na prateleira");
+    expect(enviados).toHaveLength(2);
+    expect(enviados[1]!.idempotency_key).not.toBe(enviados[0]!.idempotency_key);
   });
 });

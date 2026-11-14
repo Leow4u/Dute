@@ -23,6 +23,8 @@ const estado = vi.hoisted(() => ({
   solicitacoes: [] as Array<Record<string, unknown>>,
   /** Com a lista, a leitura dos saldos espera até o teste soltar. */
   saldosPresos: null as Array<() => void> | null,
+  /** O saldo livre de cada SKU. */
+  disponivel: 500,
 }));
 
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { publicMetadata: { role: "admin" } } }) }));
@@ -70,7 +72,7 @@ async function servir(entrada: RequestInfo | URL) {
     const presos = estado.saldosPresos;
     if (presos) await new Promise<void>((soltar) => presos.push(soltar));
     return resposta({
-      items: ["BTG-000001", "BTG-000002", "BTG-000003"].map((sku) => ({ sku_code: sku, customer_code: "BTG Pactual", location_id: "A-01", qty_available: 500 })),
+      items: ["BTG-000001", "BTG-000002", "BTG-000003"].map((sku) => ({ sku_code: sku, customer_code: "BTG Pactual", location_id: "A-01", qty_available: estado.disponivel })),
     });
   }
   if (url.pathname === "/api/customer-requests") return resposta({ items: estado.solicitacoes.map((item) => ({ ...item })) });
@@ -137,6 +139,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", vi.fn(servir));
   estado.saldosPresos = null;
+  estado.disponivel = 500;
   estado.solicitacoes = [solicitacao("1042", 12), solicitacao("1043", 40), solicitacao("1045", 120)];
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 });
@@ -250,5 +253,119 @@ describe("as ações da linha no celular", () => {
     expect(recusar.className).toContain("max-md:min-h-12");
     expect(aprovar.parentElement).toBe(recusar.parentElement);
     expect(aprovar.parentElement!.className).toContain("gap-2");
+  });
+});
+
+/**
+ * A revisão da parte 13i, no navegador: a espera do saldo não mexe na lista
+ * nem pisca. "Conferindo saldo…" fica no lugar do resumo sem mudar a altura
+ * da linha (o resumo continua ocupando o lugar, escondido, e a espera fica por
+ * cima, numa linha de 20 px); o indicador que apareceu fica pelo menos 500 ms,
+ * com os botões travados junto; antes de 300 ms o botão travado não esmaece
+ * (a trava vale desde 0 ms, mas nada aparece); e o foco que estava no botão
+ * travado vai ao "Ver itens" quando o saldo chega com falta, nunca ao body.
+ */
+describe("a espera do saldo sem salto, sem piscar e com o foco", () => {
+  const soltarSaldos = async () => {
+    await act(async () => {
+      for (const soltar of estado.saldosPresos!.splice(0)) soltar();
+    });
+  };
+
+  it("o resumo fica no lugar, escondido, sob \"Conferindo saldo…\": a altura da linha não muda", async () => {
+    estado.saldosPresos = [];
+    await montar();
+    await esperarAsLinhas();
+    await passar(CARREGANDO.atrasoMs);
+    const daLinha = linha("Pedido 1042");
+    const espera = Array.from(daLinha.querySelectorAll<HTMLElement>("span")).find((span) => span.textContent?.trim() === "Conferindo saldo…");
+    expect(espera, "a espera").toBeDefined();
+    // A espera e o resumo na mesma célula da grade: a linha mede o maior dos dois, o resumo.
+    const celula = espera!.parentElement!;
+    expect(celula.className).toContain("grid");
+    const resumo = Array.from(celula.children).find((filho) => filho !== espera) as HTMLElement | undefined;
+    expect(resumo?.textContent).toMatch(/^Retirada · BTG Pactual · 3 itens · 12 un\./);
+    expect(resumo!.className).toContain("invisible");
+    expect(resumo!.getAttribute("aria-hidden")).toBe("true");
+    for (const filho of [espera!, resumo!]) {
+      expect(filho.className).toContain("col-start-1");
+      expect(filho.className).toContain("row-start-1");
+    }
+    // A espera numa linha de texto de 20 px (o h-5), sem o inline-flex que levava a linha a 21,3 px.
+    expect(espera!.className).toContain("h-5");
+    expect(espera!.className).not.toContain("inline-flex");
+  });
+
+  it("o saldo que chega logo depois dos 300 ms não pisca: \"Conferindo saldo…\" fica 500 ms, com os botões travados", async () => {
+    estado.saldosPresos = [];
+    await montar();
+    await esperarAsLinhas();
+    await passar(CARREGANDO.atrasoMs + 50);
+    expect(linha("Pedido 1042").textContent).toContain("Conferindo saldo…");
+    await soltarSaldos();
+    await passar(10);
+    // 60 ms depois de aparecer: o indicador fica até completar 500 ms, e os botões seguem travados com ele.
+    expect(linha("Pedido 1042").textContent).toContain("Conferindo saldo…");
+    expect(botao("Pedido 1042", "Aprovar")!.getAttribute("aria-disabled")).toBe("true");
+    await passar(CARREGANDO.minimoMs - 100);
+    expect(linha("Pedido 1042").textContent).toContain("Conferindo saldo…");
+    await vi.waitFor(
+      async () => {
+        await passar(10);
+        expect(linha("Pedido 1042").textContent).not.toContain("Conferindo saldo…");
+      },
+      { timeout: 3_000 },
+    );
+    expect(botao("Pedido 1042", "Aprovar")!.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("antes de 300 ms, o botão travado pelo saldo não esmaece: a trava vale, mas nada aparece", async () => {
+    estado.saldosPresos = [];
+    await montar();
+    await esperarAsLinhas();
+    const aprovar = botao("Pedido 1042", "Aprovar")!;
+    expect(aprovar.getAttribute("aria-disabled")).toBe("true");
+    expect(aprovar.className).not.toContain("opacity-45");
+    expect(botao("Pedido 1042", "Recusar")!.className).not.toContain("opacity-45");
+    await passar(CARREGANDO.atrasoMs);
+    expect(botao("Pedido 1042", "Aprovar")!.className).toContain("opacity-45");
+    expect(botao("Pedido 1042", "Recusar")!.className).toContain("opacity-45");
+    // O saldo rápido (antes de 300 ms) nunca esmaece.
+    act(() => raiz?.unmount());
+    raiz = null;
+    container?.remove();
+    cliente.clear();
+    estado.saldosPresos = [];
+    await montar();
+    await esperarAsLinhas();
+    await passar(100);
+    await soltarSaldos();
+    const vistos: boolean[] = [];
+    for (let feito = 0; feito < 600; feito += 20) {
+      await passar(20);
+      vistos.push(botao("Pedido 1042", "Aprovar")!.className.includes("opacity-45"));
+    }
+    expect(vistos.some(Boolean)).toBe(false);
+  });
+
+  it("com o foco no Aprovar travado, o saldo que chega com falta leva o foco ao \"Ver itens\", não ao body", async () => {
+    estado.saldosPresos = [];
+    estado.disponivel = 50;
+    await montar();
+    await esperarAsLinhas();
+    const aprovar = botao("Pedido 1045", "Aprovar")!;
+    aprovar.focus();
+    expect(document.activeElement).toBe(aprovar);
+    await soltarSaldos();
+    await vi.waitFor(
+      async () => {
+        await passar(20);
+        expect(linha("Pedido 1045").textContent).toContain("Ver itens");
+      },
+      { timeout: 3_000 },
+    );
+    await passar(20);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Ver itens");
   });
 });

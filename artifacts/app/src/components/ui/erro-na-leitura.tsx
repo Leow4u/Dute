@@ -8,7 +8,7 @@ import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao"
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
-import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
+import { focoPerdido, lugarDaSecao, podeReceberFoco, segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -69,20 +69,28 @@ export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | 
     return () => {
       if (!elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
       const lugar = elemento.parentElement;
-      const alvo = id ? document.getElementById(id) : null;
-      // Sem o alvo na tela (o id que não chegou), também o título: nunca o `body`.
-      if (alvo) alvo.focus({ preventScroll: true });
-      else segurarOFocoQueSai(elemento);
       // A nova tentativa que falhou: a falha entra no lugar de quem saiu (com o commit, depois desta limpeza), e o foco
-      // vai ao "Tentar de novo" dela, e não à linha de estado que ainda não tem o que dizer (revisão da parte 13h).
+      // vai ao "Tentar de novo" dela (o do cartão da lista ou o da frase da seção), e não à linha de estado que ainda
+      // não tem o que dizer nem ao título (revisões das partes 13h e 13i).
+      const falhaNoLugar = () => (lugar?.isConnected ? lugar.querySelector<HTMLElement>(FALHA_NO_LUGAR) : null);
+      const alvo = id ? document.getElementById(id) : null;
+      if (podeReceberFoco(alvo)) alvo.focus({ preventScroll: true });
+      else {
+        // Sem o alvo que pode receber o foco agora (o campo que a leitura que chega habilita), ele é lido depois do
+        // commit, depois da falha e antes do título da seção, lido agora, com a região ainda na tela: nunca o `body`.
+        const titulo = lugarDaSecao(elemento);
+        segurarOFocoQueSai(elemento, () => [falhaNoLugar(), id ? document.getElementById(id) : null, titulo].find(podeReceberFoco));
+      }
       queueMicrotask(() => {
-        const tentar = lugar?.isConnected ? lugar.querySelector<HTMLElement>(":scope > [data-falha-na-leitura] button") : null;
-        const ativo = document.activeElement;
-        if (tentar && (!ativo || ativo === document.body || ativo === alvo || !ativo.isConnected)) tentar.focus({ preventScroll: true });
+        const tentar = falhaNoLugar();
+        if (tentar && (document.activeElement === alvo || focoPerdido(document, lugar))) tentar.focus({ preventScroll: true });
       });
     };
   }, [id, raiz]);
 }
+
+/** O "Tentar de novo" da falha que entra no lugar da espera: o cartão da lista ou a frase da seção. */
+const FALHA_NO_LUGAR = ":scope > [data-falha-na-leitura] button, :scope > [data-falha-na-secao] button";
 
 /**
  * A leitura falhou e a tela não tem nada para mostrar: a falha no lugar da
