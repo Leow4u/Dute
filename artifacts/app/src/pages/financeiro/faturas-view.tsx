@@ -3,7 +3,14 @@ import { formatarReais } from "@workspace/dominio";
 import { Check, Download, FileText, Search, Send, X } from "lucide-react";
 import { Link } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,6 +99,13 @@ export type FaturasViewProps = {
   /** A confirmação da última gravação. */
   resultado: string | null;
   ocupado: boolean;
+  /**
+   * Qual ação grava ("envio", "pagamento", "estorno", "cancelamento"): o botão
+   * dela diz o gerúndio, e os outros ficam travados sem sumir (parte 13g).
+   */
+  emAndamento?: string | null;
+  /** A nova tentativa da leitura das NFs (parte 13g). */
+  leitura?: NovaTentativa;
   acoes: AcoesDasFaturas;
   receita?: ReceitaDoMes | null;
 };
@@ -202,12 +216,13 @@ function Linha({ fatura, hoje, aberta, primeira, onAbrir }: { fatura: FaturaDoFi
   );
 }
 
-function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes }: FaturasViewProps) {
+function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes, leitura = SEM_NOVA_TENTATIVA }: FaturasViewProps) {
   const doFiltro = faturasDoFiltro(faturas, filtro, hoje);
   const lista = faturasDoFiltro(faturas, filtro, hoje, busca);
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar as NFs.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as NFs…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar as NFs." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (!doFiltro.length) conteudo = <Vazio>{VAZIO_DO_FILTRO[filtro]}</Vazio>;
   else if (!lista.length) conteudo = <Vazio>Nenhuma NF encontrada</Vazio>;
   else conteudo = lista.map((fatura, indice) => <Linha key={fatura.id} fatura={fatura} hoje={hoje} aberta={aberta?.id === fatura.id} primeira={indice === 0} onAbrir={acoes.abrir} />);
@@ -215,7 +230,9 @@ function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes }: FaturasV
     <section aria-label={`NFs: ${TITULO_DO_FILTRO[filtro]}`} className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-border px-5 py-3.5">
         <h2 className="text-base font-extrabold">NFs</h2>
-        <Contador>{doFiltro.length}</Contador>
+        <Contador>
+          <NumeroLido estado={estado}>{doFiltro.length}</NumeroLido>
+        </Contador>
         {doFiltro.length ? <span className="ml-auto text-base font-extrabold tabular-nums">{formatarReais(totalDaLista(doFiltro, filtro))}</span> : null}
       </div>
       {conteudo}
@@ -230,6 +247,7 @@ function Pagamentos({
   baixas,
   painel,
   ocupado,
+  emAndamento,
   acoes,
   podeEstornar,
 }: {
@@ -237,10 +255,11 @@ function Pagamentos({
   baixas: ReadonlyMap<string, EtapaDaBaixa> | null;
   painel: PainelDaNfAberta;
   ocupado: boolean;
+  emAndamento: string | null;
   acoes: AcoesDasFaturas;
   podeEstornar: boolean;
 }) {
-  if (pagamentos === null) return <p className="text-sm font-bold text-muted-foreground">Carregando...</p>;
+  if (pagamentos === null) return <CarregandoNaRegiao rotulo="Carregando os pagamentos…" />;
   if (!pagamentos.length) return <p className="text-sm font-bold text-muted-foreground">Nenhum pagamento</p>;
   return (
     <ul className="flex flex-col gap-2">
@@ -269,7 +288,19 @@ function Pagamentos({
             ) : null}
             {pagamento.observacao ? <span className="text-xs font-semibold">{pagamento.observacao}</span> : null}
             {pagamento.estornado?.motivo ? <span className="text-xs font-semibold text-muted-foreground">{pagamento.estornado.motivo}</span> : null}
-            {confirmando ? <Confirmacao id={`estorno-${pagamento.id}`} rotulo="Motivo do estorno" botao="Confirmar estorno" painel={painel} ocupado={ocupado} acoes={acoes} onConfirmar={acoes.confirmarEstorno} /> : null}
+            {confirmando ? (
+              <Confirmacao
+                id={`estorno-${pagamento.id}`}
+                rotulo="Motivo do estorno"
+                botao="Confirmar estorno"
+                andamento="Estornando…"
+                emAndamento={emAndamento === "estorno"}
+                painel={painel}
+                ocupado={ocupado}
+                acoes={acoes}
+                onConfirmar={acoes.confirmarEstorno}
+              />
+            ) : null}
           </li>
         );
       })}
@@ -277,25 +308,54 @@ function Pagamentos({
   );
 }
 
-function Confirmacao({ id, rotulo, botao, painel, ocupado, acoes, onConfirmar }: { id: string; rotulo: string; botao: string; painel: PainelDaNfAberta; ocupado: boolean; acoes: AcoesDasFaturas; onConfirmar: () => void }) {
+function Confirmacao({
+  id,
+  rotulo,
+  botao,
+  andamento,
+  emAndamento,
+  painel,
+  ocupado,
+  acoes,
+  onConfirmar,
+}: {
+  id: string;
+  rotulo: string;
+  botao: string;
+  /** O gerúndio do confirmar: "Estornando…". */
+  andamento: string;
+  /** É esta a ação que grava. */
+  emAndamento: boolean;
+  painel: PainelDaNfAberta;
+  ocupado: boolean;
+  acoes: AcoesDasFaturas;
+  onConfirmar: () => void;
+}) {
   return (
     <div className="flex flex-col gap-2.5">
       <Campo id={id} rotulo={rotulo}>
         <Textarea id={id} rows={2} maxLength={300} value={painel.confirmando?.motivo ?? ""} onChange={(evento) => acoes.editarMotivo(evento.target.value)} disabled={ocupado} />
       </Campo>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="destructive" size="sm" onClick={onConfirmar} disabled={ocupado}>
-          {botao}
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={acoes.desistir} disabled={ocupado}>
+        <BotaoDeAcao
+          variant="destructive"
+          size="sm"
+          estado={emAndamento ? "andamento" : "repouso"}
+          bloqueado={ocupado && !emAndamento}
+          rotulo={botao}
+          andamento={andamento}
+          onClick={onConfirmar}
+        />
+        <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistir}>
           Voltar
-        </Button>
+        </DialogCancelar>
       </div>
     </div>
   );
 }
 
-function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, acoes }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
+function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, acoes, emAndamento = null }: FaturasViewProps & { aberta: FaturaDoFinanceiro }) {
+  const daAcao = (acao: string) => ({ estado: emAndamento === acao ? ("andamento" as const) : ("repouso" as const), bloqueado: ocupado && emAndamento !== acao });
   const pode = acoesDaNf(fatura);
   const situacao = situacaoDaCobranca(fatura, hoje);
   const formPagamento = painel.pagamento;
@@ -367,10 +427,15 @@ function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, aco
                 </select>
               </Campo>
             </div>
-            <Button type="button" variant="outline" className="self-start" onClick={acoes.marcarEnviada} disabled={ocupado}>
-              <Send aria-hidden="true" />
-              Marcar como enviada
-            </Button>
+            <BotaoDeAcao
+              variant="outline"
+              className="self-start"
+              {...daAcao("envio")}
+              icone={<Send aria-hidden="true" />}
+              rotulo="Marcar como enviada"
+              andamento="Marcando como enviada…"
+              onClick={acoes.marcarEnviada}
+            />
           </>
         ) : (
           <p className="text-sm font-bold text-muted-foreground">Não enviada</p>
@@ -380,7 +445,15 @@ function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, aco
       <div aria-hidden="true" className="h-px bg-muted" />
       <div className="flex flex-col gap-2.5">
         <Subtitulo>Pagamentos</Subtitulo>
-        <Pagamentos pagamentos={pagamentos} baixas={baixas ?? null} painel={painel} ocupado={ocupado} acoes={acoes} podeEstornar={fatura.status !== "cancelada"} />
+        <Pagamentos
+          pagamentos={pagamentos}
+          baixas={baixas ?? null}
+          painel={painel}
+          ocupado={ocupado}
+          emAndamento={emAndamento}
+          acoes={acoes}
+          podeEstornar={fatura.status !== "cancelada"}
+        />
       </div>
 
       {pode.pagar ? (
@@ -415,17 +488,31 @@ function Painel({ aberta: fatura, hoje, pagamentos, baixas, painel, ocupado, aco
       ) : null}
 
       {pode.pagar ? (
-        <Button type="button" className="self-start" onClick={acoes.registrarPagamento} disabled={ocupado}>
-          <Check aria-hidden="true" />
-          Registrar pagamento
-        </Button>
+        <BotaoDeAcao
+          className="self-start"
+          {...daAcao("pagamento")}
+          icone={<Check aria-hidden="true" />}
+          rotulo="Registrar pagamento"
+          andamento="Registrando o pagamento…"
+          onClick={acoes.registrarPagamento}
+        />
       ) : null}
 
       {pode.cancelar ? (
         <>
           <div aria-hidden="true" className="h-px bg-muted" />
           {cancelando ? (
-            <Confirmacao id="cancelamento" rotulo="Motivo do cancelamento" botao="Confirmar cancelamento" painel={painel} ocupado={ocupado} acoes={acoes} onConfirmar={acoes.confirmarCancelamento} />
+            <Confirmacao
+              id="cancelamento"
+              rotulo="Motivo do cancelamento"
+              botao="Confirmar cancelamento"
+              andamento="Cancelando o registro…"
+              emAndamento={emAndamento === "cancelamento"}
+              painel={painel}
+              ocupado={ocupado}
+              acoes={acoes}
+              onConfirmar={acoes.confirmarCancelamento}
+            />
           ) : (
             <Button type="button" variant="destructive" className="self-start" onClick={acoes.pedirCancelamento} disabled={ocupado}>
               Cancelar registro
@@ -444,8 +531,13 @@ function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string
   const mes = rotuloDoMes(receita.mes);
   const dados = receita.dados;
   let conteudo: ReactNode;
-  if (receita.erro) conteudo = <p className="text-sm font-bold text-muted-foreground">Não foi possível carregar os pagamentos.</p>;
-  else if (!dados) conteudo = <p className="text-sm font-bold text-muted-foreground">Carregando...</p>;
+  if (receita.erro)
+    conteudo = (
+      <p role="alert" className="text-sm font-bold text-destructive">
+        Não foi possível carregar os pagamentos.
+      </p>
+    );
+  else if (!dados) conteudo = <CarregandoNaRegiao rotulo="Carregando os pagamentos…" />;
   else if (!dados.pagamentos) conteudo = <p className="text-sm font-bold text-muted-foreground">{`Nenhum pagamento em ${mes}`}</p>;
   else {
     conteudo = (
@@ -480,6 +572,8 @@ function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string
 export function FaturasView(props: FaturasViewProps) {
   const { filtro, estado, faturas, busca, hoje, aberta, resultado, acoes, receita } = props;
   const exporta = estado === "pronto" && faturasDoFiltro(faturas, filtro, hoje, busca).length > 0;
+  // A confirmação da gravação fica escrita; o Anunciador a diz uma vez.
+  useAnunciarAoMudar(resultado);
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">
       <header className="flex flex-wrap items-center gap-4">
@@ -498,7 +592,7 @@ export function FaturasView(props: FaturasViewProps) {
         </div>
       </header>
       {resultado ? (
-        <div role="status" className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", TOM_OK)}>
+        <div className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", TOM_OK)}>
           <Check aria-hidden="true" className="size-4.5 shrink-0" />
           {resultado}
         </div>

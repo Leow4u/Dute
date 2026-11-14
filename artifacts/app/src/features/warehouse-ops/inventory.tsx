@@ -29,7 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { OpeningLineCorrection } from "./opening-line-correction";
 import { OpeningConferenceSummary } from "./opening-conference-summary";
 import { ShelfPicker, eligibleShelfPositions, isCurrentShelfPreview } from "./shelf-picker";
@@ -446,8 +446,6 @@ export function OpeningInventoryWorkspace() {
 
   // A sessão que falhou fica na tela enquanto tenta de novo: o "Tentar de novo" não some com o foco nele (parte 13b).
   const sessionQuery = useLeituraComFalha(useOpeningInventorySession());
-  // A ação que dá certo tira o botão da tela: o foco vai ao que entrou no lugar, nunca ao body (parte 13b).
-  const focoQueSegue = useFocoQueSegue();
   const lookupQuery = useQuery({
     queryKey: ["opening-inventory-product-lookup", customerCode],
     staleTime: 30_000,
@@ -701,6 +699,9 @@ export function OpeningInventoryWorkspace() {
         },
       ),
     onSuccess: () => {
+      // Quem fecha o diálogo é o sucesso (carregamento v2, parte 13a): a troca
+      // da aba para a contagem cíclica não vale quando a pessoa escolheu a aba.
+      setCompleteDialogOpen(false);
       setActiveBox(undefined);
       queryClient.invalidateQueries({ queryKey: ["opening-inventory-session"] });
       toast({
@@ -1257,7 +1258,7 @@ export function OpeningInventoryWorkspace() {
             {session?.status === "not_started" ? (
               // A ação da sessão é o BotaoDeAcao: ocupado sem disabled, com o gerúndio (carregamento v2, parte 13b). Quando
               // a sessão começa, o botão vira o selo, e o foco vai ao título do cartão, nunca ao body.
-              <SaiComOFoco alvo={ID_DO_TITULO} pedido={focoQueSegue}>
+              <SaiComOFoco alvo={ID_DO_TITULO}>
                 <BotaoDeAcao
                   className="max-md:min-h-12"
                   estado={startSession.isPending ? "andamento" : "repouso"}
@@ -1314,7 +1315,7 @@ export function OpeningInventoryWorkspace() {
                   <h3 id={ID_DA_NOVA_CAIXA} tabIndex={-1} className="text-lg font-semibold">Nova caixa de destino</h3>
                   <p className="text-sm text-muted-foreground">Separe aqui os produtos que ficarão juntos. Modelos e tamanhos continuam identificados por seus próprios códigos.</p>
                   {/* Quando a conferência começa, o botão vira a bancada da caixa, e o foco vai ao título dela. */}
-                  <SaiComOFoco alvo={ID_DA_CAIXA} pedido={focoQueSegue}>
+                  <SaiComOFoco alvo={ID_DA_CAIXA}>
                     <BotaoDeAcao
                       className="max-md:min-h-12"
                       estado={createConference.isPending ? "andamento" : "repouso"}
@@ -1396,7 +1397,7 @@ export function OpeningInventoryWorkspace() {
               {((!currentBox && legacyBoxMode) || currentBox?.status === "reviewed") ? (
                 // A guarda que dá certo tira o painel da tela (a caixa fica guardada): o foco que estava na confirmação ou numa
                 // alternativa vai ao título da caixa; o "Voltar à nova conferência", ao da nova caixa; nunca ao body (parte 13b).
-                <SaiComOFoco alvo={[ID_DA_CAIXA, ID_DA_NOVA_CAIXA]} pedido={focoQueSegue}>
+                <SaiComOFoco alvo={[ID_DA_CAIXA, ID_DA_NOVA_CAIXA]}>
                 <div className="space-y-4 rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-foreground">

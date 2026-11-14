@@ -72,7 +72,7 @@ import { relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type MotivoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
@@ -772,7 +772,6 @@ export function ReturnWorkspace() {
   // junto. A chave de idempotência é por tentativa: repete depois da falta de conexão e do "Conferir", e muda só
   // quando o servidor recusa. Registrada, a linha vira "Disposição registrada", e o foco vai a ela.
   const disposicao = useAcaoNaLinha<string>();
-  const focoQueSegue = useFocoQueSegue();
   const pendentesDaTriagem = useLeituraComFalha(pendingReturnLinesQuery);
   // A repetição leva o mesmo corpo da tentativa: o servidor compara o conteúdo inteiro com o da chave, e um
   // `occurred_at` novo recusaria a repetição como outro conteúdo, em vez de devolver o recibo.
@@ -1168,7 +1167,7 @@ export function ReturnWorkspace() {
                             </p>
                           ) : null}
                         </div>
-                        <SaiComOFoco alvo={`disposicao-${line.itemId}`} pedido={focoQueSegue}>
+                        <SaiComOFoco alvo={`disposicao-${line.itemId}`}>
                           <BotaoDeAcao
                             className="w-full max-md:min-h-12"
                             estado={disposicao.estado(line.itemId, "dispor")}

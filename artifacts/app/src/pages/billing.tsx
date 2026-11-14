@@ -29,7 +29,7 @@ import type { LeituraDaLista } from "@/lib/carregando/use-atualizar-lista";
 import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { BarraDaLista, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { acaoDaArmazenagem } from "@/lib/financeiro/armazenagem";
 import { humanApiError } from "@/lib/permissions";
@@ -115,7 +115,7 @@ export default function Billing() {
   const { user } = useAppUser();
   // O mês na tela e o que se grava são do cliente ativo desta aba: a chave
   // da leitura leva o cliente, e cada chamada o diz no cabeçalho.
-  const { code: cliente, isLoading: carregandoCliente, codeProvavel, recarregar } = useActiveCustomer();
+  const { code: cliente, isLoading: carregandoCliente, codeProvavel, tentar: lerOsClientes } = useActiveCustomer();
   const doCliente = useMemo(() => ({ headers: { [CABECALHO_DO_CLIENTE]: cliente } }), [cliente]);
 
   // Trocar o mês ou o cliente lê no servidor: o mês anterior fica, a 50% e inert, até o novo chegar (carregamento
@@ -145,7 +145,7 @@ export default function Billing() {
           isLoading: true,
           isError: false,
           error: null,
-          refetch: (() => Promise.resolve(recarregar?.()).then(() => ({ isError: false, error: null }))) as unknown as UseQueryResult<unknown>["refetch"],
+          refetch: (() => lerOsClientes().then(() => ({ isError: false, error: null }))) as unknown as UseQueryResult<unknown>["refetch"],
         }
       : leitura;
   // O esqueleto do mês entra aos 300 ms, como a linha (momento 2); a leitura rápida não pisca nada.
@@ -153,8 +153,6 @@ export default function Billing() {
   const fantasmas = useEspera(lendoOMes);
   // Na chegada, o mês entra no lugar do esqueleto por opacidade, subindo 4 px, em cascata (momento 2).
   const chegando = useChegada(lendoOMes);
-  // O botão que sai com o foco (Salvar quantidades, Marcar como paga) o deixa no link da fatura, nunca no body.
-  const focoQueSegue = useFocoQueSegue();
   const periodos = useListBillingPeriods({
     query: { queryKey: [...getListBillingPeriodsQueryKey(), cliente], enabled: !carregandoCliente },
     request: doCliente,
@@ -605,7 +603,7 @@ export default function Billing() {
                 {aberto && (dirty || estadoDoSalvar !== "repouso") ? (
                   // Ocupado não é desabilitado: o foco fica no botão até a releitura, e vai ao link da fatura quando ele sai.
                   // Salvo, ele fica com "Quantidades salvas" até o mês relido chegar, e só então sai.
-                  <SaiComOFoco alvo={idDaFatura} pedido={focoQueSegue}>
+                  <SaiComOFoco alvo={idDaFatura}>
                     <BotaoDeAcao
                       estado={estadoDoSalvar}
                       icone={<Save aria-hidden="true" />}
@@ -650,7 +648,7 @@ export default function Billing() {
                   </>
                 ) : null}
                 {acao?.tipo === "pagar_no_wms" || estadoDoPagar !== "repouso" ? (
-                  <SaiComOFoco alvo={idDaFatura} pedido={focoQueSegue}>
+                  <SaiComOFoco alvo={idDaFatura}>
                     <BotaoDeAcao
                       variant="outline"
                       estado={estadoDoPagar}

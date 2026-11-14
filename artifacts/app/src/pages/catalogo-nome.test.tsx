@@ -57,7 +57,6 @@ vi.mock("@/features/warehouse-ops/opening-inventory-status", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
 
-import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { ProductModal } from "./products";
 import { SkuModal } from "./skus";
@@ -100,16 +99,7 @@ async function digitarLetraALetra(id: string, valor: string) {
   for (let fim = 1; fim <= valor.length; fim += 1) await digitar(id, valor.slice(0, fim));
 }
 
-/**
- * O relógio da trava do toque duplo: o Salvar é o BotaoDeAcao (parte 13a), que
- * barra o segundo toque em menos de um segundo. Quem corrige o nome e salva de
- * novo leva mais que isso; aqui, o relógio anda um intervalo a cada Salvar.
- */
-let deslocamentoDoRelogio = 0;
-const agoraDeVerdade = Date.now.bind(Date);
-
 async function salvar() {
-  deslocamentoDoRelogio += INTERVALO_DO_TOQUE_MS;
   const botao = document.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
   await act(async () => botao.click());
   // O resolver do zod é assíncrono: espera a validação terminar.
@@ -147,8 +137,6 @@ const PRODUTO_ANTIGO = {
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  deslocamentoDoRelogio = 0;
-  vi.spyOn(Date, "now").mockImplementation(() => agoraDeVerdade() + deslocamentoDoRelogio);
   estado.criados = [];
   estado.editados = [];
   container = document.createElement("div");
@@ -158,7 +146,6 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => raiz?.unmount());
-  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   container?.remove();
   raiz = null;

@@ -2,6 +2,7 @@ import * as React from "react";
 import { RefreshCw } from "lucide-react";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { useDialogoEmAcao } from "@/components/ui/dialogo-em-acao";
 import { Spinner } from "@/components/ui/spinner";
 import { toqueRepetido } from "@/lib/campo/toque-unico";
 import { useEspera } from "@/lib/carregando/use-espera";
@@ -33,6 +34,12 @@ export interface BotaoDeAcaoProps extends Omit<ButtonProps, "children" | "disabl
    * o trilho a 0,35) com o fundo e o texto trocados.
    */
   tinta?: boolean;
+  /**
+   * O primário destrutivo, cheio (o "Remover da lista" e o "Revogar acesso",
+   * a rotina apagada): o vermelho do perigo no repouso, no hover e no toque,
+   * e travado ele não muda com o ponteiro em cima.
+   */
+  perigo?: boolean;
 }
 
 /**
@@ -71,6 +78,15 @@ type Variante = NonNullable<ButtonProps["variant"]>;
 const TINTA = "bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/85";
 const TOQUE_DA_TINTA = "bg-foreground/85";
 const PONTEIRO_TRAVADO_DA_TINTA = "hover:bg-foreground active:bg-foreground";
+
+/**
+ * O primário destrutivo, cheio: o vermelho sólido em todos os estados do
+ * ponteiro, nos dois temas (o branco sobre ele tem 6,5:1; o --destructive do
+ * escuro, claro para ser lido como texto, daria 3,3:1).
+ */
+const PERIGO = "bg-red-700 text-white hover:bg-red-800 active:bg-red-800";
+const TOQUE_DO_PERIGO = "bg-red-800";
+const PONTEIRO_TRAVADO_DO_PERIGO = "hover:bg-red-700 active:bg-red-700";
 
 /** O fundo do toque de cada variante do Button: o #AD0015 no primário da v3. */
 const FUNDO_DO_TOQUE: Record<Variante, string> = {
@@ -173,6 +189,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     conferir = "Conferir",
     bloqueado = false,
     tinta = false,
+    perigo = false,
     variant: varianteDada,
     size,
     className,
@@ -214,8 +231,8 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
     elemento.style.setProperty("--botao-acao-onda-x", `${Math.round(caixa.left + caixa.width / 2 - fora.left)}px`);
   }, [troca]);
 
-  // A tinta é o primário com outra cor: o indicador fica no texto do botão.
-  const variant = tinta ? "default" : varianteDada;
+  // A tinta e o perigo são o primário com outra cor: o indicador fica no texto do botão.
+  const variant = tinta || perigo ? "default" : varianteDada;
   const juntarRef = React.useCallback(
     (no: HTMLButtonElement | null) => {
       botao.current = no;
@@ -226,6 +243,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
   );
 
   const ultimoToque = React.useRef<number | undefined>(undefined);
+  const dialogo = useDialogoEmAcao();
   const travado = bloqueado || estado === "andamento" || atual === "andamento" || atual === "sucesso";
   const aoClicar = (evento: React.MouseEvent<HTMLButtonElement>) => {
     const instante = Date.now();
@@ -234,8 +252,27 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
       return;
     }
     ultimoToque.current = instante;
+    // Dentro do diálogo, o toque já o segura, antes de a ação chegar à tela (parte 13a).
+    dialogo?.marcarToque();
     onClick?.(evento);
   };
+
+  // A pessoa mexeu no formulário do botão (o nome que a validação recusou,
+  // corrigido): o toque seguinte é outro pedido, não o segundo do mesmo, e a
+  // trava do toque duplo solta.
+  React.useEffect(() => {
+    const formulario = botao.current?.form;
+    if (!formulario) return undefined;
+    const soltar = () => {
+      ultimoToque.current = undefined;
+    };
+    formulario.addEventListener("input", soltar);
+    formulario.addEventListener("change", soltar);
+    return () => {
+      formulario.removeEventListener("input", soltar);
+      formulario.removeEventListener("change", soltar);
+    };
+  }, []);
 
   const grande = size === "lg";
   const cobre = troca.de === null && FINS.has(troca.atual);
@@ -311,8 +348,9 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
         grande && "[&_svg]:size-5",
         bloqueado && "opacity-45",
         tinta && TINTA,
+        perigo && PERIGO,
         className,
-        travado && (tinta ? PONTEIRO_TRAVADO_DA_TINTA : PONTEIRO_TRAVADO[variant ?? "default"]),
+        travado && (tinta ? PONTEIRO_TRAVADO_DA_TINTA : perigo ? PONTEIRO_TRAVADO_DO_PERIGO : PONTEIRO_TRAVADO[variant ?? "default"]),
         cobre && SEM_FUNDO_PROPRIO,
         voltaDoFim && "transition-none",
       )}
@@ -327,7 +365,7 @@ const BotaoDeAcao = React.forwardRef<HTMLButtonElement, BotaoDeAcaoProps>(functi
       onClick={aoClicar}
     >
       <span aria-hidden="true" data-recorte="">
-        <span data-fundo="toque" className={tinta ? TOQUE_DA_TINTA : FUNDO_DO_TOQUE[variant ?? "default"]} />
+        <span data-fundo="toque" className={tinta ? TOQUE_DA_TINTA : perigo ? TOQUE_DO_PERIGO : FUNDO_DO_TOQUE[variant ?? "default"]} />
         <span data-fundo="onda" data-cor={onda.cor} data-sai={onda.sai ? "" : undefined} />
         <span data-fundo="borda" data-cor={borda.cor} data-sai={borda.sai ? "" : undefined} />
       </span>

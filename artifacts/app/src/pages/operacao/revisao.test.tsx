@@ -25,6 +25,10 @@ vi.mock("@/lib/operacao/api", async (original) => ({
 }));
 
 vi.mock("@/lib/operacao/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, dados: Record<string, unknown>) => unknown) => ({
     itens: chave === "service_orders:em_revisao" ? estado.emRevisao.map((os) => mapear(os.id, os.dados)).filter(Boolean) : [],
     erro: false,
@@ -35,6 +39,7 @@ vi.mock("@/lib/operacao/leitura", () => ({
 vi.mock("@/lib/operacao/use-urls-das-fotos", () => ({ useUrlsDasFotos: () => ({}) }));
 
 import PaginaRevisao from "./revisao";
+import { rotuloDoBotao } from "@/test/botoes";
 
 function emRevisao(numero: string, concluidaEm: string) {
   return {
@@ -93,7 +98,7 @@ describe("a OS da vez na Revisão", () => {
     await mostrar();
     expect(osNaTela()).toBe("OS 10045-02");
 
-    const concluir = [...container!.querySelectorAll("button")].find((botao) => botao.textContent?.trim() === "Concluir revisão")!;
+    const concluir = [...container!.querySelectorAll("button")].find((botao) => rotuloDoBotao(botao) === "Concluir revisão")!;
     await act(async () => concluir.click());
     expect(estado.chamadas.map((chamada) => [chamada.nome, chamada.dados.numero])).toEqual([["reviewServiceOrder", "10045-02"]]);
   });

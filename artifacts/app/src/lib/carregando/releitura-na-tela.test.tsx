@@ -93,7 +93,7 @@ describe("na tela ainda não lida", () => {
     expect(ler).toHaveBeenCalledTimes(5);
   });
 
-  it("o portal: o Portal indisponível entra uma vez, e não a cada releitura", async () => {
+  it("o portal: o aviso da conexão entra uma vez, e não a cada releitura (parte 13f: o bloco da falta no lugar do Portal indisponível)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -106,11 +106,13 @@ describe("na tela ainda não lida", () => {
     let antes: Element | null = null;
     for (let t = 0; t <= 62_000; t += 10) {
       await passar(10);
-      const alerta = container.querySelector('[role="alert"]');
-      if (alerta && alerta !== antes) entradas += 1;
-      antes = alerta;
+      const aviso = container.querySelector("[data-falta]");
+      if (aviso && aviso !== antes) entradas += 1;
+      antes = aviso;
     }
-    expect(antes?.textContent).toContain("Portal indisponível");
+    // Sem nada lido e o servidor sem resposta: o aviso da conexão no lugar do portal, nunca o alerta vermelho.
+    expect(antes?.textContent).toMatch(/Reconectando…|Sem conexão\./);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(entradas).toBe(1);
     expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(5);
   });

@@ -129,7 +129,7 @@ describe("o \"Tentar de novo\" da tela que espera o cliente ativo", () => {
     });
     expect(visto[visto.length - 1]!.isLoading).toBe(true);
     await act(async () => {
-      void visto[visto.length - 1]!.recarregar?.();
+      void visto[visto.length - 1]!.tentar();
       await vi.advanceTimersByTimeAsync(700);
     });
     expect(chamadas).toBe(2);

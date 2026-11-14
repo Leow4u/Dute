@@ -1,3 +1,5 @@
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /** Peças comuns do painel do sistema (custo do Agent Dute e infraestrutura). */
@@ -28,13 +30,46 @@ export function Panel({ title, note, children, action }: { title: string; note?:
   );
 }
 
-export function Health({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "ok" | "warn" | "bad" }) {
+/**
+ * O quadro de saúde do painel. Lendo (`lendo`), o valor não é afirmado: o
+ * bloco do esqueleto e, passados 300 ms, a caixa de 16 px com o gerúndio no
+ * lugar do ponto, nunca o ponto verde (carregamento v2, parte 13e).
+ */
+export function Health({
+  label,
+  value,
+  detail,
+  tone,
+  lendo,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "ok" | "warn" | "bad";
+  lendo?: { visivel: boolean; calmo: boolean };
+}) {
   return (
     <div className="rounded-lg border border-border bg-card px-5 py-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1.5 flex items-center gap-2 text-lg font-semibold">
-        <span className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", tone === "ok" ? "bg-green-600" : tone === "warn" ? "bg-amber-500" : "bg-red-600")} />
-        <span className="min-w-0 truncate">{value}</span>
+      <div className="mt-1.5 flex min-h-7 items-center gap-2 text-lg font-semibold">
+        {lendo ? (
+          lendo.visivel ? (
+            <>
+              <Spinner tamanho={16} calmo={lendo.calmo} className="text-foreground" />
+              <span className="min-w-0 truncate">{value}</span>
+            </>
+          ) : (
+            <Esqueleto forma="texto" className="w-24" />
+          )
+        ) : (
+          <>
+            <span
+              aria-hidden="true"
+              className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", tone === "ok" ? "bg-green-600" : tone === "warn" ? "bg-amber-500" : "bg-red-600")}
+            />
+            <span className="min-w-0 truncate">{value}</span>
+          </>
+        )}
       </div>
       <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div>
     </div>

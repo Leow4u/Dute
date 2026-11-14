@@ -12,6 +12,8 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
+    // Com um diálogo aberto no celular, o index.css leva os avisos para o topo (parte 13a).
+    data-avisos=""
     className={cn(
       // Celular (abaixo de 768 px, decisão 9.4.5 de 06/11/2026): embaixo,
       // perto do polegar, 8 px acima da barra de navegação (MobileTabBar,

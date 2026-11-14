@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
@@ -9,14 +10,16 @@ import { usePessoas } from "@/components/pessoas/dados";
 import { ListaDePessoas } from "@/components/pessoas/lista";
 import { ContagemDaAba, FiltroDeSituacao, PilhaDeAvatares } from "@/components/pessoas/partes";
 import { Button } from "@/components/ui/button";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, ErroNaLeitura, FaixaSemConexao } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabel } from "@/lib/access";
 import { useAppUser } from "@/lib/auth";
-import { useCustomerRecords } from "@/lib/customer-records";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { CUSTOMERS_QUERY_KEY, useCustomerRecords } from "@/lib/customer-records";
 import { buildCustomerRows, customerHref, portalScreens } from "@/lib/customer-registry";
 import { normalizeProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
@@ -65,12 +68,16 @@ function Vazio({ children }: { children: ReactNode }) {
   );
 }
 
-function Carregando({ children }: { children: ReactNode }) {
+/**
+ * A lista que ainda lê (carregamento v2, momento 1): o cartão no lugar dela e,
+ * passados 300 ms, a caixa de 24 px com o rótulo, falado pelo Anunciador; aos
+ * 10 s, a demora. Sem região viva solta.
+ */
+function Carregando({ rotulo, continuaARota = false, onTentar }: { rotulo: string; continuaARota?: boolean; onTentar?: () => void }) {
   return (
-    <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
-      <Spinner />
-      {children}
-    </p>
+    <div className="rounded-lg border border-border bg-card px-5 py-5">
+      <CarregandoNaRegiao rotulo={rotulo} continuaARota={continuaARota} onTentar={onTentar} />
+    </div>
   );
 }
 
@@ -139,6 +146,7 @@ function IndiceDosClientes({ indice }: { indice: ClienteDoIndice[] }) {
 }
 
 export default function Users() {
+  const queryClient = useQueryClient();
   const { user } = useAppUser();
   const actorRole = normalizeProfileRole(user?.publicMetadata.role);
   const pessoas = usePessoas();
@@ -211,14 +219,29 @@ export default function Users() {
       </header>
 
       {pessoas.carregando ? (
-        <Carregando>Carregando pessoas…</Carregando>
+        <Carregando rotulo="Carregando pessoas…" continuaARota onTentar={() => void pessoas.refresh()} />
+      ) : pessoas.falta && pessoas.falta.lidaEm === null ? (
+        <BlocoSemConexao tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
       ) : pessoas.erro ? (
         <ErroNaLeitura
           mensagem="Não foi possível carregar as pessoas e os convites."
           tentando={pessoas.tentando}
           onTentar={() => void pessoas.refresh()}
         />
-      ) : termo ? (
+      ) : null}
+      {pessoas.falta && pessoas.falta.lidaEm !== null ? (
+        <FaixaSemConexao lidaEm={pessoas.falta.lidaEm} tentando={pessoas.tentando} onTentar={() => void pessoas.refresh()} />
+      ) : pessoas.falhaNaReleitura ? (
+        // A releitura que falhou não apaga a lista lida, e a falha fica escrita em cima dela, sem falar (momento 7).
+        <FalhaNaSecao
+          mensagem="Não foi possível atualizar as pessoas."
+          alerta={false}
+          tentando={pessoas.tentando}
+          onTentar={pessoas.refresh}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      ) : null}
+      {pessoas.carregando || pessoas.erro || (pessoas.falta && pessoas.falta.lidaEm === null) ? null : termo ? (
         <section aria-labelledby="pessoas-resultados" className="flex flex-col gap-4">
           <h2 id="pessoas-resultados" className="flex items-center border-b border-border pb-2.5 text-base font-extrabold">
             Resultados
@@ -271,7 +294,7 @@ export default function Users() {
           </TabsContent>
           <TabsContent value="clientes" className="mt-5">
             {customers.isLoading ? (
-              <Carregando>Carregando clientes…</Carregando>
+              <Carregando rotulo="Carregando clientes…" onTentar={() => void relerDoZero(queryClient, [CUSTOMERS_QUERY_KEY])} />
             ) : customers.isError && indice.length === 0 ? (
               <ErroNaLeitura
                 mensagem={humanApiError(customers.error, "Não foi possível carregar os clientes.")}

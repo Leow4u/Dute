@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAnuncio } from "@/lib/carregando/anunciador";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { cn } from "@/lib/utils";
 import {
   boxDraftToPayload,
@@ -1193,8 +1193,8 @@ function LinhaDaNfRow({
   const linha = item.line_number ?? "";
   const semMarca =
     situacao.tipo === "faltam" || situacao.tipo === "marca_velha";
-  // Desmarcada a falta, "Desmarcar" sai com o foco: ele vai ao "Marcar falta" que entra no lugar, ou à linha.
-  const focoQueSegue = useFocoQueSegue();
+  // Desmarcada a falta, "Desmarcar" sai com o foco: ele vai ao "Marcar falta" que entra no lugar, ou à linha
+  // (`SaiComOFoco`).
   const idDaLinha = `linha-da-nf-${item.id ?? linha}`;
   return (
     <tr className="border-t border-border/60">
@@ -1249,7 +1249,7 @@ function LinhaDaNfRow({
           ) : null}
           {podeOperar && item.id && situacao.tipo === "falta_marcada" ? (
             // O nome é o rótulo que está na tela ("Desmarcar", "Desmarcando…"); a linha vem pela descrição.
-            <SaiComOFoco alvo={[`marcar-falta-${item.id}`, idDaLinha]} pedido={focoQueSegue}>
+            <SaiComOFoco alvo={[`marcar-falta-${item.id}`, idDaLinha]}>
               <BotaoDeAcao
                 size="sm"
                 variant="secondary"

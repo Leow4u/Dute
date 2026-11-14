@@ -26,6 +26,9 @@ import {
 import type { TipoDaDemanda } from "@/lib/operacao/hoje";
 import { ROTA_HOJE, hrefDaDemanda, hrefDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › OS (docs/plataforma/fase-3-operacao.md, parte 3.7d;
@@ -452,6 +455,7 @@ export function OsView({
   anexarFotos,
   envioDasFotos,
   acoesDaRecusa,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaFicha;
   numero: string;
@@ -470,6 +474,8 @@ export function OsView({
   envioDasFotos?: ReactNode;
   /** As ações da coordenação na conclusão recusada do celular (pergunta 66); sem elas, o cartão não aparece. */
   acoesDaRecusa?: ReactNode;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const voltar = (
     <Link href={ROTA_HOJE} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -482,11 +488,9 @@ export function OsView({
       <section className="flex flex-col gap-6">
         {voltar}
         <h1 className="text-3xl font-bold tracking-tight text-foreground">OS {numero}</h1>
-        {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+        {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} /> : null}
         {estado === "erro" ? (
-          <p role="alert" className="text-sm text-destructive">
-            Não foi possível carregar a OS.
-          </p>
+          <FalhaNaSecao mensagem="Não foi possível carregar a OS." tentando={leitura.tentando} onTentar={leitura.tentar} />
         ) : null}
         {estado === "nao_encontrada" ? <p className="text-sm text-muted-foreground">OS {numero} não encontrada</p> : null}
       </section>

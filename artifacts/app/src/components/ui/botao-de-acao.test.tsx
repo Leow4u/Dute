@@ -363,6 +363,28 @@ describe("o segundo toque", () => {
     expect(aoClicar).toHaveBeenCalledTimes(1);
   });
 
+  it("a pessoa que corrige o formulário (o nome que a validação recusou) e toca de novo logo depois é atendida: mexer no formulário solta a trava", () => {
+    const aoClicar = vi.fn();
+    act(() =>
+      reacao!.render(
+        <form>
+          <input name="nome" defaultValue="Polo Masculino Piquet Preto XG" />
+          <BotaoDeAcao estado="repouso" rotulo={TEXTOS.rotulo} andamento={TEXTOS.andamento} onClick={aoClicar} />
+        </form>,
+      ),
+    );
+    clicar();
+    expect(aoClicar).toHaveBeenCalledTimes(1);
+    // Sem mexer no formulário, o segundo toque logo depois é o toque duplo.
+    clicar();
+    expect(aoClicar).toHaveBeenCalledTimes(1);
+    act(() => {
+      container!.querySelector("input")!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    clicar();
+    expect(aoClicar).toHaveBeenCalledTimes(2);
+  });
+
   it("o clique travado não envia o formulário", () => {
     chegarEm("andamento", { type: "submit" });
     const evento = new MouseEvent("click", { bubbles: true, cancelable: true });
@@ -533,6 +555,20 @@ describe("travado, o botão não responde ao ponteiro", () => {
     expect(classes()).toEqual(expect.arrayContaining(["bg-foreground", "hover:bg-foreground", "active:bg-foreground"]));
     expect(classes()).not.toContain("hover:bg-primary");
     expect(classes()).not.toContain("hover:bg-foreground/85");
+  });
+
+  it("o perigo (o Remover da lista, o Revogar acesso, a rotina apagada): o vermelho sólido no repouso e no toque, e travado ele não muda com o ponteiro em cima", () => {
+    montar("repouso", { perigo: true });
+    expect(classes()).toEqual(expect.arrayContaining(["carregando-na-cor", "bg-red-700", "text-white", "hover:bg-red-800", "active:bg-red-800"]));
+    expect(classes()).not.toContain("bg-primary");
+    expect(botao().querySelector('[data-fundo="toque"]')?.className).toBe("bg-red-800");
+    montar("andamento", { perigo: true });
+    passar(CARREGANDO.atrasoMs);
+    expect(nome()).toBe(TEXTOS.andamento);
+    // Antes, o hover do primário (o azul fora da v3 e no escuro) vencia o vermelho de quem chamava.
+    expect(classes()).toEqual(expect.arrayContaining(["bg-red-700", "hover:bg-red-700", "active:bg-red-700"]));
+    expect(classes()).not.toContain("hover:bg-primary");
+    expect(classes()).not.toContain("hover:bg-red-800");
   });
 
   it("bloqueado (o Recusar da linha que aprova): não acende no hover nem no toque", () => {

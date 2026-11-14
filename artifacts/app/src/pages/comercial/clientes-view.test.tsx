@@ -13,6 +13,7 @@ import {
 import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 
 import { ABA_INICIAL, ClientesView, type ClientesViewProps, type FichaAba } from "./clientes-view";
+import { semCamadasEscondidas } from "@/test/botoes";
 
 const CADASTROS = (
   [
@@ -102,7 +103,7 @@ function render(overrides: Partial<ClientesViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.trim())
@@ -286,21 +287,29 @@ describe("tela de Clientes e prospects", () => {
     const lista = texts(render({ contratos: "carregando" }));
     for (const rotulo of ["Sem contrato", "Contrato sem prazo", "Contrato até 30/06/2027"]) expect(lista).not.toContain(rotulo);
     expect(lista).toContain("São Paulo/SP");
-    expect(texts(render({ contratos: "carregando", aba: "contratos" })).at(-1)).toBe("Carregando...");
+    // Lendo os contratos: nada escrito antes de 300 ms; a região da espera guarda o lugar da lista (parte 13g).
+    const lendo = render({ contratos: "carregando", aba: "contratos" });
+    expect(texts(lendo).at(-1)).toBe("Contratos");
+    expect(lendo).toMatch(/id="ficha-painel"[^>]*>[\s\S]*data-carregando-na-regiao/);
   });
 
   it("erro ao ler contratos, locais ou contatos aparece como erro, não como vazio", () => {
     const comErro = texts(render({ contratos: "erro" }));
     expect(comErro).not.toContain("Sem contrato");
     expect(comErro).toContain("Erro ao ler contratos");
-    expect(texts(render({ contratos: "erro", aba: "contratos" })).at(-1)).toBe("Não foi possível carregar.");
-    expect(texts(render({ locais: "erro", aba: "locais" })).at(-1)).toBe("Não foi possível carregar.");
-    expect(texts(render({ contatos: "erro", aba: "contatos" })).at(-1)).toBe("Não foi possível carregar.");
+    // A falha diz o que não carregou, como alerta (parte 13g).
+    expect(texts(render({ contratos: "erro", aba: "contratos" })).at(-1)).toBe("Não foi possível carregar os contratos.");
+    expect(texts(render({ locais: "erro", aba: "locais" })).at(-1)).toBe("Não foi possível carregar os locais.");
+    expect(texts(render({ contatos: "erro", aba: "contatos" })).at(-1)).toBe("Não foi possível carregar os contatos.");
+    expect(render({ locais: "erro", aba: "locais" })).toMatch(/role="alert"[^>]*>Não foi possível carregar os locais\./);
   });
 
   it("busca sem resultado e carregamento", () => {
     expect(texts(render({ busca: "zzz" })).slice(8, 9)).toEqual(["Nenhum resultado"]);
-    expect(texts(render({ estado: "carregando", selecionado: null })).slice(8)).toEqual(["Carregando..."]);
-    expect(texts(render({ estado: "erro", selecionado: null })).slice(8)).toEqual(["Não foi possível carregar o cadastro."]);
+    // Lendo: nada escrito antes de 300 ms, e os contadores são o bloco, nunca o zero (parte 13g).
+    const lendo = render({ estado: "carregando", selecionado: null });
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(texts(lendo).filter((texto) => /^\d+$/.test(texto))).toEqual([]);
+    expect(texts(render({ estado: "erro", selecionado: null })).slice(-2)).toEqual(["Não foi possível carregar o cadastro.", "Tentar de novo"]);
   });
 });

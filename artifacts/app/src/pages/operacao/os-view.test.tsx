@@ -312,7 +312,9 @@ describe("OS", () => {
   });
 
   it("carregando, erro e não encontrada", () => {
-    expect(textosDaTela(render({ estado: "carregando", ficha: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando", ficha: null }))).not.toContain("Carregando");
+    expect(render({ estado: "carregando", ficha: null })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(render({ estado: "erro", ficha: null }))).toContain("Não foi possível carregar a OS.");
     expect(textosDaTela(render({ estado: "nao_encontrada", ficha: null }))).toContain("OS 10045-01 não encontrada");
   });

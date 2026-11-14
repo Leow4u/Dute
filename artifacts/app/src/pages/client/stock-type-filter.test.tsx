@@ -3,6 +3,8 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { Anunciador } from "@/lib/carregando/anunciador";
+
 import { StockTypeFilter } from "./stock-type-filter";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -34,7 +36,14 @@ async function mount(initial: string[] = [], options = categories) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  await act(async () => root!.render(<Harness />));
+  await act(async () =>
+    root!.render(
+      <>
+        <Anunciador />
+        <Harness />
+      </>,
+    ),
+  );
 }
 
 function checkbox(label: string) {
@@ -124,7 +133,12 @@ describe("tipos do estoque", () => {
     await mount(["polo"]);
     await search("inexistente");
     expect(visibleTypes()).toEqual(["Todos os tipos"]);
-    expect(document.querySelector('[role="status"]')?.textContent).toBe("Nenhum tipo encontrado.");
+    const frase = [...document.querySelectorAll("p")].find((elemento) => elemento.textContent === "Nenhum tipo encontrado.");
+    expect(frase).toBeDefined();
+    // Sem região viva solta: quem diz é o Anunciador, a região viva da tela (carregamento v2, seção 7).
+    expect(frase!.closest("[role='status'], [aria-live]:not([data-anunciador])")).toBeNull();
+    expect(document.querySelectorAll("[role='status']:not([data-anunciador])")).toHaveLength(0);
+    expect(document.querySelector("[data-anunciador]")?.textContent).toBe("Nenhum tipo encontrado");
     await click(checkbox("Todos os tipos"));
     expect(selection()).toEqual([]);
   });

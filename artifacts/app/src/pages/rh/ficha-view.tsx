@@ -1,6 +1,12 @@
 import type { FormEvent, ReactNode } from "react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { Spinner } from "@/components/ui/spinner";
+import type { NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dataBr } from "@/lib/comercial/clientes";
@@ -75,6 +81,13 @@ export type FichaViewProps = {
   /** O registro com o arquivamento por confirmar. */
   arquivando: string | null;
   ocupado: boolean;
+  /**
+   * Qual ação grava ("salvar", "vinculo", "arquivar:<id>", "anexar:<id>"): só
+   * o botão dela diz o gerúndio, e os outros ficam travados (parte 13g).
+   */
+  emAndamento?: string | null;
+  /** A nova tentativa da leitura da ficha (parte 13g); sem ela, a falha não tem o que reler (a pessoa não existe). */
+  leitura?: NovaTentativa;
   /** A mensagem do servidor da última ação que falhou. */
   falha: string | null;
   acoes: AcoesDaFicha;
@@ -114,18 +127,26 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
 
 function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: FichaViewProps }) {
   const { grava, arquivando, ocupado, formulario, vinculo, acoes } = props;
+  const emAndamento = props.emAndamento ?? null;
   const editavel = grava && registro.situacao !== "arquivado";
+  const anexando = emAndamento === `anexar:${registro.id}`;
   // Com um formulário aberto, as gravações das linhas esperam: a edição que ele leva não muda por baixo dele.
   const travado = ocupado || formulario !== null || vinculo !== null;
   if (arquivando === registro.id) {
     return (
       <div className="col-span-2 flex flex-wrap gap-2">
-        <Button type="button" variant="destructive" size="sm" onClick={acoes.confirmarArquivamento} disabled={ocupado}>
-          Confirmar arquivamento
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={acoes.desistir} disabled={ocupado}>
+        <BotaoDeAcao
+          variant="destructive"
+          size="sm"
+          estado={emAndamento === `arquivar:${registro.id}` ? "andamento" : "repouso"}
+          bloqueado={ocupado && emAndamento !== `arquivar:${registro.id}`}
+          rotulo="Confirmar arquivamento"
+          andamento="Arquivando…"
+          onClick={acoes.confirmarArquivamento}
+        />
+        <DialogCancelar size="sm" ocupado={ocupado} onClick={acoes.desistir}>
           Voltar
-        </Button>
+        </DialogCancelar>
       </div>
     );
   }
@@ -147,10 +168,21 @@ function AcoesDoRegistro({ registro, props }: { registro: RegistroDoRh; props: F
             htmlFor={entrada}
             className={cn(
               "inline-flex h-8 cursor-pointer items-center rounded-md px-3 text-sm font-medium hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring",
-              travado && "pointer-events-none opacity-50",
+              travado && "pointer-events-none",
+              travado && !anexando && "opacity-50",
             )}
           >
-            {registro.arquivo ? "Trocar arquivo" : "Anexar arquivo"}
+            {anexando ? (
+              // O arquivo que sobe: a caixa e o gerúndio no lugar do rótulo (parte 13g); a espera tem forma, nunca só 50%.
+              <span className="inline-flex items-center gap-2">
+                <Spinner />
+                Enviando o arquivo…
+              </span>
+            ) : registro.arquivo ? (
+              "Trocar arquivo"
+            ) : (
+              "Anexar arquivo"
+            )}
             <input
               id={entrada}
               type="file"
@@ -295,12 +327,8 @@ function Formulario({ formulario, ocupado, acoes }: { formulario: FormularioDoRe
         </Campo>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={ocupado}>
-          Salvar
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fechar} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fechar} />
       </div>
     </form>
   );
@@ -335,25 +363,30 @@ function FormularioDasDatas({ vinculo, ocupado, acoes }: { vinculo: FormularioDo
         />
       </Campo>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={ocupado}>
-          Salvar
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fecharVinculo} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando as datas…" />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fecharVinculo} />
       </div>
     </form>
   );
 }
 
 export function FichaView(props: FichaViewProps) {
-  const { estado, ficha, erro, grava, formulario, vinculo, ocupado, falha, acoes } = props;
+  const { estado, ficha, erro, grava, formulario, vinculo, ocupado, falha, acoes, leitura } = props;
   if (estado !== "pronto" || !ficha) {
+    const mensagem = erro ?? "Não foi possível carregar a ficha.";
     return (
       <div className="v3 flex flex-col gap-5 text-foreground">
         <h1 className="text-3xl font-extrabold tracking-tight">Ficha</h1>
         <section aria-label="Ficha" className="rounded-lg border border-border bg-card">
-          <Vazio>{estado === "erro" ? (erro ?? "Não foi possível carregar a ficha.") : "Carregando..."}</Vazio>
+          {estado !== "erro" ? (
+            <CarregandoNaRegiao rotulo="Carregando a ficha…" continuaARota onTentar={leitura?.tentar} className="px-5 py-7" />
+          ) : leitura ? (
+            <FalhaNaSecao mensagem={mensagem} tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />
+          ) : (
+            <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-destructive">
+              {mensagem}
+            </p>
+          )}
         </section>
       </div>
     );

@@ -5,6 +5,9 @@ import { OsDocumento } from "@/components/operacao/os-documento";
 import { Button } from "@/components/ui/button";
 import { hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import type { DocumentoDaOs } from "@/lib/operacao/os-documento";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * A OS impressa, via operacional (parte 3.9d; docs/mockups/OSImpressao.dc.html):
@@ -20,15 +23,18 @@ export function OsImpressaoView({
   documento,
   urlDaAssinatura,
   onImprimir,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaImpressao;
   numero: string;
   documento: DocumentoDaOs | null;
   urlDaAssinatura: string | null;
   onImprimir: () => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
-  const mensagem =
-    estado === "carregando" ? "Carregando" : estado === "erro" ? "Não foi possível carregar a OS." : estado === "nao_encontrada" || !documento ? `OS ${numero} não encontrada` : null;
+  const mensagem = estado === "carregando" || estado === "erro" ? null : estado === "nao_encontrada" || !documento ? `OS ${numero} não encontrada` : null;
+  const pronta = estado === "pronto" && Boolean(documento) && !mensagem;
   return (
     <div className="flex flex-col gap-5 text-foreground">
       <div className="no-print flex flex-wrap items-center gap-3">
@@ -39,15 +45,22 @@ export function OsImpressaoView({
           </Link>
         </Button>
         <h1 className="text-xl font-bold tracking-tight">Imprimir OS {numero}</h1>
-        <Button type="button" className="ml-auto" onClick={onImprimir} disabled={!documento || Boolean(mensagem)}>
+        <Button type="button" className="ml-auto" onClick={onImprimir} disabled={!pronta}>
           <Printer aria-hidden="true" />
           Imprimir
         </Button>
       </div>
-      {mensagem ? (
-        <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
-          {mensagem}
-        </p>
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo="Carregando a OS…" continuaARota onTentar={leitura.tentar} className="rounded-lg border border-border bg-card px-5 py-7" />
+      ) : estado === "erro" ? (
+        <FalhaNaSecao
+          mensagem="Não foi possível carregar a OS."
+          tentando={leitura.tentando}
+          onTentar={leitura.tentar}
+          className="rounded-lg border border-border bg-card px-5 py-7"
+        />
+      ) : mensagem ? (
+        <p className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">{mensagem}</p>
       ) : documento ? (
         // O papel tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela.
         <div className="overflow-x-auto rounded-lg border border-border">

@@ -41,7 +41,7 @@ export default function OperacaoLayout({ children }: { children: ReactNode }) {
       atual={moduloAberto(location) ?? { label: "Operação", icon: Truck }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.itens, menu, "operacao-inicio")}
+      contadores={contadoresDoMenu(inicio.itens, menu, "operacao-inicio", inicio.carregando)}
       basePath={basePath}
       abaixoDoSeletor={
         ehTelaDoAgente(location)

@@ -7,6 +7,7 @@ import { documentoDoOrcamento, fonteDoDocumento } from "@/lib/comercial/document
 import { OrcamentoDocumento } from "@/components/comercial/orcamento-documento";
 
 import { DocumentoView, type DocumentoViewProps } from "./documento-view";
+import { semCamadasEscondidas } from "@/test/botoes";
 
 /**
  * O documento A4 do orçamento (docs/mockups/ComDocumento.dc.html), só a
@@ -74,7 +75,7 @@ function render(overrides: Partial<DocumentoViewProps> = {}) {
 
 /** Textos visíveis, na ordem (a marca d'água é aria-hidden e entra também). */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<style>.*?<\/style>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/ /g, " ").trim())
@@ -199,13 +200,15 @@ describe("documento A4 do orçamento", () => {
   });
 
   it("carregando, não encontrado e erro, sem o papel nem a impressão", () => {
+    // Lendo: nada escrito antes de 300 ms (a caixa entra com o relógio); na falha, "Tentar de novo" (parte 13g).
     for (const [estado, mensagem] of [
-      ["carregando", "Carregando..."],
-      ["nao_encontrado", "Orçamento não encontrado"],
-      ["erro", "Não foi possível carregar o orçamento."],
+      ["carregando", []],
+      ["nao_encontrado", ["Orçamento não encontrado"]],
+      ["erro", ["Não foi possível carregar o orçamento.", "Tentar de novo"]],
     ] as const) {
       const html = render({ estado, documento: null });
-      expect(texts(html), estado).toEqual(["Orçamento", "Imprimir / Salvar PDF", mensagem]);
+      expect(texts(html), estado).toEqual(["Orçamento", "Imprimir / Salvar PDF", ...mensagem]);
+      if (estado === "carregando") expect(html).toContain("data-carregando-na-regiao");
       expect(html).not.toContain("print-area");
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Imprimir/);
     }

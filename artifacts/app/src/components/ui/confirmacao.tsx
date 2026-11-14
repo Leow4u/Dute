@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import {
   AlertDialog,
@@ -29,6 +29,7 @@ export function Confirmacao({
   confirmar,
   confirmando,
   classeDoConfirmar,
+  perigo = false,
   onConfirmar,
   onFechar,
   focoAoFechar,
@@ -40,11 +41,18 @@ export function Confirmacao({
   confirmar: string;
   confirmando: string;
   classeDoConfirmar?: string;
+  /** O confirmar destrutivo, no vermelho do perigo (o `perigo` do `BotaoDeAcao`). */
+  perigo?: boolean;
   onConfirmar: () => void;
   onFechar: () => void;
   /** O lugar do foco quando o controle que abriu a confirmação saiu da tela (a linha removida). */
   focoAoFechar?: () => HTMLElement | null | undefined;
 }) {
+  // Enquanto a confirmação sai (200 ms), o texto é o de quando ela estava
+  // aberta: quem chama costuma limpar o que ela confirmava ("Remover a
+  // posição ?"), e a saída mostraria o vazio.
+  const texto = useRef({ titulo, descricao });
+  if (aberta) texto.current = { titulo, descricao };
   return (
     <AlertDialog
       open={aberta}
@@ -53,15 +61,16 @@ export function Confirmacao({
         if (!open) onFechar();
       }}
     >
-      <AlertDialogContent focoAoFechar={focoAoFechar} {...(descricao ? {} : { "aria-describedby": undefined })}>
+      <AlertDialogContent focoAoFechar={focoAoFechar} {...(texto.current.descricao ? {} : { "aria-describedby": undefined })}>
         <AlertDialogHeader>
-          <AlertDialogTitle>{titulo}</AlertDialogTitle>
-          {descricao ? <AlertDialogDescription>{descricao}</AlertDialogDescription> : null}
+          <AlertDialogTitle>{texto.current.titulo}</AlertDialogTitle>
+          {texto.current.descricao ? <AlertDialogDescription>{texto.current.descricao}</AlertDialogDescription> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             className={classeDoConfirmar}
+            perigo={perigo}
             estado={ocupada ? "andamento" : "repouso"}
             rotulo={confirmar}
             andamento={confirmando}

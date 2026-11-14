@@ -115,3 +115,64 @@ describe("a região que ainda lê, com outras na mesma tela", () => {
     expect(falados).toEqual(["Carregando anotações"]);
   });
 });
+
+describe("a região que ainda lê, com a nova tentativa (parte 13e)", () => {
+  function montarComTentar(onTentar: () => void) {
+    act(() =>
+      raiz!.render(
+        <>
+          <section>
+            <h2>Incidentes</h2>
+            <CarregandoNaRegiao id="lendo" rotulo="Carregando incidentes…" onTentar={onTentar} />
+          </section>
+          <Anunciador />
+        </>,
+      ),
+    );
+  }
+  const tentar = () => [...regiao().querySelectorAll<HTMLButtonElement>("button")].find((botao) => botao.textContent?.includes("Tentar de novo"));
+
+  it("sem a nova tentativa, a demora não oferece Tentar de novo (a de quem não sabe repetir a leitura)", () => {
+    passar(CARREGANDO.demoraMs);
+    expect(regiao().textContent).toContain("Demorando mais que o normal");
+    expect(tentar()).toBeUndefined();
+  });
+
+  it("aos 10 s, Tentar de novo ao lado da demora; o toque relê, recomeça o relógio e o foco fica na região", () => {
+    const onTentar = vi.fn();
+    montarComTentar(onTentar);
+    expect(regiao().id).toBe("lendo");
+    passar(CARREGANDO.demoraMs - 1);
+    expect(tentar()).toBeUndefined();
+    passar(1);
+    expect(regiao().textContent).toContain("Demorando mais que o normal");
+    expect(tentar()).toBeTruthy();
+    expect(textosForaDaLista(regiao().outerHTML, ["Carregando incidentes…", "Demorando mais que o normal", "Tentar de novo"])).toEqual([]);
+    tentar()!.focus();
+    act(() => tentar()!.click());
+    expect(onTentar).toHaveBeenCalledTimes(1);
+    // A espera recomeça do zero: nada antes de 300 ms, e o foco na região, nunca no body.
+    expect(regiao().textContent).toBe("");
+    expect(document.activeElement).toBe(regiao());
+    passar(CARREGANDO.atrasoMs);
+    expect(regiao().textContent).toBe("Carregando incidentes…");
+  });
+
+  it("aos 70 s, a desistência: Sem resposta do servidor. com Tentar de novo, que relê e recomeça", async () => {
+    const onTentar = vi.fn();
+    montarComTentar(onTentar);
+    passar(CARREGANDO.desisteMs);
+    const erro = regiao().querySelector('[role="alert"]');
+    expect(erro?.textContent).toContain("Sem resposta do servidor.");
+    expect(regiao().textContent).not.toContain("Demorando mais que o normal");
+    expect(textosForaDaLista(regiao().outerHTML, ["Sem resposta do servidor.", "Tentar de novo"])).toEqual([]);
+    tentar()!.focus();
+    act(() => tentar()!.click());
+    expect(onTentar).toHaveBeenCalledTimes(1);
+    expect(regiao().querySelector('[role="alert"]')).toBeNull();
+    expect(document.activeElement).toBe(regiao());
+    const html = container!.innerHTML;
+    vi.useRealTimers();
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});

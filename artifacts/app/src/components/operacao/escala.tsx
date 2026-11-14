@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar } from "@/components/operacao/partes";
 import { rotuloDaDemandaFora, type AgendaEmEdicao, type OsDaFila } from "@/lib/operacao/fila";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Escalar a OS (parte 3.5a), no Hoje e na Agenda (parte 3.6b): o formulário
@@ -19,7 +20,14 @@ export type PessoaDaEquipe = { id: string; nome: string; funcao: string; ativo: 
 export type VeiculoDaAgenda = { id: string; placa: string; tipo: string; ativo: boolean; revisaoEm?: string | null };
 
 /** O painel de escalar aberto: o título, o cliente, o formulário e como fechar. */
-export type EscalaAberta = { titulo: string; cliente: string; conteudo: ReactNode; onFechar: () => void };
+export type EscalaAberta = {
+  titulo: string;
+  cliente: string;
+  conteudo: ReactNode;
+  onFechar: () => void;
+  /** A gravação segura o painel: o Esc, o toque fora e o X não fecham (parte 13a). */
+  ocupado?: boolean;
+};
 
 const campoClasse = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground";
 
@@ -48,6 +56,7 @@ export function EscalaDaOs({
   onSalvar,
   onCancelar,
   ocupado,
+  emAndamento = null,
   erro,
 }: {
   os: OsDaFila;
@@ -58,6 +67,8 @@ export function EscalaDaOs({
   onSalvar: () => void;
   onCancelar: () => void;
   ocupado: boolean;
+  /** Qual ação grava: o agendamento ou o cancelamento (cada botão diz a sua). */
+  emAndamento?: "agendar" | "cancelar" | null;
   erro: string | null;
 }) {
   const fora = os.demandaFora ?? null;
@@ -135,18 +146,27 @@ export function EscalaDaOs({
               {escolhidoNaRevisao.placa} em revisão preventiva no dia
             </p>
           ) : null}
-          <Button type="submit" disabled={ocupado || !podeSalvar}>
-            {os.status === "agendada" ? "Salvar" : "Agendar"}
-          </Button>
+          <BotaoDeAcao
+            type="submit"
+            estado={ocupado && emAndamento !== "cancelar" ? "andamento" : "repouso"}
+            bloqueado={!podeSalvar || (ocupado && emAndamento === "cancelar")}
+            rotulo={os.status === "agendada" ? "Salvar" : "Agendar"}
+            andamento={os.status === "agendada" ? "Salvando…" : "Agendando…"}
+          />
         </>
       )}
       <div className="flex flex-col gap-3 border-t border-border pt-5">
         <Campo id="os-motivo" rotulo="Motivo do cancelamento">
           <Input id="os-motivo" value={agenda.motivo} onChange={(event) => onAgenda({ ...agenda, motivo: event.target.value })} />
         </Campo>
-        <Button type="button" variant="outline" disabled={ocupado || agenda.motivo.trim().length < 3} onClick={onCancelar}>
-          Cancelar OS
-        </Button>
+        <BotaoDeAcao
+          variant="outline"
+          estado={ocupado && emAndamento === "cancelar" ? "andamento" : "repouso"}
+          bloqueado={agenda.motivo.trim().length < 3 || (ocupado && emAndamento !== "cancelar")}
+          rotulo="Cancelar OS"
+          andamento="Cancelando a OS…"
+          onClick={onCancelar}
+        />
       </div>
     </form>
   );
@@ -154,7 +174,7 @@ export function EscalaDaOs({
 
 export function PainelDaEscala({ escala }: { escala: EscalaAberta | null }) {
   return (
-    <Sheet open={Boolean(escala)} onOpenChange={(aberto) => (aberto ? null : escala?.onFechar())}>
+    <Sheet open={Boolean(escala)} ocupado={Boolean(escala?.ocupado)} onOpenChange={(aberto) => (aberto ? null : escala?.onFechar())}>
       <SheetContent className="w-full overflow-y-auto bg-card sm:max-w-md">
         {escala ? (
           <>

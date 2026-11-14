@@ -367,7 +367,7 @@ export default function WarehouseLabelsPage() {
       ) : loading ? (
         // O esqueleto da prévia e, aos 300 ms, a caixa com o rótulo e o anúncio (carregamento v2, parte 13b).
         <div className="no-print flex flex-col gap-3">
-          <CarregandoNaRegiao rotulo="Carregando etiquetas…" />
+          <CarregandoNaRegiao rotulo="Carregando etiquetas…" continuaARota />
           <Skeleton className="h-96 w-full rounded-lg" />
         </div>
       ) : !wantsBoxes && !wantsPositions && !wantsVolumes ? (

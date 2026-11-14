@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
 import { AlertTriangle, Check, Clock, FileText, Search, X } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { NumeroLido } from "@/components/ui/numero-lido";
+import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,6 +77,8 @@ export type AFaturarViewProps = {
   agora: Date;
   /** Uma gravação em andamento: as ações esperam. */
   ocupado: boolean;
+  /** A nova tentativa das leituras da fila (parte 13g). */
+  leitura?: NovaTentativa;
   /** A emissão pela Omie está liberada neste ambiente (OMIE_LIBERADA). */
   omie?: boolean;
   acoes: AcoesDoAFaturar;
@@ -113,9 +122,10 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">{children}</p>;
 }
 
+/** A confirmação do registro: fica escrita, sem região viva solta; quem a diz é o Anunciador (parte 13g). */
 function Caixa({ children }: { children: ReactNode }) {
   return (
-    <div role="status" className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", TOM_OK)}>
+    <div className={cn("flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm font-bold", TOM_OK)}>
       <Check aria-hidden="true" className="size-4.5 shrink-0" />
       {children}
     </div>
@@ -211,14 +221,17 @@ function Pronta({
   );
 }
 
-function Prontas({ estado, linhas, busca, painel, agora, acoes, marcando }: AFaturarViewProps & { marcando: boolean }) {
+function Prontas(props: AFaturarViewProps & { marcando: boolean }) {
+  const { estado, linhas, busca, painel, agora, acoes, marcando } = props;
   const prontas = linhas.filter((linha) => linha.situacao === "pronta");
   const filtradas = filtrarLinhas(prontas, busca);
   const grupos = gruposPorCliente(filtradas);
   const marcadas = prontas.filter((linha) => painel.marcadas.includes(linha.demanda.numero));
+  const leitura = props.leitura ?? SEM_NOVA_TENTATIVA;
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <Vazio>Carregando...</Vazio>;
-  else if (estado === "erro") conteudo = <Vazio>Não foi possível carregar a fila.</Vazio>;
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando a fila…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar a fila." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (!prontas.length) conteudo = <Vazio>Nada a faturar</Vazio>;
   else if (!grupos.length) conteudo = <Vazio>Nada encontrado</Vazio>;
   else {
@@ -248,7 +261,9 @@ function Prontas({ estado, linhas, busca, painel, agora, acoes, marcando }: AFat
     <section aria-label="Prontas para faturar" className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-border px-5 py-3.5">
         <h2 className="text-base font-extrabold">Prontas para faturar</h2>
-        <Contador>{prontas.length}</Contador>
+        <Contador>
+          <NumeroLido estado={estado}>{prontas.length}</NumeroLido>
+        </Contador>
         {prontas.length ? <span className="ml-auto text-base font-extrabold tabular-nums">{formatarReais(totalDasMarcadas(prontas))}</span> : null}
       </div>
       {conteudo}
@@ -387,13 +402,15 @@ function Painel({ linhas, painel, hoje, ocupado, omie = false, acoes }: AFaturar
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2.5">
-        <Button type="button" onClick={acoes.registrar} disabled={ocupado || marcadas.length === 0}>
-          <Check aria-hidden="true" />
-          {pelaOmie ? "Emitir pela Omie" : "Registrar NF"}
-        </Button>
-        <Button type="button" variant="outline" onClick={acoes.fecharPainel} disabled={ocupado}>
-          Cancelar
-        </Button>
+        <BotaoDeAcao
+          estado={ocupado ? "andamento" : "repouso"}
+          bloqueado={marcadas.length === 0}
+          icone={<Check aria-hidden="true" />}
+          rotulo={pelaOmie ? "Emitir pela Omie" : "Registrar NF"}
+          andamento={pelaOmie ? "Emitindo pela Omie…" : "Registrando a NF…"}
+          onClick={acoes.registrar}
+        />
+        <DialogCancelar ocupado={ocupado} onClick={acoes.fecharPainel} />
       </div>
     </section>
   );
@@ -436,6 +453,8 @@ function Esperando({ linhas, busca }: AFaturarViewProps) {
 export function AFaturarView(props: AFaturarViewProps) {
   const { estado, linhas, busca, painel, ocupado, acoes } = props;
   const temProntas = estado === "pronto" && linhas.some((linha) => linha.situacao === "pronta");
+  // A confirmação do registro fica escrita; o Anunciador a diz uma vez.
+  useAnunciarAoMudar(painel.resultado);
   const painelAberto = painel.aberto && temProntas;
   return (
     <div className="v3 flex flex-col gap-5 text-foreground">

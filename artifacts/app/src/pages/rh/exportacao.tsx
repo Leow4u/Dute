@@ -31,11 +31,14 @@ export default function RhExportacao() {
   const [competencia, setCompetencia] = useState(() => competenciaPadrao(hoje));
   const [chave, setChave] = useState(novaChave);
   const [ocupado, setOcupado] = useState(false);
+  // Qual ação grava: "gerar" ou "baixar:<id>:<arquivo>" (só o botão dela diz o gerúndio; parte 13g).
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
 
-  async function executar(acao: () => Promise<void>) {
+  async function executar(acao: () => Promise<void>, qual: string) {
     setOcupado(true);
+    setEmAndamento(qual);
     setAviso(null);
     setFalha(null);
     try {
@@ -44,6 +47,7 @@ export default function RhExportacao() {
       setFalha(error instanceof Error ? error.message : "Falha na exportação.");
     } finally {
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
@@ -64,13 +68,13 @@ export default function RhExportacao() {
         } finally {
           await queryClient.invalidateQueries({ queryKey: CHAVE_DAS_EXPORTACOES });
         }
-      }),
+      }, "gerar"),
     baixar: (id: string, arquivo: ArquivoDaExportacao) =>
       void executar(async () => {
         const baixado = arquivoLido(await chamarRh("downloadRhExport", { id, arquivo }));
         if (!baixado) throw new Error("Planilha ilegível.");
         baixarCsv(baixado.nome, baixado.conteudo);
-      }),
+      }, `baixar:${id}:${arquivo}`),
   };
 
   const estado: EstadoDaLista = leitura.erro ? "erro" : leitura.exportacoes ? "pronto" : "carregando";
@@ -83,6 +87,8 @@ export default function RhExportacao() {
       hoje={hoje}
       competencia={competencia}
       ocupado={ocupado}
+      emAndamento={emAndamento}
+      leitura={leitura.releitura}
       aviso={aviso}
       falha={falha}
       acoes={acoes}

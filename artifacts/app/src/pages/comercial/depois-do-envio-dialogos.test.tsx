@@ -15,6 +15,7 @@ import {
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { CamposDoContrato, CamposDoPeriodo, CorpoDoDialogo, tituloDoDialogo, valoresDoDialogo } from "./depois-do-envio-dialogos";
+import { semCamadasEscondidas } from "@/test/botoes";
 
 /**
  * Os diálogos das ações depois do envio (parte 12b), só a apresentação dos
@@ -63,7 +64,7 @@ function corpo(acao: AcaoDepoisDoEnvio, f: FormDoDialogo, extra: Partial<Paramet
 }
 
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").trim())

@@ -9,6 +9,7 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
 import { CamposDaTabela, TabelaDoContratoDialog } from "./tabela-do-contrato-dialog";
+import { rotuloDoBotao } from "@/test/botoes";
 
 const noop = () => undefined;
 let raiz: Root;
@@ -35,7 +36,7 @@ function campo(id: string, valor: string) {
 }
 
 function clicar(rotulo: string) {
-  const botao = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === rotulo || item.getAttribute("aria-label") === rotulo);
+  const botao = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => rotuloDoBotao(item) === rotulo || item.getAttribute("aria-label") === rotulo);
   expect(botao, rotulo).toBeDefined();
   act(() => botao!.click());
 }

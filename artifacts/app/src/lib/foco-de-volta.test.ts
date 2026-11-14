@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CARREGANDO } from "@/lib/carregando/tempo";
 
-import { abridorDoDialogo, devolverFocoAoFechar, lugarPadraoDoFoco, podeReceberFoco, vigiarFocoDeVolta } from "./foco-de-volta";
+import { abridorDoDialogo, devolverFocoAoFechar, lugarPadraoDoFoco, podeReceberFoco, vigiarFocoDeVolta, vizinhosDoFoco } from "./foco-de-volta";
 
 /**
  * O foco que volta quando o diálogo fecha (carregamento v2, parte 13a; WCAG
@@ -114,3 +114,68 @@ describe("a vigia do foco que voltou", () => {
     expect(document.activeElement).toBe(document.body);
   });
 });
+
+describe("a vigia que acaba quando a pessoa age", () => {
+  it("o foco que saiu do controle para um lugar sem foco (o clique no fundo) encerra a vigia: a linha que sai depois não leva o foco ao título", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<main><h1>Posições</h1><ul><li><button id="linha">Nova rua</button></li></ul></main>';
+    const linha = document.getElementById("linha")!;
+    linha.focus();
+    vigiarFocoDeVolta(linha);
+    // O clique num lugar sem foco: o foco vai ao body, sem focusin.
+    linha.blur();
+    await vi.advanceTimersByTimeAsync(30_000);
+    linha.closest("li")!.remove();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.activeElement).toBe(document.body);
+    expect(document.querySelector("h1")!.hasAttribute("tabindex")).toBe(false);
+  });
+});
+
+describe("o vizinho do controle que saiu", () => {
+  it("os vizinhos são o controle seguinte e o anterior na ordem do Tab, fora dos diálogos e dos menus", () => {
+    document.body.innerHTML =
+      '<main><h1>Posições</h1><button id="a">A-02</button><button id="b">A-03</button><button id="d" disabled>X</button><span tabindex="-1">Y</span><button id="c">A-04</button><div role="dialog"><button>Fechar</button></div></main>';
+    expect(vizinhosDoFoco(document.getElementById("b")!).map((elemento) => elemento.id)).toEqual(["c", "a"]);
+    expect(vizinhosDoFoco(document.getElementById("c")!).map((elemento) => elemento.id)).toEqual(["b"]);
+    // O controle dentro de outro diálogo não tem vizinho na página.
+    expect(vizinhosDoFoco(document.querySelector<HTMLElement>('[role="dialog"] button')!)).toEqual([]);
+  });
+
+  it("o gatilho que saiu leva o foco à linha seguinte (ou à anterior), e não ao título lá em cima", () => {
+    document.body.innerHTML = '<main><h1>Posições</h1><ul><li><button id="a">A-02</button></li><li><button id="b">A-03</button></li><li><button id="c">A-04</button></li></ul></main>';
+    const gatilho = document.getElementById("b")!;
+    const vizinhos = vizinhosDoFoco(gatilho);
+    gatilho.closest("li")!.remove();
+    devolverFocoAoFechar(new Event("x", { cancelable: true }), gatilho, undefined, vizinhos);
+    expect(document.activeElement?.id).toBe("c");
+    // A última linha que sai vai à anterior.
+    const ultima = document.getElementById("c")!;
+    const deUltima = vizinhosDoFoco(ultima);
+    ultima.closest("li")!.remove();
+    devolverFocoAoFechar(new Event("x", { cancelable: true }), ultima, undefined, deUltima);
+    expect(document.activeElement?.id).toBe("a");
+  });
+
+  it("a vigia leva ao vizinho a linha que a releitura tira depois", async () => {
+    document.body.innerHTML = '<main><h1>Posições</h1><ul><li><button id="a">A-02</button></li><li><button id="b">A-03</button></li><li><button id="c">A-04</button></li></ul></main>';
+    const linha = document.getElementById("b")!;
+    linha.focus();
+    vigiarFocoDeVolta(linha);
+    linha.closest("li")!.remove();
+    await esperar();
+    expect(document.activeElement?.id).toBe("c");
+  });
+
+  it("o título fora da vista (a lista longa e rolada) vem até a borda, para o foco aparecer", () => {
+    document.body.innerHTML = "<main><h1>Posições</h1></main>";
+    const titulo = document.querySelector("h1")!;
+    const rolar = vi.fn();
+    titulo.scrollIntoView = rolar;
+    vi.spyOn(titulo, "getBoundingClientRect").mockReturnValue({ top: -1621, bottom: -1585, left: 0, right: 200, width: 200, height: 36, x: 0, y: -1621, toJSON: () => ({}) });
+    devolverFocoAoFechar(new Event("x", { cancelable: true }), document.createElement("button"));
+    expect(document.activeElement).toBe(titulo);
+    expect(rolar).toHaveBeenCalledWith({ block: "nearest" });
+  });
+});
+

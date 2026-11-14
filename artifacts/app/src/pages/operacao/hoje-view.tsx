@@ -25,6 +25,9 @@ import { Avatar, Filtro, SeloDoTipo, Servicos, selo, seloAlerta, seloNeutro, typ
 import { hrefDeAtender, pedidoEmTexto, rotaDaSolicitacao } from "@/lib/operacao/solicitacoes";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs, hrefDoPlano, hrefDoPlanoDaVistoria } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › Hoje (docs/plataforma/fase-3-operacao.md, parte 3.5a;
@@ -257,6 +260,7 @@ export function HojeView({
   onEscalar,
   erro,
   escala,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDoHoje;
   resumo: string;
@@ -270,6 +274,8 @@ export function HojeView({
   erro: string | null;
   /** O painel de escalar aberto, com o formulário (EscalaDaOs) e como fechar. */
   escala: EscalaAberta | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const filtrado = Boolean(filtros.tipo || filtros.entrada || filtros.cliente || filtros.pessoa);
   return (
@@ -324,11 +330,9 @@ export function HojeView({
         ) : null}
       </div>
 
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando o Hoje…" continuaARota onTentar={leitura.tentar} /> : null}
       {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar o Hoje.
-        </p>
+        <FalhaNaSecao mensagem="Não foi possível carregar o Hoje." tentando={leitura.tentando} onTentar={leitura.tentar} />
       ) : null}
       {erro && !escala ? (
         <p role="alert" className="text-sm text-destructive">

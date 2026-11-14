@@ -81,8 +81,7 @@ import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
-import { useNovaAssinatura } from "@/lib/operacao/nova-assinatura";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
@@ -287,16 +286,15 @@ export default function Pedidos() {
     linhaDoDialogo.current = { chave, abridor: typeof document === "undefined" ? null : document.activeElement };
   };
   // A leitura ao vivo das entregas que falha não se refaz sozinha: "Tentar de novo", na linha, assina de novo, e a
-  // falha fica até a nova responder (carregamento v2, parte 13c). Quando ela chega, o foco vai à entrega da linha.
-  const entregasAoVivo = useNovaAssinatura(OPERACAO_LIBERADO ? "orders:em_aberto" : null);
+  // falha fica até a nova responder (`useLeitura`; carregamento v2, partes 13c e 13g). Quando ela chega, o foco vai à
+  // entrega da linha.
   const [tentandoEntregas, setTentandoEntregas] = useState(false);
-  const focoDaEntrega = useFocoQueSegue();
   const entregas = useLeitura(
-    entregasAoVivo.chave,
+    OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
     (id, data) => ({ id, entrega: entregaDoPedido(data) }),
   );
-  const entregasFalharam = entregasAoVivo.falhou(entregas);
+  const entregasFalharam = entregas.erro;
   const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
   const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
@@ -681,8 +679,14 @@ export default function Pedidos() {
     evento.preventDefault();
     destino.focus();
   };
+  // O diálogo que sai (200 ms) mostra o que mostrava, com a mesma largura: o
+  // fim não esvazia o cartão nem tira o botão que tem o foco (que cairia no
+  // body até o diálogo sair). O seguinte que abre toma o lugar.
+  const [dialogoNaTela, setDialogoNaTela] = useState<DialogState>(null);
+  if (dialog !== null && dialog !== dialogoNaTela) setDialogoNaTela(dialog);
+  const dialogoVisivel = dialog ?? dialogoNaTela;
   // A tabela do cancelamento pede um diálogo mais largo.
-  const larguraDoDialogo = cn("sm:max-w-[440px]", dialog?.kind === "cancel" && "sm:max-w-[560px]");
+  const larguraDoDialogo = cn("sm:max-w-[440px]", dialogoVisivel?.kind === "cancel" && "sm:max-w-[560px]");
 
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
@@ -694,7 +698,7 @@ export default function Pedidos() {
       return {
         detail: "Não consegui carregar a entrega.",
         secondary: operador ? (
-          <SaiComOFoco alvo={`entrega-${order.key}`} pedido={focoDaEntrega}>
+          <SaiComOFoco alvo={`entrega-${order.key}`}>
             <BotaoDeAcao
               variant="outline"
               estado={tentandoEntregas ? "andamento" : "repouso"}
@@ -702,7 +706,7 @@ export default function Pedidos() {
               andamento="Tentando de novo…"
               onClick={() => {
                 setTentandoEntregas(true);
-                void entregasAoVivo.tentar().finally(() => setTentandoEntregas(false));
+                void entregas.tentar().finally(() => setTentandoEntregas(false));
               }}
             />
           </SaiComOFoco>
@@ -1011,7 +1015,7 @@ export default function Pedidos() {
         }}
       >
         <DialogContent className={larguraDoDialogo} aria-describedby={undefined} onCloseAutoFocus={devolverFocoDoDialogo}>
-          {dialog?.kind === "reject" ? (
+          {dialogoVisivel?.kind === "reject" ? (
             <>
               <DialogHeader>
                 <DialogTitle>Recusar solicitação</DialogTitle>
@@ -1029,27 +1033,27 @@ export default function Pedidos() {
                 <DialogCancelar onClick={() => setDialog(null)}>Voltar</DialogCancelar>
                 <BotaoDeAcao
                   variant="destructive"
-                  estado={linhas.estado(dialog.request.id, "recusar")}
+                  estado={linhas.estado(dialogoVisivel.request.id, "recusar")}
                   rotulo="Recusar"
                   andamento="Recusando…"
                   sucesso="Recusado"
                   erro="Não recusado"
                   bloqueado={recusaTravada(
-                    linhas.estado(dialog.request.id, "recusar"),
-                    linhas.ocupada(dialog.request.id),
+                    linhas.estado(dialogoVisivel.request.id, "recusar"),
+                    linhas.ocupada(dialogoVisivel.request.id),
                     rejectReason,
                   )}
-                  onClick={() => decidir(dialog.request, "recusar", rejectReason.trim())}
+                  onClick={() => decidir(dialogoVisivel.request, "recusar", rejectReason.trim())}
                 />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "deliver" ? (
+          ) : dialogoVisivel?.kind === "deliver" ? (
             <>
               <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: entregue</DialogTitle>
+                <DialogTitle>{dialogoVisivel.order.orderNumber}: entregue</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3">
-                {dialog.order.stage === "enviar" ? (
+                {dialogoVisivel.order.stage === "enviar" ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                       <Label htmlFor="motorista">Quem levou</Label>
@@ -1078,7 +1082,7 @@ export default function Pedidos() {
                   />
                 </div>
               </div>
-              {dialog.order.stage === "enviar" ? (
+              {dialogoVisivel.order.stage === "enviar" ? (
                 <Progresso
                   forma="etapas"
                   titulo="Confirmando a entrega"
@@ -1104,27 +1108,27 @@ export default function Pedidos() {
                   erro="Não confirmada"
                   bloqueado={
                     estadoDaEntrega === "repouso" &&
-                    (busy || (dialog.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
+                    (busy || (dialogoVisivel.order.stage === "enviar" && (!driver.trim() || !plate.trim())))
                   }
                   onClick={() => {
                     if (conferindoEntrega) return;
-                    if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialog.order);
-                    else deliver.mutate({ order: dialog.order });
+                    if (estadoDaEntrega === "sem-resposta") void conferirEntrega(dialogoVisivel.order);
+                    else deliver.mutate({ order: dialogoVisivel.order });
                   }}
                 />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "cancel" ? (
+          ) : dialogoVisivel?.kind === "cancel" ? (
             <>
               <DialogHeader>
-                <DialogTitle>Cancelar pedido {dialog.order.orderNumber}</DialogTitle>
+                <DialogTitle>Cancelar pedido {dialogoVisivel.order.orderNumber}</DialogTitle>
                 <p className="text-sm font-medium text-muted-foreground">
-                  {[cliente.name, orderMeta(dialog.order)].filter(Boolean).join(" · ")}
+                  {[cliente.name, orderMeta(dialogoVisivel.order)].filter(Boolean).join(" · ")}
                 </p>
               </DialogHeader>
               <CancelarPedidoView
                 motivo={cancelReason}
-                voltas={voltasDoPedido(dialog.order)}
+                voltas={voltasDoPedido(dialogoVisivel.order)}
                 onMotivo={(motivo) => {
                   setCancelReason(motivo);
                   chaveDoCancelamento.current = null;
@@ -1138,14 +1142,14 @@ export default function Pedidos() {
                   rotulo="Cancelar pedido"
                   andamento="Cancelando…"
                   bloqueado={!cancelar.isPending && (!motivoValido(cancelReason) || busy)}
-                  onClick={() => cancelar.mutate({ orderId: dialog.orderId, reason: cancelReason.trim() })}
+                  onClick={() => cancelar.mutate({ orderId: dialogoVisivel.orderId, reason: cancelReason.trim() })}
                 />
               </DialogFooter>
             </>
-          ) : dialog?.kind === "entrega" && entregaForm ? (
+          ) : dialogoVisivel?.kind === "entrega" && entregaForm ? (
             <>
               <DialogHeader>
-                <DialogTitle>{dialog.order.orderNumber}: entrega</DialogTitle>
+                <DialogTitle>{dialogoVisivel.order.orderNumber}: entrega</DialogTitle>
               </DialogHeader>
               <form
                 id="entrega-do-pedido"
@@ -1155,7 +1159,7 @@ export default function Pedidos() {
                   setEntregaTentou(true);
                   if (Object.keys(problemasDaEntrega(entregaForm, new Date())).length) return;
                   setEntregaErro(null);
-                  salvarEntrega.mutate({ orderId: dialog.orderId, form: entregaForm });
+                  salvarEntrega.mutate({ orderId: dialogoVisivel.orderId, form: entregaForm });
                 }}
               >
                 <FormularioDaEntregaView

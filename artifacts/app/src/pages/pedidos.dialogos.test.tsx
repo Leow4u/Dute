@@ -183,12 +183,25 @@ describe("Cancelar pedido, gravando", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("só o sucesso fecha; a falha deixa o diálogo, e a nova tentativa leva a mesma chave", async () => {
+  it("só o sucesso fecha; a falha deixa o diálogo, com o foco no Cancelar pedido que nunca ficou disabled, e a nova tentativa leva a mesma chave", async () => {
     await abrirOCancelamento();
-    await act(async () => botao("Cancelar pedido", dialogo()!).click());
+    const confirmar = botao("Cancelar pedido", dialogo()!);
+    confirmar.focus();
+    await act(async () => confirmar.click());
+    await passar(CARREGANDO.atrasoMs);
+    // Antes, o botão ficava disabled enquanto gravava: o foco caía no body.
+    expect(confirmar.disabled).toBe(false);
+    expect(confirmar.getAttribute("aria-busy")).toBe("true");
     await act(async () => estado.cancelamentos[0].responder({ message: "Falha interna no servidor." }, 500));
-    await passar(CARREGANDO.minimoMs + 50);
+    // O Voltar e o X seguem o gerúndio do confirmar, que fica pelo menos 500 ms na tela, e voltam com ele.
+    await passar(CARREGANDO.minimoMs);
+    for (let vez = 0; vez < 10 && confirmar.querySelector(".botao-acao-camada[data-atual]")?.textContent !== "Cancelar pedido"; vez += 1) {
+      expect(botao("Voltar", dialogo()!).getAttribute("aria-disabled")).toBe("true");
+      await passar(50);
+    }
+    expect(confirmar.querySelector(".botao-acao-camada[data-atual]")?.textContent).toBe("Cancelar pedido");
     expect(dialogo()).not.toBeNull();
+    expect(document.activeElement).toBe(confirmar);
     expect(botao("Voltar", dialogo()!).hasAttribute("aria-disabled")).toBe(false);
 
     await passar(1_100);
@@ -202,5 +215,29 @@ describe("Cancelar pedido, gravando", () => {
     // O foco não fica no body depois do fim.
     await passar(50);
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("o fim não esvazia o diálogo: o conteúdo e o botão com o foco ficam até ele sair", async () => {
+    await abrirOCancelamento();
+    const conteudo = dialogo()!;
+    const confirmar = botao("Cancelar pedido", conteudo);
+    confirmar.focus();
+    await act(async () => confirmar.click());
+    // O que sai de dentro do diálogo enquanto ele ainda está na tela.
+    const tirados: string[] = [];
+    const observador = new MutationObserver((registros) => {
+      for (const registro of registros) {
+        if (registro.target instanceof Node && conteudo.contains(registro.target) && registro.removedNodes.length) {
+          tirados.push(...Array.from(registro.removedNodes).map((no) => no.textContent ?? ""));
+        }
+      }
+    });
+    observador.observe(document.body, { subtree: true, childList: true });
+    await act(async () => estado.cancelamentos[0].responder({ ok: true }));
+    await passar(CARREGANDO.minimoMs + 50);
+    observador.disconnect();
+    expect(dialogo()).toBeNull();
+    // Antes, o fim trocava o conteúdo pelo vazio (o setDialog(null)) e só depois o diálogo saía.
+    expect(tirados.filter((texto) => texto.includes("Cancelar pedido PED-1039") || texto.includes("Voltar"))).toEqual([]);
   });
 });

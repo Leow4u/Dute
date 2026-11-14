@@ -166,6 +166,18 @@ describe("onde o toast aparece", () => {
     expect(celular).toEqual(expect.arrayContaining(["px-4", "pb-2"]));
   });
 
+  it("com um diálogo aberto no celular (em pé ou deitado), vai para o topo: embaixo cobriria o rodapé preso do diálogo", () => {
+    mostrar();
+    expect(viewport().hasAttribute("data-avisos")).toBe(true);
+    const semComentarios = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const bloco = /@media \(width < 48rem\), \(height < 31\.25rem\) \{\s*body:has\(\[role="dialog"\]\[data-state="open"\], \[role="alertdialog"\]\[data-state="open"\]\) \[data-avisos\] \{([^}]*)\}/.exec(semComentarios);
+    expect(bloco, "a regra do toast com o diálogo aberto").not.toBeNull();
+    expect(bloco![1]).toMatch(/top:\s*calc\(env\(safe-area-inset-top\) \+ 0\.5rem\);/);
+    expect(bloco![1]).toMatch(/bottom:\s*auto;/);
+    // O celular da regra é o mesmo do rodapé preso (a variante celular).
+    expect(semComentarios).toMatch(/@custom-variant celular \{\s*@media \(width < 48rem\), \(height < 31\.25rem\) \{\s*@slot;/);
+  });
+
   it("de 640 a 767 px nada muda: a barra de baixo ainda está na tela", () => {
     mostrar();
     expect(porTela(viewport()).sm).toEqual([]);

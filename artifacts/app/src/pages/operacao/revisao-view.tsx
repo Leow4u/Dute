@@ -25,6 +25,10 @@ import {
   type LinhaParaRevisar,
 } from "@/lib/operacao/revisao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Operação › Revisão (docs/plataforma/fase-3-operacao.md, parte 3.10b;
@@ -362,10 +366,13 @@ function OsDaVez({
         </p>
       ) : null}
       <div className="flex justify-end">
-        <Button type="button" onClick={onConcluir} disabled={ocupado}>
-          <Check aria-hidden="true" className="size-4" />
-          {pedeAditivo(form, linhas) ? "Concluir revisão e pedir aditivo" : "Concluir revisão"}
-        </Button>
+        <BotaoDeAcao
+          estado={ocupado ? "andamento" : "repouso"}
+          icone={<Check aria-hidden="true" className="size-4" />}
+          rotulo={pedeAditivo(form, linhas) ? "Concluir revisão e pedir aditivo" : "Concluir revisão"}
+          andamento="Concluindo a revisão…"
+          onClick={onConcluir}
+        />
       </div>
     </div>
   );
@@ -382,6 +389,7 @@ export function RevisaoView({
   erro,
   ocupado,
   onConcluir,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaRevisao;
   cartoes: readonly CartaoParaRevisar[];
@@ -393,15 +401,15 @@ export function RevisaoView({
   erro: string | null;
   ocupado: boolean;
   onConcluir: () => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   return (
     <section className="flex flex-col gap-6">
       <h1 className="text-3xl font-bold tracking-tight text-foreground">Revisão</h1>
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando as OS para revisar…" continuaARota onTentar={leitura.tentar} /> : null}
       {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar as OS para revisar.
-        </p>
+        <FalhaNaSecao mensagem="Não foi possível carregar as OS para revisar." tentando={leitura.tentando} onTentar={leitura.tentar} />
       ) : null}
       {estado === "pronto" ? (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">

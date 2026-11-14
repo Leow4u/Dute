@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { resumoDoDiaEmPartes, type Agenda, type DiaDaAgenda, type GrupoDaAgenda, type OsNaAgenda, type ParteDoResumo } from "@/lib/operacao/agenda";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda, hrefDaFichaDaOs } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › Agenda (docs/plataforma/fase-3-operacao.md, parte 3.6b;
@@ -265,6 +268,7 @@ export function AgendaView({
   onEscalar,
   erro,
   escala,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDaAgenda;
   agenda: Agenda;
@@ -278,6 +282,8 @@ export function AgendaView({
   onEscalar: (numero: string) => void;
   erro: string | null;
   escala: EscalaAberta | null;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   const idDaSemana = useId();
   const os = selecionada ? (agenda.ordens[selecionada] ?? null) : null;
@@ -300,11 +306,9 @@ export function AgendaView({
         </div>
       </header>
 
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando a agenda…" continuaARota onTentar={leitura.tentar} /> : null}
       {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar a agenda.
-        </p>
+        <FalhaNaSecao mensagem="Não foi possível carregar a agenda." tentando={leitura.tentando} onTentar={leitura.tentar} />
       ) : null}
       {erro && !escala ? (
         <p role="alert" className="text-sm text-destructive">

@@ -4,7 +4,7 @@ import { useAppUser } from "@/lib/auth";
 import { minhasOs, saudacao } from "@/lib/campo/os-no-campo";
 import { fichaDaLeitura } from "@/lib/operacao/ficha-da-os";
 import { hojeIso } from "@/lib/operacao/fila";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 
 import { CampoHojeView } from "./hoje-view";
 
@@ -26,6 +26,7 @@ export default function PaginaCampoHoje() {
   return (
     <CampoHojeView
       estado={ordens.erro ? "erro" : ordens.itens ? "pronto" : "carregando"}
+      leitura={novaTentativaDe([ordens])}
       dia={dia}
       ola={ola}
       lista={minhasOs(ordens.itens ?? [], hoje)}

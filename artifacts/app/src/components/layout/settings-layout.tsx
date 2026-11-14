@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, WifiOff } from "lucide-react";
 
 import { AccountMenu } from "@/components/layout/account-menu";
-import { ITEM, ITEM_ATUAL, ITEM_OUTRO, MarcaDoAtual } from "@/components/layout/shell-do-modulo";
+import { ContadorOuEspera, ITEM, ITEM_ATUAL, ITEM_OUTRO, MarcaDoAtual } from "@/components/layout/shell-do-modulo";
 import { cn } from "@/lib/utils";
 import { useAppAuth, useAppUser } from "@/lib/auth";
 import { useConexao } from "@/lib/carregando/estado-da-conexao";
@@ -137,6 +137,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                     {active ? <MarcaDoAtual /> : null}
                     <Icon className="size-5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                    <ContadorOuEspera atual={active} contador={undefined} />
                   </Link>
                 );
               })}

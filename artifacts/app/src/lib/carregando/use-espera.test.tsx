@@ -267,6 +267,29 @@ describe("o timer que dispara um pouco antes do marco", () => {
     vi.restoreAllMocks();
   });
 
+  it("o marco alcançado conta inteiro, mesmo quando a conta do relógio arredonda para baixo (o 300 virando 299,99…)", () => {
+    // Com o começo em 7909,879733812541, (começo + 300) − começo dá 299,9999999999991 em ponto flutuante. O tique que
+    // dispara uma fração antes do marco usava esse instante, não marcava, e o indicador só entrava aos 3 s.
+    const comeco = 7_909.879733812541;
+    expect(comeco + 300 - comeco).toBeLessThan(300);
+    let relogio = comeco;
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.spyOn(performance, "now").mockImplementation(() => relogio);
+    montar(true);
+    expect(atual().visivel).toBe(false);
+    relogio = comeco + 299.9;
+    passar(300);
+    expect(atual()).toMatchObject({ visivel: true, fase: "andamento" });
+    relogio = comeco + 2_999.9;
+    passar(2_700);
+    expect(atual().fase).toBe("com-objeto");
+    relogio = comeco + 9_999.9;
+    passar(7_000);
+    expect(atual()).toMatchObject({ fase: "demorando", calmo: true });
+    vi.restoreAllMocks();
+  });
+
   it("aos 300 ms o indicador entra, mesmo com o timer 0,2 ms adiantado; e os marcos seguintes também", () => {
     timersAdiantados(0.2);
     montar(true);

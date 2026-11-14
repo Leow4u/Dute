@@ -10,7 +10,7 @@ import { Confirmacao } from "@/components/ui/confirmacao";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
@@ -407,7 +407,6 @@ export default function WarehousePositionsPage() {
   // nele, e a tabela vazia nunca aparece junto do aviso (carregamento v2, parte 13b). A releitura que falha com a
   // lista lida fica na linha de estado, e a tabela continua.
   const leitura = useLeituraComFalha(positionsQuery);
-  const focoQueSegue = useFocoQueSegue();
   const loading = leitura.isLoading;
   const falhou = leitura.isError && leitura.data === undefined;
   // Erro de leitura não é mapa vazio: sem isso a tela oferecia carregar o mapa inicial junto com o erro.
@@ -482,7 +481,7 @@ export default function WarehousePositionsPage() {
             {canEdit ? (
               // Ocupado sem disabled: o foco fica no botão, com o gerúndio (parte 13b). Quando o mapa entra, o quadro sai, e o
               // foco vai à linha de estado, que diz "Atualizado às", nunca ao body.
-              <SaiComOFoco alvo={ID_DA_LINHA} pedido={focoQueSegue}>
+              <SaiComOFoco alvo={ID_DA_LINHA}>
                 <BotaoDeAcao
                   size="sm"
                   className="max-md:min-h-12"

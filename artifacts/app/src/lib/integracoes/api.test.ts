@@ -67,3 +67,12 @@ it('usa endpoints pessoais e nunca inclui clientes na criação pessoal', async 
   expect(calls[2][1]).toMatchObject({ cache: 'no-store', method: 'POST' });
   expect(calls[3][0]).toContain(`/api-keys/${'a'.repeat(32)}`);
 });
+
+it("a leitura que não alcança a API é falta de conexão, e não um erro qualquer (carregamento v2, parte 13e)", async () => {
+  const { listarChavesPessoais } = await import("./api");
+  const { ehFaltaDeConexao } = await import("../conexao");
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+  const erro = await listarChavesPessoais().catch((causa: unknown) => causa);
+  // Sem rede ou sem resposta, a tela diz qual (o BlocoSemConexao), e o app relê sozinho quando a rede volta.
+  expect(ehFaltaDeConexao(erro)).toBe(true);
+});

@@ -72,7 +72,7 @@ export default function WmsLayout({ children }: { children: ReactNode }) {
       atual={moduloAberto(location) ?? { label: "Armazenagem", icon: Boxes }}
       opcoes={opcoesDoSeletor(role, profile, location)}
       items={menu}
-      contadores={contadoresDoMenu(inicio.items, menu, "home")}
+      contadores={contadoresDoMenu(inicio.items, menu, "home", inicio.carregando)}
       basePath={basePath}
       conteudoV3={telaDoWmsNaV3(location)}
       abaixoDoSeletor={

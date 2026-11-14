@@ -162,7 +162,9 @@ describe("Concluir OS no celular", () => {
     const concluida = textosDaTela(render({ ficha: { ...FICHA, status: "em_revisao" } }));
     expect(concluida).toContain("OS 10211-01 concluída");
     expect(concluida).toContain("Minhas OS");
-    expect(textosDaTela(render({ estado: "carregando", ficha: null }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando", ficha: null }))).not.toContain("Carregando");
+    expect(render({ estado: "carregando", ficha: null })).toContain("data-carregando-na-regiao");
   });
 
   it("sem o motivo nada vai; sem responsável no local, vai a conclusão com o nome de quem recebeu", () => {

@@ -59,7 +59,7 @@ export function PedidosRomaneioView({
 {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
           com o anúncio pelo Anunciador, no lugar do "Carregando" seco. */}
       {estado === "carregando" ? (
-        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} className="no-print rounded-lg border border-border bg-card px-5 py-6" />
+        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota className="no-print rounded-lg border border-border bg-card px-5 py-6" />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}

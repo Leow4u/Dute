@@ -110,7 +110,7 @@ describe("Numerar pedidos e envios antigos", () => {
     expect(ver.disabled).toBe(false);
     await passar(350);
     expect(ver.getAttribute("aria-busy")).toBe("true");
-    expect(ver.textContent).toContain("Vendo o que muda…");
+    expect(ver.textContent).toContain("Conferindo a numeração…");
     expect(document.activeElement).toBe(ver);
     paraOAxe.push(container.innerHTML);
     await passar(1_000);
@@ -134,7 +134,7 @@ describe("Numerar pedidos e envios antigos", () => {
 
 const camada = (item: HTMLButtonElement) => item.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? null;
 const TEXTOS = [
-  /^Numerar pedidos e envios antigos$/, /^Dá número PED-\/ENV-/, /^(Vai numerar|Numerou) 2 solicitação\(ões\)/, "Ver o que muda", "Vendo o que muda…",
+  /^Numerar pedidos e envios antigos$/, /^Dá número PED-\/ENV-/, /^(Vai numerar|Numerou) 2 solicitação\(ões\)/, "Ver o que muda", "Conferindo a numeração…",
   "Numerar agora", "Numerando…", "Numerado", "Não numerado", "Conferir",
 ];
 const textosDoNumerar = () => {

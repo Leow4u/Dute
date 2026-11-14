@@ -1,12 +1,18 @@
-import type { FormEvent, ReactNode } from "react";
+import { useEffect, type FormEvent, type ReactNode } from "react";
 import { formatarReais } from "@workspace/dominio";
 import { Check, FileText, Paperclip, Plus, Search, X } from "lucide-react";
 import { Link } from "wouter";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { DialogCancelar } from "@/components/ui/dialog";
+import { ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAnuncio } from "@/lib/carregando/anunciador";
 import type { SituacaoDaCobranca } from "@/lib/financeiro/faturas";
 import { hrefDoComprovante } from "@/lib/portal/comprovante";
 import { SITUACAO_NO_PORTAL_ROTULO, type CobrancaDaOs, type NumerosDoPortal, type OsDoPortal, type SituacaoNoPortal } from "@/lib/portal/servicos";
@@ -50,8 +56,18 @@ export type PedidoNaTela = {
   hoje: string;
 };
 
+/** A nova tentativa de uma leitura que falhou (carregamento v2, parte 13f). */
+export type NovaTentativaNaTela = { tentando: boolean; onTentar: () => void };
+
+/** A falha de uma leitura de apoio (as NFs, as solicitações): dita na tela, nunca o vazio. */
+export type FalhaDeApoio = NovaTentativaNaTela & { mensagem: string };
+
 export type ServicosViewProps = {
   estado: "carregando" | "erro" | "pronto";
+  /** A nova tentativa da leitura das OS: a demora e a falha com "Tentar de novo". */
+  leitura?: NovaTentativaNaTela;
+  /** As leituras de apoio que falharam, ditas acima da lista. */
+  falhas?: FalhaDeApoio[];
   /** As OS já ordenadas (ordenarOs). */
   os: OsDoPortal[];
   numeros: NumerosDoPortal;
@@ -208,12 +224,15 @@ function Painel({ os, cobranca, onFechar }: { os: OsDoPortal; cobranca: Cobranca
 }
 
 function Solicitacoes({ lista, enviada }: { lista: SolicitacaoDoPortal[]; enviada: boolean }) {
+  // A confirmação à vista; o leitor de tela a ouve pelo Anunciador, a região viva da tela (seção 7).
+  const anunciar = useAnuncio();
+  useEffect(() => (enviada ? anunciar("Solicitação enviada") : undefined), [enviada, anunciar]);
   return (
     <section aria-label="Solicitações" className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 border-b border-muted px-5 py-3.5">
         <h2 className="text-base font-extrabold">Solicitações</h2>
         {enviada ? (
-          <p role="status" className="text-sm font-bold text-success-soft-foreground">
+          <p className="text-sm font-bold text-success-soft-foreground">
             Solicitação enviada
           </p>
         ) : null}
@@ -271,9 +290,10 @@ function Formulario({ pedido, acoes }: { pedido: PedidoNaTela; acoes: ServicosVi
     >
       <div className="flex items-start gap-2.5">
         <h2 className="flex-1 text-base font-extrabold">Solicitar OS</h2>
-        <Button type="button" variant="ghost" size="icon" aria-label="Fechar" className="size-8" onClick={acoes.cancelar}>
+        {/* Enviando, o Fechar fica travado no código, nunca disabled (parte 13f). */}
+        <DialogCancelar variant="ghost" size="icon" aria-label="Fechar" className="size-8" ocupado={pedido.enviando} onClick={acoes.cancelar}>
           <X aria-hidden="true" />
-        </Button>
+        </DialogCancelar>
       </div>
       <Campo id="solicitar-tipo" rotulo="Tipo de serviço">
         <select id="solicitar-tipo" className={campoClasse} value={form.tipo} onChange={(evento) => set("tipo", evento.target.value as TipoDeServico)}>
@@ -339,19 +359,34 @@ function Formulario({ pedido, acoes }: { pedido: PedidoNaTela; acoes: ServicosVi
           {pedido.problemaDoAnexo ?? pedido.erro}
         </p>
       ) : null}
-      <Button type="submit" className="h-11 w-full" disabled={pedido.enviando}>
-        {pedido.enviando ? "Enviando..." : "Enviar solicitação"}
-      </Button>
+      {/* O gerúndio aos 300 ms, sem desabilitar: os anexos e a solicitação (parte 13f). */}
+      <BotaoDeAcao
+        type="submit"
+        className="h-11 w-full"
+        estado={pedido.enviando ? "andamento" : "repouso"}
+        rotulo="Enviar solicitação"
+        andamento="Enviando a solicitação…"
+      />
     </form>
   );
 }
 
-export function ServicosView({ estado, os, numeros, aPagarCents, cobrancas, busca, aberta, solicitacoes, pedido, acoes }: ServicosViewProps) {
+export function ServicosView({ estado, leitura, falhas = [], os, numeros, aPagarCents, cobrancas, busca, aberta, solicitacoes, pedido, acoes }: ServicosViewProps) {
+  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão (parte 13f).
+  const tentandoAsOs = useTentandoNoRelogio(Boolean(leitura?.tentando));
   const termo = semAcento(busca.trim());
   const lista = termo ? os.filter((item) => [item.numero, item.servicos, item.origem ?? "", item.destino ?? ""].some((campo) => semAcento(campo).includes(termo))) : os;
   let conteudo: ReactNode;
-  if (estado === "carregando") conteudo = <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">Carregando...</p>;
-  else if (estado === "erro") conteudo = <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">Não foi possível carregar as OS.</p>;
+  // Lendo, a caixa e o rótulo aos 300 ms; na falha, a nova tentativa (carregamento v2, parte 13f).
+  if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as OS…" continuaARota onTentar={leitura?.onTentar} className="px-5 py-7" />;
+  else if (estado === "erro")
+    conteudo = leitura ? (
+      <ErroNaLeitura mensagem="Não foi possível carregar as OS." tentando={tentandoAsOs} onTentar={leitura.onTentar} className="rounded-none border-0" />
+    ) : (
+      <p role="alert" className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">
+        Não foi possível carregar as OS.
+      </p>
+    );
   else if (!os.length) conteudo = <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">Nenhuma OS ainda</p>;
   else if (!lista.length) conteudo = <p className="px-5 py-7 text-center text-sm font-bold text-muted-foreground">Nenhuma OS encontrada</p>;
   else conteudo = lista.map((item, indice) => <Linha key={item.numero} os={item} cobranca={cobrancas.get(item.demanda) ?? null} aberta={aberta?.numero === item.numero} primeira={indice === 0} onAbrir={acoes.abrir} />);
@@ -380,6 +415,16 @@ export function ServicosView({ estado, os, numeros, aPagarCents, cobrancas, busc
       ) : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
+          {falhas.map((falha) => (
+            // A leitura de apoio que falhou fica dita, nunca some (necessidade 2).
+            <FalhaNaSecao
+              key={falha.mensagem}
+              mensagem={falha.mensagem}
+              tentando={falha.tentando}
+              onTentar={falha.onTentar}
+              className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+            />
+          ))}
           {solicitacoes.length ? <Solicitacoes lista={solicitacoes} enviada={Boolean(pedido?.enviada)} /> : null}
           <section aria-label="OS" className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
             {conteudo}

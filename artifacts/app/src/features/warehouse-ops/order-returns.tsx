@@ -17,7 +17,6 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { novaChave } from "@/lib/operacao/api";
 import { useLeitura } from "@/lib/operacao/leitura";
-import { useNovaAssinatura } from "@/lib/operacao/nova-assinatura";
 import { humanApiError } from "@/lib/permissions";
 import {
   codigosDaLinha,
@@ -186,28 +185,26 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { code: customerCode } = useActiveCustomer();
-  // A leitura ao vivo que falha não se refaz sozinha: "Tentar de novo" assina de novo (a chave muda), e a falha fica na
-  // tela até a nova responder (carregamento v2, parte 13c).
-  const retornosAoVivo = useNovaAssinatura(OPERACAO_LIBERADO ? "orders:retorno_a_receber" : null);
+  // A leitura ao vivo que falha não se refaz sozinha: "Tentar de novo" assina de novo (`useLeitura`), e a falha fica na
+  // tela até a nova responder (carregamento v2, partes 13c e 13g).
   const leitura = useLeitura(
-    retornosAoVivo.chave,
+    OPERACAO_LIBERADO ? "orders:retorno_a_receber" : null,
     (db) => query(collection(db, "orders"), where("retorno.status", "==", "a_receber")),
     retornoAReceber,
   );
   const retornos = (leitura.itens ?? []).filter((item) => item.customerCode === customerCode).sort((a, b) => (a.chegouEm ?? "").localeCompare(b.chegouEm ?? ""));
   const [aberto, setAberto] = useState<{ retorno: RetornoAReceber; voltou: Record<string, string>; notas: string; tentou: boolean; erro: string | null; enviando: boolean } | null>(null);
   const chave = useRef<string | null>(null);
-  // A falha das linhas é do pedido aberto: a do pedido A não aparece no B.
-  const linhasAoVivo = useNovaAssinatura(aberto ? `order_items:${aberto.retorno.orderId}` : null);
+  // A falha das linhas é do pedido aberto (a chave dele): a do pedido A não aparece no B.
   const linhas = useLeitura(
-    linhasAoVivo.chave,
+    aberto ? `order_items:${aberto.retorno.orderId}` : null,
     (db) => query(collection(db, "order_items"), where("order_id", "==", aberto?.retorno.orderId ?? "-")),
     linhaDoRetorno,
   );
   const linhasDoAberto = aberto && linhas.itens ? linhas.itens.map((linha) => ({ ...linha, voltou: aberto.voltou[linha.id] ?? linha.voltou })) : null;
   const problema = aberto?.tentou && linhasDoAberto ? problemaDoRetorno(linhasDoAberto) : null;
-  const falhaDosRetornos = retornosAoVivo.falhou(leitura);
-  const falhaDasLinhas = linhasAoVivo.falhou(linhas);
+  const falhaDosRetornos = leitura.erro;
+  const falhaDasLinhas = linhas.erro;
 
   async function receber() {
     if (!aberto || !linhasDoAberto) return;
@@ -230,7 +227,7 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
     <RetornosView
       somenteConsulta={somenteConsulta}
       retornos={retornos}
-      falha={falhaDosRetornos ? { tentar: retornosAoVivo.tentar } : null}
+      falha={falhaDosRetornos ? { tentar: leitura.tentar } : null}
       aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, linhasFalharam: falhaDasLinhas, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
       acoes={{
         abrir: (retorno) => {
@@ -247,7 +244,7 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
           setAberto((atual) => (atual ? { ...atual, notas } : atual));
         },
         receber: () => void receber(),
-        tentarLinhas: linhasAoVivo.tentar,
+        tentarLinhas: linhas.tentar,
       }}
     />
   );

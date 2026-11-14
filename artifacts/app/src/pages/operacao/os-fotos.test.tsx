@@ -50,6 +50,10 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/operacao/leitura", () => ({
+  // A nova tentativa das leituras ao vivo (carregamento v2, parte 13g): sem efeito aqui.
+  novaTentativaDe: () => ({ tentando: false, tentar: () => undefined }),
+  juntarTentativas: () => ({ tentando: false, tentar: () => undefined }),
+  SEM_NOVA_TENTATIVA: { tentando: false, tentar: () => undefined },
   useDocumento: (chave: string | null, _referencia: unknown, mapear: (id: string, dados: Record<string, unknown>) => unknown) => {
     if (chave === `service_orders/${NUMERO}`) {
       return {

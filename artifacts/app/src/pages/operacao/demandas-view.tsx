@@ -14,6 +14,9 @@ import {
 import { ENTRADAS_DA_DEMANDA, ENTRADA_ROTULO, TIPOS_DA_DEMANDA, TIPO_ROTULO, entradaNaTela } from "@/lib/operacao/hoje";
 import { ROTA_NOVA_DEMANDA, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { cn } from "@/lib/utils";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 
 /**
  * Operação › Demandas (docs/plataforma/fase-3-operacao.md, parte 3.5b;
@@ -74,6 +77,7 @@ export function DemandasView({
   busca,
   onBusca,
   onFiltros,
+  leitura = SEM_NOVA_TENTATIVA,
 }: {
   estado: EstadoDasDemandas;
   resumo: string;
@@ -83,6 +87,8 @@ export function DemandasView({
   busca: string;
   onBusca: (busca: string) => void;
   onFiltros: (filtros: FiltrosDeDemandas) => void;
+  /** A nova tentativa da leitura ao vivo (parte 13g). */
+  leitura?: NovaTentativa;
 }) {
   return (
     <section className="flex flex-col gap-6">
@@ -131,11 +137,9 @@ export function DemandasView({
         />
       </div>
 
-      {estado === "carregando" ? <p className="text-sm text-muted-foreground">Carregando</p> : null}
+      {estado === "carregando" ? <CarregandoNaRegiao rotulo="Carregando as demandas…" continuaARota onTentar={leitura.tentar} /> : null}
       {estado === "erro" ? (
-        <p role="alert" className="text-sm text-destructive">
-          Não foi possível carregar as demandas.
-        </p>
+        <FalhaNaSecao mensagem="Não foi possível carregar as demandas." tentando={leitura.tentando} onTentar={leitura.tentar} />
       ) : null}
       {estado === "pronto" && linhas.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Nenhuma demanda</p>

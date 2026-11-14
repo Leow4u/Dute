@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardPaste, FileText, Loader2, Paperclip, Plus, RotateCw, Sparkles, X } from "lucide-react";
+import { CheckCircle2, ClipboardPaste, FileText, Paperclip, Plus, RotateCw, Sparkles, X } from "lucide-react";
 
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { DEMORANDO } from "@/components/ui/carregando-tela";
 import { PageHeader } from "@/components/ui/page-header";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { useEspera } from "@/lib/carregando/use-espera";
 import {
   SHIPMENT_STEPS,
   invoiceDraft,
@@ -27,6 +32,7 @@ import { envioDoPedido, type EnvioDoPedido } from "@/lib/client-cart";
 import { ATTACHMENT_LIMIT_HINT, isAcceptedAttachment, prepareAttachment, uploadAttachment } from "@/lib/shipment-files";
 import { cn } from "@/lib/utils";
 
+import { ConfirmacaoNaLinha } from "./confirmacao-na-linha";
 import {
   ClientDataBoundary,
   clientOverviewQueryKey,
@@ -61,7 +67,7 @@ export function ClienteEnvios() {
     if (wantsDraft) navigate("/portal/recebimentos", { replace: true });
   }, [wantsDraft, navigate]);
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo={creating ? "Avisar um envio" : "Envios para a Dutelog"} largura="max-w-6xl">
       {(overview) =>
         creating ? (
           <ShipmentForm overview={overview} initial={initial} onClose={() => setCreating(false)} />
@@ -241,22 +247,20 @@ function OnTheWayCard({ view }: { view: ShipmentView }) {
         ) : null}
         <span>{view.detail}</span>
         {view.canCancel ? (
-          confirming ? (
-            <span className="ml-auto inline-flex items-center gap-2">
-              Cancelar este aviso?
-              <Button type="button" size="sm" variant="destructive" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
-                {cancel.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Cancelar aviso
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-                Manter
-              </Button>
-            </span>
-          ) : (
-            <button type="button" className="ml-auto font-medium text-primary hover:underline" onClick={() => setConfirming(true)}>
-              Cancelar aviso
-            </button>
-          )
+          // A pergunta na linha, com o foco que nunca cai no body (parte 13f).
+          <ConfirmacaoNaLinha
+            aberta={confirming}
+            ocupada={cancel.isPending}
+            gatilho="Cancelar aviso"
+            pergunta="Cancelar este aviso?"
+            confirmar="Cancelar aviso"
+            andamento="Cancelando…"
+            onAbrir={() => setConfirming(true)}
+            onManter={() => setConfirming(false)}
+            onConfirmar={() => cancel.mutate()}
+            classeDoGatilho="ml-auto font-medium text-primary hover:underline"
+            className="ml-auto"
+          />
         ) : null}
       </div>
     </article>
@@ -416,6 +420,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
   });
 
   function submit() {
+    // A nota em leitura ainda vai preencher o aviso, e o arquivo dela ainda sobe: o aviso espera (parte 13f).
+    if (send.isPending || reading || preparing) return;
     const issue = problem();
     if (issue) {
       toast({ title: "Falta pouco", description: issue, variant: "destructive" });
@@ -425,7 +431,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
   }
 
   async function addFiles(list: FileList | null) {
-    if (!list) return;
+    // O arquivo solto durante o envio, a leitura ou o preparo espera: ele entraria no meio deles (parte 13f).
+    if (!list || send.isPending || reading || preparing) return;
     const chosen = [...list].filter(isAcceptedAttachment);
     let left = list.length - chosen.length;
     // Scan de celular passa de 9 MB; é reduzido aqui antes de subir, para
@@ -530,10 +537,11 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
       title="Avisar um envio"
       subtitle="Preencha o que souber e envie. A Dutelog confirma e se programa para a chegada."
       action={
-        <Button type="button" variant="outline" className="rounded-xl" onClick={onClose} disabled={busy}>
+        // Com o aviso indo para a Dutelog, o Cancelar fica travado no código, nunca disabled (parte 13f).
+        <DialogCancelar variant="outline" className="rounded-xl" ocupado={busy} onClick={onClose}>
           <X className="h-4 w-4" />
           Cancelar
-        </Button>
+        </DialogCancelar>
       }
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -544,7 +552,7 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             reading={reading}
             preparing={preparing}
             read={Boolean(readableFile && readFile === readableFile)}
-            disabled={busy}
+            ocupado={busy}
             onPick={() => fileInput.current?.click()}
             onDrop={(list) => void addFiles(list)}
             onRead={() => readableFile && void readInvoice(readableFile)}
@@ -553,6 +561,8 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
           <input
             ref={fileInput}
             type="file"
+            aria-label="Anexar nota"
+            tabIndex={-1}
             multiple
             accept="application/pdf,image/jpeg,image/png,image/webp"
             className="hidden"
@@ -696,10 +706,15 @@ function ShipmentForm({ overview, initial, onClose }: { overview: ClientOverview
             {newProducts ? <SummaryRow label="Produtos novos" value={integer.format(newProducts)} /> : null}
             {pendingCodes ? <SummaryRow label="Código a definir" value={integer.format(pendingCodes)} /> : null}
           </dl>
-          <Button type="button" className="mt-4 w-full rounded-xl" onClick={submit} disabled={busy}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {progress ?? "Enviar aviso"}
-          </Button>
+          {/* O gerúndio de cada passo aos 300 ms, sem desabilitar; travado enquanto a nota é lida (parte 13f). */}
+          <BotaoDeAcao
+            className="mt-4 w-full rounded-xl"
+            estado={busy ? "andamento" : "repouso"}
+            rotulo="Enviar aviso"
+            andamento={progress ?? "Enviando o aviso…"}
+            bloqueado={!busy && (reading || preparing)}
+            onClick={submit}
+          />
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             O estoque só muda depois da conferência física na Dutelog.
             {pendingCodes ? " Itens sem código: a equipe define pela etiqueta na chegada." : ""}
@@ -725,7 +740,7 @@ function InvoiceDrop({
   reading,
   preparing,
   read,
-  disabled,
+  ocupado,
   onPick,
   onDrop,
   onRead,
@@ -736,47 +751,91 @@ function InvoiceDrop({
   reading: boolean;
   preparing: boolean;
   read: boolean;
-  disabled: boolean;
+  /** O aviso indo para a Dutelog: os botões da nota esperam, travados no código. */
+  ocupado: boolean;
   onPick: () => void;
   onDrop: (files: FileList | null) => void;
   onRead: () => void;
   onRemove: (index: number) => void;
 }) {
+  // A leitura no relógio da espera (carregamento v2, parte 13f): a caixa violeta aos 300 ms, com o anúncio, e a
+  // demora aos 10 s, dita uma vez. A leitura da nota não tem prazo: a pessoa segue podendo preencher à mão.
+  const ocupada = reading || preparing;
+  const espera = useEspera(ocupada);
+  const demorando = espera.fase === "demorando" || espera.fase === "sem-resposta";
+  const anunciar = useAnuncio();
+  const marco = !espera.visivel ? null : demorando ? "demora" : preparing ? "preparando" : "lendo";
+  useEffect(() => {
+    if (marco === "lendo") return anunciar("Lendo a nota");
+    if (marco === "preparando") return anunciar("Preparando o arquivo");
+    if (marco === "demora") return anunciar(DEMORANDO);
+    return undefined;
+  }, [marco, anunciar]);
+  // Ocupado não é desabilitado: o foco fica no botão, e o toque é barrado aqui.
+  const travaDoAnexo = ocupado || ocupada;
   return (
+    // A seção é a própria região de estado ("Lendo a nota…"): nunca aria-busy nela (seção 7).
     <section
       className="rounded-lg border-[1.5px] border-dashed border-agent-soft-border bg-agent-soft p-5"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
-        onDrop(event.dataTransfer.files);
+        if (!travaDoAnexo) onDrop(event.dataTransfer.files);
       }}
     >
       <div className="flex flex-wrap items-center gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-card text-agent shadow-sm">
-          {reading || preparing ? <Loader2 className="h-5 w-5 animate-spin" /> : read ? <CheckCircle2 className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+          {espera.visivel ? (
+            <Spinner tamanho={20} calmo={espera.calmo} />
+          ) : read && !ocupada ? (
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-agent-strong">
             {preparing ? "Preparando o arquivo…" : reading ? "Lendo a nota…" : read ? "Nota lida pelo Agent Dute" : "Comece pela nota fiscal ou pedido"}
           </h2>
-          <p className="text-sm text-agent">
-            {preparing
-              ? "Scan grande é reduzido aqui mesmo antes de subir."
-              : reading
-                ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
-                : read
-                  ? "Confira os dados abaixo antes de enviar. A leitura automática pode errar."
-                  : "Anexe em PDF ou foto e o Agent Dute preenche o resto. Sem nota? Preencha abaixo."}
+          {/* No escuro, o violeta do texto sobre o fundo violeta dava 3,9:1; o --agent-muted dá 5,7:1. */}
+          <p className="text-sm text-agent dark:text-agent-muted">
+            {ocupada && demorando
+              ? DEMORANDO
+              : preparing
+                ? "Scan grande é reduzido aqui mesmo antes de subir."
+                : reading
+                  ? "O Agent Dute está preenchendo fornecedor, NF, observações e itens."
+                  : read
+                    ? "Confira os dados abaixo antes de enviar. A leitura automática pode errar."
+                    : "Anexe em PDF ou foto e o Agent Dute preenche o resto. Sem nota? Preencha abaixo."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {readableFile && !reading ? (
-            <Button type="button" size="sm" variant="outline" className="rounded-lg border-agent-soft-border bg-card" disabled={disabled} onClick={onRead}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn("rounded-lg border-agent-soft-border bg-card max-md:min-h-11", travaDoAnexo && "opacity-45 hover:bg-card")}
+              aria-disabled={travaDoAnexo || undefined}
+              onClick={() => {
+                if (!travaDoAnexo) onRead();
+              }}
+            >
               {read ? <RotateCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
               {read ? "Ler de novo" : "Ler nota"}
             </Button>
           ) : null}
-          <Button type="button" size="sm" className="rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover" disabled={disabled || reading || preparing} onClick={onPick}>
+          <Button
+            type="button"
+            size="sm"
+            // No celular, 44 px (seção 7).
+            className={cn("rounded-lg bg-agent text-agent-foreground hover:bg-agent-hover max-md:min-h-11", travaDoAnexo && "opacity-45 hover:bg-agent")}
+            aria-disabled={travaDoAnexo || undefined}
+            onClick={() => {
+              if (!travaDoAnexo) onPick();
+            }}
+          >
             <Paperclip className="h-4 w-4" />
             {files.length ? "Anexar outro" : "Anexar nota"}
           </Button>
@@ -788,8 +847,20 @@ function InvoiceDrop({
             <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-card px-2 py-1 text-xs text-foreground">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{file.name}</span>
-              <button type="button" aria-label={`Remover ${file.name}`} disabled={reading || preparing} onClick={() => onRemove(index)}>
-                <X className="h-3 w-3" />
+              <button
+                type="button"
+                aria-label={`Remover ${file.name}`}
+                aria-disabled={travaDoAnexo || undefined}
+                // 24 px de alvo (44 no celular, pelo ::before) e o anel cheio do foco, com o recuo (3:1).
+                className={cn(
+                  "relative inline-grid size-6 shrink-0 place-items-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:before:absolute max-md:before:-inset-2.5 max-md:before:content-['']",
+                  travaDoAnexo && "opacity-45",
+                )}
+                onClick={() => {
+                  if (!travaDoAnexo) onRemove(index);
+                }}
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
               </button>
             </span>
           ))}

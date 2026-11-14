@@ -10,6 +10,7 @@ import { LEGACY_CUSTOMER_CODE } from "@/lib/operations";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { ContratosView, type ContratosViewProps } from "./contratos-view";
+import { semCamadasEscondidas } from "@/test/botoes";
 
 /**
  * Tela de contratos (docs/mockups/ComContrato.dc.html), parte 14: só
@@ -126,7 +127,7 @@ function render(overrides: Partial<ContratosViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.trim())
@@ -313,9 +314,10 @@ describe("tela de contratos", () => {
     const carregando = texts(render({ tabelas: "carregando", aditivos: "carregando" }));
     expect(carregando).not.toContain("Nenhuma tabela");
     expect(carregando).not.toContain("Nenhum aditivo");
-    expect(carregando.filter((texto) => texto === "Carregando...")).toHaveLength(2);
+    // Lendo: nada escrito antes de 300 ms; as duas regiões da espera guardam o lugar (parte 13g).
+    expect(render({ tabelas: "carregando", aditivos: "carregando" }).match(/data-carregando-na-regiao/g)).toHaveLength(2);
     const comErro = texts(render({ tabelas: "erro", aditivos: "erro" }));
-    expect(comErro.filter((texto) => texto === "Não foi possível carregar.")).toHaveLength(2);
+    expect(comErro).toEqual(expect.arrayContaining(["Não foi possível carregar as tabelas.", "Não foi possível carregar os aditivos."]));
     // Sem aditivos lidos, o selo do último aditivo não aparece e o próximo número não se sabe.
     expect(carregando).not.toContain("Aditivo 1");
     const registrar = (html: string) => html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Registrar aditivo<\/button>/)?.[0] ?? "";
@@ -342,8 +344,11 @@ describe("tela de contratos", () => {
   });
 
   it("carregando e erro na lista", () => {
-    expect(texts(render({ estado: "carregando", selecionado: null })).slice(4)).toEqual(["Carregando..."]);
-    expect(texts(render({ estado: "erro", selecionado: null })).slice(4)).toEqual(["Não foi possível carregar os contratos."]);
+    // Lendo: nada escrito antes de 300 ms, e a contagem é o bloco, nunca o zero (parte 13g).
+    const lendo = render({ estado: "carregando", selecionado: null });
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(texts(lendo).filter((texto) => /^\d+$/.test(texto))).toEqual([]);
+    expect(texts(render({ estado: "erro", selecionado: null })).slice(-2)).toEqual(["Não foi possível carregar os contratos.", "Tentar de novo"]);
   });
 
   it("no Financeiro, só leitura: a ficha inteira sem Novo contrato, Editar nem Registrar aditivo (parte 7.5c)", async () => {

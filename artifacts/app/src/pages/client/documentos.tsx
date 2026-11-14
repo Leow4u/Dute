@@ -36,7 +36,7 @@ export function ClienteDocumentos() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<PortalDocumentKind | "all">("all");
   return (
-    <ClientDataBoundary>
+    <ClientDataBoundary titulo="Documentos" largura="max-w-6xl">
       {(overview) => {
         const rows = portalDocuments(
           overview.document_history ?? [],

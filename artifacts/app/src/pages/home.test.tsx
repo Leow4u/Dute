@@ -27,9 +27,18 @@ vi.mock("@/lib/use-inicio-do-wms", () => ({
 
 import Home from "./home";
 
+function html() {
+  return renderToStaticMarkup(<Router ssrPath="/dashboard"><Home /></Router>);
+}
+
 function skus() {
-  const textos = textosDaTela(renderToStaticMarkup(<Router ssrPath="/dashboard"><Home /></Router>));
+  const textos = textosDaTela(html());
   return textos[textos.indexOf("SKUs em estoque") + 1];
+}
+
+/** A linha "SKUs em estoque" inteira, do rótulo ao fim do item. */
+function linhaDosSkus() {
+  return html().match(/SKUs em estoque<\/span>.*?<\/li>/)?.[0] ?? "";
 }
 
 beforeEach(() => {
@@ -37,8 +46,10 @@ beforeEach(() => {
 });
 
 describe("o total de SKUs do Início", () => {
-  it("carregando, mostra — e não 0", () => {
-    expect(skus()).toBe("—");
+  it("carregando, mostra o bloco do esqueleto, e não 0 nem — (parte 13e)", () => {
+    expect(skus()).toBeUndefined();
+    expect(linhaDosSkus()).toContain('data-esqueleto=""');
+    expect(linhaDosSkus()).not.toContain(">0<");
   });
 
   it("com a leitura que falhou, mostra — e não 0", () => {

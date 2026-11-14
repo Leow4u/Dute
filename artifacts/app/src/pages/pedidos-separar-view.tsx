@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,9 +101,6 @@ const MENSAGENS: Record<Exclude<EstadoDaBancada, "pronto">, string> = {
 };
 
 const numero = new Intl.NumberFormat("pt-BR");
-
-/** Sem a tela que leva o foco (o teste da linha sozinha), o pedido não vai a lugar nenhum. */
-const semFoco = { current: null as readonly string[] | null };
 
 export function PedidosSepararView({
   estado,
@@ -213,9 +210,6 @@ export function PedidosSepararView({
   const diferenca = textoComDiferenca(progresso);
   // Só a primeira linha por separar leva a ação principal.
   const primeira = grupos.flatMap((grupo) => grupo.linhas).find((linha) => estadoDaLinha(linha.item) === "pendente")?.id;
-  // A linha que muda de estado tira o botão tocado da tela ("Separar" vira "Desfazer"): o foco vai ao botão que entra
-  // no lugar, nunca ao body (carregamento v2, parte 13c).
-  const focoQueSegue = useFocoQueSegue();
   const aberto = volumes ? volumeAberto(volumes) : null;
   // Quem só consulta, ou o pedido que já fechou a separação, não fecha volume.
   const fecharVolume = operador && !fechada ? onFecharVolume : undefined;
@@ -265,7 +259,7 @@ export function PedidosSepararView({
 {/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
           com o anúncio pelo Anunciador, no lugar do "Carregando" seco. */}
       {estado === "carregando" ? (
-        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} className="rounded-lg border border-border bg-card px-5 py-6" />
+        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota className="rounded-lg border border-border bg-card px-5 py-6" />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
@@ -357,7 +351,6 @@ export function PedidosSepararView({
                           operador={operador && !fechada}
                           ocupada={ocupadas?.has(linha.id) ?? false}
                           acao={ocupadas && "get" in ocupadas ? ocupadas.get(linha.id) : undefined}
-                          focoQueSegue={focoQueSegue}
                           grupo={idDoGrupo}
                           caixas={caixasDaLinha?.get(linha.id)}
                           volumes={volumes ? volumesDaLinha(linha.item, volumes) : undefined}
@@ -569,7 +562,6 @@ function Linha({
   operador,
   ocupada,
   acao,
-  focoQueSegue,
   grupo,
   caixas,
   volumes,
@@ -589,8 +581,6 @@ function Linha({
   ocupada: boolean;
   /** A ação da linha em curso ("separar", "levar", "desfazer"): o botão dela mostra a espera. */
   acao?: string;
-  /** O foco que segue o botão que entra no lugar quando a linha muda de estado. */
-  focoQueSegue?: ReturnType<typeof useFocoQueSegue>;
   /**
    * O id do botão do grupo da prateleira: separada a última linha, o grupo se
    * fecha e o "Desfazer" não aparece, e o foco vai a ele.
@@ -680,9 +670,11 @@ function Linha({
         ) : null}
         <span className="whitespace-nowrap font-semibold tabular-nums">{numero.format(linha.quantidade)} un.</span>
       </div>
+      {/* A linha que muda de estado tira o botão tocado da tela ("Separar" vira "Desfazer"): o foco vai ao botão que
+          entra no lugar, nunca ao body (carregamento v2, parte 13c). */}
       {operador ? (
         pendente ? (
-          <SaiComOFoco alvo={grupo ? [`desfazer-${linha.id}`, grupo] : `desfazer-${linha.id}`} pedido={focoQueSegue ?? semFoco}>
+          <SaiComOFoco alvo={grupo ? [`desfazer-${linha.id}`, grupo] : `desfazer-${linha.id}`}>
           {/* No celular, "Levar a caixa" fica numa linha só dele, e "Separar" e o "⋯" na de baixo: lado a lado, os três
               não cabem, e o "⋯" encolhia abaixo do toque. */}
           <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
@@ -733,7 +725,7 @@ function Linha({
                 Dividir em volumes
               </Button>
             ) : null}
-            <SaiComOFoco alvo={`separar-${linha.id}`} pedido={focoQueSegue ?? semFoco}>
+            <SaiComOFoco alvo={`separar-${linha.id}`}>
               <BotaoDeAcao
                 id={`desfazer-${linha.id}`}
                 variant="link"

@@ -19,7 +19,7 @@ import {
 } from "@/lib/comercial/clientes";
 import { abrirPreviaSalva, hrefDoDocumento } from "@/lib/comercial/documento";
 import { enviarEAbrirDocumento, type AcaoDeEnvio } from "@/lib/comercial/envio";
-import { useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
+import { novaTentativaDe, useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import {
   SINCRONIA_INICIAL,
   VARIANTE_PADRAO,
@@ -217,6 +217,12 @@ function MontarOrcamento({ numero }: { numero: string }) {
 
   // --- Gravação --------------------------------------------------------------------
   const [ocupado, setOcupado] = useState(false);
+  // Qual ação do cabeçalho grava: o botão dela diz o gerúndio (parte 13g). As gravações seguem as mesmas.
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
+  const comAcao = (acao: string, fazer: () => Promise<unknown>) => {
+    setEmAndamento(acao);
+    void fazer().finally(() => setEmAndamento((atual) => (atual === acao ? null : atual)));
+  };
   // Até a gravação desta tela chegar pelo onSnapshot, nada se edita: o que voltar substitui o formulário.
   const travado = ocupado || estado.aguardar !== null;
   const [aviso, setAviso] = useState<{ tipo: "erro" | "info"; texto: string } | null>(null);
@@ -473,9 +479,10 @@ function MontarOrcamento({ numero }: { numero: string }) {
   const parecidos = useParecidos(montando && form ? pedidoDosParecidos(numero, form.linhas) : null, MEMORIA_LIBERADA);
 
   // --- Estados ---------------------------------------------------------------------
-  if (demanda.erro || quote.erro) return <EstadoDoOrcamento estado="erro" />;
+  const leituraDoOrcamento = novaTentativaDe([demanda, quote]);
+  if (demanda.erro || quote.erro) return <EstadoDoOrcamento estado="erro" leitura={leituraDoOrcamento} />;
   if (demandaDoc === null || quoteDoc === null) return <EstadoDoOrcamento estado="nao_encontrado" />;
-  if (!item || !form || !base) return <EstadoDoOrcamento estado="carregando" />;
+  if (!item || !form || !base) return <EstadoDoOrcamento estado="carregando" leitura={leituraDoOrcamento} />;
 
   const contratoLido =
     contratoId && contrato.dados ? contratoDoDocumento(contratoId, contrato.dados) : contrato.dados === null ? null : undefined;
@@ -542,6 +549,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
         locais={ordenarLocais(locais.itens ?? [])}
         catalogo={catalogo}
         ocupado={travado || depois.ocupado}
+        emAndamento={emAndamento}
         aviso={aviso ?? (depois.aviso?.numero === numero ? { tipo: "erro", texto: depois.aviso.mensagem } : null)}
         salvoEm={salvoEm}
         desatualizado={desatualizado(estado)}
@@ -550,26 +558,26 @@ function MontarOrcamento({ numero }: { numero: string }) {
         parecidos={parecidos}
         podeAtualizarTabela={Boolean(contratoId && !tabelaId)}
         handlers={{
-          salvar: () => void salvar(),
+          salvar: () => comAcao("salvar", () => salvar()),
           previaSalva: () => void previaSalva(),
-          enviar: () => void enviar(),
-          duplicar: () => void duplicar(),
+          enviar: () => comAcao("enviar", enviar),
+          duplicar: () => comAcao("duplicar", duplicar),
           editar: () => {
             const esperado = esperadoDaBase();
-            if (esperado?.status === "para_aprovar") void avancar("return", esperado, "Voltou para a montagem");
-            if (esperado?.status === "aprovado") void avancar("edit", esperado, "Voltou para a montagem");
+            if (esperado?.status === "para_aprovar") comAcao("editar", () => avancar("return", esperado, "Voltou para a montagem"));
+            if (esperado?.status === "aprovado") comAcao("editar", () => avancar("edit", esperado, "Voltou para a montagem"));
           },
           aprovar: () => {
             const esperado = esperadoDaBase();
-            if (esperado) void avancar("approve", esperado, "Orçamento aprovado");
+            if (esperado) comAcao("aprovar", () => avancar("approve", esperado, "Orçamento aprovado"));
           },
           devolver: () => setDialogo({ tipo: "devolver" }),
-          enviarCliente: () => void enviarAoCliente("send", "Orçamento enviado"),
-          aprovarEEnviar: () => void enviarAoCliente("approve_and_send", "Aprovado e enviado"),
-          enviarDispensado: () => void enviarDispensado(),
+          enviarCliente: () => comAcao("enviar_cliente", () => enviarAoCliente("send", "Orçamento enviado")),
+          aprovarEEnviar: () => comAcao("aprovar_e_enviar", () => enviarAoCliente("approve_and_send", "Aprovado e enviado")),
+          enviarDispensado: () => comAcao("enviar_dispensado", enviarDispensado),
           descartarRv: () => depois.abrir("descartar_rv", item),
           trocarVariante: (variante) => void salvar(variante),
-          atualizarTabela: () => void salvar(undefined, true),
+          atualizarTabela: () => comAcao("atualizar_tabela", () => salvar(undefined, true)),
           novoContato: () => {
             setErroDoDialogo(null);
             setDialogo({ tipo: "contato", chave: novaChave() });

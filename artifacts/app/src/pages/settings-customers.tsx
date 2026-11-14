@@ -1,4 +1,4 @@
-import { useListBillingUsers } from "@workspace/api-client-react";
+import { getListBillingUsersQueryKey, useListBillingUsers } from "@workspace/api-client-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
@@ -22,11 +22,11 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -57,6 +57,9 @@ import {
   type OperationTemplateKey,
 } from "@/lib/operations";
 import { CUSTOMERS_QUERY_KEY, useCustomerRecords } from "@/lib/customer-records";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { ehFaltaDeConexao } from "@/lib/conexao";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { comercialLiberado, PLATAFORMA_LIBERADA } from "@/lib/liberacao";
 import { CLIENT_PROFILES_QUERY_KEY } from "@/lib/active-customer-context";
 import { humanApiError } from "@/lib/permissions";
@@ -132,13 +135,18 @@ export default function SettingsCustomers() {
   const topo = useRef<HTMLDivElement>(null);
 
   // A mesma leitura de Pessoas e acessos (lib/customer-records.ts).
-  const customers = useCustomerRecords();
-  const positions = useQuery({
+  const leituraDosClientes = useCustomerRecords();
+  const leituraDasPosicoes = useQuery({
     queryKey: POSITIONS_KEY,
     staleTime: 30_000,
     queryFn: async () => ({ items: await fetchWarehouseRows<WarehousePosition>("/api/warehouse/positions?limit=2000") }),
   });
-  const users = useListBillingUsers();
+  const leituraDasPessoas = useListBillingUsers();
+  // A leitura que falhou sem nada lido fica na falha enquanto é relida: o "Tentar de novo" diz "Tentando de novo…",
+  // e o aviso não sai da tela com o foco nele (o react-query 5 a voltaria a "carregando").
+  const customers = useLeituraComFalha(leituraDosClientes);
+  const positions = useLeituraComFalha(leituraDasPosicoes);
+  const users = useLeituraComFalha(leituraDasPessoas);
 
   const rows = useMemo(
     () =>
@@ -155,12 +163,13 @@ export default function SettingsCustomers() {
   const pessoasDoCliente = usePessoasDoCliente(row);
 
   // A ocupação por rua só na página de um cliente com zona: a leitura do Mapa.
-  const boxes = useQuery({
+  const leituraDasCaixas = useQuery({
     queryKey: BOXES_KEY,
     enabled: comZona,
     staleTime: 10_000,
     queryFn: async () => (await fetchWarehouseRows<AnyRecord>("/api/warehouse/boxes?limit=5000")).map(warehouseBoxFromRecord),
   });
+  const boxes = useLeituraComFalha(leituraDasCaixas);
   const occupancy = useMemo(
     () => (row && comZona && boxes.data ? zoneOccupancy(buildShelves(positions.data?.items ?? [], boxes.data), row.code) : null),
     [boxes.data, comZona, positions.data, row],
@@ -271,8 +280,13 @@ export default function SettingsCustomers() {
   });
 
   const estado = customers.isLoading ? "carregando" : customers.isError ? "erro" : "pronto";
-  const zonas = positions.isSuccess ? "pronto" : positions.isError ? "erro" : "carregando";
+  const zonas = positions.data !== undefined ? "pronto" : positions.isError ? "erro" : "carregando";
+  const relerOsClientes = () => relerDoZero(queryClient, [CUSTOMERS_QUERY_KEY]);
+  // Quantas pessoas entram no portal: sem a leitura das pessoas, o número não é afirmado (nunca "0 no portal").
+  const pessoasLidas = users.data !== undefined ? "pronto" : users.isError ? "erro" : "carregando";
   const erroDaLeitura = customers.isError ? humanApiError(customers.error, "Não foi possível carregar os clientes.") : null;
+  // Sem rede e sem os clientes lidos: o aviso da conexão (âmbar, ou "Reconectando…"), nunca o erro vermelho (momento 8).
+  const clientesSemConexao = estado === "erro" && ehFaltaDeConexao(customers.error);
 
   return (
     <div ref={topo} className="scroll-mt-10">
@@ -281,38 +295,46 @@ export default function SettingsCustomers() {
           estado={estado}
           erro={erroDaLeitura}
           tentando={customers.isFetching}
-          onTentar={() => void customers.refetch()}
+          onTentar={() => void relerOsClientes()}
+          semConexao={clientesSemConexao}
           rows={rows}
           filtro={filtro}
           onFiltro={setFiltro}
           busca={busca}
           onBusca={setBusca}
           zonas={zonas}
+          pessoas={pessoasLidas}
           comModulos={PLATAFORMA_LIBERADA}
           onNovo={openCreate}
+          tentarLeituras={{
+            tentando: positions.isFetching || users.isFetching,
+            onTentar: () => relerDoZero(queryClient, [POSITIONS_KEY, getListBillingUsersQueryKey()]),
+          }}
         />
       ) : estado === "carregando" ? (
-        <p role="status" className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
-          <Spinner />
-          Carregando clientes…
-        </p>
+        <div className="rounded-lg border border-border bg-card px-5 py-5">
+          <CarregandoNaRegiao rotulo="Carregando clientes…" continuaARota onTentar={() => void relerOsClientes()} />
+        </div>
+      ) : clientesSemConexao ? (
+        <BlocoSemConexao tentando={customers.isFetching} onTentar={() => void relerOsClientes()} />
       ) : estado === "erro" ? (
-        <ErroNaLeitura mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."} tentando={customers.isFetching} onTentar={() => void customers.refetch()} />
+        <ErroNaLeitura mensagem={erroDaLeitura ?? "Não foi possível carregar os clientes."} tentando={customers.isFetching} onTentar={() => void relerOsClientes()} />
       ) : row ? (
         <PaginaDoCliente
           key={row.code}
           row={row}
           zonas={zonas}
+          pessoasLidas={pessoasLidas}
           comModulos={PLATAFORMA_LIBERADA}
           ocupacao={{
-            estado: positions.isError || boxes.isError ? "erro" : occupancy ? "pronto" : "carregando",
+            // A releitura que falha não apaga a ocupação lida: ela fica, e a falha em cima (necessidade 8).
+            estado: occupancy ? "pronto" : positions.isError || boxes.isError ? "erro" : "carregando",
+            falhaNaReleitura: Boolean(occupancy) && (positions.isError || boxes.isError),
+            semConexao: [positions, boxes].some((leitura) => leitura.isError && ehFaltaDeConexao(leitura.error)),
             aisles: occupancy?.aisles ?? [],
             boxes: occupancy?.boxes ?? 0,
             tentando: positions.isFetching || boxes.isFetching,
-            onTentar: () => {
-              void queryClient.invalidateQueries({ queryKey: POSITIONS_KEY });
-              void queryClient.invalidateQueries({ queryKey: BOXES_KEY });
-            },
+            onTentar: () => relerDoZero(queryClient, [POSITIONS_KEY, BOXES_KEY]),
           }}
           contatosAtivos={contatosAtivos}
           avisos={

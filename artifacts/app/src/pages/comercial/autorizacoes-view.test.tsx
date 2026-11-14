@@ -20,6 +20,7 @@ import { ROTA_AUTORIZACOES, TELAS_DO_COMERCIAL } from "@/lib/comercial/navegacao
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
 import { AutorizacoesView, type AutorizacoesViewProps } from "./autorizacoes-view";
+import { semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 
 /**
  * Tela de Autorizações (docs/mockups/ComAutorizacoes.dc.html), parte 15b: só
@@ -174,7 +175,7 @@ function render(overrides: Partial<AutorizacoesViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/ /g, " ").trim())
@@ -383,13 +384,16 @@ describe("tela de autorizações", () => {
 
   it("conferência: valor igual à soma em verde (success-soft); diferente, âmbar (warning-soft) com a diferença", () => {
     const igual = render();
-    expect(igual).toMatch(/<div role="status" class="[^"]*bg-success-soft[^"]*"[^>]*>[\s\S]*?Valor confere com a soma das RVs<\/div>/);
+    expect(igual).toMatch(/<div class="[^"]*bg-success-soft[^"]*"[^>]*>[\s\S]*?Valor confere com a soma das RVs<\/div>/);
     const diferente = render({ painel: painel({ form: { ...formNovaAutorizacao(HOJE), valor: "20.000,00" } }) });
-    expect(diferente).toMatch(/<div role="status" class="[^"]*bg-warning-soft[^"]*"[^>]*>[\s\S]*?Diverge em R\$ 748,80<\/div>/);
+    expect(diferente).toMatch(/<div class="[^"]*bg-warning-soft[^"]*"[^>]*>[\s\S]*?Diverge em R\$ 748,80<\/div>/);
     expect(texts(diferente)).not.toContain("Valor confere com a soma das RVs");
     // Sem valor digitado, nenhuma conferência.
     const vazio = render({ painel: painel({ form: formNovaAutorizacao(HOJE) }) });
-    expect(vazio).not.toContain('role="status"');
+    // A conferência fica escrita, sem região viva solta: quem fala é o Anunciador (parte 13g).
+    expect(igual + diferente + vazio).not.toContain('role="status"');
+    expect(texts(vazio)).not.toContain("Valor confere com a soma das RVs");
+    expect(texts(vazio).some((texto) => texto.startsWith("Diverge em"))).toBe(false);
   });
 
   it("com o painel aberto, cada linha marcável tem a caixa; a de outro cliente não", () => {
@@ -417,8 +421,8 @@ describe("tela de autorizações", () => {
     const textos = texts(secao(html, "Registrar autorização de faturamento"));
     expect(textos).not.toContain("Cliente");
     expect(textos).toEqual(expect.arrayContaining(["Demandas", "0", "Soma das RVs", "R$ 0,00"]));
-    const registrar = html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Registrar autorização<\/button>/)?.[0] ?? "";
-    expect(registrar).toMatch(/ disabled=""/);
+    // O Registrar é o BotaoDeAcao: travado (aria-disabled, com a trava no código), nunca disabled (parte 13g).
+    expect(travadoNoHtml(html, "Registrar autorização")).toBe(true);
   });
 
   it("painel fechado: sem caixas, sem ação principal, e \"Nova autorização\" no cabeçalho", () => {
@@ -471,8 +475,11 @@ describe("tela de autorizações", () => {
   });
 
   it("carregando e erro não viram fila vazia", () => {
-    expect(texts(render({ estado: "carregando", linhas: [] }))).toContain("Carregando...");
-    expect(texts(render({ estado: "erro", linhas: [] }))).toContain("Não foi possível carregar a fila.");
+    // Lendo: nada escrito antes de 300 ms, e nenhum "Nenhum executado"; a região da espera guarda o lugar (parte 13g).
+    const carregando = render({ estado: "carregando", linhas: [] });
+    expect(carregando).toContain("data-carregando-na-regiao");
+    expect(texts(carregando)).not.toContain("Nenhum executado aguardando autorização");
+    expect(texts(render({ estado: "erro", linhas: [] }))).toEqual(expect.arrayContaining(["Não foi possível carregar a fila.", "Tentar de novo"]));
     expect(texts(render({ autorizadas: "carregando" }))).not.toContain("Nenhuma autorização a faturar");
     expect(texts(render({ autorizadas: "erro" }))).toContain("Não foi possível carregar as autorizações.");
     expect(texts(render({ autorizadas: [] }))).toContain("Nenhuma autorização a faturar");

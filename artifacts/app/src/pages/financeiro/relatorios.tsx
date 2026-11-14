@@ -31,7 +31,7 @@ import {
   type FiltroDoFinanceiro,
 } from "@/lib/financeiro/relatorios";
 import { useFaturas } from "@/lib/financeiro/use-faturas";
-import { useLeitura } from "@/lib/operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useLeitura } from "@/lib/operacao/leitura";
 import { diaEmSaoPaulo } from "@/lib/operacao/relatorios";
 import { baixarPlanilha, planilhaXlsx } from "@/lib/planilha-xlsx";
 import type { NumeroDoResumo, TabelaDeRelatorio } from "@/lib/relatorios";
@@ -113,6 +113,12 @@ export default function FinanceiroRelatorios() {
       hoje={hoje}
       clientes={clientes}
       estado={estado}
+      leitura={juntarTentativas(leituraDasFaturas.releitura, novaTentativaDe([pagamentos, catalogo]), {
+        tentando: lidas.some((lida) => lida.isError && lida.isFetching),
+        tentar: () => {
+          for (const lida of lidas) if (lida.isError) void lida.refetch();
+        },
+      })}
       problema={problema}
       resumo={resumo}
       tabela={tabela}

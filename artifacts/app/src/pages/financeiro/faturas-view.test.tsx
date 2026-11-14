@@ -4,7 +4,8 @@ import { Router } from "wouter";
 
 import { faturaDoFinanceiro, formDoEnvio, formDoPagamento, pagamentoDaNf, receitaPorCliente, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela, textosForaDaLista } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
+import { textosForaDaLista } from "@/test/textos";
 
 import { FaturasView, type FaturasViewProps } from "./faturas-view";
 
@@ -102,7 +103,7 @@ const MEIOS = ["E-mail", "Portal do cliente", "Correio", "Em mãos"];
 
 describe("A receber, Vencidos, Pagos e Faturas", () => {
   it("A receber: a lista pelo vencimento e o painel da NF com pagamento parcial, sem legenda", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "A receber",
       "Exportar XLSX",
       "NFs",
@@ -153,6 +154,8 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       "Registrar pagamento",
     ]);
     const permitidos = [
+      // O gerúndio e o "Conferir" do BotaoDeAcao, nas camadas escondidas; o "—" da contagem na falha e o "Tentar de novo" (parte 13g).
+      /^(Marcando como enviada…|Registrando o pagamento…|Estornando…|Cancelando o registro…|Conferir)$/,
       /^(A receber|Vencidos|Pagos|Faturas|NFs|Envio|Pagamentos|Demandas)$/,
       /^\d+$/,
       /^(de )?R\$ [\d.]+,\d{2}$/,
@@ -179,8 +182,8 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(html).toMatch(/^<div class="v3 /);
     const principais = html.match(PRINCIPAL) ?? [];
     expect(principais).toHaveLength(1);
-    expect(textosDaTela(principais[0] ?? "")).toEqual(["Registrar pagamento"]);
-    expect(textosDaTela(html)).not.toContain("Cancelar registro");
+    expect(textosVisiveis(principais[0] ?? "")).toEqual(["Registrar pagamento"]);
+    expect(textosVisiveis(html)).not.toContain("Cancelar registro");
     // A via comercial abre a NF para imprimir.
     expect(html).toContain(`href="/financeiro/nf?nf=${PARCIAL.id}"`);
     // A NF aberta fica marcada na lista.
@@ -196,29 +199,29 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       [naFila.id, "na_fila" as const],
     ]);
     const html = render({ aberta: pelaOmie, faturas: [pelaOmie], pagamentos: [lancado, naFila], baixas });
-    const pagamentos = textosDaTela(html.slice(html.indexOf(">Pagamentos<") + 1));
+    const pagamentos = textosVisiveis(html.slice(html.indexOf(">Pagamentos<") + 1));
     expect(pagamentos.slice(0, 8)).toEqual(["Pagamentos", "R$ 5.000,00", "21/10/2026 · Pix", "Estornar", "Baixa lançada", "R$ 2.000,00", "22/10/2026 · Boleto", "Baixa na fila"]);
     // A NF registrada à mão não tem baixa: nada muda.
-    expect(textosDaTela(render())).not.toContain("Baixa lançada");
+    expect(textosVisiveis(render())).not.toContain("Baixa lançada");
   });
 
   it("Vencidos: a NF vencida sem pagamento pode ser enviada, receber pagamento ou ter o registro cancelado", () => {
     const html = render({ filtro: "vencidos", aberta: FATURAS[2], pagamentos: [] });
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos.slice(0, 10)).toEqual(["Vencidos", "Exportar XLSX", "NFs", "1", "R$ 14.845,00", "NF 1190 · série 2", "Itaú Unibanco", "Emitida 10/09/2026 · vence 10/10/2026", "Para enviar", "Vencida há 13 dias"]);
     expect(textos).toContain("Nenhum pagamento");
     expect(textos).toContain("Cancelar registro");
     expect((html.match(PRINCIPAL) ?? []).length).toBe(1);
     // A que saiu pela Omie (parte 7.4d) só se desfaz com a NFS-e cancelada lá: sem a ação.
     const pelaOmie = fatura("1190", { vencimento: "2026-10-10", nf: { numero: "1190", serie: "2", emitida_em: "2026-09-10" }, origem_nf: "omie" });
-    const semCancelar = textosDaTela(render({ filtro: "vencidos", aberta: pelaOmie, faturas: [pelaOmie], pagamentos: [] }));
+    const semCancelar = textosVisiveis(render({ filtro: "vencidos", aberta: pelaOmie, faturas: [pelaOmie], pagamentos: [] }));
     expect(semCancelar).toContain("Registrar pagamento");
     expect(semCancelar).not.toContain("Cancelar registro");
   });
 
   it("Pagos: a NF paga não tem ação; o envio que não houve aparece como dado", () => {
     const html = render({ filtro: "pagos", aberta: FATURAS[3], pagamentos: [] });
-    const textos = textosDaTela(html);
+    const textos = textosVisiveis(html);
     expect(textos).toContain("Paga em 22/10/2026");
     expect(textos).toContain("Não enviada");
     expect(html.match(PRINCIPAL) ?? []).toHaveLength(0);
@@ -227,13 +230,13 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
 
   it("a NF enviada mostra o envio; o estorno e o cancelamento pedem o motivo antes de confirmar", () => {
     const enviada = FATURAS[1];
-    expect(textosDaTela(secao(render({ aberta: enviada, pagamentos: [] }), "NF 1235"))).toContain("21/10/2026 · Portal do cliente");
+    expect(textosVisiveis(secao(render({ aberta: enviada, pagamentos: [] }), "NF 1235"))).toContain("21/10/2026 · Portal do cliente");
     const estornando = render({ painel: { ...props().painel, confirmando: { tipo: "estorno", pagamentoId: PAGAMENTOS[0].id, motivo: "" } } });
-    expect(textosDaTela(estornando)).toEqual(expect.arrayContaining(["Motivo do estorno", "Confirmar estorno", "Voltar"]));
-    expect(textosDaTela(estornando)).not.toContain("Estornar");
+    expect(textosVisiveis(estornando)).toEqual(expect.arrayContaining(["Motivo do estorno", "Confirmar estorno", "Voltar"]));
+    expect(textosVisiveis(estornando)).not.toContain("Estornar");
     const cancelando = render({ filtro: "vencidos", aberta: FATURAS[2], pagamentos: [], painel: { ...props().painel, confirmando: { tipo: "cancelamento", motivo: "Demanda errada" } } });
-    expect(textosDaTela(cancelando)).toEqual(expect.arrayContaining(["Motivo do cancelamento", "Confirmar cancelamento", "Voltar"]));
-    expect(textosDaTela(cancelando)).not.toContain("Cancelar registro");
+    expect(textosVisiveis(cancelando)).toEqual(expect.arrayContaining(["Motivo do cancelamento", "Confirmar cancelamento", "Voltar"]));
+    expect(textosVisiveis(cancelando)).not.toContain("Cancelar registro");
     const comErro = render({ painel: { ...props().painel, erro: "O pagamento passa do saldo da NF, de R$ 9.845,00." } });
     expect(comErro).toMatch(/<p role="alert"[^>]*>O pagamento passa do saldo da NF/);
   });
@@ -242,11 +245,16 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     const fechada = render({ aberta: null });
     expect(fechada).not.toContain('aria-label="NF 1234"');
     expect(fechada.match(PRINCIPAL) ?? []).toHaveLength(0);
-    expect(textosDaTela(render({ aberta: null, estado: "carregando", faturas: [] }))).toEqual(["A receber", "NFs", "0", "Carregando..."]);
-    expect(textosDaTela(render({ aberta: null, estado: "erro", faturas: [] }))).toEqual(["A receber", "NFs", "0", "Não foi possível carregar as NFs."]);
-    expect(textosDaTela(render({ aberta: null, filtro: "vencidos", faturas: [PARCIAL] }))).toEqual(["Vencidos", "NFs", "0", "Nenhuma NF vencida"]);
-    expect(textosDaTela(render({ aberta: null, busca: "nada assim" }))).toContain("Nenhuma NF encontrada");
-    expect(textosDaTela(render({ aberta: null, resultado: "Pagamento registrado na NF 1234" })).slice(0, 3)).toEqual(["A receber", "Exportar XLSX", "Pagamento registrado na NF 1234"]);
+    // Lendo, nem o zero nem o vazio: a contagem em esqueleto e a caixa da região (o rótulo aos 300 ms).
+    const lendo = render({ aberta: null, estado: "carregando", faturas: [] });
+    expect(textosVisiveis(lendo)).toEqual(["A receber", "NFs"]);
+    expect(lendo).toContain("data-carregando-na-regiao");
+    expect(lendo).toContain('data-forma="contagem"');
+    // No erro, a contagem não diz zero, e a falha traz o Tentar de novo.
+    expect(textosVisiveis(render({ aberta: null, estado: "erro", faturas: [] }))).toEqual(["A receber", "NFs", "—", "Não foi possível carregar as NFs.", "Tentar de novo"]);
+    expect(textosVisiveis(render({ aberta: null, filtro: "vencidos", faturas: [PARCIAL] }))).toEqual(["Vencidos", "NFs", "0", "Nenhuma NF vencida"]);
+    expect(textosVisiveis(render({ aberta: null, busca: "nada assim" }))).toContain("Nenhuma NF encontrada");
+    expect(textosVisiveis(render({ aberta: null, resultado: "Pagamento registrado na NF 1234" })).slice(0, 3)).toEqual(["A receber", "Exportar XLSX", "Pagamento registrado na NF 1234"]);
   });
 
   it("Pagos sem NF aberta: a receita do mês por cliente, com os outros somados, o total e quantos pagamentos", () => {
@@ -258,7 +266,7 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
       nomes,
     );
     const html = render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados, erro: false } });
-    const textos = textosDaTela(secao(html, "Receita por cliente"));
+    const textos = textosVisiveis(secao(html, "Receita por cliente"));
     expect(textos).toEqual([
       "Receita por cliente",
       "Mês",
@@ -280,9 +288,10 @@ describe("A receber, Vencidos, Pagos e Faturas", () => {
     expect(html).toMatch(/id="receita-mes"[^>]*type="month"|type="month"[^>]*id="receita-mes"/);
     // Com a NF aberta, o painel dela ocupa o lugar da receita.
     expect(render({ filtro: "pagos", aberta: FATURAS[3], pagamentos: [], receita: { mes: "2026-10", dados, erro: false } })).not.toContain('aria-label="Receita por cliente"');
-    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-09", dados: receitaPorCliente([], nomes), erro: false } }), "Receita por cliente"))).toContain("Nenhum pagamento em setembro de 2026");
-    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: false } }), "Receita por cliente"))).toContain("Carregando...");
-    expect(textosDaTela(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true } }), "Receita por cliente"))).toContain("Não foi possível carregar os pagamentos.");
+    expect(textosVisiveis(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-09", dados: receitaPorCliente([], nomes), erro: false } }), "Receita por cliente"))).toContain("Nenhum pagamento em setembro de 2026");
+    expect(textosVisiveis(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: false } }), "Receita por cliente"))).not.toContain("Nenhum pagamento em outubro de 2026");
+    expect(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: false } }), "Receita por cliente")).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(secao(render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true } }), "Receita por cliente"))).toContain("Não foi possível carregar os pagamentos.");
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, com e sem NF aberta", async () => {

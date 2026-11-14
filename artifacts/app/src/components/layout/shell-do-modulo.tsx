@@ -4,8 +4,12 @@ import { ChevronDown, WifiOff, type LucideIcon } from "lucide-react";
 
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SeletorDeModulo } from "@/components/layout/seletor-de-modulo";
+import { Spinner } from "@/components/ui/spinner";
 import { ehTelaDoAgente } from "@/lib/agente/navegacao";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { useRotaEsperando } from "@/lib/carregando/espera-da-rota";
 import { useConexao } from "@/lib/carregando/estado-da-conexao";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { isModuleGroup, isNavRouteActive, type AppModule } from "@/lib/modules";
 import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
@@ -82,7 +86,7 @@ function GrupoDoMenu({
         {atualNoGrupo && !aberto ? <MarcaDoAtual /> : null}
         <Icone className="size-5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        <Contador contador={contador} />
+        <ContadorOuEspera atual={atualNoGrupo && !aberto} contador={contador} />
         <ChevronDown className={cn("size-4 shrink-0 opacity-70 transition-transform", aberto ? "" : "-rotate-90")} aria-hidden="true" />
       </button>
       {aberto ? (
@@ -103,6 +107,7 @@ function GrupoDoMenu({
                   {atual ? <span aria-hidden="true" className="absolute inset-y-2.5 left-0 w-0.75 rounded-full bg-v3-marca" /> : null}
                   <IconeDaTela className="size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{route.label}</span>
+                  <ContadorOuEspera atual={atual} contador={undefined} />
                 </Link>
               </li>
             );
@@ -113,7 +118,22 @@ function GrupoDoMenu({
   );
 }
 
+/**
+ * O item do menu da tela que ainda abre: passados 300 ms, a caixa de 16 px no
+ * lugar do contador, enquanto o arquivo da tela baixa (carregamento v2,
+ * momento 1). Em branco, com o trilho a 0,25 da barra preta. Decorativa: quem
+ * diz "Abrindo Pedidos…" é a `CarregandoTela`, com o anúncio.
+ */
+export function ContadorOuEspera({ atual, contador }: { atual: boolean; contador: ContadorDoItem | undefined }) {
+  const esperando = useRotaEsperando();
+  const espera = useEspera(atual && esperando);
+  if (atual && espera.visivel) return <Spinner tamanho={16} calmo={espera.calmo} data-espera-da-rota="" className="ml-auto shrink-0" />;
+  return <Contador contador={contador} />;
+}
+
 function Contador({ contador }: { contador: ContadorDoItem | undefined }) {
+  // Lendo, o bloco no lugar do número, no branco a 12% da barra preta (decorativo).
+  if (contador?.lendo) return <Esqueleto forma="contagem" data-contador-lendo="" className="ml-auto shrink-0" />;
   if (!contador || contador.n <= 0) return null;
   return (
     <span
@@ -212,7 +232,7 @@ export function ShellDoModulo({
                 {atualItem ? <MarcaDoAtual /> : null}
                 <Icone className="size-5 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                <Contador contador={contadores?.[item.id]} />
+                <ContadorOuEspera atual={atualItem} contador={contadores?.[item.id]} />
               </Link>
             );
           })}

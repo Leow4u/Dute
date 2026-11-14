@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,7 @@ import {
 import { VARIANTES, rotuloDoContato } from "@/lib/comercial/montar";
 import type { EtapaDemanda } from "@/lib/comercial/orcamentos";
 import { cn } from "@/lib/utils";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Os diálogos das ações depois do envio (parte 12b de
@@ -410,7 +411,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
   const problemas = problemasDoDialogo(acao, form, { agora, hoje, envioEm, contatos, comprometida, contratos });
   const mostrados = tentou ? problemas : {};
   return (
-    <Dialog open onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -443,12 +444,8 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             </p>
           ) : null}
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado}>
-              {ocupado ? "Gravando..." : "Confirmar"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} rotulo="Confirmar" andamento="Gravando…" />
           </DialogFooter>
         </form>
       </DialogContent>

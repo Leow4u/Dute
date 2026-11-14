@@ -7,7 +7,7 @@ import { LinhaDeEstado, type LeituraDaLista } from "@/components/ui/linha-de-est
 import { PageHeader } from "@/components/ui/page-header";
 import { itensParadosEmTexto, rotuloDoAlerta, type AlertaProposto } from "@/lib/memoria/alertas";
 import { dataDoRelogio, diasEmTexto } from "@/lib/memoria/parados";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 
 /**
  * Estoque › Alertas (docs/plataforma/fase-5-memoria.md, parte 5.4e), só a
@@ -170,7 +170,6 @@ export function AlertasParadosView({
   voltando = false,
   decidindo = null,
 }: AlertasParadosViewProps) {
-  const foco = useFocoQueSegue();
   return (
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader title="Alertas de itens parados" estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leitura} objeto="alertas" pedidaPelaPessoa={voltando} />} />
@@ -196,7 +195,7 @@ export function AlertasParadosView({
             </div>
           ) : null}
           {/* Um alerta por chave: o botão do alerta decidido não passa ao seguinte com o "Enviando…" (parte 13b). */}
-          <SaiComOFoco key={alerta.id} alvo={ID_DO_ALERTA} pedido={foco}>
+          <SaiComOFoco key={alerta.id} alvo={ID_DO_ALERTA}>
             <Alerta alerta={alerta} nome={nomeDoCliente(alerta.customerCode)} marcados={marcados} ocupado={ocupado} decidindo={decidindo} erro={erro} acoes={acoes} voltando={voltando} />
           </SaiComOFoco>
         </>

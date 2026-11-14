@@ -115,6 +115,7 @@ export default function FinanceiroAFaturarPage() {
   return (
     <AFaturarView
       estado={estado}
+      leitura={fila.releitura}
       linhas={linhas}
       busca={busca}
       painel={{ aberto, marcadas, form: formDoPainel, resultado, erro }}

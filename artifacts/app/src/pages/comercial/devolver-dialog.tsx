@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Devolver para a montagem (advanceQuote return): a nota para quem montou.
@@ -28,7 +29,7 @@ export function DevolverDialog({
     if (aberto) setNota("");
   }, [aberto]);
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-md">
         <form
           className="grid gap-4"
@@ -45,12 +46,8 @@ export function DevolverDialog({
             <Textarea id="devolver-nota" rows={4} value={nota} onChange={(evento) => setNota(evento.target.value)} maxLength={1000} />
           </div>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado || (notaObrigatoria && !nota.trim())}>
-              {ocupado ? "Devolvendo..." : "Devolver"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} bloqueado={notaObrigatoria && !nota.trim()} rotulo="Devolver" andamento="Devolvendo…" />
           </DialogFooter>
         </form>
       </DialogContent>

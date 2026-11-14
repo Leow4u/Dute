@@ -10,6 +10,7 @@ import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { CABECALHO_DO_CLIENTE } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { currentCompetencia } from "@/lib/billing-format";
+import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { buildInvoiceView } from "@/lib/invoice-view";
 
@@ -26,19 +27,17 @@ function competenciaFromUrl() {
 export default function BillingInvoice() {
   const competencia = competenciaFromUrl();
   // A fatura do cliente ativo, como no Fechamento do mês (pages/billing.tsx).
-  const { code: cliente, isLoading: carregandoCliente, recarregar } = useActiveCustomer();
+  const { code: cliente, isLoading: carregandoCliente, tentar: lerOsClientes } = useActiveCustomer();
   const chave = [...getGetBillingPeriodQueryKey(competencia), cliente];
   const leitura = useGetBillingPeriod(competencia, {
     query: { queryKey: chave, enabled: !carregandoCliente },
     request: { headers: { [CABECALHO_DO_CLIENTE]: cliente } },
   });
   const qc = useQueryClient();
-  // "Tentar de novo" da demora (10 s): a leitura presa é cancelada e lida de novo (o react-query não recomeça a leitura
-  // sem dado). Com o cliente ativo ainda lendo, quem lê de novo é a lista dos clientes, nunca a fatura do cliente padrão.
-  const tentarDeNovo = () =>
-    carregandoCliente
-      ? Promise.resolve(recarregar?.())
-      : qc.cancelQueries({ queryKey: chave }).then(() => leitura.refetch());
+  // "Tentar de novo" da demora (10 s): a leitura presa é cancelada e lida de novo (`relerDoZero`: o react-query não
+  // recomeça a leitura sem dado). Com o cliente ativo ainda lendo, quem lê de novo é a lista dos clientes, nunca a
+  // fatura do cliente padrão.
+  const tentarDeNovo = () => (carregandoCliente ? lerOsClientes() : relerDoZero(qc, [chave]));
   // A falha fica na tela enquanto a pessoa tenta de novo (o react-query a voltaria a "carregando"), e só a leitura
   // sem nada lido a mostra: a releitura que falha com a fatura na tela não a apaga (carregamento v2, parte 13d).
   const comFalha = useLeituraComFalha(leitura);
@@ -63,7 +62,7 @@ export default function BillingInvoice() {
         <FalhaNaLeitura leitura={leitura} erro={comFalha.error} mensagem="Não consegui carregar a fatura." className="no-print" focoAoSair={idDaVolta} />
       ) : !data ? (
         // A espera em bloco: nada antes de 300 ms, depois a caixa e "Carregando a fatura…", com o anúncio.
-        <CarregandoNaRegiao rotulo="Carregando a fatura…" className="no-print" onTentar={tentarDeNovo} focoAoSair={idDaVolta} />
+        <CarregandoNaRegiao rotulo="Carregando a fatura…" className="no-print" continuaARota onTentar={tentarDeNovo} focoAoSair={idDaVolta} />
       ) : (
         <InvoiceDocument
           competencia={competencia}

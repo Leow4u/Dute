@@ -27,14 +27,25 @@ vi.mock("@/lib/liberacao", async (importOriginal) => ({ ...(await importOriginal
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { publicMetadata: { role: "admin" } } }) }));
 vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ active: { code: "BTG", name: "BTG Pactual" }, code: "BTG" }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
-vi.mock("@/lib/operacao/leitura", () => ({
-  useLeitura: (chave: string | null) => {
-    if (!chave?.startsWith("orders:em_aberto")) return { itens: [], erro: false };
-    if (!estado.chaves.includes(chave)) estado.chaves.push(chave);
-    return !chave.endsWith("#0") && estado.daNovaAssinatura ? estado.daNovaAssinatura : estado.entregas;
-  },
-  useDocumento: () => ({ item: undefined, erro: false }),
-}));
+vi.mock("@/lib/operacao/leitura", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return {
+    // A nova tentativa é a da própria `useLeitura` (`tentar` assina de novo, com a vez na assinatura).
+    useLeitura: (chave: string | null) => {
+      const [vez, setVez] = useState(0);
+      const tentar = () => {
+        setVez((atual) => atual + 1);
+        return Promise.resolve();
+      };
+      if (!chave?.startsWith("orders:em_aberto")) return { itens: [], erro: false, tentando: false, tentar };
+      const assinatura = `${chave}#${vez}`;
+      if (!estado.chaves.includes(assinatura)) estado.chaves.push(assinatura);
+      const leitura = vez > 0 && estado.daNovaAssinatura ? estado.daNovaAssinatura : estado.entregas;
+      return { ...leitura, tentando: false, tentar };
+    },
+    useDocumento: () => ({ item: undefined, erro: false }),
+  };
+});
 vi.mock("@/features/warehouse-ops/opening-inventory-status", () => ({
   useOpeningInventorySession: () => ({ data: undefined }),
   OpeningInventoryNotice: () => null,

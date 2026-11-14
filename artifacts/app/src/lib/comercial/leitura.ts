@@ -3,6 +3,9 @@ import { doc, getDoc, onSnapshot, type DocumentData, type Firestore, type Query 
 
 import { useAppUser } from "../auth";
 import { firestore } from "../firebase";
+import { useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
+
+export { SEM_NOVA_TENTATIVA, novaTentativaDe, type NovaTentativa } from "../operacao/leitura";
 import type { Carga } from "./clientes";
 
 /**
@@ -20,28 +23,32 @@ export function useLeitura<T>(
   chave: string | null,
   consulta: (db: Firestore) => Query<DocumentData>,
   mapear: (id: string, data: DocumentData) => T | null,
-): Leitura<T> {
+): Leitura<T> & NovaTentativa {
+  const nova = useNovaTentativa(chave);
+  const { assinatura } = nova;
   const [estado, setEstado] = useState<Leitura<T> & { chave: string | null }>({ chave: null, itens: null, erro: false });
   useEffect(() => {
-    if (!chave) return undefined;
+    if (!assinatura) return undefined;
     if (!firestore) {
-      setEstado({ chave, itens: null, erro: true });
+      setEstado({ chave: assinatura, itens: null, erro: true });
       return undefined;
     }
     return onSnapshot(
       consulta(firestore),
       (snapshot) =>
         setEstado({
-          chave,
+          chave: assinatura,
           itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
           erro: false,
         }),
-      () => setEstado({ chave, itens: null, erro: true }),
+      () => setEstado({ chave: assinatura, itens: null, erro: true }),
     );
-    // A consulta e o mapeamento dependem só da chave.
+    // A consulta e o mapeamento dependem só da chave (e da tentativa).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave]);
-  return estado.chave === chave ? estado : { itens: null, erro: false };
+  }, [assinatura]);
+  const leitura = estado.chave === assinatura ? estado : { itens: null, erro: false };
+  const tentando = nova.tentando(leitura.erro, leitura.itens !== null);
+  return { itens: leitura.itens, erro: leitura.erro || tentando, tentando, tentar: nova.tentar };
 }
 
 /** A leitura como a tela mostra: erro e carregando nunca viram lista vazia. */
@@ -56,25 +63,31 @@ export type LeituraDoDocumento = {
 };
 
 /** Um documento ao vivo ("demands/10045"). Caminho null: nada a ler. */
-export function useDocumento(caminho: string | null): LeituraDoDocumento {
+export function useDocumento(caminho: string | null): LeituraDoDocumento & NovaTentativa {
+  const nova = useNovaTentativa(caminho);
+  const { assinatura } = nova;
   const [estado, setEstado] = useState<LeituraDoDocumento & { caminho: string | null }>({
     caminho: null,
     dados: undefined,
     erro: false,
   });
   useEffect(() => {
-    if (!caminho) return undefined;
+    if (!caminho || !assinatura) return undefined;
     if (!firestore) {
-      setEstado({ caminho, dados: undefined, erro: true });
+      setEstado({ caminho: assinatura, dados: undefined, erro: true });
       return undefined;
     }
     return onSnapshot(
       doc(firestore, caminho),
-      (snapshot) => setEstado({ caminho, dados: snapshot.exists() ? snapshot.data() : null, erro: false }),
-      () => setEstado({ caminho, dados: undefined, erro: true }),
+      (snapshot) => setEstado({ caminho: assinatura, dados: snapshot.exists() ? snapshot.data() : null, erro: false }),
+      () => setEstado({ caminho: assinatura, dados: undefined, erro: true }),
     );
-  }, [caminho]);
-  return estado.caminho === caminho ? estado : { dados: undefined, erro: false };
+    // O caminho está na assinatura (com a tentativa).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinatura]);
+  const leitura = estado.caminho === assinatura ? estado : { dados: undefined, erro: false };
+  const tentando = nova.tentando(leitura.erro, leitura.dados !== undefined);
+  return { dados: leitura.dados, erro: leitura.erro || tentando, tentando, tentar: nova.tentar };
 }
 
 /**

@@ -42,7 +42,7 @@ vi.mock("@/lib/active-customer-context", () => ({
     code: "BTG",
     isLoading: estado.carregandoCliente,
     codeProvavel: estado.codeProvavel ?? "BTG",
-    recarregar: estado.recarregar ?? undefined,
+    tentar: estado.recarregar ?? (() => Promise.resolve()),
   }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));

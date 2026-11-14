@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 
 import { aberturaNaTela } from "../abertura";
 
@@ -26,10 +26,39 @@ export interface EsperaDaRota {
   retirar: (() => void) | null;
   /** Uma lista continuou esta espera: o anúncio que ainda espera a vez é dela. */
   herdada: boolean;
+  /**
+   * A espera é de uma região da tela que já chegou (a leitura do portal), e
+   * não do arquivo de uma tela: a região seguinte a continua, mas o item do
+   * menu não mostra a caixa por ela (`useRotaEsperando`).
+   */
+  daRegiao?: boolean;
 }
 
 /** As esperas de rota na tela agora; a última é a que a tela que chega continua. */
 const naTela: EsperaDaRota[] = [];
+
+/** Quem quer saber quando uma espera de rota entra ou sai da tela (o item do menu, `useRotaEsperando`). */
+const ouvintes = new Set<() => void>();
+
+function avisarOsOuvintes() {
+  for (const ouvinte of ouvintes) ouvinte();
+}
+
+function ouvirAsEsperas(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+  };
+}
+
+/**
+ * Alguma tela ainda abre (a `CarregandoTela` está na tela): o item do menu
+ * tocado mostra a caixa de 16 px no lugar do contador enquanto a tela baixa
+ * (carregamento v2, momento 1; o relógio dos 300 ms é de quem mostra).
+ */
+export function useRotaEsperando(): boolean {
+  return useSyncExternalStore(ouvirAsEsperas, () => naTela.some((espera) => !espera.daRegiao), () => false);
+}
 
 /** A espera de rota que começa agora, ou que continua a que começou em `desde`. */
 export function novaEsperaDaRota(desde?: number): EsperaDaRota {
@@ -38,13 +67,19 @@ export function novaEsperaDaRota(desde?: number): EsperaDaRota {
   return { inicio, entrada: false, demora: false, retirar: null, herdada: false };
 }
 
-/** A `CarregandoTela` está na tela com esta espera, desde o commit em que entrou até o em que sai. */
-export function useEsperaDaRotaNaTela(espera: EsperaDaRota): void {
+/**
+ * A `CarregandoTela` (ou a região que passa a espera adiante) está na tela com
+ * esta espera, desde o commit em que entrou até o em que sai. Sem espera, nada.
+ */
+export function useEsperaDaRotaNaTela(espera: EsperaDaRota | null): void {
   useLayoutEffect(() => {
+    if (!espera) return undefined;
     naTela.push(espera);
+    avisarOsOuvintes();
     return () => {
       const posicao = naTela.indexOf(espera);
       if (posicao >= 0) naTela.splice(posicao, 1);
+      avisarOsOuvintes();
     };
   }, [espera]);
 }

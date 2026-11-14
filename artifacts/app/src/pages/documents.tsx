@@ -47,8 +47,9 @@ import { useChegada } from "@/lib/carregando/use-chegada";
 import { CARREGANDO, relogioDaEspera } from "@/lib/carregando/tempo";
 import { desfechoDoErro, useAcaoNaLinha, type AcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { canAccessModule, type ProfileRole } from "@/lib/modules";
 import { humanApiError } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -386,9 +387,6 @@ export default function Documents() {
   // O que o Anunciador já disse de cada espera, pela vez dela: a linha que sai da lista (a busca, o filtro) e volta,
   // e a mesma linha na tabela e no cartão, não falam de novo.
   const falas = useRef<FalasDasLinhas>({ ditas: new Set(), vezes: new Map() });
-  // O documento arquivado sai da lista ("Todos" não mostra os arquivados): o foco que estava no "⋯" dele vai à linha
-  // de estado, nunca ao body.
-  const focoQueSegue = useFocoQueSegue();
   /** O que a lista relida diz da ação: valeu ou não. */
   const conferirNaLista = (id: string, valeu: (row: DocumentRow) => boolean) => async () => {
     const lidos = (await apiJson<{ items?: Record<string, unknown>[] }>(documentsUrl)).items ?? [];
@@ -613,7 +611,6 @@ export default function Documents() {
                     conferindo={Boolean(row.documentId && conferindo.has(row.documentId))}
                     onConferir={(acao) => conferir(row, acao)}
                     falas={falas}
-                    focoQueSegue={focoQueSegue}
                     alvoDoFoco={idDaLinha}
                     onSend={() => sendToKnowledge(row)}
                     onDecide={(approve) => decideKnowledge(row, approve)}
@@ -636,7 +633,6 @@ export default function Documents() {
                 conferindo={Boolean(row.documentId && conferindo.has(row.documentId))}
                 onConferir={(acao) => conferir(row, acao)}
                 falas={falas}
-                focoQueSegue={focoQueSegue}
                 alvoDoFoco={idDaLinha}
                 onSend={() => sendToKnowledge(row)}
                 onDecide={(approve) => decideKnowledge(row, approve)}
@@ -811,8 +807,7 @@ type DocumentLineProps = {
   onConferir: (acao: AcaoDoDocumento) => void;
   /** O que o Anunciador já disse de cada espera (a da tela). */
   falas: MutableRefObject<FalasDasLinhas>;
-  /** Para onde vai o foco quando a linha sai da lista com ele dentro (useFocoQueSegue). */
-  focoQueSegue: MutableRefObject<readonly string[] | null>;
+  /** Para onde vai o foco quando a linha sai da lista com ele dentro (a linha de estado). */
   alvoDoFoco: string;
   onSend: () => void;
   onDecide: (approve: boolean) => void;
@@ -864,7 +859,6 @@ function DocumentActions({
   canApprove,
   acoes,
   conferindo,
-  focoQueSegue,
   alvoDoFoco,
   onSend,
   onDecide,
@@ -883,14 +877,15 @@ function DocumentActions({
   // O menu abre só com a linha livre, e a escolha o fecha: o `open` é só o que a pessoa pediu. (Com o `open` também
   // preso ao ocupado, o fechamento da escolha não chegava, e o menu reabria sozinho quando a linha soltava.)
   const [aberto, setAberto] = useState(false);
-  // A linha que sai com o foco no "⋯" (o documento arquivado) pede o foco para a linha de estado.
+  // O documento arquivado sai da lista ("Todos" não mostra os arquivados): o foco que estava no "⋯" dele vai à linha
+  // de estado, nunca ao body.
   const gatilho = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     const elemento = gatilho.current;
     return () => {
-      if (elemento && typeof document !== "undefined" && elemento === document.activeElement) focoQueSegue.current = [alvoDoFoco];
+      if (elemento) segurarOFocoQueSai(elemento, () => elemento.ownerDocument.getElementById(alvoDoFoco));
     };
-  }, [alvoDoFoco, focoQueSegue]);
+  }, [alvoDoFoco]);
   const nome = andando && naTela ? (conferindo ? `Conferindo ${row.title}…` : gerundioDa(naTela.acao, row.title)) : `Ações de ${row.title}`;
   const escolher = (fazer: () => void) => () => {
     setAberto(false);
@@ -971,7 +966,6 @@ function ApoioDaAcao({
   falas,
   id,
   idDoGatilho,
-  focoQueSegue,
 }: {
   row: DocumentRow;
   acoes: AcaoNaLinha<string>;
@@ -980,7 +974,6 @@ function ApoioDaAcao({
   falas: MutableRefObject<FalasDasLinhas>;
   id: string;
   idDoGatilho: string;
-  focoQueSegue: MutableRefObject<readonly string[] | null>;
 }) {
   const naTela = acaoNaTela(acoes, row);
   const andando = naTela?.estado === "andamento";
@@ -1028,7 +1021,7 @@ function ApoioDaAcao({
           <span>{SEM_CONFIRMACAO_DO_SERVIDOR}</span>
           <span aria-hidden="true">·</span>
           {/* Fica na tela enquanto relê, com o foco: "Conferindo…". O que não valeu volta a linha, e o foco vai ao "⋯". */}
-          <SaiComOFoco alvo={idDoGatilho} pedido={focoQueSegue}>
+          <SaiComOFoco alvo={idDoGatilho}>
             <button
               type="button"
               className="linha-de-estado-tentar h-4 before:-inset-3.5"
@@ -1106,7 +1099,6 @@ function DocumentLine(props: DocumentLineProps) {
           falas={props.falas}
           id={idDoApoio}
           idDoGatilho={idDoGatilho}
-          focoQueSegue={props.focoQueSegue}
         />
         {KNOWLEDGE_LABEL[row.knowledge] ? (
           <div className={cn("mt-0.5 text-xs font-medium", knowledgeTone(row.knowledge))}>{KNOWLEDGE_LABEL[row.knowledge]}</div>
@@ -1144,7 +1136,6 @@ function DocumentCard(props: DocumentLineProps) {
           falas={props.falas}
           id={idDoApoio}
           idDoGatilho={idDoGatilho}
-          focoQueSegue={props.focoQueSegue}
         />
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span className={cn("rounded-md px-2 py-0.5 font-semibold", audience.tone)}>{audience.label}</span>

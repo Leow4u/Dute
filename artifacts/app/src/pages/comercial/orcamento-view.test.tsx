@@ -17,6 +17,7 @@ import {
   type DadosDoOrcamento,
   type MontarViewProps,
 } from "./orcamento-view";
+import { acoesPrincipais, semCamadasEscondidas, travadoNoHtml } from "@/test/botoes";
 
 /**
  * Montar orçamento (docs/mockups/ComOrcamento.dc.html), só a apresentação: sem
@@ -147,7 +148,7 @@ function render(overrides: Partial<MontarViewProps> = {}) {
 
 /** Textos visíveis, na ordem: o que a pessoa lê na tela. */
 function texts(html: string) {
-  return html
+  return semCamadasEscondidas(html)
     .replace(/<span class="sr-only">[^<]*<\/span>/g, "")
     .split(/<[^>]+>/)
     .map((text) => text.replace(/&amp;/g, "&").replace(/ /g, " ").trim())
@@ -267,7 +268,7 @@ describe("montar orçamento", () => {
     const html = render();
     expect(html).toMatch(/^<div class="v3 /);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar para aprovação<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar para aprovação"]);
   });
 
   it("a grade: busca de item da tabela pelo teclado e a quantidade de cada linha com id para o foco", () => {
@@ -368,7 +369,7 @@ describe("montar orçamento", () => {
       "Pedido do cliente",
     ]);
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>.*?Enviar ao cliente<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar ao cliente"]);
   });
 
   it("o documento abre noutra aba: a prévia até o envio; o PDF da RV enviada depois", () => {
@@ -413,8 +414,8 @@ describe("montar orçamento", () => {
       podeAtualizarTabela: true,
       acoes: acoesDoOrcamento({ status: "para_aprovar", role: "owner", uid: "u-leo", autorUid: "u-gui" }),
     })).not.toContain("Atualizar tabela");
-    expect(render({ dados: semTabela, podeAtualizarTabela: true, ocupado: true }))
-      .toMatch(/<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?Atualizar tabela<\/button>/);
+    // Gravando outra coisa: o Atualizar tabela é o BotaoDeAcao, travado por aria-disabled, nunca disabled (parte 13g).
+    expect(travadoNoHtml(render({ dados: semTabela, podeAtualizarTabela: true, ocupado: true }), "Atualizar tabela")).toBe(true);
   });
 
   it("item cadastrado na tabela herda código e preço sem pedir motivo", () => {
@@ -526,9 +527,10 @@ describe("montar orçamento", () => {
           </Router>,
         ),
       );
-    expect(estado("carregando")).toEqual(["Orçamento", "Carregando..."]);
+    // Lendo: nada escrito antes de 300 ms (a caixa entra com o relógio); na falha, "Tentar de novo" (parte 13g).
+    expect(estado("carregando")).toEqual(["Orçamento"]);
     expect(estado("nao_encontrado")).toEqual(["Orçamento", "Orçamento não encontrado"]);
-    expect(estado("erro")).toEqual(["Orçamento", "Não foi possível carregar o orçamento."]);
+    expect(estado("erro")).toEqual(["Orçamento", "Não foi possível carregar o orçamento.", "Tentar de novo"]);
   });
 });
 
@@ -594,7 +596,7 @@ describe("montar orçamento depois do envio (parte 12b)", () => {
     expect(lista).toContain("Enviar ao cliente");
     expect(lista).not.toContain("Enviar para aprovação");
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>(?:<svg[^>]*>.*?<\/svg>)?Enviar ao cliente<\/button>/);
+    expect(acoesPrincipais(html)).toEqual(["Enviar ao cliente"]);
   });
 
   it("sem a dispensa do servidor, a RV de execução passa pela aprovação e não mostra a marca", () => {

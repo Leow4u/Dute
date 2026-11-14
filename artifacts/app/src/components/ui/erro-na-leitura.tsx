@@ -9,6 +9,7 @@ import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao"
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
+import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,6 +28,16 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
 }
 
 /**
+ * O "Tentando de novo…" no relógio da espera, para quem passa ao
+ * `ErroNaLeitura` a leitura crua (o `isFetching`): só depois de 300 ms, e pelo
+ * menos 500 ms. A nova tentativa que falha de novo antes não pisca o botão nem
+ * muda a frase do alerta (carregamento v2, parte 13f).
+ */
+export function useTentandoNoRelogio(tentando: boolean): boolean {
+  return useEspera(tentando, { segurarMinimo: true }).visivel;
+}
+
+/**
  * A nova tentativa no relógio da espera: "Tentando de novo…" só depois de
  * 300 ms, e pelo menos 500 ms; a leitura que acaba antes não pisca o botão. A
  * trava do toque segue o que o botão diz: enquanto ele diz "Tentando de
@@ -35,7 +46,7 @@ export function useFaltaNaTela(forcada?: FaltaNaTela): FaltaNaTela {
  * toque alcançar o servidor.
  */
 function useNovaTentativa(tentando: boolean, onTentar: () => void) {
-  const mostrando = useEspera(tentando, { segurarMinimo: true }).visivel;
+  const mostrando = useTentandoNoRelogio(tentando);
   const tentarDeNovo = useTentarDeNovo();
   return {
     mostrando,
@@ -49,14 +60,19 @@ function useNovaTentativa(tentando: boolean, onTentar: () => void) {
  * O aviso no lugar da lista sai da tela quando a nova tentativa começa a ler
  * (a lista volta às linhas-fantasma): com o foco nele, o foco vai à linha de
  * estado da lista (`id`), que diz "Carregando pedidos…" e depois a hora, e
- * nunca ao `body` (2.4.3).
+ * nunca ao `body` (2.4.3). Sem linha de estado, ao título da seção ou do
+ * diálogo onde o aviso morava (o painel que chegou, a nova tentativa que deu
+ * certo; parte 13e).
  */
 export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | undefined) {
   useLayoutEffect(() => {
     const elemento = raiz.current;
     return () => {
-      if (!id || !elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
-      document.getElementById(id)?.focus({ preventScroll: true });
+      if (!elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
+      const alvo = id ? document.getElementById(id) : null;
+      // Sem o alvo na tela (o id que não chegou), também o título: nunca o `body`.
+      if (alvo) alvo.focus({ preventScroll: true });
+      else segurarOFocoQueSai(elemento);
     };
   }, [id, raiz]);
 }

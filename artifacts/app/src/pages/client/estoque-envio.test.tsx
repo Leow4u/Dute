@@ -215,4 +215,21 @@ describe("o painel do pedido enviando (carregamento v2, parte 13a)", () => {
     for (const soltar of estado.envioPreso!.splice(0)) soltar();
     estado.envioPreso = null;
   });
+
+  it("o pedido enviado fecha o painel e o foco vai ao título da página, e não ao body: o Pedido · que abriu o painel saiu da tela", async () => {
+    estado.perdidas = 0;
+    await abrirATela();
+    const enviar = botao("Enviar pedido para a Dutelog")!;
+    enviar.focus();
+    await act(async () => enviar.click());
+    await esperar(() => estado.envios.length === 1, "o envio");
+    await esperar(() => document.querySelector('[role="dialog"]') === null, "o painel fechado");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(botao("Pedido ·")).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.tagName).toBe("H1");
+  });
 });
+

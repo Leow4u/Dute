@@ -8,22 +8,30 @@ import type { ComprovanteDaOs } from "@/lib/portal/comprovante";
  * imprime só a área .print-area, e o cliente salva em PDF. É papel: fica
  * branco nos dois temas, por isso as cores fixas (PAPER_FILES em
  * lib/theme-colors.test.ts). Sem valor.
+ *
+ * A imagem que ainda chega guarda o lugar dela no papel; a que não veio diz
+ * que não carregou, no lugar dela, e nunca some calada (carregamento v2,
+ * parte 13f).
  */
 
 export function ComprovanteDocumento({
   comprovante,
   urls,
   emissor = EMISSOR_DO_DOCUMENTO,
+  faltando = [],
 }: {
   comprovante: ComprovanteDaOs;
   /** A URL de cada arquivo do Storage (a assinatura e as fotos), pelo caminho. */
   urls: Readonly<Record<string, string>>;
   emissor?: Emissor;
+  /** Os caminhos que não vieram do Storage. */
+  faltando?: readonly string[];
 }) {
   const cabecalho = cabecalhoDoEmissor(emissor);
   const { aceite } = comprovante;
   const urlDaAssinatura = aceite.assinatura ? (urls[aceite.assinatura] ?? null) : null;
-  const fotos = comprovante.fotos.flatMap((caminho) => (urls[caminho] ? [{ caminho, url: urls[caminho] }] : []));
+  const assinaturaFaltou = Boolean(aceite.assinatura && faltando.includes(aceite.assinatura));
+  const fotos = comprovante.fotos.map((caminho) => ({ caminho, url: urls[caminho] ?? null, faltou: faltando.includes(caminho) }));
   return (
     <article
       aria-label={`Comprovante da OS ${comprovante.numero}`}
@@ -103,7 +111,11 @@ export function ComprovanteDocumento({
         <div className="flex items-end gap-6 px-3 py-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex h-[60px] items-end border-b border-[#161616]">
-              {urlDaAssinatura ? <img src={urlDaAssinatura} alt={`Assinatura de ${aceite.nome ?? "quem recebeu"}`} className="h-[56px] w-auto object-contain" /> : null}
+              {urlDaAssinatura ? (
+                <img src={urlDaAssinatura} alt={`Assinatura de ${aceite.nome ?? "quem recebeu"}`} className="h-[56px] w-auto object-contain" />
+              ) : assinaturaFaltou ? (
+                <span className="pb-1 text-[11px] font-semibold text-[#B3261E]">Assinatura não carregou</span>
+              ) : null}
             </div>
             <b className="text-[12px] font-extrabold">{aceite.nome ?? "—"}</b>
             {aceite.detalhe ? <span className="text-[11px] font-semibold text-[#3F403F]">{aceite.detalhe}</span> : null}
@@ -115,8 +127,18 @@ export function ComprovanteDocumento({
         <Secao titulo="Fotos do final">
           <ul className="grid grid-cols-3 gap-2 p-2">
             {fotos.map((foto, indice) => (
-              <li key={foto.caminho} className="break-inside-avoid">
-                <img src={foto.url} alt={`Foto do final ${indice + 1}`} className="aspect-[4/3] w-full rounded-[4px] object-cover" />
+              // A foto que ainda chega guarda o lugar à vista, fora da árvore: o leitor de tela não ouve item em branco.
+              <li key={foto.caminho} className="break-inside-avoid" aria-hidden={!foto.url && !foto.faltou ? true : undefined}>
+                {foto.url ? (
+                  <img src={foto.url} alt={`Foto do final ${indice + 1}`} className="aspect-[4/3] w-full rounded-[4px] object-cover" />
+                ) : foto.faltou ? (
+                  <span className="flex aspect-[4/3] w-full items-center justify-center rounded-[4px] border border-dashed border-[#B3261E] px-2 text-center text-[11px] font-semibold text-[#B3261E]">
+                    {`Foto ${indice + 1} não carregou`}
+                  </span>
+                ) : (
+                  // A foto que ainda chega guarda o lugar dela.
+                  <span aria-hidden="true" className="block aspect-[4/3] w-full rounded-[4px] bg-[#E5E5E1]" />
+                )}
               </li>
             ))}
           </ul>

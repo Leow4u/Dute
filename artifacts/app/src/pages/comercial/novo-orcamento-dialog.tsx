@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 import { SeloProspect } from "./clientes-view";
 import { CamposDoContrato, CamposDoPeriodo } from "./depois-do-envio-dialogos";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 
 /**
  * Novo orçamento (parte 11): o cliente (busca por nome ou CNPJ, ou um
@@ -95,7 +96,7 @@ export function NovoOrcamentoDialog({
   const problemasDoPeriodo = execucao ? problemasDaExecucao({ de: estado.de, ate: estado.ate }, hoje) : {};
 
   return (
-    <Dialog open={aberto} onOpenChange={(open) => (!open && !ocupado ? onCancelar() : undefined)}>
+    <Dialog open={aberto} ocupado={ocupado} onOpenChange={(open) => (!open ? onCancelar() : undefined)}>
       <DialogContent className="v3 max-w-lg">
         <form
           className="grid gap-4"
@@ -256,12 +257,8 @@ export function NovoOrcamentoDialog({
           ) : null}
 
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onCancelar} disabled={ocupado}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={ocupado || !estado.code}>
-              {ocupado ? "Criando..." : "Criar orçamento"}
-            </Button>
+            <DialogCancelar onClick={onCancelar} />
+            <BotaoDeAcao type="submit" estado={ocupado ? "andamento" : "repouso"} bloqueado={!estado.code} rotulo="Criar orçamento" andamento="Criando o orçamento…" />
           </DialogFooter>
         </form>
       </DialogContent>

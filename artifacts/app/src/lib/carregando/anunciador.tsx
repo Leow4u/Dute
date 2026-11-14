@@ -59,6 +59,22 @@ export function useRetirarAnuncio(): (texto: string) => void {
 }
 
 /**
+ * O resultado que a tela escreve e que antes era uma região viva solta (o
+ * `role="status"` da confirmação "NF 1234 registrada", "Recusada"): o texto
+ * fica na tela, sem região viva, e quem fala é o Anunciador, uma vez, quando
+ * ele aparece ou muda depois de a tela abrir (parte 13g). O que já estava na
+ * tela ao abrir não é falado, como numa região viva.
+ */
+export function useAnunciarAoMudar(texto: string | null | undefined): void {
+  const antes = useRef(texto ?? null);
+  useEffect(() => {
+    const agora = texto ?? null;
+    if (agora && agora !== antes.current) anunciar(agora);
+    antes.current = agora;
+  }, [texto]);
+}
+
+/**
  * A região viva do carregamento (carregamento v2, seção 7): uma por tela,
  * montada desde o início no App, fora das rotas, para já estar na página
  * quando a primeira espera falar. Nunca `aria-live` na lista, no botão ou na

@@ -22,7 +22,7 @@ import {
   type ResultadoDoEnvio,
   type TentativaDeChamada,
 } from "@/lib/comercial/envio";
-import { useLeitura, useNomes } from "@/lib/comercial/leitura";
+import { novaTentativaDe, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import { classificarErro, payloadCriar } from "@/lib/comercial/montar";
 import {
   contarSegmentos,
@@ -232,6 +232,7 @@ export default function ComercialOrcamentosPage() {
     <>
       <FilaView
         estado={estado}
+        leitura={novaTentativaDe([demandas, orcamentos])}
         itens={itens}
         agora={agora}
         segmento={segmentoAtual}

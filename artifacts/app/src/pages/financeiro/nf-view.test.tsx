@@ -5,7 +5,7 @@ import { Router } from "wouter";
 import { faturaDoFinanceiro } from "@/lib/financeiro/faturas";
 import { chaveDaRevisao, demonstrativoDaNf } from "@/lib/financeiro/nf-documento";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
-import { textosDaTela } from "@/test/textos";
+import { textosVisiveis } from "@/test/botoes";
 
 import { NfView, type EstadoDaVia } from "./nf-view";
 
@@ -56,7 +56,7 @@ const PRINCIPAL = /<button[^>]*class="[^"]*bg-primary text-primary-foreground[^"
 
 describe("via comercial da NF", () => {
   it("a barra e o papel, na ordem, sem legenda", () => {
-    expect(textosDaTela(render())).toEqual([
+    expect(textosVisiveis(render())).toEqual([
       "Faturas",
       "Via comercial da NF 1234",
       "Imprimir",
@@ -101,15 +101,17 @@ describe("via comercial da NF", () => {
     const html = render();
     const principais = html.match(PRINCIPAL) ?? [];
     expect(principais).toHaveLength(1);
-    expect(textosDaTela(principais[0] ?? "")).toEqual(["Imprimir"]);
+    expect(textosVisiveis(principais[0] ?? "")).toEqual(["Imprimir"]);
     expect(html).toContain(`href="/financeiro/faturas?nf=${FATURA.id}"`);
     expect(html).toMatch(/<div class="no-print /);
     expect(html).toMatch(/<article aria-label="NF 1234" class="print-area /);
   });
 
   it("carregando, não encontrada e erro dizem o que é, e Imprimir fica desligado", () => {
-    expect(textosDaTela(render("carregando"))).toEqual(["Faturas", "Via comercial", "Imprimir", "Carregando..."]);
-    expect(textosDaTela(render("nao_encontrada"))).toEqual(["Faturas", "Via comercial", "Imprimir", "NF não encontrada"]);
+    // Lendo, a caixa da região (o rótulo aos 300 ms), sem o "Carregando..." de três pontos (parte 13g).
+    expect(textosVisiveis(render("carregando"))).toEqual(["Faturas", "Via comercial", "Imprimir"]);
+    expect(render("carregando")).toContain("data-carregando-na-regiao");
+    expect(textosVisiveis(render("nao_encontrada"))).toEqual(["Faturas", "Via comercial", "Imprimir", "NF não encontrada"]);
     expect(render("erro")).toMatch(/<p role="alert"[^>]*>Não foi possível carregar a NF\.<\/p>/);
     expect(render("carregando")).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Imprimir/);
   });

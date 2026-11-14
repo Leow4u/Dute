@@ -7,6 +7,7 @@ import type { OsDaFila } from "@/lib/operacao/fila";
 import { SEM_FILTRO, quadroDoHoje, type DemandaDoHoje } from "@/lib/operacao/hoje";
 import { solicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
+import { travadoNoHtml } from "@/test/botoes";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
 import { HojeView } from "./hoje-view";
@@ -176,7 +177,9 @@ describe("Hoje", () => {
   });
 
   it("carregando e erro", () => {
-    expect(textosDaTela(render({ estado: "carregando" }))).toContain("Carregando");
+    // Lendo: nada escrito antes de 300 ms; a região da espera (a caixa e o gerúndio) guarda o lugar (parte 13g).
+    expect(textosDaTela(render({ estado: "carregando" }))).not.toContain("Carregando");
+    expect(render({ estado: "carregando" })).toContain("data-carregando-na-regiao");
     expect(textosDaTela(render({ estado: "erro" }))).toContain("Não foi possível carregar o Hoje.");
   });
 
@@ -212,8 +215,10 @@ describe("escalar a OS", () => {
     for (const texto of ["Data", "Hora", "Equipe", "Veículo", "Sem veículo", "Agendar", "Motivo do cancelamento", "Cancelar OS", "Montador · Desativado"]) {
       expect(textos, texto).toContain(texto);
     }
-    expect(html).toMatch(/<button[^>]*type="submit"(?![^>]*disabled)[^>]*>Agendar/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Cancelar OS/);
+    // Agendar e Cancelar OS são o BotaoDeAcao: travados por aria-disabled, com a trava no código, nunca disabled (parte 13g).
+    expect(html).toMatch(/<button[^>]*type="submit"/);
+    expect(travadoNoHtml(html, "Agendar")).toBe(false);
+    expect(travadoNoHtml(html, "Cancelar OS")).toBe(true);
   });
 
   it("a OS agendada salva; a de demanda perdida só cancela", () => {
@@ -229,10 +234,10 @@ describe("escalar a OS", () => {
     const livre = formulario({ veiculos });
     expect(textosDaTela(livre)).toContain("ABC-1D23 · Fiorino · Revisão preventiva");
     expect(livre).toMatch(/<option value="vei_a" disabled="">/);
-    expect(livre).toMatch(/<button[^>]*type="submit"(?![^>]*disabled)[^>]*>Agendar/);
+    expect(travadoNoHtml(livre, "Agendar")).toBe(false);
     const escolhido = formulario({ veiculos, agenda: { ...agenda, veiculoId: "vei_a" } });
     expect(textosDaTela(escolhido)).toContain("ABC-1D23 em revisão preventiva no dia");
-    expect(escolhido).toMatch(/<button[^>]*disabled=""[^>]*>Agendar/);
+    expect(travadoNoHtml(escolhido, "Agendar")).toBe(true);
     expect(textosDaTela(formulario({ veiculos, agenda: { ...agenda, data: "2026-10-24", veiculoId: "vei_a" } }))).not.toContain("ABC-1D23 em revisão preventiva no dia");
   });
 

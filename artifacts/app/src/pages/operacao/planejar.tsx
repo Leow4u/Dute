@@ -10,7 +10,7 @@ import { chamarOperacao, mensagemDoErro, novaChave } from "@/lib/operacao/api";
 import { colaboradorDaLeitura, veiculoDaLeitura } from "@/lib/operacao/cadastro";
 import { demandaDaOperacao, escopoComSaldo, osDaDemanda } from "@/lib/operacao/demandas";
 import { clienteDaLeitura, hojeIso, nomesPorCodigo, osDaLeitura } from "@/lib/operacao/fila";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
 import { demandaDoPlanoDaBusca, hrefDaDemanda, vistoriaNoPlanoDaBusca } from "@/lib/operacao/navegacao";
 import {
   alertasDoPlano,
@@ -195,6 +195,7 @@ export default function PaginaPlanejar() {
   return (
     <PlanejarView
       estado={estado}
+      leitura={novaTentativaDe([demanda, ordens, pessoas, veiculos])}
       numero={numero}
       demanda={ficha}
       cliente={ficha ? nomesPorCodigo(clientes.itens ?? [])[ficha.customerCode] || ficha.customerCode : ""}
@@ -215,6 +216,7 @@ export default function PaginaPlanejar() {
       alertas={form ? alertasDoPlano(form, pessoas.itens ?? [], veiculos.itens ?? [], (ordens.itens ?? []).filter((os) => os.demanda !== ficha?.numero), vistoria ? "A vistoria" : undefined) : []}
       problemas={tentou ? problemas : problemasAgendando.filter((problema) => problema.includes("as OS somam"))}
       ocupado={ocupado}
+      agendando={agendando}
       erro={erro}
       onGravar={(agendar) => void gravar(agendar)}
       vistoria={vistoria}

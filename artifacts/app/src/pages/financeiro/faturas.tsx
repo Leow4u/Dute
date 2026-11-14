@@ -91,6 +91,8 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
   const [chave, setChave] = useState(novaChave);
   const [resultado, setResultado] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Qual ação do painel grava: o botão dela diz o gerúndio (parte 13g).
+  const [emAndamento, setEmAndamento] = useState<string | null>(null);
   // A receita por cliente (parte 4.2c), só em Pagos: o mês de hoje até a pessoa trocar.
   const [mes, setMes] = useState(() => hoje.slice(0, 7));
   const doMes = usePagamentosDoMes(user?.publicMetadata.role, mes, filtro === "pagos");
@@ -107,8 +109,9 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
 
   const estado = leitura.falhas.length ? "erro" : leitura.faturas ? "pronto" : "carregando";
 
-  async function gravar(pedido: Record<string, unknown>, confirmacao: string, recomeco: Recomeco) {
+  async function gravar(pedido: Record<string, unknown>, confirmacao: string, recomeco: Recomeco, acao: string) {
     setOcupado(true);
+    setEmAndamento(acao);
     setPainel((atual) => ({ ...atual, erro: null }));
     try {
       const resultado = await chamarFinanceiro<ResultadoDaCobranca>("advanceFatura", pedido);
@@ -122,6 +125,7 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       // O pagamento e o estorno mexem na baixa da NF que saiu pela Omie: ela é lida de novo.
       await queryClient.invalidateQueries({ queryKey: CHAVE_DAS_BAIXAS });
       setOcupado(false);
+      setEmAndamento(null);
     }
   }
 
@@ -144,6 +148,8 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
       painel={painel}
       resultado={resultado}
       ocupado={ocupado}
+      emAndamento={emAndamento}
+      leitura={leitura.releitura}
       receita={
         filtro === "pagos"
           ? { mes, dados: doMes.pagamentos && leitura.faturas ? receitaPorCliente(doMes.pagamentos, nomesDosClientes(faturas)) : null, erro: doMes.erro }
@@ -164,13 +170,13 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
             ...atual,
             pagamento: formDoPagamento(comSaldoDaResposta(aberta, resultado), hoje),
             confirmando: null,
-          }));
+          }), "pagamento");
         },
         editarEnvio: (campo, valor) => setPainel((atual) => ({ ...atual, erro: null, envio: { ...atual.envio, [campo]: valor } })),
         marcarEnviada: () => {
           if (!aberta || comProblemas(problemasDoEnvio(painel.envio, aberta, hoje))) return;
           // O envio não mexe no pagamento que a pessoa está digitando.
-          void gravar(pedidoDoEnvio(painel.envio, aberta, chave), `${rotuloDaNf(aberta)} enviada ao cliente`, () => (atual) => ({ ...atual, envio: formDoEnvio(hoje), confirmando: null }));
+          void gravar(pedidoDoEnvio(painel.envio, aberta, chave), `${rotuloDaNf(aberta)} enviada ao cliente`, () => (atual) => ({ ...atual, envio: formDoEnvio(hoje), confirmando: null }), "envio");
         },
         pedirEstorno: (pagamentoId) => {
           setChave(novaChave());
@@ -184,7 +190,7 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
             ...atual,
             pagamento: formDoPagamento(comSaldoDaResposta(aberta, resultado), hoje),
             confirmando: null,
-          }));
+          }), "estorno");
         },
         pedirCancelamento: () => {
           setChave(novaChave());
@@ -195,7 +201,7 @@ function FaturasPage({ filtro }: { filtro: FiltroDeFaturas }) {
           if (!aberta || pedido?.tipo !== "cancelamento" || comProblemas(problemasDoMotivo(pedido.motivo))) return;
           void gravar(pedidoDoCancelamento(aberta, pedido.motivo, chave), `Registro da ${rotuloDaNf(aberta)} cancelado: as demandas voltaram a A faturar`, (resultado) => () =>
             painelNovo(comSaldoDaResposta(aberta, resultado), hoje),
-          );
+          "cancelamento");
         },
         desistir: () => setPainel((atual) => ({ ...atual, erro: null, confirmando: null })),
         exportar: () => {

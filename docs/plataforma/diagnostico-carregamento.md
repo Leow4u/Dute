@@ -341,7 +341,7 @@ o Início) ou por URL.
    desabilitado, `preventDefault` nos quatro `AlertDialogAction`; a janela do
    Evento do portal só fecha depois do retorno. *Entrou na parte 13a do
    carregamento v2 (registro em 10.5), com o Cancelar `aria-disabled` no
-   lugar de desabilitado.*
+   lugar de desabilitado, o aviso dos 10 s no rodapé e a saída aos 70 s.*
 8. **Operações longas.** Fotos com contagem e `uploadBytesResumable`;
    aviso de que só quatro sobem por vez; Documentos e Conhecimento com
    etapa e tempo limite; Separado e Entrega com etapa; foto por IA com tempo
@@ -576,8 +576,11 @@ já estava decidido. O restante vira cinco PRs, um problema por PR:
    tem, e o envio mostra a contagem e o progresso (`uploadBytesResumable`).
 4. **Ação no celular** (itens 5 e 9). A trava de toque duplo, as chaves por
    tentativa, o rodapé preso nos diálogos longos e o X de 44 px. *O rodapé
-   preso e o X de 44 px entraram na parte 13a do carregamento v2 (registro
-   em 10.5); a trava de toque duplo veio com o `BotaoDeAcao` (parte 4).*
+   preso e o X de 44 px, em pé e deitado, entraram na parte 13a do
+   carregamento v2 (registro em 10.5), com o campo que recebe o foco fora de
+   trás do rodapé e o toast no topo enquanto o diálogo está aberto; a trava de
+   toque duplo veio com o `BotaoDeAcao` (parte 4). O "Sem conexão" dentro do
+   diálogo espera um desenho.*
 5. **Leitura leve e volta do segundo plano** (itens 6 e 7). O shell sem a
    releitura de 60 s no celular, o Separado com uma leitura só, e a releitura
    na volta ao app com o "atualizado às".
@@ -633,9 +636,12 @@ este diagnóstico:
 
 Ficam para depois:
 
-- as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
+- ~~as leituras que vão ao Firestore sem passar por `lib/cloud-api.ts` (o
   seletor de cliente, Pessoas, as anotações e os playbooks do Agent Dute),
-  que sem rede ainda devolvem o cache;
+  que sem rede ainda devolvem o cache~~: feito. O seletor e Pessoas leem pelo
+  `lerDocsDoServidor` desde a parte 13e do carregamento v2 (10.5), e as
+  anotações e os playbooks, pelas callables do núcleo e pelas rotas do
+  `lib/cloud-api.ts`;
 - o `deadline-exceeded` de 70 s, que fica com a mensagem própria das
   operações longas (seção 6, PR 8);
 - os PRs 2 a 5 do celular.
@@ -751,7 +757,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos), 13b (o Estoque e o armazém) e 13c (Receber, Operações, Pedidos e Solicitações) no PR 610; o resto a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos), 13b (o Estoque e o armazém), 13c (Receber, Operações, Pedidos e Solicitações), 13d (o Faturamento, os Relatórios, os Documentos e o Catálogo), 13e (as Configurações, o sistema e o Início), 13f (o portal) e 13g (o Comercial, a Operação, o campo, a TV, o Financeiro e o RH, com a revisão a fazer) no PR 610; a trava a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -1858,35 +1864,64 @@ Fica aberto:
 o PR 7 da seção 6 e o PR 4 do celular (9.3), no app inteiro.
 
 - **Um jeito só de segurar o diálogo durante a ação** (`components/ui/dialog.tsx`,
-  `alert-dialog.tsx` e `sheet.tsx`), ligado pelo `ocupado` da raiz (`Dialog`,
-  `AlertDialog`, `Sheet`) ou do `DialogContent`, quando a ação mora no
-  conteúdo (o convite):
+  `alert-dialog.tsx` e `sheet.tsx`, com o estado em `dialogo-em-acao.ts`),
+  ligado pelo `ocupado` da raiz (`Dialog`, `AlertDialog`, `Sheet`) ou do
+  `DialogContent`, quando a ação mora no conteúdo (o convite):
   - o `onOpenChange(false)` não chega a quem usa, e o Esc, o toque fora e o
-    X não fecham; o conteúdo marca `data-ocupado`;
+    X não fecham; o conteúdo marca `data-ocupado`. O Esc e o toque fora, que
+    escapam sem querer, esperam também o toque aceito no confirmar, antes de
+    a ação chegar à tela: por até 300 ms, e daí quem segura é a ação. A
+    falha que volta antes disso os solta na hora. O X e o Cancelar seguem o
+    que dizem: sem `aria-disabled`, fecham;
   - o X e o Cancelar (o `DialogCancelar`, o `AlertDialogCancel`) ficam
-    `aria-disabled`, a 0,45, com a trava no código, nunca `disabled`;
+    `aria-disabled` desde o toque, com a trava no código, nunca `disabled`.
+    Eles esmaecem a 0,45 aos 300 ms, junto com o gerúndio do confirmar, e
+    ficam assim pelo menos 500 ms, como ele; a ação que volta antes dos
+    300 ms não os faz piscar. Do X, só o ícone esmaece: o anel do foco fica
+    inteiro;
   - o `AlertDialogAction` é o `BotaoDeAcao` e nunca fecha sozinho (o
     `preventDefault` mora nele): quem fecha é o sucesso; na falha, a
     confirmação fica;
   - o confirmar é o `BotaoDeAcao` em todos, com o gerúndio ("Cancelando…",
-    "Cadastrando…", "Salvando…"), e o foco fica nele durante a ação;
+    "Cadastrando…", "Salvando…"), e o foco fica nele durante a ação. O
+    destrutivo cheio é o `perigo` dele (o vermelho sólido no repouso, no toque
+    e travado): com a classe solta de antes, o confirmar travado mostrava o
+    primário com o ponteiro em cima, azul fora da v3 e no escuro;
+  - aos 10 s, o rodapé diz "Demorando mais que o normal · 0:12", em cima dos
+    botões. Aos 70 s, "Sem confirmação do servidor", e o diálogo volta a
+    fechar: a ação pode ter gravado ou não, e o confirmar segue nela. O
+    diálogo da operação longa (o `Progresso`, as fotos, o aviso da tela) não
+    repete o aviso e cuida da própria saída;
   - no fim, o foco volta ao controle que abriu o diálogo; o item do menu "⋯"
     vira o botão do menu. Se ele saiu da tela, ou sai logo depois (a linha
-    que a releitura tira), o foco vai ao `focoAoFechar` de quem usa ou ao
-    título da página, sem rolar a tela, nunca ao `body`
-    (`lib/foco-de-volta.ts`, vigia de até `CARREGANDO.desisteMs`);
+    que a releitura tira), o foco vai ao `focoAoFechar` de quem usa, ao
+    vizinho dele na ordem do Tab (o controle da linha seguinte ou, sem ela,
+    o da anterior, lidos na abertura) ou, sem nenhum, ao título da página,
+    que vem até a borda quando está fora da vista; nunca ao `body`
+    (`lib/foco-de-volta.ts`). A vigia do foco que voltou dura até
+    `CARREGANDO.desisteMs` e acaba quando a pessoa leva o foco a outro
+    lugar, também quando clica no fundo da página;
   - o `fecharTravado` da parte 11 saiu: os cinco diálogos dela (a chegada
     avulsa, a foto por IA, "Concluir separação", a entrega de Pedidos e
     Documentos) usam o `ocupado`.
-- **No celular**: o `DialogFooter` fica preso embaixo do diálogo que rola
-  (`sticky`, cobrindo até a borda, com o fio de cima), com os botões de
-  44 px, também no `AlertDialogFooter`; o X do diálogo e do painel tem 44 px,
-  e só o título deixa o lugar dele.
+- **No celular, em pé ou deitado** (a variante `celular` do `index.css`:
+  menos de 768 px de largura ou menos de 500 de altura): o `DialogFooter`
+  fica preso embaixo do diálogo que rola (`sticky`, cobrindo até a borda, com
+  o fio de cima), com os botões de 44 px, também no `AlertDialogFooter`; o X
+  do diálogo e do painel tem 44 px, e só o título deixa o lugar dele (dos dois
+  lados quando está centrado, em pé; só à direita, deitado). O campo que
+  recebe o foco não fica atrás do rodapé preso: o rodapé mede a própria
+  altura, e o diálogo a guarda como `scroll-padding` embaixo. Com um diálogo
+  aberto, o toast vai para o topo, porque embaixo ele cobria o rodapé preso,
+  com o Voltar e a nova tentativa.
 - **O que mudou, contra o código atual** (os 22 diálogos e as 4 confirmações
   da necessidade 6):
   - Pedidos: "Cancelar pedido" e "Salvar entrega" eram `disabled` e fechavam
     no meio; a recusa da solicitação fechava com "Recusando…". Agora os três
-    seguram o diálogo, com o `BotaoDeAcao` e a mesma chave na nova tentativa;
+    seguram o diálogo, com o `BotaoDeAcao` e a mesma chave na nova tentativa.
+    O diálogo que sai mostra o que mostrava até sair: antes, o fim trocava o
+    conteúdo pelo vazio, o cartão caía para uma faixa só com o X e o foco
+    ficava no `body` até ele sair;
   - Registrar exceção, Concluir inventário ("Encerrando…"), Receber retorno,
     Posições (Nova posição, Nova rua, Zona da rua), Falta da linha, Recusa
     da prateleira (e o Liberar da guarda), Guardar do RECEBIMENTO, Tabela de
@@ -1894,46 +1929,89 @@ o PR 7 da seção 6 e o PR 4 do celular (9.3), no app inteiro.
     orçamento), Infra (Tabela do faturamento), Produtos e SKUs (o cadastro e
     o Excluir ou Arquivar), Recusar solicitação: fechavam no meio da ação e
     desligavam os botões;
+  - Concluir inventário fecha no sucesso: antes, o diálogo só sumia porque a
+    aba virava "Contagem cíclica", e com a aba escolhida à mão ele ficava
+    aberto, pronto para outro envio;
+  - Infra e owner fecham quando o POST vale, e a releitura do painel segue
+    por trás: esperar por ela deixava o diálogo "Salvando…" e preso enquanto
+    o Google Cloud respondia;
   - Clientes (Novo cliente e Arquivar), Convite, Reenviar, Remover da lista e
     Revogar acesso: o Esc já não fechava em quase todos, mas o Revogar
-    fechava, e os botões `disabled` derrubavam o foco no `body`;
+    fechava, e os botões `disabled` derrubavam o foco no `body`. O Revogar e
+    o Devolver acesso são a mesma mutação: o diálogo segura só a revogação
+    daquela pessoa, e o item "Revogar acesso" espera, como o "Devolver
+    acesso", enquanto ela grava;
   - as quatro confirmações (Emitir, Remover item, Remover posição, Apagar
     rotina), pela `Confirmacao`: não fechavam mais no clique desde 06/11, mas
-    o confirmar e o Cancelar ficavam `disabled`;
+    o confirmar e o Cancelar ficavam `disabled`. Enquanto sai, ela mostra o
+    texto de quando estava aberta, e não "Remover a posição ?";
   - o portal: o Editar evento só fecha depois do retorno (antes, fechar no
-    meio desmontava a janela, e o aviso do salvo não chegava), o Excluir
-    evento segura a confirmação, e o painel "Seu pedido" do Estoque fica
-    aberto enquanto o pedido vai para a Dutelog, com o "Fechar pedido"
-    `aria-disabled` e o Enviar no `BotaoDeAcao` ("Enviando o pedido…", no
-    lugar do caminhão pulsando);
+    meio desmontava a janela, e o aviso do salvo não chegava); o Excluir
+    evento segura a confirmação e só fecha no sucesso (antes, fechava também
+    na falha); o painel "Seu pedido" do Estoque fica aberto enquanto o pedido
+    vai para a Dutelog, com o "Fechar pedido" `aria-disabled` e o Enviar no
+    `BotaoDeAcao` ("Enviando o pedido…", no lugar do caminhão pulsando), e
+    usa o jeito único: o pedido enviado tira da tela o "Pedido ·" que abriu
+    o painel, e o foco vai ao título, não ao `body`;
   - as duas outras confirmações com `AlertDialogAction` (a foto do produto e
-    "Marcar como cliente" do Comercial) passaram ao `BotaoDeAcao` também.
+    "Marcar como cliente" do Comercial) passaram ao `BotaoDeAcao` também;
+  - o Mapa do armazém, no celular: o painel da prateleira dentro do painel de
+    baixo ficou sem o "Fechar" dele, que o X de 44 px cobria; ao lado da
+    lista, ele continua;
+  - o `BotaoDeAcao` solta a trava do toque duplo quando a pessoa mexe no
+    formulário dele: o nome que a validação recusou, corrigido e salvo de
+    novo logo depois, era engolido sem aviso.
 - **O que já estava feito**: a entrega de Pedidos ("Confirmar entrega"),
   "Concluir separação", Documentos e a chegada avulsa seguravam o diálogo
   desde a parte 11, e o Esc não fechava Clientes nem Pessoas; mudaram só
   para o `ocupado`, com o X e o rodapé novos.
 - **Testes**: por peça (`components/ui/dialogo-em-acao.test.tsx`,
-  `lib/foco-de-volta.test.ts`, `confirmacao.test.tsx`): o Esc, o toque fora,
-  o X e o Cancelar não fecham durante a ação, o Cancelar e o X ficam
-  `aria-disabled`, o foco fica no botão tocado e volta ao gatilho ou ao
-  título, e o axe; por área: Pedidos (`pedidos.dialogos.test.tsx`), Posições
-  (`warehouse-positions.dialogos.test.tsx`), Documentos, Clientes e o portal
-  (`eventos-editar.test.tsx`, `estoque-envio.test.tsx`). Contra o commit
-  anterior, 26 deles falham, e o do foco de volta nem carrega.
+  `lib/foco-de-volta.test.ts`, `confirmacao.test.tsx`,
+  `botao-de-acao.test.tsx`, `toast.test.tsx`): o Esc, o toque fora, o X e o
+  Cancelar não fecham durante a ação nem logo depois do toque, o Cancelar e o
+  X ficam `aria-disabled` e esmaecem aos 300 ms, o aviso dos 10 s e a saída
+  dos 70 s, o foco fica no botão tocado e volta ao gatilho, ao vizinho ou ao
+  título, e o axe; por área: Pedidos (`pedidos.dialogos.test.tsx`, também a
+  saída sem esvaziar), Posições (`warehouse-positions.dialogos.test.tsx`),
+  Documentos, Clientes, Pessoas (`pessoas/acoes.test.tsx`), o Sistema
+  (`system/dialogos-que-gravam.test.tsx`), a Contagem
+  (`inventory-concluir.test.tsx`), o Mapa (`warehouse-map-painel.test.tsx`) e
+  o portal (`eventos-editar.test.tsx`, `eventos-excluir.test.tsx`,
+  `estoque-envio.test.tsx`). Contra o commit de antes da parte, 26 deles
+  falham, e o do foco de volta nem carrega; os da revisão da parte, 33 em 14
+  arquivos, falham contra a primeira versão dela.
 - **Medição no Chromium** (harness com a API falsa e o servidor a 3 s, só
-  127.0.0.1), antes e depois:
+  127.0.0.1, no build de produção):
   - "Cancelar pedido", "Nova rua" e "Remover a posição": antes, o foco caía
     no `body` 100 ms depois do toque, e o Esc, o toque fora, o X e o
     Cancelar fechavam os dois primeiros no meio da gravação; depois, o foco
-    fica no botão de ação ("Cancelando…") e nenhum dos quatro fecha;
-  - o fim: antes, o foco ficava no `body` em Posições (a linha removida e a
-    rua cadastrada); depois, vai ao "Nova rua" que abriu o diálogo e, na
-    posição removida, ao título "Posições";
-  - no celular de 390 × 664: o X passou de 28 para 44 px; com o diálogo
-    rolado ao topo, o botão de ação ficava fora da vista (612 a 652 px, com o
-    diálogo até 631) e passa a ficar preso a 77 px da borda de baixo, nos
-    dois diálogos longos medidos (Nova posição e Cancelar pedido), no claro
-    e no escuro.
+    fica no botão de ação ("Cancelando…") e nenhum dos quatro fecha. O Esc
+    dado de 2 a 15 ms depois do Enter, antes de a ação chegar à tela (de 13
+    a 63 ms, também com a CPU 4× mais lenta), não fecha em 15 de 15; antes,
+    fechava com a gravação andando;
+  - o esmaecer: na recusa sem rede (30 ms) e no erro aos 120 ms, o Voltar e
+    o X ficam inteiros; na ação lenta, o Voltar vai a 0,45 aos 327 ms e o
+    ícone do X, de 0,70 a 0,45 em 200 ms;
+  - com o servidor parado: aos 12 s, "Demorando mais que o normal · 0:12" em
+    cima dos botões, e aos 69,5 s, "· 1:09"; aos 70 s, a callable desiste,
+    o diálogo destrava e o toast diz "O servidor não respondeu a tempo";
+  - o fim: em Posições, o foco vai ao "Nova rua" que abriu o diálogo; na
+    posição removida do fim de uma lista de 40, rolada, ao "Editar" da
+    vizinha, à vista. No "Cancelar pedido", o diálogo que sai fica com os
+    646 px e o conteúdo, com o foco no botão, até ir ao "Separar";
+  - no celular de 390 × 664: o X passou de 28 para 44 px; o botão de ação,
+    que ficava fora da vista, fica preso a 77 px da borda de baixo; pelo Tab,
+    nenhum campo fica atrás do rodapé preso, na Nova posição e num
+    formulário de nove campos;
+  - deitado, em 844 × 390: o rodapé fica preso, com os botões de 44 px à
+    vista, e o X tem 44 px; no computador nada muda;
+  - em 390 × 844, sem rede: o toast fica de 8 a 106 px, o Voltar (712 a
+    756) fica livre, e o toque nele fecha o diálogo;
+  - o anel do foco do X tem de 4,22 a 6,04:1 contra o fundo, no claro e no
+    escuro, na v3 e fora dela; o ícone, de 5,21 a 9,31:1;
+  - o confirmar destrutivo travado, com o ponteiro em cima, fica no mesmo
+    vermelho do repouso, nos dois temas;
+  - no Mapa do celular, um "Fechar" só, de 44 px.
 
 Fica aberto:
 
@@ -1941,15 +2019,29 @@ Fica aberto:
   Chrome do Android não encolhe a página quando o teclado abre (falta o
   `interactive-widget=resizes-content` no `viewport`, que muda o app
   inteiro) e o Safari não encolhe nada;
+- o "Sem conexão" dentro do diálogo, como pede a necessidade 9 do celular
+  (9.2): por ora, com um diálogo aberto, o toast vai para o topo, e por 5 s
+  cobre o título e o X (o Voltar e a nova tentativa ficam livres). Dentro do
+  diálogo, ele pede um desenho;
+- o aviso dos 10 s entra sem lugar guardado: no computador, o diálogo
+  centrado cresce 44 px, e os botões descem 22 px (no celular, o rodapé
+  preso cresce para cima, e o botão tocado não sai do lugar). Os diálogos da
+  operação longa (parte 11) guardam o lugar;
+- o "Conferir" dos 70 s, que relê e nunca reenvia, fica com as telas que
+  sabem conferir (a entrega de Pedidos, Documentos); nas outras, "Sem
+  confirmação do servidor" e o diálogo que volta a fechar;
 - o "fieldset" `disabled` da chegada avulsa durante o envio, que desliga o
   Cancelar e o "Criar conferência"; e os diálogos fora da lista (Trocar de
   caixa, Conferir e fechar, Remover rascunho, Remover linha e caixa da
   abertura, o Comercial, a Operação e o RH), que seguram o diálogo do jeito
-  antigo, com `disabled`;
+  antigo, com `disabled` (*o `fieldset` saiu na parte 13c; os diálogos da
+  abertura seguram como os outros desde a 13b, e os do Comercial, da
+  Operação e do RH, desde a 13g; registros abaixo*);
 - o X do diálogo longo rola com o conteúdo, como antes;
-- entre o toque e o primeiro desenho do `isPending` (um tique), o Esc ainda
-  fecha o diálogo;
-- a conferência com leitor de tela de verdade e num Android médio.
+- o Recusar da linha (parte 4) ainda esmaece no toque, e não aos 300 ms; o
+  "⋯" de Pedidos fica `disabled` enquanto outra ação grava;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari; o anel do foco do `Button` (1,91:1), da parte 6.
 
 **Parte 13b, o Estoque e o armazém (PR 610, 13/11/2026).** A migração das
 seções 4.4, 4.6 e 4.7 (Estoque › Itens e Alertas, a Contagem com a abertura e
@@ -2122,11 +2214,11 @@ seção 5, conferidas contra o código atual.
     título da seção (os últimos movimentos da ficha) e, na abertura, ao
     título das caixas da sessão, da caixa aberta, do "Guardar em" ou do
     cartão. Quando a ação dá certo e o botão sai da tela, o foco vai ao que
-    entrou no lugar (`SaiComOFoco` e `useFocoQueSegue`, em
-    `lib/carregando/use-foco-que-segue.tsx`): "Iniciar conferência da caixa"
-    e a guarda, ao título da caixa; "Iniciar contagem", ao título do cartão;
-    "Voltar à nova conferência", ao da nova caixa; "Carregar mapa inicial", à
-    linha de estado das Posições;
+    entrou no lugar (`SaiComOFoco`, em `lib/carregando/use-foco-que-segue.tsx`;
+    desde a junção com a 13e, sobre a `segurarOFocoQueSai`): "Iniciar
+    conferência da caixa" e a guarda, ao título da caixa; "Iniciar contagem",
+    ao título do cartão; "Voltar à nova conferência", ao da nova caixa;
+    "Carregar mapa inicial", à linha de estado das Posições;
   - **A abertura não afirma o que não leu.** As caixas da sessão precisam das
     caixas e da sessão lidas: até lá, o bloco no lugar do número e
     "Carregando caixas…"; sem a sessão, "—" e nada na lista, e o cabeçalho
@@ -2408,8 +2500,9 @@ conferidas contra o código atual.
   - **A falha é da leitura em que aconteceu.** Nos Retornos da Operação, a
     falha dos itens do pedido A não aparece mais no pedido B aberto em
     seguida: B espera os itens dele ("Carregando itens…"). A nova assinatura
-    da leitura ao vivo virou uma peça (`lib/operacao/nova-assinatura.ts`), que
-    a entrega dos pedidos também usa: a entrega que não carregou diz "Não
+    da leitura ao vivo virou uma peça, que a entrega dos pedidos também usa
+    (na junção com a 13g, ela passou à própria `useLeitura`, em
+    `lib/operacao/leitura.ts`): a entrega que não carregou diz "Não
     consegui carregar a entrega." com "Tentar de novo" na linha, que assina de
     novo e fica até a resposta; quando ela chega, o foco vai à entrega;
   - **Nada aparece antes de 300 ms.** Os cartões-fantasma das Solicitações e
@@ -2611,7 +2704,7 @@ escritas seguem as de antes.
     ligadas: "Salvar quantidades", "Emitir" e "Marcar como paga" gravariam no
     cliente errado. Agora, enquanto o cliente ativo lê, nenhum mês nem fatura
     do cliente padrão entra na tela, e o "Tentar de novo" do Fechamento e da
-    fatura lê de novo a lista dos clientes (`recarregar`, do
+    fatura lê de novo a lista dos clientes (hoje o `tentar` do
     `ActiveCustomerProvider`), cancelando a que ficou presa: sem isso, o
     react-query só esperava a mesma leitura. O esqueleto do mês usa as linhas
     lembradas do cliente que a tela vai operar (o provável), como Pedidos e
@@ -2769,3 +2862,420 @@ Fica aberto:
   `agent-knowledge`);
 - a conferência num Android médio, com leitor de tela de verdade e na
   homologação.
+
+**Parte 13e, as Configurações, o sistema e o Início (PR 610, 13/11/2026).** A
+parte 13 em Pessoas e acessos, Clientes, Chaves de API, Sistema e
+Infraestrutura, no Início dos módulos, no painel do owner e no shell (as
+seções 4.1, 4.2 e 4.10). Fecha também a pendência da 9.4.
+
+- **O que já estava feito**: Pessoas dizia "Carregando pessoas…" com o
+  `Spinner`; as Chaves de API já tinham a reticência certa e a trava por ref;
+  a parte 13a já cuidava dos diálogos (Convite, Reenviar, Remover, Revogar,
+  Clientes, Sistema, owner e Infra); o total de SKUs do Início já dizia "—"
+  sem leitura (decisão 6); o `Skeleton` já era o bloco neutro (parte 3); e o
+  painel do owner já tinha a `FaixaSemConexao` e o `BlocoSemConexao`.
+- **O shell**:
+  - o seletor do cliente ativo mostra o bloco e, aos 300 ms, a caixa de 16 px
+    no lugar da seta, nunca o cliente legado. Lendo, fica `aria-disabled`, e
+    o menu não abre;
+  - quando a lista dos clientes não vem, ele diz "Não carregou",
+    "Reconectando…" ou "Sem conexão", com o ícone de tentar de novo no lugar
+    da seta e sem dizer que abre um menu (`aria-haspopup`), e o toque tenta de
+    novo. A nova tentativa fica na falha, com "Tentando de novo", e não volta
+    ao bloco de quem carrega (`useLeituraComFalha` no provedor). No cabeçalho
+    do celular, o seletor tem 44 px;
+  - o item do menu da tela que abre mostra a caixa no lugar do contador
+    (`useRotaEsperando`), também na barra da Configuração;
+  - enquanto o "Precisa de você" lê, o contador do Início é o bloco, e nenhum
+    número aparece pela metade (antes, "Início 1" e, no quadro seguinte,
+    "Início 2"), nos cinco módulos.
+- **A pendência da 9.4, feita**: os convites de Pessoas e a lista de clientes
+  do comercial no seletor leem pelo `lerDocsDoServidor`. Sem rede, a leitura
+  que só achou o cache é falta de conexão, e o app relê sozinho (parte 7a).
+  As anotações e os playbooks do Agent Dute já liam pelas callables do núcleo
+  e pelas rotas do `lib/cloud-api.ts`.
+- **As peças**:
+  - a `CarregandoNaRegiao` ganhou a saída da tabela da seção 3 para quem sabe
+    repetir a leitura (`onTentar`): aos 10 s, "Tentar de novo" ao lado do
+    aviso da demora; aos 70 s, "Sem resposta do servidor." no `ErroNaLeitura`,
+    com "Tentar de novo". A nova tentativa recomeça o relógio, e o foco fica
+    na região. Quem usa relê do zero (`lib/carregando/reler-do-zero.ts`): o
+    react-query não recomeça a leitura sem dado que ainda lê, e o `refetch`
+    só se juntaria à presa. Está no Início, nos incidentes do Sistema, no
+    painel do owner, na Infraestrutura, em Pessoas, em Clientes e nas Chaves;
+  - a `FalhaNaSecao` (a falha de uma parte da tela) diz "Tentando de novo…"
+    só na tentativa que a pessoa pediu, até a promessa da releitura acabar: o
+    intervalo da tela não muda o botão. A frase é alerta quando a seção não
+    tem nada lido; com o que já estava lido na tela (a releitura que falhou,
+    quase sempre a automática), fica escrita, sem falar (momento 7);
+  - quando a nova tentativa dá certo e o aviso sai com o foco nele, o foco vai
+    ao título da seção ou do diálogo onde ele morava, nunca ao `body`. Vale
+    para a `FalhaNaSecao` e para o `ErroNaLeitura` sem linha de estado
+    (`lib/foco-de-volta.ts`).
+- **O Início dos módulos**:
+  - nasce com a forma final: os rótulos reais, as linhas-fantasma com a
+    anatomia da linha e, no lugar da frase, "Carregando o que precisa de
+    você…", que continua a espera da tela que abriu. O "Precisa de você"
+    aponta para essa linha (`aria-describedby`) enquanto lê;
+  - a fonte que falhou sem nada lido fica na falha enquanto é relida
+    (`useLeituraComFalha`): o "Tentar de novo" diz "Tentando de novo…", e o
+    aviso não sai da tela com o foco nele. A releitura de cada minuto não tira
+    o aviso, não mexe no foco e não fala. O toque relê todas as fontes,
+    também as anotações e os playbooks do Agent Dute. A releitura que falha
+    depois de lido fica escrita, sem falar;
+  - "Hoje no armazém" não afirma zero: lendo, o bloco do tamanho do número de
+    24 px (28 × 18); com o armazém sem leitura, "—";
+  - quem não tinha nada parado na última leitura não vê o "Precisa de você"
+    nascer lendo para sumir na chegada (a contagem lembrada guarda o zero), e
+    o que está ao lado e embaixo não salta;
+  - na chegada, as linhas reais entram por opacidade, subindo 4 px, em
+    cascata, e a frase entra por opacidade (no reduzido, só a opacidade);
+  - o aviso da fonte que falhou tem "Tentar de novo" no WMS, no Comercial e no
+    RH.
+- **Pessoas e acessos**:
+  - cancelar o convite, trocar o perfil e devolver o acesso têm a espera na
+    linha (`useAcaoNaLinha`): o gerúndio ("Cancelando o convite…"), a caixa no
+    lugar do "⋯", com `aria-busy`, e as outras linhas livres. Se a linha sai,
+    o foco vai ao vizinho;
+  - cada linha espera a própria gravação: trocar o perfil de duas pessoas
+    seguidas soltava só a última, e a primeira ficava presa (o react-query só
+    dá os avisos do pedido ao último `mutate`); a devolução tem a mutação
+    dela, e devolver o acesso de uma pessoa não trava o das outras;
+  - a ação que sai do menu o fecha: antes, ele reabria sozinho quando a ação
+    acabava. No celular, o "⋯" tem 44 px;
+  - a releitura que falha não apaga a lista, e "Não foi possível atualizar as
+    pessoas." fica escrita em cima dela, sem falar.
+- **Clientes**:
+  - nenhum "0 no portal" nem "…" antes de ler: o bloco enquanto lê e "—" na
+    falha. Na galeria, a falha das prateleiras ou das pessoas também fica
+    dita, em cima dos cartões, com "Tentar de novo";
+  - na página do cliente, "Pessoas · ▪" lendo e "Pessoas · —" na falha, com o
+    separador fora da árvore (o leitor de tela ouve "Pessoas"); a ocupação
+    que falhou fica na falha durante a nova tentativa, e a releitura que falha
+    não apaga a ocupação lida;
+  - sem rede, a página, a ocupação e as pessoas dizem a mesma falta, no aviso
+    da conexão ("Reconectando…" ou "Sem conexão."), e não o erro vermelho;
+  - o Salvar das seções é o `BotaoDeAcao`; o Cancelar fica `aria-disabled` e
+    esmaece aos 300 ms; quando o formulário fecha, o foco volta ao "Editar"
+    da seção.
+- **Chaves de API**:
+  - a leitura que não alcança a API é falta de conexão: sem nada lido, o
+    aviso da conexão, e o app relê sozinho quando a rede volta; com a lista,
+    a faixa com a hora;
+  - a releitura que falha com a lista na tela fica escrita em cima dela, sem
+    falar; a página seguinte que não veio diz "Não carregou" no botão por 2 s
+    e "Não foi possível carregar mais chaves." ao lado, falado uma vez;
+  - criando a chave, os campos ficam só para leitura (`aria-disabled`, com a
+    trava no código), nunca `disabled`: o Enter no Nome não derruba o foco;
+  - o link da documentação fica em tinta, sublinhado (o vermelho dava 4,2:1).
+- **Sistema e conta**: o "Verificar agora" só mostra a espera quando a pessoa
+  toca nele. Cada gerúndio diz o quê ("Verificando o sistema…", "Verificando
+  a infraestrutura…", "Conferindo a numeração…"), e o "Verificar agora" da
+  Infraestrutura só sublinha com o ponteiro em cima (o fundo do ghost dava
+  3,35:1 no escuro). No celular, o Verificar agora, o Ver o que muda, o
+  Numerar agora, o Carregar mais e o Sair têm 44 px.
+- **Testes**: por peça (`falha-na-secao.test.tsx`,
+  `carregando-na-regiao.test.tsx`) e por área (`inicio-do-modulo.carregando`,
+  `home.carregando`, `pessoas/acoes.carregando`, `users.carregando`,
+  `settings-customers`, `settings-integrations`, `carregando-do-sistema`,
+  `carregando-no-shell`, `active-customer-context.falta`, os Inícios do
+  Comercial e do RH), com a lista dos textos e o axe. Contra o código de antes
+  da revisão, 48 testes falham; os que ainda passam são as travas dos textos
+  que já existiam. Os testes que esperavam um tempo fixo depois dos 300 ms
+  esperam o estado chegar: com a suíte inteira rodando, eles falhavam à toa.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1):
+  - a nova tentativa que dá certo: o foco fica no "Tentar de novo" com
+    "Tentando de novo…" e depois vai ao título da seção (o H2 dos incidentes,
+    da ocupação e do portal, o H1 da tela), em dez casos de oito telas;
+    antes, o `body`. No seletor, o foco fica no mesmo botão;
+  - o Início com o armazém falhando sempre, o foco no "Tentar de novo" por 66
+    s: o aviso e o foco ficam, nenhuma linha-fantasma, nenhum anúncio, e a
+    releitura de 1 min falha em silêncio; antes, aos 59,7 s, o aviso sumia e o
+    foco ia ao `body`;
+  - a leitura presa em sete telas (Início, Sistema, Pessoas, Clientes,
+    Chaves, painel e Infraestrutura): "Tentar de novo" aos 11 s e "Sem
+    resposta do servidor." aos 72 s; antes, só a demora, para sempre;
+  - trocar o perfil e devolver o acesso: o menu fica fechado até o fim (4,5
+    s); antes, reabria a 3,2 s;
+  - o Início sem nada parado, na segunda visita: CLS 0 no computador e 0,0003
+    no celular; antes, 0,15 e 0,13;
+  - na chegada, a linha entra de 0 a 1 de opacidade e de 4 a 0 px em 166 ms;
+    o menu passa do bloco ao "Início 2" num quadro só;
+  - sem rede, as Chaves e a página do cliente dizem "Reconectando…" e depois
+    "Sem conexão.", e voltam sozinhas com a rede;
+  - criar a chave pelo Enter no Nome: o foco fica no campo durante o
+    "Criando…"; antes, no `body`. O Salvar da seção devolve o foco ao
+    "Editar contrato";
+  - a 390 px, nenhum dos botões da parte abaixo de 44 px; o axe não acusa nada
+    no claro, e no escuro só o branco sobre o primário azul (4,3:1, o token
+    registrado na seção 4.3 da especificação).
+
+Fica aberto:
+
+- a primeira visita ao Início de quem não tem nada parado ainda mostra o
+  "Precisa de você" lendo e o tira na chegada: sem lembrança, a forma é a de
+  duas linhas;
+- os Inícios da Operação, que lê ao vivo, e do Financeiro, que junta quatro
+  leituras, mostram a falha sem "Tentar de novo";
+- o Sistema do owner: o painel lendo ocupa uma linha e não guarda a forma, e
+  ele e a Infraestrutura empurram os incidentes quando chegam (cerca de 700 e
+  320 px);
+- os contadores dos outros itens do menu (Pedidos) só aparecem na chegada; o
+  bloco fica no Início;
+- no celular lendo, o `main` que rola fica sem nada focável até o dado chegar
+  (o axe acusa; o Chrome já deixa a rolagem focável);
+- o Cancelar convite continua sem confirmação, que pede um desenho;
+- as telas que esperam o `isLoading` do cliente ativo (Faturamento,
+  Contratos) não leem o `falhou`: com a lista que falhou, seguem com o
+  cliente legado (área 13d);
+- quando tudo lê ao mesmo tempo, aparecem três indicadores juntos (o seletor,
+  o item do menu e a tela), a confirmar com o Leonardo;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari.
+
+**Parte 13f, o portal do cliente (PR 610, 13/11/2026).** A parte 13 no portal
+do cliente (seção 4.13): Pedidos, Estoque, Envios, Eventos, Faturas, o
+Relatório, o Início, Minhas OS, o comprovante e o sino. Fecha também, no
+portal, as necessidades 2, 3, 5, 8 e 10 (seção 5). As escritas, as chaves de
+idempotência e o `customer_code` como fronteira não mudam.
+
+- **O que já estava feito**: o `#D9DDE3` do esqueleto fora da v3, como token,
+  desde a parte 3; o caminhão pulsando do Enviar pedido, que virou o
+  `BotaoDeAcao` ("Enviando o pedido…") na 13a; os diálogos do Evento (Editar e
+  Excluir) e o painel "Seu pedido", também da 13a; o `Skeleton` neutro; e o
+  "Enviando anexo i de n…".
+- **A leitura do portal**, que toda tela dele espera:
+  - a tela nasce com o título e a largura dela; os blocos neutros entram aos
+    300 ms e, sob o título, "Carregando o portal…", com o anúncio; aos 10 s,
+    a demora e "Tentar de novo", que lê do zero; aos 70 s, "Sem resposta do
+    servidor." (`CarregandoNaRegiao`). Continua a espera da tela que abriu
+    ("Abrindo Estoque…"), sem anunciar de novo. O texto só para leitor de
+    tela, fora de região viva, saiu;
+  - a espera passa adiante (`passaAdiante`): a tela que chega e ainda lê o
+    que é dela ("Carregando eventos…", "Carregando as NFs dos serviços…",
+    "Carregando as OS…", "Abrindo o evento…") segue o mesmo relógio. O
+    indicador não some, a caixa não entra de novo, nada é anunciado duas
+    vezes, e a demora vem aos 10 s do começo, e não da leitura da tela. O
+    item do menu não conta essa espera como tela abrindo;
+  - a linha de estado nunca encolhe nem fica sob os blocos: os blocos cabem
+    no que sobra, sem rolar. Só o contêiner dos blocos fica `aria-busy`,
+    apontando para a linha, que fica fora dele, também aos 70 s;
+  - sem nada lido, a falha fica no lugar da tela, com "Tentar de novo" de
+    44 px; a nova tentativa fica na falha (`useLeituraComFalha`) e diz
+    "Tentando de novo…" só aos 300 ms, e pelo menos 500 ms: a que falha de
+    novo antes não pisca o botão nem muda a frase do alerta, e a primeira
+    falha nasce dizendo "Tentar de novo". Sem rede, o aviso da conexão. O
+    "Portal indisponível", com o RefreshCw girando e o botão `disabled`,
+    saiu;
+  - com o portal lido, a releitura que falha não apaga a tela (necessidade
+    8): sem rede, a faixa do topo já diz; por outro motivo, "Não foi possível
+    atualizar o portal." fica escrita em cima da tela, sem falar, com "Tentar
+    de novo". Antes, a tela inteira virava a falha, e o teste do PR 582
+    travava isso para a falha que não é de conexão; ele mudou. A estrutura em
+    volta da tela é sempre a mesma, para a frase entrar e sair sem montar a
+    tela de novo.
+- **A leitura de cada tela**:
+  - Eventos: o título fica, e sob ele "Carregando eventos…", no lugar do
+    segundo esqueleto da tela inteira. A falha tem "Tentar de novo", e a
+    releitura que falha não apaga a lista: "Não foi possível atualizar os
+    eventos." fica escrita, sem falar;
+  - Faturas nunca dizem "Nenhuma fatura fechada" antes de ler as NFs, e a
+    falha delas fica dita, com a nova tentativa;
+  - Minhas OS (as OS, as NFs e as solicitações), o sino e o comprovante leem
+    ao vivo com a nova tentativa (`useLeituraDoPortal` e
+    `useDocumentoDoPortal`): o `onSnapshot` que falha não volta sozinho, e a
+    falha fica na tela durante a nova tentativa, com "Tentando de novo…",
+    até ela responder;
+  - as datas de entrada no detalhe do produto: lendo e na falha, a seção
+    fica, com a espera ou a falha. Só no produto que tem peça nas
+    prateleiras, livre ou reservada: o zerado e o que só está em recebimento
+    não têm data, e a seção deles não nasce lendo para sumir na chegada;
+  - as rotinas do Agent Dute no Início: a falha fica dita, com "Tentar de
+    novo".
+- **O comprovante**: o "Baixar PDF" espera os endereços da assinatura e das
+  fotos, travado no código (nunca `disabled`), até a desistência dos 70 s;
+  depois, volta a sair com o que chegou, e a região diz que o servidor não
+  respondeu. A imagem que não veio fica dita, na barra e no papel ("Foto 2
+  não carregou", "Assinatura não carregou"); a que ainda chega guarda o
+  lugar à vista, fora da árvore, e a lista do leitor de tela não tem item em
+  branco.
+- **As ações**:
+  - o `BotaoDeAcao`, com o gerúndio, em Cancelar o pedido e o aviso
+    ("Cancelando…"), Avisar um envio ("Registrando o aviso…"), Baixar
+    planilha ("Gerando a planilha…"), Salvar evento ("Salvando o evento…") e
+    Solicitar OS ("Enviando a solicitação…"). Manter, Cancelar e Fechar
+    ficam `aria-disabled` desde o toque e esmaecem junto com o gerúndio, aos
+    300 ms: o `DialogCancelar` com `ocupado` segue o relógio do confirmar, e
+    a ação que responde antes não pisca o botão. Vale também para a falta da
+    linha, a guarda da área e o destino da caixa, na Armazenagem;
+  - a pergunta na linha ("Cancelar PED-0001?", `ConfirmacaoNaLinha`): ao
+    abrir, o foco vai ao "Manter", no grupo que tem a pergunta como nome; o
+    "Manter" e o sucesso devolvem o foco ao gatilho e, se ele sai depois (a
+    releitura tirou a ação da linha), ao pedido no lugar novo dele, ao
+    vizinho ou ao título. Nunca ao `body`;
+  - os produtos zerados do Estoque têm a ação de cada um (`useAcaoNaLinha`,
+    num contexto): antes, os botões dividiam o `isPending`, e no card não
+    havia trava. O "Avisado" fica até a releitura do portal, que é uma só
+    (antes, duas). O produto arquivado sai da vitrine, e o foco vai ao
+    vizinho;
+  - em Envios, o aviso não sai durante a leitura da nota (antes, saía sem os
+    itens, e o arquivo subia duas vezes), soltar um arquivo é ignorado nesse
+    tempo, a caixa violeta aparece aos 300 ms e a demora aos 10 s; Anexar,
+    Ler e Remover ficam `aria-disabled`. A área da nota é a própria região de
+    estado: sem `aria-busy` nela.
+- **Acessibilidade**:
+  - quem fala é o Anunciador: a contagem do Estoque (só quando a pessoa
+    busca), o "adicionado", "Solicitação enviada" e "Nenhum tipo encontrado".
+    A trava do portal (`carregando-v2.test.ts`) pega também o `role="status"`
+    solto, e não só o `aria-live`;
+  - quando a região sai com o foco nela (a pessoa tocou em "Tentar de novo"
+    na demora), o foco vai ao título da seção ou da tela que chegou, nunca ao
+    `body`, em qualquer tela que use a `CarregandoNaRegiao`;
+  - no celular, as ações de linha têm 48 px (Cancelar pedido, Cancelar
+    aviso, Manter, Avisar reposição, Arquivar; o gatilho de texto pelo
+    `::before`, sem mudar a linha), Anexar e Ler nota têm 44 px, e o Remover
+    do anexo tem 24 px (44 no celular) e o anel cheio do foco, com o recuo
+    (antes, 12 px e o anel a 1,9:1);
+  - o texto de apoio da caixa violeta, a demora inclusive, tem 5,7:1 no
+    escuro (antes, 3,9:1).
+- **Testes**: por área (`shared.carregando`, `shared-sem-conexao`,
+  `cancelar-no-portal`, `estoque-carregando`, `envios-carregando`,
+  `eventos-carregando`, `faturas-carregando`, `minhas-os-carregando`,
+  `comprovante-carregando`, `relatorio-carregando`, `inicio-carregando`,
+  `sino-carregando`), as leituras ao vivo com a nova tentativa
+  (`lib/portal/leitura-do-portal.test.tsx`, que pega a nova tentativa que
+  voltasse a "carregando" ou soltasse a falha antes da resposta) e a trava
+  do portal, com a lista dos textos e o axe. Contra o código de antes da
+  parte, 58 de 123 testes dela falham; contra o código da parte, 22 dos 83
+  da revisão falham. Os que passam são as travas dos textos e as guardas.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1):
+  - o portal lendo: "Carregando o portal…" à vista e anunciado aos 309 ms;
+    a demora e "Tentar de novo" aos 9,98 s. A 390 × 844, aos 10,2 s, a linha
+    tem 56 px e o "Tentar de novo" recebe o toque; aos 70,3 s, 170 px, com o
+    "Tentar de novo" de 324 × 44 à vista. A 1366 × 657, aos 70 s, o cartão
+    de 78 px inteiro. Antes da revisão, a linha encolhia a 24 px, os blocos
+    a cobriam, e o toque não chegava ao botão;
+  - Eventos e Faturas com o portal em 1 s e a leitura da tela em 3 s: a
+    caixa fica de 0,36 s a 3,03 s, sem quadro vazio e sem entrar de novo, e
+    a única fala é "Carregando o portal"; antes, nada de 1,05 a 1,35 s e uma
+    segunda fala. Com o portal em 8 s e os eventos em 16 s, a demora aos
+    10,03 s, dita uma vez; antes, nunca;
+  - o cancelamento com a releitura do portal que falha: a lista fica, com
+    "Não foi possível atualizar o portal." e nenhum alerta; antes, a tela
+    virava "Não foi possível carregar o portal.". O foco vai ao "Manter" ao
+    abrir e, no fim, ao gatilho; antes, ao `body` por 2,4 s;
+  - a nova tentativa do portal que falha de novo em 150 ms: o botão fica
+    "Tentar de novo" o tempo todo, sem caixa; antes, a caixa piscava por
+    cerca de 115 ms;
+  - arquivar pelo teclado: o foco fica no "Arquivando…" e, quando o produto
+    sai, vai ao card vizinho aos 1,66 s; antes, ao `body`;
+  - as datas com a resposta em 600 ms: o produto zerado nunca mostra a
+    seção (antes, 74 px de 7 a 571 ms); o que tem peça mostra a seção desde
+    o começo e "Carregando as datas…" aos 296 ms;
+  - "Tentar de novo" da demora pelo teclado: o foco fica na região e vai ao
+    título "Pedidos" quando a tela chega; antes, ao `body`;
+  - aos 0,4 s e aos 71 s, o `main` sem `aria-busy`, a linha e o alerta
+    "Sem resposta do servidor." fora de qualquer `aria-busy`;
+  - a chegada a 1440: o título da espera no lugar do título da tela (144,
+    20 em Pedidos; 32, 20 no Estoque; 80, 20 em Eventos);
+  - a 390 px, os alvos acima, e nenhuma rolagem lateral. O axe não acusa
+    nada nos estados da parte a 390 (o portal lendo inclusive, que antes
+    rolava sem nada focável), nem a 1440 no claro, fora o rodapé do
+    relatório, de antes; no escuro, a caixa violeta da nota passa, e ficam o
+    azul do primário (4,3 e 4,38:1, o token registrado na seção 4.3 da
+    especificação) e o mesmo rodapé.
+
+Fica aberto:
+
+- com `?evento=` no Estoque, "Abrindo o evento…" guarda a altura dela e,
+  quando o evento chega, sai, e a grade sobe 44 px. No caminho comum, o
+  painel do pedido abre no mesmo instante, por cima; só no "Evento não
+  encontrado" a subida fica à vista;
+- o corpo da espera do portal é genérico (os cartões e o bloco grande): o
+  título e a largura já são os da tela, o resto muda na chegada;
+- a leitura da nota fiscal em Envios segue sem prazo: aos 10 s diz que
+  demora, sem a saída dos 70 s nem cancelar;
+- o "Baixar PDF" espera os endereços das imagens, e não os bytes: na rede
+  lenta, o PDF ainda pode sair com a foto em branco;
+- o progresso nos anexos do Solicitar OS, a confirmação do "Marcar como
+  lidos" do sino, e a nova tentativa da foto do comprovante, que relê todas
+  as imagens, e não só as que faltaram;
+- "Avisar reposição" transborda a borda do botão na grade de duas e de três
+  colunas (o layout, de antes);
+- fora do portal, as telas que passam o `isFetching` cru ao `ErroNaLeitura`
+  (a tabela de preços, a central da IA, Pessoas, Clientes, as Chaves de API,
+  a conversa do Agent Dute) ainda dizem "Tentando de novo…" no toque, sem o
+  relógio; o `useTentandoNoRelogio` é a peça para elas;
+- a conferência com leitor de tela de verdade, num Android médio e no
+  Safari.
+
+**Parte 13g, o Comercial, a Operação, o campo, a TV, o Financeiro e o RH (PR
+610, 14/11/2026).** A parte 13 nos módulos que o mapa da seção 4 não cobre.
+A revisão desta parte ainda corre no PR; o registro completo vem com ela.
+
+- **A espera à vista**: o "Carregando..." solto e o `Skeleton` que pulsava
+  viram a `CarregandoNaRegiao` (o gerúndio aos 300 ms, continuando a espera
+  da rota) e o `Esqueleto` neutro; nenhuma contagem diz zero antes de ler
+  (`NumeroLido`, `components/ui/numero-lido.tsx`: o bloco lendo, "—" na
+  falha).
+- **A leitura ao vivo que falha tenta de novo**: o `onSnapshot` recusado não
+  volta sozinho, e a falha ficava sem saída. A `useLeitura` e a
+  `useDocumento` (`lib/operacao/leitura.ts`) assinam de novo no `tentar`, e a
+  falha fica à vista até a nova assinatura responder (`tentando`); a tela que
+  junta várias usa a `novaTentativaDe` e a `juntarTentativas`. A falha da
+  seção é a `FalhaNaSecao`.
+- **A ação diz o que faz**: as ações que gravam passam ao `BotaoDeAcao` e ao
+  `DialogCancelar` (o gerúndio na camada, `aria-busy` e `aria-disabled`,
+  nunca `disabled`); as confirmações destrutivas mantêm a variante. As
+  regiões vivas soltas saem para o `Anunciador`.
+- **As travas**: `modulos-carregando-v2` (a fonte dos seis módulos),
+  `modulos-carregando`, `modulos-acoes` e a nova tentativa da leitura
+  (`lib/operacao/leitura.test.tsx`).
+
+**A junção das partes 10 e 13b a 13d com as 13a, 13e a 13g (PR 610,
+14/11/2026).** A parte 10 e as 13b, 13c e 13d foram feitas numa cópia, ao
+mesmo tempo que a revisão da 13a, as 13e, 13f e 13g e a correção do relógio
+(`99ee4b6`) no PR. Na junção, cada peça feita dos dois lados ficou uma só:
+
+- **A `CarregandoNaRegiao`** é a do PR (a demora com "Tentar de novo" que
+  recomeça o relógio, a desistência aos 70 s, `continuaARota`,
+  `passaAdiante`, o `id`), com o que a da 13d tinha a mais: o `focoAoSair`
+  (o foco vai à volta para o Fechamento quando a fatura chega) e a promessa
+  do `onTentar`, que nunca fica sem tratar. O "Tentando de novo…" no botão da
+  13d saiu: a nova tentativa é uma espera nova, que diz o gerúndio de novo
+  aos 300 ms. A fatura, a separação, o romaneio e as Etiquetas continuam a
+  espera da rota (`continuaARota`), como as telas do PR.
+- **O "Tentar de novo" do cliente ativo** é um só, o `tentar` do
+  `useActiveCustomer` (13e), agora pela `relerDoZero`: relê a falha e
+  cancela a leitura presa sem dado, como fazia o `recarregar` da 13d, que
+  saiu. O Fechamento e a fatura usam o `tentar`.
+- **A nova tentativa da leitura ao vivo** é a da `useLeitura` (13g). A
+  `useNovaAssinatura` da 13c (`lib/operacao/nova-assinatura.ts`) saiu; o que
+  ela tinha a mais, a promessa do `tentar` que acaba quando a nova assinatura
+  responde (o "Tentando de novo…" da `FalhaNaLeitura`), passou à
+  `useLeitura`. A entrega dos Pedidos e os Retornos da Operação usam a
+  `useLeitura` direto.
+- **O foco que sai com o pedaço da tela** é um mecanismo só, a
+  `segurarOFocoQueSai` (13e): a `SaiComOFoco` da 13b passou a ser ela, dita
+  na tela, sem o pedido que a tela levava (`useFocoQueSegue` saiu); sem o
+  alvo na tela, o foco vai ao título da seção, e nunca fica no `body`. O "⋯"
+  dos Documentos usa a `segurarOFocoQueSai` direto. O `useFocoAoSair` do
+  `ErroNaLeitura`, sem o alvo na tela, também vai ao título.
+- **O Numerar do Sistema** (13d e 13e): os dois `BotaoDeAcao` com 44 px no
+  celular, "Conferindo a numeração…" no "Ver o que muda", o fim do "Numerar
+  agora" ("Numerado" pelo menos 1 s, "Não numerado" por 2 s) e o aviso dos
+  10 s embaixo dos botões.
+- **Os registros e a regra**: a 10.5 em ordem de parte, a linha 13 da
+  tabela 10.4 com as sete partes e, no sistema visual, uma linha só para a
+  `CarregandoNaRegiao`.
+
+Fica aberto:
+
+- a `FalhaNaLeitura` (parte 10) ainda diz "Tentando de novo…" no toque, sem
+  o relógio, no `ErroNaLeitura`; na falta de conexão, o `BlocoSemConexao` já
+  usa o relógio. O `useTentandoNoRelogio` (13f) é a peça, e os testes da
+  parte 10 que pedem o texto na hora mudam com ela;
+- a `useLeituraDoPortal` (13f) tenta de novo por cima da `useLeitura`, que já
+  tenta desde a 13g: fica para a revisão da 13g;
+- o "Conferir" do "Numerar agora" aos 70 s não relê nada enquanto a
+  numeração não responde (a 13d não deu a ele o que conferir).

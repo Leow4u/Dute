@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -40,7 +40,7 @@ import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { useChegada } from "@/lib/carregando/use-chegada";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { SaiComOFoco, useFocoQueSegue } from "@/lib/carregando/use-foco-que-segue";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 
 export type CustomerRequest = {
   id: string;
@@ -1242,8 +1242,6 @@ export default function CustomerRequests() {
   const lendoAFila = requests.data === undefined && !filaFalhou;
   const esperaDaFila = useEspera(lendoAFila);
   const filaChegando = useChegada(lendoAFila);
-  // Decidida a solicitação, o detalhe passa à próxima, e o foco vai ao título dela; sem próxima, à linha de estado.
-  const focoDaDecisao = useFocoQueSegue();
 
   const transition = useMutation<
     TransitionResponse,
@@ -1536,7 +1534,6 @@ export default function CustomerRequests() {
                 : undefined
             }
             busy={transition.isPending}
-            focoDaDecisao={focoDaDecisao}
             idDaLinha={idDaLinha}
             onApprove={() => decide(selected, "approve")}
             onReject={() => {
@@ -1600,7 +1597,6 @@ const VERDICT_STYLE: Record<
 
 /** O título do detalhe, que recebe o foco quando a decisão leva a solicitação embora. */
 const ID_DO_DETALHE = "detalhe-da-solicitacao";
-const SEM_FOCO: MutableRefObject<readonly string[] | null> = { current: null };
 
 /** O cartão-fantasma da fila: a mesma caixa do cartão real (o título, o resumo e a linha do selo), em blocos. */
 const CARTAO_FANTASMA = "rounded-2xl border border-border bg-card px-4 py-3.5";
@@ -1628,7 +1624,6 @@ function RequestDetail({
   canDecide,
   pendingAction,
   busy,
-  focoDaDecisao,
   idDaLinha,
   onApprove,
   onReject,
@@ -1639,8 +1634,7 @@ function RequestDetail({
   canDecide: boolean;
   pendingAction?: RequestAction;
   busy: boolean;
-  /** Decidida, a solicitação sai do detalhe: o foco vai ao título da próxima ou, sem ela, à linha de estado. */
-  focoDaDecisao?: MutableRefObject<readonly string[] | null>;
+  /** A linha de estado: decidida a solicitação sem próxima, o foco vai a ela. */
   idDaLinha?: string;
   onApprove: () => void;
   onReject: () => void;
@@ -1852,7 +1846,8 @@ function RequestDetail({
                   : "Confira os itens antes de aprovar."
                 : "Aprovar libera quando todos os itens tiverem saldo."}
           </p>
-          <SaiComOFoco alvo={[ID_DO_DETALHE, ...(idDaLinha ? [idDaLinha] : [])]} pedido={focoDaDecisao ?? SEM_FOCO}>
+          {/* Decidida a solicitação, o detalhe passa à próxima, e o foco vai ao título dela; sem próxima, à linha de estado. */}
+          <SaiComOFoco alvo={[ID_DO_DETALHE, ...(idDaLinha ? [idDaLinha] : [])]}>
           <div className="flex shrink-0 gap-2">
             {/* Ocupado não é desabilitado: o botão tocado mostra a espera, com o gerúndio e o foco nele; os outros esperam
                 com aria-disabled (carregamento v2, parte 13c). */}
