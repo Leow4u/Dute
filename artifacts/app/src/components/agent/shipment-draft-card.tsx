@@ -124,7 +124,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
                         situacao: event.target.value.trim() ? "novo" : "codigo_a_definir",
                       })
                     }
-                    className="w-40 min-w-0 rounded-md border border-transparent bg-transparent px-1 font-mono text-xs text-muted-foreground hover:border-border focus:border-primary/60 focus:outline-none"
+                    className="w-40 min-w-0 rounded-md border border-transparent bg-transparent px-1 font-mono text-xs text-muted-foreground hover:border-border focus-visible:outline-hidden focus-visible:border-primary"
                   />
                   <span className={cn("rounded-full px-1.5 py-0.5 text-xs", SITUATION[line.situacao].tone)}>{SITUATION[line.situacao].label}</span>
                 </span>
@@ -134,7 +134,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
                   placeholder="nome do produto"
                   disabled={send.isPending}
                   onChange={(event) => updateLine(index, { nome: event.target.value })}
-                  className="min-w-0 rounded-md border border-transparent bg-transparent px-1 hover:border-border focus:border-primary/60 focus:outline-none"
+                  className="min-w-0 rounded-md border border-transparent bg-transparent px-1 hover:border-border focus-visible:outline-hidden focus-visible:border-primary"
                 />
               </span>
               <input
@@ -143,7 +143,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
                 value={line.quantidade}
                 disabled={send.isPending}
                 onChange={(event) => updateLine(index, { quantidade: Math.floor(Number(event.target.value.replace(/\D/g, "")) || 0) })}
-                className="h-8 w-16 rounded-lg border border-border bg-card text-center tabular-nums outline-none focus:border-primary/60"
+                className="h-8 w-16 rounded-lg border border-border bg-card text-center tabular-nums focus-visible:outline-hidden focus-visible:border-primary"
               />
               <button
                 type="button"

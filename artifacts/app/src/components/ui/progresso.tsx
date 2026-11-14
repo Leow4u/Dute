@@ -207,7 +207,7 @@ export function Progresso({ forma, titulo, itens, concluido, apoio, unidade = ["
           ref={cabecalho}
           tabIndex={-1}
           data-titulo=""
-          className="flex min-h-7 flex-wrap items-center gap-x-2.5 text-base font-bold text-foreground outline-none"
+          className="flex min-h-7 flex-wrap items-center gap-x-2.5 rounded-md text-base font-bold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
         >
           {terminou && concluido ? (
             <>

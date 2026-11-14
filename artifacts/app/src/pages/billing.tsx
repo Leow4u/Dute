@@ -393,7 +393,7 @@ export default function Billing() {
             </button>
           );
         })}
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground hover:bg-surface-hover">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground hover:bg-surface-hover focus-within:outline-hidden focus-within:ring-2 focus-within:ring-foco">
           <CalendarDays className="size-4" aria-hidden="true" />
           Outro mês
           <input
@@ -402,7 +402,7 @@ export default function Billing() {
             value={competencia}
             max={currentCompetencia()}
             onChange={(event) => event.target.value && setCompetencia(event.target.value)}
-            className="w-32 bg-transparent text-sm text-foreground outline-none"
+            className="w-32 bg-transparent text-sm text-foreground focus-visible:outline-hidden"
           />
         </label>
       </div>

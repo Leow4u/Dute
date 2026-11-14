@@ -873,7 +873,7 @@ function InvoiceDrop({
 }
 
 const inputClass =
-  "w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50";
+  "w-full rounded-xl border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:border-primary";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -927,7 +927,7 @@ function PasteDialog({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder={"A.01.0114.004.G\t300\nA.01.0114.004.GG\t200"}
-          className="h-40 w-full resize-none rounded-xl border border-border p-3 font-mono text-xs leading-6 outline-none focus:border-primary/50"
+          className="h-40 w-full resize-none rounded-xl border border-border p-3 font-mono text-xs leading-6 focus-visible:outline-hidden focus-visible:border-primary"
         />
         <p className="text-sm text-muted-foreground">
           {parsed.lines.length ? (

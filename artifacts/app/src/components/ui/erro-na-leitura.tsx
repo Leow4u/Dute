@@ -68,10 +68,18 @@ export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | 
     const elemento = raiz.current;
     return () => {
       if (!elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
+      const lugar = elemento.parentElement;
       const alvo = id ? document.getElementById(id) : null;
       // Sem o alvo na tela (o id que não chegou), também o título: nunca o `body`.
       if (alvo) alvo.focus({ preventScroll: true });
       else segurarOFocoQueSai(elemento);
+      // A nova tentativa que falhou: a falha entra no lugar de quem saiu (com o commit, depois desta limpeza), e o foco
+      // vai ao "Tentar de novo" dela, e não à linha de estado que ainda não tem o que dizer (revisão da parte 13h).
+      queueMicrotask(() => {
+        const tentar = lugar?.isConnected ? lugar.querySelector<HTMLElement>(":scope > [data-falha-na-leitura] button") : null;
+        const ativo = document.activeElement;
+        if (tentar && (!ativo || ativo === document.body || ativo === alvo || !ativo.isConnected)) tentar.focus({ preventScroll: true });
+      });
     };
   }, [id, raiz]);
 }
@@ -117,6 +125,7 @@ export function ErroNaLeitura({
       // A falta de conexão não é alerta: "Reconectando" não fala, e "Sem conexão" o Anunciador diz uma vez (momento 8).
       role={falta ? undefined : "alert"}
       data-falta={falta}
+      data-falha-na-leitura=""
       className={cn(
         "flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-4 sm:px-5",
         className,

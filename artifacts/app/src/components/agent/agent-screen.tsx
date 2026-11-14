@@ -693,13 +693,13 @@ function AgentRail({
         </button>
       </div>
       {nav}
-      <label className="my-2 flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-sm text-muted-foreground">
+      <label className="my-2 flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-sm text-muted-foreground focus-within:border-primary">
         <Search className="h-4 w-4 shrink-0" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar conversas"
-          className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-foreground focus-visible:outline-hidden placeholder:text-muted-foreground"
         />
       </label>
       <nav aria-label="Conversas recentes" aria-busy={loading || undefined} className="min-h-0 flex-1 overflow-y-auto">
@@ -816,7 +816,7 @@ function Composer({
   }, [value]);
   const canSend = (value.trim().length > 0 || hasFile) && !uploading && !disabled;
   return (
-    <div className="rounded-lg border border-border bg-card px-4 pb-2.5 pt-3 focus-within:border-primary/40">
+    <div className="rounded-lg border border-border bg-card px-4 pb-2.5 pt-3 focus-within:border-primary">
       {files.length ? (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           {files.map((file) => (
@@ -856,7 +856,7 @@ function Composer({
         }}
         placeholder={placeholder}
         data-agent-input
-        className="block max-h-[200px] w-full resize-none bg-transparent text-base leading-6 outline-none placeholder:text-muted-foreground"
+        className="block max-h-[200px] w-full resize-none bg-transparent text-base leading-6 focus-visible:outline-hidden placeholder:text-muted-foreground"
       />
       <div className={cn("mt-1.5 flex items-center", attach ? "justify-between" : "justify-end")}>
         {attach ? (

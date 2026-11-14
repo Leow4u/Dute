@@ -70,7 +70,7 @@ export function NewNote({ escrever }: { escrever: NonNullable<ClienteDoAgente["a
         onChange={(event) => setText(event.target.value)}
         maxLength={300}
         rows={2}
-        className="mt-2 w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+        className="mt-2 w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus-visible:outline-hidden focus-visible:border-primary"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="group" aria-label="Quem o agente considera">
@@ -222,7 +222,7 @@ function PendingNote({
         maxLength={300}
         rows={2}
         aria-label="Texto da anotação"
-        className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:border-primary/40"
+        className="w-full resize-none rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus-visible:outline-hidden focus-visible:border-primary"
       />
       <p className="mt-1 text-xs text-muted-foreground">
         {[origemDaNota(note), note.reason ? `“${note.reason}”` : ""].filter(Boolean).join(" · ")}

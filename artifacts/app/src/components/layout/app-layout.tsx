@@ -86,7 +86,7 @@ function CollapsedModuleItem({
   const enabled = isModuleEnabled(module);
   const hasSubroutes = isModuleGroup(module);
   const triggerClassName = cn(
-    "flex h-11 w-11 items-center justify-center rounded-xl outline-none transition-[background-color,color,box-shadow] duration-200",
+    "flex h-11 w-11 items-center justify-center rounded-xl transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
     active
       ? "bg-sidebar-accent text-sidebar-accent-foreground"
       : "text-sidebar-foreground/60 hover:bg-card hover:text-sidebar-foreground",
@@ -169,7 +169,7 @@ function ExpandedModuleItem({
   const enabled = isModuleEnabled(module);
   const hasSubroutes = isModuleGroup(module);
   const itemClassName = cn(
-    "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium outline-none transition-[background-color,color,box-shadow] duration-200",
+    "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
     active
       ? "bg-sidebar-accent text-sidebar-accent-foreground"
       : "text-sidebar-foreground/70 hover:bg-card hover:text-sidebar-foreground",
@@ -368,7 +368,7 @@ function LayoutDoPortal({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/60 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/60 transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
                   collapsed &&
                     "absolute left-[56px] bg-sidebar",
                 )}

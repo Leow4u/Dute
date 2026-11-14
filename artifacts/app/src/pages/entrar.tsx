@@ -136,7 +136,7 @@ export default function SignInPage() {
       <div className="mt-5 flex items-center justify-between border-t border-[var(--auth-line)] pt-4 text-sm">
         <button
           type="button"
-          className="font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
+          className="inline-flex min-h-11 items-center font-medium text-[var(--auth-accent)] transition-opacity hover:opacity-80"
           onClick={resetPassword}
         >
           Esqueci minha senha

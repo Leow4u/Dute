@@ -260,7 +260,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-border/70 text-xs uppercase tracking-wide text-foreground/50">
+                <tr className="border-b border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Data</th>
                   <th className="px-3 py-2.5 font-semibold">Tipo</th>
                   <th className="px-3 py-2.5 font-semibold">Código</th>
@@ -298,7 +298,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                             {movementLabel(mov.tipo_mov)}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary">
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary-texto">
                           {mov.cod_sku}
                         </td>
                         <td className="max-w-[280px] truncate px-3 py-3 font-medium text-foreground" title={produto}>
@@ -543,7 +543,7 @@ export function MovementModal({ defaultSku, trigger }: { defaultSku?: string; tr
                     }}
                     defaultValue={field.value}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="tipo_mov" className="w-full">
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>

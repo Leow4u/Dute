@@ -283,7 +283,7 @@ export function FichaDaChegadaPorCaixaConteudo(
           <h2
             ref={tituloRef}
             tabIndex={-1}
-            className="text-2xl font-extrabold tracking-tight outline-none sm:text-3xl"
+            className="rounded-md text-2xl font-extrabold tracking-tight sm:text-3xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco"
           >
             {titulo}
           </h2>

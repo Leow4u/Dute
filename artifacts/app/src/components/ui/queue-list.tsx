@@ -337,7 +337,7 @@ export function QueueGroup({
         ref={tituloRef}
         tabIndex={tituloRef ? -1 : undefined}
         data-palco={semSaltos ? "bloco" : undefined}
-        className={cn("flex items-baseline gap-2 px-1 focus:outline-none", tituloRef && TITULO_FOCAVEL)}
+        className={cn("flex items-baseline gap-2 px-1", tituloRef && TITULO_FOCAVEL)}
       >
         <span className="text-base font-semibold text-foreground in-[.v3]:text-lg in-[.v3]:font-bold">{title}</span>
         <span className="text-sm text-muted-foreground">{contagem}</span>

@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { Check, Mail } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 
 import { AuthShell } from "@/components/auth-shell";
@@ -30,6 +30,7 @@ import {
 } from "@/lib/convite";
 import { firebaseApp, firebaseAuth, firebaseConfigError } from "@/lib/firebase";
 import { functionsDoApp } from "@/lib/firebase-functions";
+import { lugarPadraoDoFoco, segurarOFocoQueSai } from "@/lib/foco-de-volta";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -53,6 +54,8 @@ export type TelaDoConvite =
 export type AcaoDoConviteComEspera = "aceitar" | "jaConfirmei" | "reenviar" | "sair" | "sairDaOutraConta";
 
 export type AcoesDoConvite = {
+  /** Lê o convite de novo: o "Tentar de novo" da demora e da desistência da leitura. */
+  lerDeNovo: () => void;
   nome: (valor: string) => void;
   senha: (valor: string) => void;
   aceitar: () => void;
@@ -64,6 +67,23 @@ export type AcoesDoConvite = {
   sairDaOutraConta: () => void;
   voltarAoSistema: () => void;
 };
+
+/**
+ * Cada tela do convite: quando ela dá lugar à seguinte (o "Já confirmei" que
+ * confirmou, o "Aceitar convite" que pede a confirmação, o "Sair e continuar"
+ * que volta ao formulário), o foco que estava nela vai ao título da capa, que
+ * fica, e nunca ao `body` (WCAG 2.4.3; revisão da parte 13h).
+ */
+function TrocaDeTela({ children }: { children: ReactNode }) {
+  const raiz = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const elemento = raiz.current;
+    return () => {
+      if (elemento) segurarOFocoQueSai(elemento, () => lugarPadraoDoFoco(elemento.ownerDocument));
+    };
+  }, []);
+  return <div ref={raiz}>{children}</div>;
+}
 
 function Erro({ erro }: { erro: string | null }) {
   return erro ? (
@@ -93,11 +113,16 @@ export function ConviteView({
   // aria-disabled, e o foco fica nele; os outros esperam travados (aria-disabled), nunca disabled.
   const emAndamento = (acao: AcaoDoConviteComEspera) => (ocupado === true || ocupado === acao ? "andamento" : "repouso");
   const travado = Boolean(ocupado);
+  // O e-mail de confirmação indo: o reenvio, ou o envio que segue o "Aceitar convite" na tela de confirmar.
+  const enviando = ocupado === "reenviar" || ocupado === "aceitar";
   if (estado.tela === "carregando") {
     // A espera tem forma e lugar: nada antes de 300 ms; depois, a caixa e o gerúndio, ditos pelo Anunciador.
     return (
       <AuthShell title="Validando convite">
-        <CarregandoNaRegiao rotulo="Conferindo seu convite…" className="justify-center" />
+        <TrocaDeTela key="carregando">
+          {/* Com a saída da seção 3: aos 10 s, "Tentar de novo"; aos 70 s, "Sem resposta do servidor.". */}
+          <CarregandoNaRegiao rotulo="Conferindo seu convite…" onTentar={acoes.lerDeNovo} className="justify-center" />
+        </TrocaDeTela>
       </AuthShell>
     );
   }
@@ -105,6 +130,7 @@ export function ConviteView({
   if (estado.tela === "sem_convite") {
     return (
       <AuthShell title="Convite necessário">
+        <TrocaDeTela key="sem_convite">
         <div className="space-y-4">
           <Alert variant="destructive">
             <AlertDescription>
@@ -115,6 +141,7 @@ export function ConviteView({
             Voltar para login
           </Button>
         </div>
+        </TrocaDeTela>
       </AuthShell>
     );
   }
@@ -122,6 +149,7 @@ export function ConviteView({
   if (estado.tela === "outra_conta") {
     return (
       <AuthShell title="Você já está conectado">
+        <TrocaDeTela key="outra_conta">
         <div className="space-y-4">
           <p className="break-all font-semibold">{estado.email}</p>
           <Erro erro={erro} />
@@ -136,6 +164,7 @@ export function ConviteView({
             Voltar ao sistema
           </Button>
         </div>
+        </TrocaDeTela>
       </AuthShell>
     );
   }
@@ -143,6 +172,7 @@ export function ConviteView({
   if (estado.tela === "confirmar") {
     return (
       <AuthShell title="Confirme seu e-mail">
+        <TrocaDeTela key="confirmar">
         <div className="space-y-4">
           <span aria-hidden className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-info-soft text-info-soft-foreground">
             <Mail className="h-7 w-7" />
@@ -164,19 +194,22 @@ export function ConviteView({
             bloqueado={travado && emAndamento("jaConfirmei") === "repouso"}
             onClick={acoes.jaConfirmei}
           />
+          {/* O envio que segue o "Aceitar convite" (a conta criada, o e-mail ainda indo) é a espera deste botão:
+              "Enviando…", e o reenvio, "Reenviando…" (revisão da parte 13h). */}
           <BotaoDeAcao
             variant="outline"
             className="w-full"
-            estado={ocupado === "reenviar" ? "andamento" : "repouso"}
+            estado={enviando ? "andamento" : "repouso"}
             rotulo="Reenviar e-mail"
-            andamento="Reenviando…"
-            bloqueado={travado && ocupado !== "reenviar"}
+            andamento={ocupado === "aceitar" ? "Enviando…" : "Reenviando…"}
+            bloqueado={travado && !enviando}
             onClick={acoes.reenviar}
           />
           <button type="button" className="w-full text-sm font-medium text-primary hover:underline" onClick={acoes.sair}>
             Sair
           </button>
         </div>
+        </TrocaDeTela>
       </AuthShell>
     );
   }
@@ -184,6 +217,7 @@ export function ConviteView({
   if (estado.tela === "confirmado") {
     return (
       <AuthShell title="E-mail confirmado" subtitle={perfilDoConvite(estado.convite)}>
+        <TrocaDeTela key="confirmado">
         <div className="space-y-4">
           <span aria-hidden className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-success-soft text-success-soft-foreground">
             <Check className="h-7 w-7" />
@@ -193,6 +227,7 @@ export function ConviteView({
             <a href={`${basePath}/`}>Entrar</a>
           </Button>
         </div>
+        </TrocaDeTela>
       </AuthShell>
     );
   }
@@ -200,6 +235,7 @@ export function ConviteView({
   const { convite } = estado;
   return (
     <AuthShell title="Aceitar convite" subtitle="Crie sua senha para acessar">
+      <TrocaDeTela key="formulario">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -248,6 +284,7 @@ export function ConviteView({
       <button type="button" className="mt-4 w-full text-sm font-medium text-primary hover:underline" onClick={acoes.jaTenhoConta}>
         Já tenho conta
       </button>
+      </TrocaDeTela>
     </AuthShell>
   );
 }
@@ -286,6 +323,8 @@ export default function ConvitePage() {
   const [ocupado, setOcupado] = useState<AcaoDoConviteComEspera | false>(false);
   const [reenviado, setReenviado] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  // A leitura do convite que a pessoa pediu de novo (o "Tentar de novo" da demora): a anterior é deixada de lado.
+  const [leituraPedida, setLeituraPedida] = useState(0);
   // O "Aceitar convite" cria a conta, e a conta nova muda a sessão no meio dele.
   const emAndamento = useRef(false);
   const convite = typeof leitura === "object" ? leitura : null;
@@ -305,7 +344,7 @@ export default function ConvitePage() {
     return () => {
       ativo = false;
     };
-  }, [token]);
+  }, [token, leituraPedida]);
 
   async function aceitarConfirmado(usuario: User) {
     if (!convite) return;
@@ -373,6 +412,7 @@ export default function ConvitePage() {
   }, [contaDoConvite, passo]);
 
   const acoes: AcoesDoConvite = {
+    lerDeNovo: () => setLeituraPedida((atual) => atual + 1),
     nome: setNome,
     senha: setSenha,
     aceitar: () =>

@@ -115,7 +115,7 @@ export function AccountMenu({
       ) : (
         <DropdownMenuTrigger
           className={cn(
-            "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 outline-none transition-colors duration-200 hover:bg-card hover:text-sidebar-foreground",
+            "flex items-center gap-3 rounded-xl text-sm font-medium text-sidebar-foreground/80 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco duration-200 hover:bg-card hover:text-sidebar-foreground",
             compact ? "h-11 w-11 justify-center" : "w-full px-2 py-2",
           )}
         >

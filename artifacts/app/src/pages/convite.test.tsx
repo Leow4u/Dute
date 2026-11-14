@@ -21,6 +21,7 @@ const CONVITE: ConviteLido = {
 
 const NADA = () => undefined;
 const ACOES: AcoesDoConvite = {
+  lerDeNovo: NADA,
   nome: NADA,
   senha: NADA,
   aceitar: NADA,

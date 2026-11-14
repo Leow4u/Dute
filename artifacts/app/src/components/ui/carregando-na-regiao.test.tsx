@@ -176,3 +176,67 @@ describe("a região que ainda lê, com a nova tentativa (parte 13e)", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 });
+
+describe("a região que ainda lê, na revisão da parte 13h", () => {
+  it("a altura da linha fica reservada dentro do recuo: a caixa que entra aos 300 ms não empurra o que vem embaixo", () => {
+    // O min-h-6 vale para o conteúdo (box-content): com o py-8 de quem usa, 24 px mais o recuo desde 0 ms, e não 64
+    // que viram 88 quando a caixa entra.
+    expect(regiao().className).toContain("box-content");
+    expect(regiao().className).toContain("min-h-6");
+    // A demora que quebra a linha (no celular) fica no alinhamento da região, centralizada onde ela é.
+    expect(regiao().className).toContain("[&>span]:[justify-content:inherit]");
+  });
+
+  it("a caixa e o rótulo leem a tinta da espera (--carregando-cor), que a capa escura de entrada redefine", () => {
+    passar(CARREGANDO.atrasoMs);
+    const caixa = regiao().querySelector<HTMLElement>("[data-spinner]")!;
+    const rotulo = [...regiao().querySelectorAll("span")].find((span) => span.textContent === "Carregando anotações…" && span.children.length === 0)!;
+    for (const elemento of [caixa, rotulo]) {
+      expect(elemento.getAttribute("class")).toContain("text-carregando-cor");
+      expect(elemento.getAttribute("class")).not.toContain("text-foreground");
+    }
+  });
+
+  it("a nova tentativa que falha: o foco vai ao Tentar de novo da falha que entra no lugar, não à linha de estado", async () => {
+    const { ErroNaLeitura } = await import("./erro-na-leitura");
+    const tela = (falhou: boolean) => (
+      <>
+        <p id="linha" tabIndex={-1} />
+        <div>
+          {falhou ? (
+            <ErroNaLeitura mensagem="Não consegui carregar os incidentes." tentando={false} onTentar={() => undefined} focoAoSair="linha" />
+          ) : (
+            <CarregandoNaRegiao rotulo="Carregando incidentes…" onTentar={() => undefined} focoAoSair="linha" />
+          )}
+        </div>
+        <Anunciador />
+      </>
+    );
+    act(() => raiz!.render(tela(false)));
+    passar(CARREGANDO.demoraMs);
+    const tentar = [...regiao().querySelectorAll("button")].find((botao) => botao.textContent === "Tentar de novo")!;
+    tentar.focus();
+    act(() => tentar.click());
+    expect(document.activeElement).toBe(regiao());
+    await act(async () => raiz!.render(tela(true)));
+    const falha = container!.querySelector('[role="alert"]')!;
+    expect(document.activeElement).toBe(falha.querySelector("button"));
+  });
+
+  it("a leitura que chega com o foco na região: o foco vai à linha de estado (focoAoSair), como antes", async () => {
+    const tela = (lida: boolean) => (
+      <>
+        <p id="linha" tabIndex={-1} />
+        <div>{lida ? <ul><li>Incidente 1</li></ul> : <CarregandoNaRegiao rotulo="Carregando incidentes…" onTentar={() => undefined} focoAoSair="linha" />}</div>
+        <Anunciador />
+      </>
+    );
+    act(() => raiz!.render(tela(false)));
+    passar(CARREGANDO.demoraMs);
+    const tentar = [...regiao().querySelectorAll("button")].find((botao) => botao.textContent === "Tentar de novo")!;
+    tentar.focus();
+    act(() => tentar.click());
+    await act(async () => raiz!.render(tela(true)));
+    expect(document.activeElement?.id).toBe("linha");
+  });
+});

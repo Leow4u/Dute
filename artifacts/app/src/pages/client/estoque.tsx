@@ -1380,7 +1380,7 @@ function CatalogSelect({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-base font-medium text-foreground outline-none disabled:cursor-default md:text-sm"
+        className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-base font-medium text-foreground focus-visible:outline-hidden disabled:cursor-default md:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -1658,7 +1658,7 @@ function ConteudoDoPainelLateral({
             {...travas}
             data-ocupado={travado ? "" : undefined}
             className={cn(
-              "relative w-full overflow-hidden text-foreground outline-none",
+              "relative w-full overflow-hidden text-foreground focus:outline-hidden",
               bottomSheetOnMobile
                 ? "flex max-h-[88dvh] flex-col rounded-t-xl bg-card shadow-lg md:h-full md:max-h-none md:max-w-[440px] md:rounded-xl"
                 : cn("h-full rounded-lg", wide ? "max-w-[1200px]" : "max-w-[440px]"),

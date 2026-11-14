@@ -79,4 +79,10 @@ describe("a entrada (carregamento v2, parte 13h)", () => {
     await act(async () => entrar().click());
     expect(mocks.entrar).toHaveBeenCalledTimes(1);
   });
+
+  it("o Esqueci minha senha tem o alvo de 44 px do celular (revisão da parte 13h)", async () => {
+    await act(async () => root.render(<SignInPage />));
+    const esqueci = [...container.querySelectorAll("button")].find((botao) => botao.textContent === "Esqueci minha senha")!;
+    expect(esqueci.className).toContain("min-h-11");
+  });
 });

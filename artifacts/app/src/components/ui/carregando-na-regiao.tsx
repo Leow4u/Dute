@@ -95,7 +95,10 @@ export function CarregandoNaRegiao({
       tabIndex={onTentar ? -1 : undefined}
       data-carregando-na-regiao=""
       className={cn(
-        "flex min-h-6 flex-wrap items-center gap-x-3 gap-y-2 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
+        // O min-h-6 vale para o conteúdo (box-content): a linha fica reservada dentro do recuo de quem usa, e a caixa
+        // que entra aos 300 ms não empurra o que vem embaixo. A demora que quebra a linha (no celular) fica no
+        // alinhamento da região.
+        "box-content flex min-h-6 flex-wrap items-center gap-x-3 gap-y-2 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco [&>span]:[justify-content:inherit]",
         className,
       )}
     >
@@ -183,8 +186,9 @@ function EsperaDaRegiao({
   return (
     <>
       <span className="flex items-center gap-2.5">
-        <Spinner tamanho={24} calmo={espera.calmo} className="text-foreground" data-continua={continua ? "" : undefined} />
-        <span className="text-sm font-bold text-foreground">{rotulo}</span>
+        {/* A tinta da espera (--carregando-cor): a do tema, e a da capa escura de entrada dentro dela. */}
+        <Spinner tamanho={24} calmo={espera.calmo} className="text-carregando-cor" data-continua={continua ? "" : undefined} />
+        <span className="text-sm font-bold text-carregando-cor">{rotulo}</span>
       </span>
       {marco === "demorando" ? (
         <span className="flex flex-wrap items-center gap-x-3 gap-y-2">

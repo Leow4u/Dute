@@ -219,3 +219,129 @@ describe("o anel do foco (parte 13h)", () => {
     }
   });
 });
+
+/*
+ * O foco sem anel (revisão da parte 13h; WCAG 2.4.7 e 1.4.11). O anel não é
+ * o único sinal de foco do app: o campo acende a borda, e o item de menu do
+ * Radix acende o fundo. Mas o contorno do navegador só sai de cena com outro
+ * sinal no lugar, e nunca pelo outline-none, que o tira também das cores
+ * forçadas (lá a sombra do anel e o fundo somem, e o que fica é o contorno
+ * transparente do outline-hidden, que o sistema pinta):
+ *
+ * - `outline-none` em nenhuma classe do app;
+ * - a borda do foco é cheia (o --primary tem 4,6:1 no branco da v3 e 4,4:1 no
+ *   cartão escuro); a 40%, 50% ou 60%, ela fica abaixo de 3:1;
+ * - quem esconde o contorno (o outline-hidden) mostra o foco no mesmo lugar:
+ *   o anel, a borda cheia ou, nos itens dos menus, listas e abas do Radix e
+ *   do cmdk (o foco que anda pelas setas), o fundo realçado. O resto mostra o
+ *   foco em outro lugar, e está na lista abaixo, com o porquê.
+ */
+
+/** Os componentes cujo item com foco é o realçado pelo fundo (o foco que anda pelas setas). */
+const MENUS = new Set([
+  "components/ui/command.tsx",
+  "components/ui/context-menu.tsx",
+  "components/ui/dropdown-menu.tsx",
+  "components/ui/menubar.tsx",
+  "components/ui/navigation-menu.tsx",
+  "components/ui/select.tsx",
+]);
+
+/**
+ * Quem esconde o contorno e mostra o foco em outro lugar, com o trecho da
+ * classe e o porquê. O campo sem moldura dentro da caixa que acende com o
+ * foco de dentro (focus-within), os títulos que só recebem o foco do código
+ * (tabIndex -1, fora do Tab) e os painéis que passam o foco para dentro.
+ */
+const FOCO_EM_OUTRO_LUGAR: ReadonlyArray<{ arquivo: string; trecho: string; porque: string }> = [
+  { arquivo: "components/agent/agent-screen.tsx", trecho: "min-w-0 flex-1 bg-transparent text-foreground", porque: "a busca de conversas: o rótulo em volta acende a borda" },
+  { arquivo: "components/agent/agent-screen.tsx", trecho: "block max-h-[200px] w-full resize-none bg-transparent", porque: "o compositor: a caixa em volta acende a borda" },
+  { arquivo: "components/ui/command.tsx", trecho: "flex h-10 w-full rounded-md bg-transparent py-3", porque: "a busca do cmdk: a caixa em volta acende a borda" },
+  { arquivo: "pages/billing.tsx", trecho: "w-32 bg-transparent text-sm text-foreground", porque: "o mês: o rótulo em volta mostra o anel" },
+  { arquivo: "pages/client/estoque.tsx", trecho: "min-w-0 flex-1 cursor-pointer appearance-none bg-transparent", porque: "o filtro: o rótulo em volta mostra o anel" },
+  { arquivo: "pages/client/inicio.tsx", trecho: "min-w-0 flex-1 bg-transparent py-1 text-base", porque: "a pergunta ao Agent Dute: a caixa em volta acende a borda" },
+  { arquivo: "pages/client/estoque.tsx", trecho: "relative w-full overflow-hidden text-foreground", porque: "o painel do item: o Radix passa o foco ao primeiro controle de dentro" },
+  { arquivo: "components/ui/popover.tsx", trecho: "z-50 w-72 rounded-md border bg-popover", porque: "o painel: o Radix passa o foco ao primeiro controle de dentro" },
+  { arquivo: "components/ui/hover-card.tsx", trecho: "z-50 w-64 rounded-md border bg-popover", porque: "o cartão que abre no ponteiro, sem tela que o use" },
+];
+
+const VARIANTE_DE_FOCO_NO_FIM = /(?:^|:)(?:group-|peer-)?(?:focus|focus-visible|focus-within|has-focus)$/;
+
+/** A classe que esconde o contorno: o outline-hidden solto ou numa variante de foco. */
+function escondeOContorno(classe: string): boolean {
+  if (!/(?:^|:)outline-hidden$/.test(classe)) return false;
+  const corte = classe.lastIndexOf(":");
+  return corte < 0 || VARIANTE_DE_FOCO_NO_FIM.test(classe.slice(0, corte));
+}
+
+/** O sinal do foco no mesmo lugar: o anel com cor, a borda cheia ou, num menu, o fundo realçado. */
+function mostraOFoco(classes: string[], arquivo: string): boolean {
+  if (classes.some((classe) => corDoAnel(classe) !== null)) return true;
+  if (classes.some((classe) => /(?:^|:)(?:focus|focus-visible|focus-within|has-focus):border-(?!\[)[\w-]+$/.test(classe) && !/\/\d+$/.test(classe))) return true;
+  return MENUS.has(arquivo) && classes.some((classe) => /(?:^|:)(?:focus|focus-visible|data-\[highlighted\]|data-\[selected=true\]|data-\[state=active\]):bg-/.test(classe));
+}
+
+function problemasDoFoco(texto: string, arquivo: string): string[] {
+  const classes = texto.split(/\s+/).filter(Boolean);
+  const problemas: string[] = [];
+  for (const classe of classes) if (/(?:^|:)outline-none$/.test(classe)) problemas.push(classe);
+  // Sem a variante do foco, o contorno transparente fica sempre: nas cores forçadas, o sistema o pinta em todo item.
+  for (const classe of classes) if (classe === "outline-hidden") problemas.push("outline-hidden sem a variante do foco");
+  for (const classe of classes) {
+    if (/(?:^|:)(?:focus|focus-visible|focus-within|has-focus):border-(?:primary|ring|foco)\/\d+$/.test(classe)) problemas.push(classe);
+  }
+  if (classes.some(escondeOContorno) && !mostraOFoco(classes, arquivo)) {
+    const aceito = FOCO_EM_OUTRO_LUGAR.some((excecao) => excecao.arquivo === arquivo && texto.includes(excecao.trecho));
+    if (!aceito) problemas.push("esconde o contorno sem outro sinal");
+  }
+  return problemas;
+}
+
+describe("o foco sem anel (revisão da parte 13h)", () => {
+  it("a regra separa o foco que se vê do apagado", () => {
+    expect(problemasDoFoco("rounded-xl outline-none hover:bg-card", "x.tsx")).toEqual(["outline-none"]);
+    expect(problemasDoFoco("rounded-lg border outline-none focus:border-primary/40", "x.tsx")).toEqual(["outline-none", "focus:border-primary/40"]);
+    expect(problemasDoFoco("border focus-visible:outline-hidden focus-visible:border-primary", "x.tsx")).toEqual([]);
+    expect(problemasDoFoco("focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco", "x.tsx")).toEqual([]);
+    expect(problemasDoFoco("text-xs font-medium focus-visible:outline-hidden focus-visible:bg-surface-hover", "x.tsx")).toEqual([
+      "esconde o contorno sem outro sinal",
+    ]);
+    // O item do menu do Radix: o realce pelo fundo, com o contorno das cores forçadas.
+    expect(problemasDoFoco("rounded-sm px-2 focus:outline-hidden focus:bg-accent", "components/ui/dropdown-menu.tsx")).toEqual([]);
+    expect(problemasDoFoco("rounded-sm px-2 outline-none focus:bg-accent", "components/ui/dropdown-menu.tsx")).toEqual(["outline-none"]);
+    expect(problemasDoFoco("rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-foco", "x.tsx")).toEqual(["outline-hidden sem a variante do foco"]);
+    // Sem esconder o contorno, o do navegador fica: não é problema desta regra.
+    expect(problemasDoFoco("rounded-md px-3 hover:bg-card", "x.tsx")).toEqual([]);
+  });
+
+  it("nenhum foco do app sem sinal, e as exceções ainda existem", () => {
+    const achados = TRECHOS.flatMap((trecho) => {
+      const problemas = problemasDoFoco(trecho.texto, arquivoDo(trecho));
+      return problemas.length ? [`${trecho.onde} ${problemas.join(", ")}`] : [];
+    });
+    expect(achados).toEqual([]);
+    for (const excecao of FOCO_EM_OUTRO_LUGAR) {
+      const achou = TRECHOS.some((trecho) => arquivoDo(trecho) === excecao.arquivo && trecho.texto.includes(excecao.trecho));
+      expect(achou, `${excecao.arquivo}: ${excecao.trecho}`).toBe(true);
+    }
+  });
+
+  it("no index.css, o foco visível não apaga o contorno, e o :focus que o apaga tem o :focus-visible com contorno", () => {
+    const css = readFileSync(new URL("../../index.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const blocos = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, seletor, corpo]) => ({ seletor: seletor.trim().replace(/\s+/g, " "), corpo }));
+    const apaga = (corpo: string) => /(?:^|;)\s*outline\s*:\s*(?:none|0)\s*(?:;|$)/.test(corpo);
+    const problemas: string[] = [];
+    for (const { seletor, corpo } of blocos) {
+      if (!apaga(corpo)) continue;
+      for (const parte of seletor.split(",").map((pedaco) => pedaco.trim())) {
+        if (/:focus-visible|:focus-within/.test(parte)) problemas.push(parte);
+        else if (/:focus\b/.test(parte)) {
+          const visivel = parte.replace(/:focus\b/, ":focus-visible");
+          const temContorno = blocos.some((bloco) => bloco.seletor.split(",").map((pedaco) => pedaco.trim()).includes(visivel) && /outline\s*:\s*\d/.test(bloco.corpo));
+          if (!temContorno) problemas.push(parte);
+        }
+      }
+    }
+    expect(problemas).toEqual([]);
+  });
+});

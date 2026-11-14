@@ -180,7 +180,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
                   value={line.quantidade}
                   onChange={(event) => setQuantity(index, Math.floor(Number(event.target.value.replace(/\D/g, "")) || 1))}
                   disabled={send.isPending}
-                  className="h-8 w-12 bg-card text-center tabular-nums outline-none"
+                  className="h-8 w-12 bg-card text-center tabular-nums focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foco"
                 />
                 <button
                   type="button"

@@ -624,3 +624,67 @@ describe("o primário como texto, em cada contexto", () => {
     expect(contraste(temas.escuro.cor("--primary"), temas.escuro.cor("--card"))).toBeLessThan(4.5);
   });
 });
+
+/**
+ * A capa de entrada (components/auth-shell.tsx, `.auth-cover`): sempre escura,
+ * nos dois temas, com as cores dela (o cartão #101112). As peças do
+ * carregamento leem os tokens do tema; dentro da capa, a tinta e o aviso da
+ * espera são os dela (revisão da parte 13h: no claro, "Conferindo seu
+ * convite…" e "Reenviando…" saíam em #1F2A3D sobre o cartão, a 1,3:1).
+ */
+describe("a capa de entrada, sempre escura", () => {
+  const CAPAS: Record<string, Cadeia> = { claro: [[], ["auth-cover"]], escuro: [["dark"], ["auth-cover"]] };
+
+  function hexParaRgb(hex: string): Rgb {
+    const limpo = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!limpo) throw new Error(`não é um hex: ${hex}`);
+    const n = Number.parseInt(limpo[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  /** O rgba() de uma declaração sobre o fundo dado. */
+  function rgbaSobre(rgba: string, fundo: Rgb): Rgb {
+    const partes = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(rgba.trim());
+    if (!partes) throw new Error(`não é um rgba: ${rgba}`);
+    return sobre([Number(partes[1]), Number(partes[2]), Number(partes[3])], fundo, Number(partes[4]));
+  }
+
+  /** A declaração que vale para o seletor, somando as regras de topo que o citam (a última vence). */
+  const declaracaoDe = (seletor: string, propriedade: string) => {
+    const valores = regras(CSS)
+      .filter((achada) => achada.contexto.length === 0 && seletores(achada).includes(seletor))
+      .flatMap((achada) => declaracoes(achada.corpo).filter(([nome]) => nome === propriedade).map(([, valor]) => valor));
+    return valores[valores.length - 1];
+  };
+
+  it("a tinta e o aviso da espera têm 4,5:1 no cartão da capa, e a tinta, 3:1 no vale do respiro", () => {
+    for (const [nome, cadeia] of Object.entries(CAPAS)) {
+      const t = tema(cadeia);
+      const cartao = hexParaRgb(t.valor("--auth-surface"));
+      expect(contraste(t.cor("--carregando-cor"), cartao), `${nome} tinta`).toBeGreaterThanOrEqual(4.5);
+      expect(contraste(t.cor("--carregando-aviso"), cartao), `${nome} aviso`).toBeGreaterThanOrEqual(4.5);
+      const vale = sobre(t.cor("--carregando-cor"), cartao, t.numero("--carregando-piso"));
+      expect(contraste(vale, cartao), `${nome} respiro`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("o toque dos botões escuros da capa fica escuro: o texto dela continua com 4,5:1", () => {
+    const fundo = declaracaoDe(".auth-cover button[type='button'].w-full [data-fundo=\"toque\"]", "background-color");
+    expect(fundo).toBeDefined();
+    const t = tema(CAPAS.claro);
+    const cartao = hexParaRgb(t.valor("--auth-surface"));
+    expect(contraste(hexParaRgb(t.valor("--auth-text")), rgbaSobre(fundo!, cartao))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("o branco do botão principal da capa tem 4,5:1, e o alvo dos controles, 44 px", () => {
+    const t = tema(CAPAS.claro);
+    const fundo = declaracaoDe('.auth-cover button[type="submit"]', "background-color");
+    expect(fundo).toBe("var(--auth-accent-fundo)");
+    expect(contraste([255, 255, 255], hexParaRgb(t.valor("--auth-accent-fundo")))).toBeGreaterThanOrEqual(4.5);
+    // O acento como texto (o "Esqueci minha senha") e como borda do foco continua no cartão escuro.
+    expect(contraste(hexParaRgb(t.valor("--auth-accent")), hexParaRgb(t.valor("--auth-surface")))).toBeGreaterThanOrEqual(4.5);
+    for (const seletor of [".auth-cover input", '.auth-cover button[type="submit"]', ".auth-cover button[type='button'].w-full"]) {
+      expect(declaracaoDe(seletor, "height"), seletor).toBe("44px");
+    }
+  });
+});
