@@ -1,6 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClientContext } from "@tanstack/react-query";
-import { Clock3, RefreshCw, WifiOff } from "lucide-react";
+import { AlertCircle, Clock3, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,9 @@ export type EstadoDaLinha =
   | { tipo: "lida"; hora: string }
   | { tipo: "atualizando" }
   | { tipo: "reconectando"; hora: string }
-  | { tipo: "sem-conexao"; hora: string };
+  | { tipo: "sem-conexao"; hora: string }
+  /** A releitura falhou por outro motivo que não a conexão, com a lista lida: ela fica (momento 7). */
+  | { tipo: "falhou"; hora: string };
 
 export interface LinhaDeEstadoProps {
   /** A leitura da lista, ou as leituras que ela junta (Pedidos lê as filas e as solicitações). */
@@ -36,9 +38,10 @@ export interface LinhaDeEstadoProps {
   objeto: string;
   /**
    * A releitura em curso foi pedida pela pessoa e tem a barra no topo do
-   * cartão (a volta do app ao primeiro plano): passados 5 s, quando a barra
-   * para, a linha diz "Atualizando…". Sem ela, a releitura é automática e
-   * não mostra nada.
+   * cartão (a volta do app ao primeiro plano; a troca de filtro, mês ou
+   * cliente): passados 5 s, quando a barra para, a linha diz "Atualizando…".
+   * Sem ela, a releitura é automática e não mostra nada. A leitura que troca
+   * (`isPlaceholderData`) conta como pedida.
    */
   pedidaPelaPessoa?: boolean;
   /**
@@ -52,6 +55,18 @@ export interface LinhaDeEstadoProps {
    * "Carregando pedidos" aos 300 ms: a leitura rápida não fala nada.
    */
   resumo?: string;
+  /**
+   * A primeira leitura a tela ainda mostra no lugar da lista ("Carregando...",
+   * nas telas que a parte 13 migra): a linha fica vazia até a lista chegar, e
+   * não fala.
+   */
+  primeiraNaLista?: boolean;
+  /**
+   * A hora da lista está em outra linha da tela (a aba Histórico, sob a linha
+   * do Estoque): lida, esta linha fica vazia, e só diz o que muda (a troca que
+   * passa de 5 s, a demora, a falha e a falta de conexão).
+   */
+  semHora?: boolean;
   className?: string;
 }
 
@@ -61,8 +76,10 @@ export interface LinhaDeEstadoProps {
  * cada 5). Na falta, "lista de": a da mais antiga, porque é dela o dado mais
  * velho na tela (o `semConexaoNaLeitura`).
  */
-function horaDaLista(leituras: readonly LeituraDaLista[], qual: "recente" | "antiga"): string {
-  const horas = leituras.map((leitura) => leitura.dataUpdatedAt);
+function horaDaLista(leituras: readonly LeituraDaLista[], qual: "recente" | "antiga"): string | null {
+  // A leitura que troca ainda não tem hora própria (a lista na tela é a anterior): fica de fora.
+  const horas = leituras.map((leitura) => leitura.dataUpdatedAt).filter((quando) => quando > 0);
+  if (!horas.length) return null;
   return horaDaLeitura(qual === "recente" ? Math.max(...horas) : Math.min(...horas));
 }
 
@@ -98,9 +115,14 @@ function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
  *   pedidos…", com o anúncio; aos 10 s, a pílula âmbar "Demorando mais que o
  *   normal" e "Tentar de novo", com a mesma caixa na volta calma;
  * - lida: "Atualizado às 10:42";
- * - a releitura pedida pela pessoa, com a barra do topo passando de 5 s:
- *   "Atualizando…". A releitura automática não mostra nada, não fala e não
- *   mexe na região viva: no fim, só a hora muda;
+ * - a releitura pedida pela pessoa (a volta do app, a troca de filtro, mês
+ *   ou cliente), com a barra do topo passando de 5 s: "Atualizando…". A
+ *   releitura automática não mostra nada, não fala e não mexe na região
+ *   viva: no fim, só a hora muda;
+ * - a releitura que falhou por outro motivo que não a conexão, com a lista
+ *   lida: a lista fica, e a linha diz "Não consegui atualizar · lista de
+ *   10:42", com "Tentar de novo" (momento 7: o erro na releitura nunca apaga
+ *   a lista);
  * - a falta de conexão com a lista lida (absorve o `FaixaSemConexao`):
  *   "Reconectando… · lista de 10:42" em tinta, com os arcos do Wi-Fi, ou a
  *   pílula âmbar "Sem conexão · lista de 10:42", pelo estado único da
@@ -126,15 +148,27 @@ function tentarNaTela(raiz: HTMLElement): HTMLElement | null {
  * passa à de baixo, sem sair da tela. O CSS mora em index.css
  * (`.linha-de-estado`).
  */
-export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, resumo, className }: LinhaDeEstadoProps) {
+export function LinhaDeEstado({
+  leitura,
+  objeto,
+  pedidaPelaPessoa = false,
+  id,
+  resumo,
+  primeiraNaLista = false,
+  semHora = false,
+  className,
+}: LinhaDeEstadoProps) {
   const leituras: readonly LeituraDaLista[] = Array.isArray(leitura) ? leitura : [leitura as LeituraDaLista];
   const lida = listaLida(leituras);
   const primeira = leituras.some((uma) => uma.isLoading);
   // A primeira leitura que começa quando a tela chega continua a espera da rota: o mesmo relógio, sem vão.
   const rota = useEsperaDaRota(primeira, true);
   const espera = useEspera(primeira, { desde: rota?.inicio });
-  const releitura = useEspera(pedidaPelaPessoa && lida && leituras.some((uma) => uma.isFetching));
+  const trocando = leituras.some((uma) => uma.isPlaceholderData === true);
+  const releitura = useEspera((pedidaPelaPessoa || trocando) && lida && leituras.some((uma) => uma.isFetching));
   const comFalta = leituras.filter((uma) => uma.isError && ehFaltaDeConexao(uma.error));
+  // A releitura que falhou por outro motivo, com a lista lida: a lista fica, e a linha diz (momento 7).
+  const comErro = leituras.filter((uma) => uma.isError && !ehFaltaDeConexao(uma.error) && uma.dataUpdatedAt > 0);
   const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0);
   const anunciar = useAnuncio();
   const retirarAnuncio = useRetirarAnuncio();
@@ -144,24 +178,48 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
   const [tentativas, setTentativas] = useState(0);
   const novaTentativa = useEspera(tentativas > 0, { segurarMinimo: true });
   const raiz = useRef<HTMLDivElement>(null);
+  // O que a linha diz depois de uma leitura (o "Não consegui atualizar") só com ela ainda na tela.
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
 
   // A leitura que falhou sem nada lido: o aviso está no lugar da lista (o `ErroNaLeitura`, o `BlocoSemConexao`), e a
   // linha não diz "Carregando" ao lado dele, nem enquanto a outra leitura da lista ainda lê.
   const falhou = !lida && leituras.some((uma) => uma.isError);
+  // A hora da lista que está na tela: na troca em que nenhuma leitura tem hora própria, a última dita.
+  const horaVista = useRef<string | null>(null);
+  const hora = (dessas: readonly LeituraDaLista[], qual: "recente" | "antiga") => {
+    const achada = horaDaLista(dessas, qual) ?? horaVista.current ?? horaDaLeitura(Date.now());
+    horaVista.current = achada;
+    return achada;
+  };
+  // A releitura pedida (a troca de filtro, a volta do app) que passa de 10 s: a demora, com "Tentar de novo", como na
+  // primeira leitura (o relógio da espera, seção 3); antes, aos 5 s, "Atualizando…".
+  const releituraDemorando = releitura.visivel && (releitura.fase === "demorando" || releitura.fase === "sem-resposta");
   const estado: EstadoDaLinha = !lida
-    ? comFalta.length || falhou
+    ? comFalta.length || falhou || primeiraNaLista
       ? { tipo: "vazia" }
       : primeira && espera.visivel
         ? { tipo: espera.fase === "andamento" || espera.fase === "com-objeto" ? "carregando" : "demorando", calmo: espera.calmo }
         : { tipo: "vazia" }
     : comFalta.length
-      ? { tipo: falta, hora: horaDaLista(comFalta, "antiga") }
+      ? { tipo: falta, hora: hora(comFalta, "antiga") }
       : falta === "sem-conexao"
         ? // O aparelho sem rede há 3 s, antes de qualquer leitura falhar (momento 8).
-          { tipo: "sem-conexao", hora: horaDaLista(leituras, "antiga") }
-        : releitura.visivel && !releitura.movimento
-          ? { tipo: "atualizando" }
-          : { tipo: "lida", hora: horaDaLista(leituras, "recente") };
+          { tipo: "sem-conexao", hora: hora(leituras, "antiga") }
+        : releituraDemorando
+          ? { tipo: "demorando", calmo: releitura.calmo }
+          : releitura.visivel && !releitura.movimento
+            ? { tipo: "atualizando" }
+            : comErro.length
+              ? { tipo: "falhou", hora: hora(comErro, "antiga") }
+              : semHora
+                ? { tipo: "vazia" }
+                : { tipo: "lida", hora: hora(leituras, "recente") };
 
   // Os anúncios da primeira leitura, uma vez cada: a entrada na espera aos 300 ms, a demora aos 10 s e, quando a
   // lista chega, o resumo dela, só se a entrada foi falada. Depois que ela falhou, quem relê é a releitura
@@ -173,6 +231,8 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
   const pedidoVisto = useRef(pedidosDaPessoa);
   // O que esta linha mandou dizer: quando ela sai da tela, o que ainda espera o intervalo do Anunciador sai junto.
   const ditos = useRef(new Set<string>());
+  // A demora da releitura pedida é dita uma vez, ao entrar (seção 7: o aviso de 10 s).
+  const demoraDaReleitura = useRef(false);
   // Os anúncios da espera que ainda podem esperar a vez ("Carregando pedidos", a demora e o da rota que esta linha
   // continua): quando a espera acaba (a lista chegou, a leitura falhou), saem da fila. O leitor de tela não ouve
   // "Carregando estoque" com a lista já na tela, nem depois do aviso da falha.
@@ -185,6 +245,12 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
     const acabouAEspera = () => {
       for (const retirar of daEspera.current.splice(0)) retirar();
     };
+    if (lida && estado.tipo === "demorando") {
+      if (!demoraDaReleitura.current) dizer("Demorando mais que o normal");
+      demoraDaReleitura.current = true;
+    } else {
+      demoraDaReleitura.current = false;
+    }
     if (pedidosDaPessoa !== pedidoVisto.current) {
       pedidoVisto.current = pedidosDaPessoa;
       // Só o pedido depois da falha conta: é ele que tira a linha do silêncio.
@@ -232,7 +298,8 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
       // leitura sem dado): ela é cancelada e lida de novo. Só as da lista: cada `refetch` é o do observador dela,
       // e o que a tela lê além da lista (o cliente ativo, as caixas, os contadores do menu) segue lendo.
       const daLista = new Set<unknown>(leituras.map((uma) => uma.refetch));
-      const presas = primeira && cliente
+      // A troca que demora também: a leitura do filtro novo ainda não tem dado (a lista na tela é a anterior).
+      const presas = (primeira || trocando) && cliente
         ? cliente.cancelQueries({
             predicate: (consulta) =>
               consulta.state.data === undefined &&
@@ -242,6 +309,15 @@ export function LinhaDeEstado({ leitura, objeto, pedidaPelaPessoa = false, id, r
         : Promise.resolve();
       void presas
         .then(() => Promise.all(leituras.map((uma) => uma.refetch())))
+        .then((resultados) => {
+          // A pessoa pediu e a releitura falhou de novo: o Anunciador diz (a falta de conexão ele diz sozinho), só com
+          // a linha ainda na tela, e o que ainda espera o intervalo dele sai com ela.
+          if (!montada.current) return;
+          if (resultados.some((resultado) => resultado.isError && !ehFaltaDeConexao(resultado.error))) {
+            ditos.current.add("Não consegui atualizar");
+            anunciar("Não consegui atualizar");
+          }
+        })
         .finally(() => setTentativas((quantas) => quantas - 1));
     });
   };
@@ -353,6 +429,15 @@ function desenhar(estado: EstadoDaLinha, objeto: string, mostrando: boolean, onT
             {`Sem conexão · lista de ${estado.hora}`}
           </span>
           {tentar(true)}
+        </>
+      );
+    case "falhou":
+      return (
+        <>
+          <AlertCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+          <span className="linha-de-estado-forte">Não consegui atualizar</span>
+          <span className="linha-de-estado-calmo">{`· lista de ${estado.hora}`}</span>
+          {tentar(false)}
         </>
       );
   }

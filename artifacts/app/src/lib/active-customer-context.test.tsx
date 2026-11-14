@@ -98,3 +98,43 @@ describe("o cliente provável na abertura", () => {
     expect(visto[visto.length - 1]!.codeProvavel).toBe(LEGACY_CUSTOMER_CODE);
   });
 });
+
+describe("o \"Tentar de novo\" da tela que espera o cliente ativo", () => {
+  it("lê de novo a lista dos clientes que ficou presa, e o ativo chega", async () => {
+    window.localStorage.setItem(activeCustomerStorageKey("pessoa_1"), "ACME");
+    let chamadas = 0;
+    const responder = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (...args: Parameters<typeof fetch>) => {
+        chamadas += 1;
+        // A primeira leitura fica presa: nunca responde.
+        if (chamadas === 1) return new Promise<Response>(() => undefined);
+        return responder(...args);
+      }),
+    );
+    const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    raiz = createRoot(container);
+    await act(async () => {
+      raiz!.render(
+        <QueryClientProvider client={cliente}>
+          <ActiveCustomerProvider>
+            <Quem />
+          </ActiveCustomerProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+    expect(visto[visto.length - 1]!.isLoading).toBe(true);
+    await act(async () => {
+      void visto[visto.length - 1]!.tentar();
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(chamadas).toBe(2);
+    const depois = visto[visto.length - 1]!;
+    expect(depois.isLoading).toBe(false);
+    expect(depois.code).toBe("ACME");
+  });
+});

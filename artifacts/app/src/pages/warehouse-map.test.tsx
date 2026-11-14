@@ -125,10 +125,13 @@ describe("Mapa sem conexão", () => {
   const fonte = readFileSync(new URL("./warehouse-map.tsx", import.meta.url), "utf8");
 
   it("o mapa lido fica com a hora; sem nada lido, o aviso, e não \"Nenhuma posição cadastrada\"", () => {
-    expect(fonte).toContain("const semRede = semConexaoNaLeitura(positionsQuery, boxesQuery);");
-    expect(fonte).toContain("const error = semRede ? null : positionsQuery.error ?? boxesQuery.error;");
-    expect(fonte).toContain("const empty = !loading && !error && !semNadaLido && shelves.length === 0;");
-    expect(fonte).toMatch(/semRede\.lidaEm === null \? \(\s*<BlocoSemConexao tentando=\{relendo\} onTentar=\{reler\} \/>\s*\) : \(\s*<FaixaSemConexao lidaEm=\{semRede\.lidaEm\}/);
+    // A falha do mapa sai das cópias das posições e das caixas: com ou sem rede, a FalhaNaLeitura (parte 13b).
+    expect(fonte).toContain("const falhaDoMapa = falhaDasLeituras([");
+    expect(fonte).toContain("const empty = !loading && !falhou && shelves.length === 0;");
+    // Com o mapa lido, a hora e a falta ficam na linha de estado sob o título, sem a faixa que empurrava o mapa (parte 13b).
+    expect(fonte).toContain('estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="prateleiras" />}');
+    expect(fonte).toContain('<FalhaNaLeitura leitura={falhaDoMapa.leitura} erro={falhaDoMapa.erro} mensagem="Não consegui carregar o mapa." focoAoSair={ID_DA_LINHA} />');
+    expect(fonte).not.toContain("FaixaSemConexao");
     // A situação do inventário sem rede não vira um segundo aviso.
     expect(fonte).toContain("showSessionStatus && sessionQuery.isError && !ehFaltaDeConexao(sessionQuery.error)");
   });

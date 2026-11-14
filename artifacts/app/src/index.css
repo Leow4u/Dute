@@ -1440,6 +1440,13 @@
     animation-delay: calc(var(--ordem, 0) * 120ms);
   }
 
+  /* Na tabela, o brilho é o do corpo das linhas-fantasma (o tbody, um por cartão): o recorte não vale ali, e a faixa
+     fica na altura dele, sem passar pelos títulos das colunas. */
+  tbody.carregando-com-brilho::after {
+    top: 0;
+    bottom: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .carregando-com-brilho::after {
       animation: none;
@@ -2209,6 +2216,40 @@
     .carregando-barra {
       color: inherit;
     }
+  }
+}
+
+/* A lista que troca de filtro, mês ou cliente (lib/carregando/use-lista-em-troca.tsx;
+   momento 7, caso 4): enquanto a nova não chega, a anterior fica a 50%, em
+   150 ms. Esmaece tudo dentro do contêiner menos o caminho até a barra do
+   topo do cartão ([data-barra-da-lista], sempre na árvore), que fica inteira:
+   em cada nível do caminho, só os irmãos dele. Na chegada, a lista nova volta
+   a 1 da opacidade em que a anterior estava (uma transição, que parte do valor
+   de agora: da troca rápida, que nem chegou a 0,5, ela volta sem piscar; nunca
+   passa por 0, e o cartão nunca fica vazio), subindo 4 px (só opacidade no
+   reduzido, pelo --carregando-subida), em 150 ms. Só opacity e transform. */
+@layer components {
+  :is([data-lista-em-troca][data-trocando], [data-lista-em-troca][data-trocando] :has([data-barra-da-lista]))
+    > :not([data-barra-da-lista], :has([data-barra-da-lista])) {
+    opacity: 0.5;
+    transition: opacity var(--carregando-t-entrada) var(--ease-carregando-entrada);
+  }
+
+  :is([data-lista-em-troca][data-chegou], [data-lista-em-troca][data-chegou] :has([data-barra-da-lista]))
+    > :not([data-barra-da-lista], :has([data-barra-da-lista])) {
+    transition: opacity var(--carregando-t-chegada) var(--ease-carregando-entrada);
+  }
+
+  [data-lista-em-troca][data-chegou] {
+    animation: carregando-chega-troca var(--carregando-t-chegada) var(--ease-carregando-entrada) both;
+  }
+}
+
+/* A subida da lista que chega na troca: só o transform; a opacidade volta pela
+   transição acima, de onde a lista anterior estava. */
+@keyframes carregando-chega-troca {
+  from {
+    transform: translateY(var(--carregando-subida));
   }
 }
 

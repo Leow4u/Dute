@@ -576,3 +576,22 @@ describe("Estoque e Alertas: os filtros e as contagens não mostram 0 antes de l
     expect(naTela()).toContain("Alertas de itens parados");
   });
 });
+
+/**
+ * A contagem do segmentado na falha (carregamento v2, junção das partes 10 e
+ * 13): lendo, o bloco; com a falha, "—", como a `NumeroLido` e os SKUs. O
+ * Receber ficava com o bloco de quem ainda lê ao lado da frase da falha, e
+ * Pedidos com o rótulo só, como se não houvesse pedido.
+ */
+describe.each(TELAS.slice(0, 2))("$nome com a primeira leitura que falhou", (tela) => {
+  it("o segmentado diz \"Em aberto · —\", sem o bloco de quem lê; o leitor de tela ouve só o rótulo", async () => {
+    estado.atrasoMs = 100;
+    estado.falhaPorCaminho = { "/api/warehouse/ops": true, "/api/customer-requests": true };
+    await montar(tela.Tela);
+    await passar(400);
+    expect(naTela()).toMatch(/Não consegui carregar/);
+    expect(segmento().querySelector("[data-esqueleto]")).toBeNull();
+    expect(segmento().textContent?.replace(/\s+/g, " ").trim()).toBe("Em aberto · —");
+    expect(naArvore(segmento())).toBe("Em aberto");
+  });
+});

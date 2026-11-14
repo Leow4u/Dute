@@ -226,7 +226,7 @@ describe("o Numerar do Sistema", () => {
     expect(
       textosForaDaLista(numeracao.outerHTML, [
         "Numerar pedidos e envios antigos", /^Dá número PED-\/ENV-/, "Ver o que muda", "Conferindo a numeração…", "Numerar agora", "Numerando…",
-        "Conferir",
+        "Numerado", "Não numerado", "Conferir",
       ]),
     ).toEqual([]);
     // No celular, os dois e o Verificar agora têm o alvo de 44 px.

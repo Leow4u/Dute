@@ -127,7 +127,10 @@ describe("a lista dos clientes do seletor que não veio", () => {
     await esperar(() => ultimo().falhou, "a falha chegar");
     const { tentar } = ultimo();
     visto = [];
-    await act(async () => tentar());
+    // A promessa do `tentar` acaba com a leitura, que aqui só responde no fim: a nova tentativa começa e o teste segue.
+    await act(async () => {
+      void tentar();
+    });
     await esperar(() => leituras.mock.calls.length === 2, "a nova leitura");
     await esperar(() => visto.length > 0 && ultimo().tentando, "o tentando");
     expect(visto.some((quem) => quem.isLoading)).toBe(false);

@@ -34,6 +34,7 @@ import { useAppUser } from "@/lib/auth";
 import { BUILD_COMMIT, BUILD_TIME } from "@/lib/build-info";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { relerDoZero } from "@/lib/carregando/reler-do-zero";
+import { useAcaoNaLinha } from "@/lib/carregando/use-acao-na-linha";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { useEspera } from "@/lib/carregando/use-espera";
 import { humanApiError } from "@/lib/permissions";
@@ -250,6 +251,28 @@ export default function SettingsSystem() {
       }),
   });
 
+  // "Numerar agora" no relógio da ação (carregamento v2, momento 3): "Numerando…", "Numerado" pelo menos 1 s, e no erro
+  // "Não numerado" por 2 s. A chamada é a de sempre.
+  const numerar = useAcaoNaLinha<"numeracao">();
+  const estadoDoNumerar = numerar.estado("numeracao", "aplicar");
+  // Aos 70 s sem resposta, "Conferir" relê a prévia (a numeração sem gravar) e nunca numera de novo, também com a
+  // chamada ainda a caminho: sem nada a numerar, valeu; com o que falta, a prévia nova fica na tela, no lugar da velha
+  // (junção das partes 10 e 13). Conferindo, o botão diz "Conferindo…".
+  const [conferindoANumeracao, setConferindoANumeracao] = useState(false);
+  const conferirANumeracao = async () => {
+    setConferindoANumeracao(true);
+    try {
+      const previa = await fetchJson<NumberingResult>("/api/system/request-numbers", {
+        method: "POST",
+        body: JSON.stringify({ apply: false }),
+      });
+      setNumbering(previa);
+      return previa.assigned_count === 0;
+    } finally {
+      setConferindoANumeracao(false);
+    }
+  };
+
   const check = health.data;
   const serverValue = health.isLoading
     ? "Verificando…"
@@ -267,6 +290,19 @@ export default function SettingsSystem() {
   const numerando = assignNumbers.isPending ? (assignNumbers.variables ? "aplicar" : "ver") : null;
   // A numeração em massa sem resposta: aos 10 s, "Demorando mais que o normal · 0:12" embaixo dos botões.
   const esperaDaNumeracao = useEspera(assignNumbers.isPending);
+  // A escrita ou a prévia: pela chamada feita, que fica depois da resposta. Pelo `numerando`, o tipo virava "leitura"
+  // no desenho em que a chamada acabou e o aviso ainda não saiu, e o Anunciador dizia a demora de novo.
+  const tipoDaNumeracao = assignNumbers.variables ? "escrita" : "leitura";
+  // Na escrita, o aviso é o apoio do botão: a demora enquanto ele espera e a desistência enquanto ele diz "Conferir" ou
+  // confere, também depois de a chamada cair no prazo; sai com o fim que o "Conferir" achou, mesmo com a chamada ainda
+  // sem resposta. Na prévia, o relógio da chamada.
+  const faseDoAviso =
+    tipoDaNumeracao === "escrita" && (estadoDoNumerar === "sem-resposta" || conferindoANumeracao)
+      ? "sem-resposta"
+      : (esperaDaNumeracao.fase === "demorando" || esperaDaNumeracao.fase === "sem-resposta") &&
+          (tipoDaNumeracao === "leitura" || estadoDoNumerar === "andamento")
+        ? esperaDaNumeracao.fase
+        : null;
   const lastEventAt = dateTime(check?.last_event?.occurred_at);
   const incidents = check?.incidents ?? [];
 
@@ -375,33 +411,44 @@ export default function SettingsSystem() {
                 : "."}
             </p>
           ) : null}
+          {/* Ocupado não é desabilitado (partes 13d e 13e): o tocado diz o quê, com o próprio gerúndio, e o outro espera
+              travado (aria-disabled). "Numerar agora" sem a prévia não tem o que fazer: travado do mesmo jeito. */}
           <div className="mt-3 flex flex-wrap gap-2">
-            {/* Ocupado não é desabilitado (parte 13e): o tocado diz o quê, e o outro espera (aria-disabled). */}
             <BotaoDeAcao
               size="sm"
               variant="outline"
               className="max-md:min-h-11"
               estado={numerando === "ver" ? "andamento" : "repouso"}
-              bloqueado={numerando === "aplicar"}
+              bloqueado={numerando === "aplicar" || numerar.ocupada("numeracao")}
               rotulo="Ver o que muda"
               andamento="Conferindo a numeração…"
-              onClick={() => assignNumbers.mutate(false)}
+              onClick={() => {
+                if (!assignNumbers.isPending && !numerar.ocupada("numeracao")) assignNumbers.mutate(false);
+              }}
             />
             <BotaoDeAcao
               size="sm"
               className="max-md:min-h-11"
-              estado={numerando === "aplicar" ? "andamento" : "repouso"}
-              bloqueado={numerando === "ver" || (numerando === null && (!numbering?.dry_run || !numbering.assigned_count))}
+              estado={estadoDoNumerar}
+              // Em repouso com uma chamada a caminho (a prévia, ou a numeração que o "Conferir" achou incompleta), espera.
+              bloqueado={estadoDoNumerar === "repouso" && (assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count)}
               rotulo="Numerar agora"
-              andamento="Numerando…"
-              onClick={() => assignNumbers.mutate(true)}
+              andamento={conferindoANumeracao ? "Conferindo…" : "Numerando…"}
+              sucesso="Numerado"
+              erro="Não numerado"
+              onClick={() => {
+                // Sem resposta, o toque é o "Conferir": relê, também com a chamada ainda a caminho.
+                const conferir = estadoDoNumerar === "sem-resposta";
+                if (!conferir && (assignNumbers.isPending || !numbering?.dry_run || !numbering.assigned_count)) return;
+                void numerar.executar("numeracao", "aplicar", () => assignNumbers.mutateAsync(true), { conferir: conferirANumeracao });
+              }}
             />
           </div>
-          {esperaDaNumeracao.fase === "demorando" || esperaDaNumeracao.fase === "sem-resposta" ? (
+          {faseDoAviso ? (
             <AvisoDeEspera
               className="mt-3"
-              fase={esperaDaNumeracao.fase}
-              tipo={numerando === "aplicar" ? "escrita" : "leitura"}
+              fase={faseDoAviso}
+              tipo={tipoDaNumeracao}
               desdeMs={esperaDaNumeracao.decorridoMs}
             />
           ) : null}

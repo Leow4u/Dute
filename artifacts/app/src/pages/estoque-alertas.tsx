@@ -7,8 +7,10 @@ import { MEMORIA_LIBERADA } from "@/lib/liberacao";
 import { alertaLido, alternarItem, alternarTodos, itensMarcados, type AlertaProposto } from "@/lib/memoria/alertas";
 import { chamarNucleo } from "@/lib/memoria/api";
 import { erroDaResposta } from "@/lib/erro-da-resposta";
-import { semConexaoNaLeitura } from "@/lib/conexao";
+import { toqueRepetido } from "@/lib/campo/toque-unico";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
+import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
 
 import { AlertasParadosView } from "./estoque-alertas-view";
 
@@ -81,12 +83,20 @@ export default function EstoqueAlertas() {
   const marcados = alerta ? (marcadosPorAlerta[alerta.id] ?? new Set(alerta.itens.map((item) => item.skuCode))) : new Set<string>();
   const [erro, setErro] = useState<string | null>(null);
 
+  // A decisão que acabou de dar certo troca o alerta na tela: o toque repetido do mesmo gesto (o duplo clique) não
+  // decide o alerta seguinte, de outro cliente, que ninguém conferiu (o mesmo intervalo do toque único).
+  const decididoEm = useRef<number | undefined>(undefined);
+  const seNaoRepetido = (fazer: () => void) => {
+    if (!toqueRepetido(decididoEm.current, Date.now())) fazer();
+  };
+
   const decidir = useMutation({
     mutationFn: ({ decisao, alvo }: { decisao: "aprovar" | "descartar"; alvo: AlertaProposto }) =>
       chamarNucleo("answerStockAlert", { alerta_id: alvo.id, decisao, itens: decisao === "aprovar" ? itensMarcados(alvo, marcados) : [] }),
     onMutate: () => setErro(null),
     onSuccess: (_resultado, { decisao, alvo }) => {
       toast({ title: decisao === "aprovar" ? "Alerta enviado ao cliente." : "Alerta descartado." });
+      decididoEm.current = Date.now();
       setDecididos((atuais) => new Set(atuais).add(alvo.id));
       setEscolhido(null);
       naTela.current = null;
@@ -99,21 +109,19 @@ export default function EstoqueAlertas() {
     if (alerta) setMarcadosPorAlerta((atual) => ({ ...atual, [alerta.id]: proximos }));
   };
 
-  // Sem rede, a lista lida fica com a hora dela; sem nada lido, o aviso
-  // (decisão 2 do celular).
-  const semRede = MEMORIA_LIBERADA ? semConexaoNaLeitura(consulta) : null;
   // A linha de estado sob o título (carregamento v2, parte 7b); a volta do app ao primeiro plano relê com a barra no topo.
-  const leituras = MEMORIA_LIBERADA ? [consulta] : [];
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo (a cópia): o aviso e o "Tentar de novo" não
+  // somem com o foco nele, e a falta de conexão não vira o erro genérico na nova tentativa (parte 13b). Sem rede e com a
+  // lista lida, quem diz a hora dela é a linha de estado (decisão 2 do celular).
+  const comFalha = useLeituraComFalha(consulta);
+  const leituras = MEMORIA_LIBERADA ? [comFalha] : [];
   const { voltando } = useAtualizarLista(leituras);
-
+  const falha = MEMORIA_LIBERADA ? falhaDasLeituras([[consulta, comFalha]]) : null;
   return (
     <AlertasParadosView
-      estado={MEMORIA_LIBERADA && consulta.isLoading ? "carregando" : consulta.isError && !semRede ? "erro" : "pronto"}
-      semConexao={
-        semRede
-          ? { lidaEm: semRede.lidaEm, tentando: consulta.isFetching, onTentar: () => void queryClient.invalidateQueries({ queryKey: ["stock-alerts"] }) }
-          : null
-      }
+      // A releitura que falha com a lista lida não a troca pelo erro: quem diz é a linha de estado (momento 7).
+      estado={MEMORIA_LIBERADA && comFalha.isLoading ? "carregando" : falha ? "erro" : "pronto"}
+      falha={falha}
       leitura={leituras}
       voltando={voltando}
       alertas={alertas}
@@ -121,6 +129,7 @@ export default function EstoqueAlertas() {
       nomeDoCliente={nomeDoCliente}
       marcados={marcados}
       ocupado={decidir.isPending}
+      decidindo={decidir.isPending ? (decidir.variables?.decisao ?? null) : null}
       erro={erro}
       acoes={{
         escolher: (id) => {
@@ -129,8 +138,8 @@ export default function EstoqueAlertas() {
         },
         marcar: (sku) => mudarMarcados(alternarItem(marcados, sku)),
         marcarTodos: () => alerta && mudarMarcados(alternarTodos(alerta, marcados)),
-        enviar: () => alerta && decidir.mutate({ decisao: "aprovar", alvo: alerta }),
-        descartar: () => alerta && decidir.mutate({ decisao: "descartar", alvo: alerta }),
+        enviar: () => seNaoRepetido(() => alerta && decidir.mutate({ decisao: "aprovar", alvo: alerta })),
+        descartar: () => seNaoRepetido(() => alerta && decidir.mutate({ decisao: "descartar", alvo: alerta })),
       }}
     />
   );

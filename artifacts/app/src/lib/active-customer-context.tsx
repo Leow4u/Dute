@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection } from "firebase/firestore";
 
 import {
@@ -19,6 +19,7 @@ import {
   type ActiveCustomerOption,
 } from "./active-customer";
 import { useAppUser } from "./auth";
+import { relerDoZero } from "./carregando/reler-do-zero";
 import { useLeituraComFalha } from "./carregando/use-leitura-com-falha";
 import { lerDocsDoServidor } from "./cloud-api";
 import { firestore } from "./firebase";
@@ -64,8 +65,14 @@ export type ActiveCustomerState = {
   falhou: boolean;
   /** O erro da leitura que falhou, para dizer qual é a falta. */
   erro: unknown;
-  /** Lê a lista de novo (o "Tentar de novo" do seletor); `tentando` enquanto lê. */
-  tentar: () => void;
+  /**
+   * Lê a lista dos clientes de novo, cancelando a que ficou presa sem nada
+   * lido (`relerDoZero`): o "Tentar de novo" do seletor e o da tela que espera
+   * o cliente ativo (o Fechamento do mês, que não lê o próprio dado com o
+   * cliente padrão enquanto o ativo não chegou; parte 13d). `tentando`
+   * enquanto lê, depois da falha.
+   */
+  tentar: () => Promise<unknown>;
   tentando: boolean;
   /**
    * O cliente que a tela vai operar: enquanto a lista dos clientes não chegou
@@ -87,7 +94,7 @@ const ActiveCustomerContext = createContext<ActiveCustomerState>({
   isLoading: false,
   falhou: false,
   erro: null,
-  tentar: () => undefined,
+  tentar: () => Promise.resolve(),
   tentando: false,
   codeProvavel: LEGACY_CUSTOMER_CODE,
 });
@@ -117,8 +124,10 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   const commercial = role === "comercial" && AGENTE_LIBERADO;
   const storageKey = activeCustomerStorageKey(user?.uid);
 
+  const queryClient = useQueryClient();
+  const chaveDosClientes = commercial ? COMMERCIAL_CUSTOMERS_QUERY_KEY : CLIENT_PROFILES_QUERY_KEY;
   const leitura = useQuery({
-    queryKey: commercial ? COMMERCIAL_CUSTOMERS_QUERY_KEY : CLIENT_PROFILES_QUERY_KEY,
+    queryKey: chaveDosClientes,
     enabled: internal || commercial,
     staleTime: 5 * 60_000,
     queryFn: async () => {
@@ -156,10 +165,8 @@ export function ActiveCustomerProvider({ children }: { children: ReactNode }) {
   const falhou = (internal || commercial) && profiles.isError && profiles.data === undefined;
   const erro = falhou ? profiles.error : null;
   const tentando = falhou && profiles.isFetching;
-  const { refetch } = leitura;
-  const tentar = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+  // Sem nada lido, o refetch do react-query só espera a leitura presa: ela é cancelada antes, e a nova sai.
+  const tentar = useCallback(() => relerDoZero(queryClient, [chaveDosClientes]), [chaveDosClientes, queryClient]);
   const guardado = stored?.trim() || null;
   const value = useMemo<ActiveCustomerState>(
     () => ({

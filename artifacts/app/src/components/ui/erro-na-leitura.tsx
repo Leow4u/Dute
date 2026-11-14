@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { AlertCircle, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { horaDaLeitura } from "@/lib/conexao";
+import { ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
 import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +68,9 @@ export function useFocoAoSair(raiz: RefObject<HTMLElement | null>, id: string | 
     const elemento = raiz.current;
     return () => {
       if (!elemento || typeof document === "undefined" || !elemento.contains(document.activeElement)) return;
-      if (id) document.getElementById(id)?.focus({ preventScroll: true });
+      const alvo = id ? document.getElementById(id) : null;
+      // Sem o alvo na tela (o id que não chegou), também o título: nunca o `body`.
+      if (alvo) alvo.focus({ preventScroll: true });
       else segurarOFocoQueSai(elemento);
     };
   }, [id, raiz]);
@@ -242,5 +244,74 @@ export function FaixaSemConexao({
         {mostrando ? "Tentando de novo…" : "Tentar de novo"}
       </button>
     </div>
+  );
+}
+
+/**
+ * O pedaço da leitura que a falha da lista precisa: o do react-query, ou o de
+ * quem lê de outro jeito (a lista dos clientes, a leitura ao vivo), com a
+ * promessa da nova tentativa.
+ */
+export type LeituraQueFalhou = { error: unknown; refetch: () => Promise<unknown> };
+
+/**
+ * A leitura que falhou sem nada da lista dela para mostrar (a primeira, ou a
+ * troca de filtro que falhou): o aviso no lugar da lista, nunca o vazio. Na
+ * falta de conexão, o `BlocoSemConexao`; em outro erro, o `ErroNaLeitura`,
+ * com a `mensagem` ("Não consegui carregar os produtos."). "Tentar de novo"
+ * relê a leitura.
+ *
+ * "Tentando de novo…" só na nova tentativa que a pessoa pediu: a releitura
+ * automática (o tempo real, o intervalo da tela) não mexe no aviso, que é um
+ * alerta e falaria de novo. E no relógio da espera, como o do bloco da
+ * conexão: só depois de 300 ms, e pelo menos 500 ms. A nova tentativa que
+ * responde antes, com o dado ou com a falha de novo, não pisca o botão nem
+ * muda o alerta, que o leitor de tela releria inteiro (junção das partes 10 e
+ * 13). O toque repetido com a leitura a caminho não lê de novo. Quando a nova
+ * tentativa dá certo e o aviso sai com o foco nele, o foco vai à linha de
+ * estado da tela (`focoAoSair`), nunca ao `body`.
+ */
+export function FalhaNaLeitura({
+  leitura,
+  erro = leitura.error,
+  mensagem,
+  className,
+  focoAoSair,
+}: {
+  leitura: LeituraQueFalhou;
+  /** A falha que fica na tela enquanto tenta de novo (a `useListaComFiltro`): o react-query zera o erro na nova tentativa. */
+  erro?: unknown;
+  mensagem: string;
+  className?: string;
+  /** O id da linha de estado da tela, que recebe o foco quando o aviso sai com ele. */
+  focoAoSair?: string;
+}) {
+  const [tentativas, setTentativas] = useState(0);
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
+  const reler = () => {
+    setTentativas((quantas) => quantas + 1);
+    void leitura.refetch().finally(() => {
+      if (montada.current) setTentativas((quantas) => quantas - 1);
+    });
+  };
+  const tentando = tentativas > 0;
+  const mostrando = useTentandoNoRelogio(tentando);
+  if (ehFaltaDeConexao(erro)) return <BlocoSemConexao tentando={tentando} onTentar={reler} className={className} focoAoSair={focoAoSair} />;
+  return (
+    <ErroNaLeitura
+      mensagem={mensagem}
+      tentando={mostrando}
+      onTentar={() => {
+        if (!tentando) reler();
+      }}
+      className={className}
+      focoAoSair={focoAoSair}
+    />
   );
 }

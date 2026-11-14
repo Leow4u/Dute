@@ -130,7 +130,14 @@ texto dentro dos 2 s não repete, nem tira da fila o outro que espera a vez.
 a espera da `CarregandoTela` (`lib/carregando/espera-da-rota.ts`): a linha de
 estado e as linhas-fantasma aparecem já na pintura em que a tela entra, a
 demora vem aos 10 s do toque, e a entrada ("Abrindo Pedidos") não é anunciada
-de novo como "Carregando pedidos".
+de novo como "Carregando pedidos". **O cliente ativo é a fronteira também
+enquanto lê:** a tela interna não lê nem grava com o cliente padrão antes de
+a lista dos clientes chegar, e o "Tentar de novo" da demora lê de novo essa
+lista (o `tentar` do `useActiveCustomer`), nunca o dado da tela. Com a lista
+que falhou (o `falhou`, também durante a nova tentativa), a tela diz "Não
+consegui carregar o cliente ativo." no lugar do dado, com "Tentar de novo",
+que lê de novo a lista (`FalhaDoClienteAtivo`), e a ação que grava para o
+cliente fica `aria-disabled`.
 
 **As peças:**
 
@@ -140,8 +147,10 @@ de novo como "Carregando pedidos".
 | `Esqueleto` e `CartaoComBrilho` (`components/ui/esqueleto.tsx`) | Primeira leitura de tela com desenho conhecido | Blocos neutros (`--carregando-esqueleto`, nunca a cor da marca), sempre `aria-hidden`. O brilho faz dois ciclos e para. O `Skeleton` antigo já usa o mesmo bloco |
 | `BotaoDeAcao` (`components/ui/botao-de-acao.tsx`) | Ação com espera | Mantém a largura. Repouso, em andamento, sucesso (a caixa fecha em check), erro (crítico suave) e "Conferir". Durante a ação, `aria-busy` e `aria-disabled`, nunca `disabled` nem só 50% de opacidade |
 | Toast | Retorno da ação | Continua o retorno padrão. No celular, embaixo, perto do polegar, com o fechar no toque; com um diálogo aberto, no topo, para não cobrir o rodapé preso dele |
-| `LinhaDeEstado` (`components/ui/linha-de-estado.tsx`) | Sob o título de Pedidos, Receber, Estoque e Estoque › Alertas (`PageHeader`, `estado`), numa fila só dela, a 6 px do título no computador e a 2 px no celular, sempre abaixo das ações | 24 px sempre reservados: "Carregando pedidos…" com a caixa de 24 px depois de 300 ms; aos 10 s, a mesma caixa na volta calma e a pílula âmbar da demora; "Atualizado às 10:42"; "Atualizando…" quando a barra do topo passa de 5 s; "Reconectando… · lista de 10:42" e "Sem conexão · lista de 10:42" (também com o aparelho sem rede há 3 s, antes de qualquer leitura falhar), com "Tentar de novo" (toque de 44 px). O texto troca em sequência: o que sai some em 80 ms (180 ms quando é uma espera) e só então o novo entra, em 150 ms. Nada é região viva, e a releitura automática não fala. Com o foco no "Tentar de novo", a troca leva o foco ao novo ou à própria linha, nunca ao `body`. No celular estreito, o que não cabe passa à linha de baixo, sem rolagem lateral. As ações do cabeçalho ficam por cima do toque estendido e nunca o perdem para ele |
+| `LinhaDeEstado` (`components/ui/linha-de-estado.tsx`) | Sob o título de Pedidos, Receber, Estoque, Estoque › Alertas, Produtos, SKUs, Movimentações, Pedidos legado, Relatórios, Documentos, Estoque › Mapa e Estoque › Posições (`PageHeader`, `estado`), numa fila só dela, a 6 px do título no computador e a 2 px no celular, sempre abaixo das ações; no Fechamento, logo abaixo dos meses; na Tabela de preços, sob "Serviços e valores" e sob "Cobrança" (que lê à parte), na largura do cartão, abaixo da fileira do título e do "Novo item"; na aba Histórico do Estoque, logo acima da lista, sem a hora (`semHora`) | 24 px sempre reservados: "Carregando pedidos…" com a caixa de 24 px depois de 300 ms (nas telas que ainda dizem "Carregando..." na tabela, a linha fica vazia até a lista chegar: `primeiraNaLista`); aos 10 s, a mesma caixa na volta calma e a pílula âmbar da demora; "Atualizado às 10:42"; "Atualizando…" quando a barra do topo passa de 5 s (a volta do app e a troca de filtro, mês ou cliente) e, aos 10 s, a demora com "Tentar de novo", dita uma vez; "Reconectando… · lista de 10:42" e "Sem conexão · lista de 10:42" (também com o aparelho sem rede há 3 s, antes de qualquer leitura falhar), e "Não consegui atualizar · lista de 10:42" quando a releitura falha por outro motivo, com a lista lida, todos com "Tentar de novo" (toque de 44 px). O texto troca em sequência: o que sai some em 80 ms (180 ms quando é uma espera) e só então o novo entra, em 150 ms. Nada é região viva, e a releitura automática não fala. Com o foco no "Tentar de novo", a troca leva o foco ao novo ou à própria linha, nunca ao `body`. No celular estreito, o que não cabe passa à linha de baixo, sem rolagem lateral. As ações do cabeçalho ficam por cima do toque estendido e nunca o perdem para ele |
 | `BotaoAtualizar` | O Atualizar das listas | 40 px no computador, 44 px no celular. Só mostra a espera quando a pessoa toca nele: o ícone sai em 80 ms e a caixa entra em 150 ms; no fim, a caixa sai em 180 ms e o ícone volta. A releitura automática não o gira nem o desabilita. Travado na primeira leitura, a 0,45, volta a 1 em 150 ms. No fim do toque, "Lista atualizada" no Anunciador, só com a tela ainda aberta. Antes de reler, acorda a conexão de quem lê (`useAtualizarLista`). O Atualizar com rótulo do Conhecimento e da Central da IA (`BotaoDeAcao`, "Atualizando…") segue o mesmo `useAtualizarLista` |
+| `CarregandoNaRegiao` (`components/ui/carregando-na-regiao.tsx`) | A parte da tela que ainda lê, sem a forma da lista: a espera em bloco (o painel, os incidentes, Pessoas, as chaves, a ocupação, a fatura, o catálogo que se verifica, a sugestão do destino) | Nada antes de 300 ms; depois, a caixa de 24 px e o gerúndio com o objeto ("Carregando a fatura…"), com o anúncio; aos 10 s, a volta calma e "Demorando mais que o normal". Com `onTentar` (quem lê sabe ler de novo), "Tentar de novo" de 44 px ao lado da demora e, aos 70 s, "Sem resposta do servidor." com "Tentar de novo"; a nova tentativa recomeça o relógio e o foco fica na região. Quem usa relê do zero (`relerDoZero`): o `refetch` da leitura sem dado só se juntaria à que está presa. A primeira leitura da tela continua a espera da rota (`continuaARota`), sem o vão de 300 ms nem o anúncio repetido. O dado que chega com o foco nela leva o foco a `focoAoSair` ou, sem ele, ao título da seção, nunca ao `body`. A altura da linha fica guardada desde 0 ms. A falha é a `FalhaNaLeitura`, no lugar da lista, ou a `FalhaNaSecao` |
+| Ação na linha (`useAcaoNaLinha`) | Cada linha que grava: Pedidos, as Devoluções, o "⋯" dos Documentos | A linha tocada espera e as outras seguem livres; o segundo toque não grava de novo. O apoio da linha diz a espera no lugar dele, sem crescer: o gerúndio aos 300 ms, com o objeto aos 3 s, "Demorando mais que o normal · 0:12" aos 10 s, no relógio da ação (a linha que sai da lista e volta não recomeça). O sucesso fica pelo menos 1 s e até a lista relida (no botão, "Aprovado"; no apoio dos Documentos, "Arquivado"), e o motivo da falha fica até a próxima ação. Aos 70 s, "Sem confirmação do servidor" e "Conferir", que relê e diz "Conferindo…", nunca a ação de novo. A chave da tentativa se repete depois do resultado incerto. O menu da linha não abre enquanto ela grava e nunca reabre sozinho. No celular, a ação da linha tem 48 px |
 | `BarraDeEspera` (`components/ui/barra-de-espera.tsx`) | A linha em andamento e o topo do cartão que relê na volta do app | Na volta do app (`resultado="fim"`), a barra do topo completa em tinta por `scaleX` em 200 ms e esmaece em 150 ms; a que nunca apareceu sai sem nada |
 | `CarregandoTela` (`components/ui/carregando-tela.tsx`) | A tela que ainda abre: o arquivo dela, o perfil, o cliente | Aos 300 ms, a caixa de 40 px e "Abrindo Faturamento…" (o nome da aba; o que não é substantivo vem com "a tela": "Abrindo a tela Separar…"). Aos 10 s, "Demorando mais que o normal" e "Tentar de novo"; aos 70 s, "Sem resposta do servidor."; tentar de novo recarrega. Nunca o branco nem o `fallback={null}`. Nada aparece por baixo da abertura. A lista que ainda lê quando a tela chega continua esta espera, sem vão e sem anunciar de novo |
 | `Progresso` (`components/ui/progresso.tsx`) | Operação longa: as fotos que sobem e as etapas | "3 de 4" com a barra em segmentos chanfrados de 8 px e as miniaturas, ou "Etapa 1 de 2" com os marcadores de 28 px. A barra de progresso tem o nome e o `aria-valuetext` ("3 de 4 fotos"), por item, nunca por byte. As fotos sobem compactadas a 2000 px, uma por vez (`useEnvioDeFotos`); a que sobe sem bytes medidos gira em vez de encher, e a que falha tem o próprio "Tentar de novo", de 44 px. No fim, o título diz o que subiu ("3 fotos enviadas") e o bloco não encolhe. As etapas ficam na tela desde o repouso, pendentes, e a de agora anda aos 300 ms, com o anúncio do título; na caixa estreita, o rótulo vai para baixo do marcador |
@@ -149,17 +158,20 @@ de novo como "Carregando pedidos".
 | `TrilhaDoAgente` (`components/agent/trilha-do-agente.tsx`) | A resposta do Agent Dute chegando | No lugar do "Pensando…": aos 300 ms, a caixa violeta de 20 px e "Lendo a pergunta…"; uma linha por consulta, "Consultando o estoque…" na da vez e "Estoque" com o check violeta de 16 px nas feitas (o check se chama "Consulta feita"). Até 4 linhas, as antigas em "+N consultas", numa caixa de pelo menos 300 px. Quando o texto começa, recolhe numa linha da mesma altura ("Leu o estoque e o razão de movimentos"), que entra em 150 ms; a resposta gravada mostra a mesma linha, e o bloco não encolhe enquanto chega. Aos 10 s sem texto, "Demorando mais que o normal" e o Parar (44 px), que corta a espera neste aparelho e devolve a pergunta ao campo vazio. Aos 180 s sem notícia do servidor, "Sem resposta do Agent Dute" e "Tentar de novo", que relê a conversa antes de perguntar de novo. A resposta não é região viva: o Anunciador fala a primeira consulta, a demora e "Resposta pronta". No escuro, o texto violeta é o `--agent-strong` |
 | `FontesDaResposta` (`components/agent/trilha-do-agente.tsx`) | O fim da resposta do Agent Dute | "De onde tirei:" e um chip por fonte, de `tools_used` (invariante 3); o rascunho, a rotina e a anotação não são fonte. O lugar fica guardado enquanto o texto chega, e os chips entram nele em 150 ms |
 | Diálogo em ação (`ocupado` no `Dialog`, `AlertDialog`, `Sheet` ou `DialogContent`; `DialogCancelar`; `components/ui/dialogo-em-acao.ts`; `lib/foco-de-volta.ts`) | O diálogo cuja ação grava | Enquanto grava, nada fecha: o Esc, o toque fora, o X e o Cancelar não fecham, e o `onOpenChange(false)` não chega a quem usa. O Esc e o toque fora esperam também o toque no confirmar, até a ação chegar à tela (no máximo 300 ms). O X e o Cancelar ficam `aria-disabled` desde o toque, com a trava no código, nunca `disabled`, e esmaecem a 0,45 aos 300 ms, junto com o gerúndio do confirmar, por pelo menos 500 ms; a ação que volta antes não os faz piscar. Do X, só o ícone esmaece: o anel do foco é o cheio, com o recuo. O confirmar é o `BotaoDeAcao` (o destrutivo cheio é o `perigo` dele); o `AlertDialogAction` já é ele e nunca fecha sozinho: quem fecha é o sucesso, e na falha o diálogo fica. Aos 10 s, o rodapé diz "Demorando mais que o normal · 0:12", em cima dos botões; aos 70 s, "Sem confirmação do servidor", e o diálogo volta a fechar. O diálogo com o `Progresso`, as fotos ou o próprio `AvisoDeEspera` não repete o aviso e cuida da própria saída. Quem limpa o estado do diálogo no fim mostra o último conteúdo até ele sair, como Pedidos e a `Confirmacao`: o fim não esvazia o cartão. O foco fica no botão tocado e, no fim, volta a quem abriu o diálogo (o item do "⋯" volta ao botão do menu); se ele saiu da tela, vai ao `focoAoFechar`, ao vizinho dele na ordem do Tab (a linha seguinte ou a anterior) ou ao título da página, que vem à vista se estava fora dela; nunca ao `body`. No celular, em pé ou deitado (a variante `celular`: menos de 768 px de largura ou de 500 de altura), o `DialogFooter` fica preso embaixo do diálogo que rola, com os botões de 44 px, o campo que recebe o foco não fica atrás dele, e o X tem 44 px; com um diálogo aberto, o toast vai para o topo |
-| `CarregandoNaRegiao` (`components/ui/carregando-na-regiao.tsx`) | A parte da tela que ainda lê, sem a forma da lista (o painel, os incidentes, Pessoas, as chaves, a ocupação) | Aos 300 ms, a caixa de 24 px e o rótulo no gerúndio, com o anúncio; aos 10 s, a volta calma e "Demorando mais que o normal". Com `onTentar`, "Tentar de novo" ao lado da demora e, aos 70 s, "Sem resposta do servidor." com "Tentar de novo"; a nova tentativa recomeça o relógio e o foco fica na região. Quem usa relê do zero (`relerDoZero`): o `refetch` da leitura sem dado só se juntaria à que está presa. A altura da linha fica guardada desde 0 ms |
 | `FalhaNaSecao` (`components/ui/falha-na-secao.tsx`) | A falha de uma parte da tela, na própria seção | A frase e "Tentar de novo" (44 px no celular). "Tentando de novo…" só na tentativa que a pessoa pediu, até a promessa da releitura acabar; o intervalo da tela não muda o botão. A frase é alerta sem nada lido; com o que já estava lido na tela (`alerta={false}`), fica escrita, sem falar. Quando a nova tentativa dá certo, o foco vai ao título da seção ou do diálogo, nunca ao `body` (também no `ErroNaLeitura` sem linha de estado). A leitura por trás fica na falha durante a nova tentativa (`useLeituraComFalha`), para o aviso não sair da tela com o foco nele |
 | Abertura (`#abertura` no `index.html`, `lib/abertura.ts`) | A entrada no app, até o perfil chegar | Preta nos dois temas, fora do `#root`, com a marca e a palavra embutidas e o trilho chanfrado aos 300 ms, sem texto visível. "Sem conexão" aos 3 s, "Demorando mais que o normal" e "Tentar de novo" aos 10 s, "Sem resposta" aos 70 s, na região de status dela, um aviso a cada 2 s. Na passagem para o app, o `Anunciador` espera os 2 s da última fala dela e não repete o "Sem conexão" que ela já disse. Sai pela `fecharAbertura()`: o trilho completa (200 ms) e tudo esmaece (260 ms). Enquanto ela cobre a tela, o `#root` fica inerte |
 
 **As listas na primeira leitura** (`QueueGroup` com `count={null}` e
 `carregando`, momento 2): Pedidos e Receber nascem com a forma final. Desde 0
 ms, os títulos reais dos grupos, com o bloco de 16 × 12 px no lugar do número,
-e o segmentado "Em aberto · ▪"; nunca "0" nem "Nenhum…" antes de ler. Os
+e o segmentado "Em aberto · ▪" (na falha, "Em aberto · —"); nunca "0" nem
+"Nenhum…" antes de ler. Os
 cartões já têm a altura das linhas-fantasma, pela contagem lembrada da lista e
 do cliente (`lib/carregando/contagem-lembrada.ts`, de 1 a 5; sem ela, 2), e
-elas aparecem aos 300 ms, com o brilho de dois ciclos. A lista fica
+elas aparecem aos 300 ms, com o brilho de dois ciclos, um por cartão e nunca
+um por bloco (nas tabelas, o corpo das linhas-fantasma). Quando a linha muda
+de altura, a contagem lembrada guarda também quantas são mais altas (nos
+Documentos, as que têm o selo do Conhecimento). A lista fica
 `aria-busy`, descrita pela linha de estado. Na chegada, as linhas reais entram
 por opacidade, subindo 4 px, em cascata de 30 ms em até seis, por cima dos
 fantasmas, que esmaecem junto; o número entra no lugar do bloco sem mexer o
@@ -173,6 +185,40 @@ e o foco nele, sem fantasmas e sem fala (`useFalhaNaReleituraAutomatica`).
 Nas listas sem a forma final (as do Agent Dute, a troca de filtro), o aviso
 fica também na nova tentativa da pessoa, com "Tentando de novo…". No celular,
 cada opção do segmentado tem 44 px.
+
+**A troca de filtro e a releitura** (momento 7, casos 3 e 4;
+`lib/carregando/use-lista-em-troca.tsx`): nas listas com filtro no servidor
+(Produtos, SKUs, Movimentações, Pedidos legado, Relatórios, o Fechamento do mês
+e a troca de cliente no Receber), trocar a busca, a página, o tipo, o
+período, o mês ou o cliente mantém a lista anterior (`placeholderData`), a 50%
+em 150 ms, `inert` e com `aria-busy`, que só vale neste caso, com a
+`BarraDaLista` no topo do cartão aos 300 ms, inteira; aos 5 s, a linha de
+estado diz "Atualizando…" e, aos 10 s, "Demorando mais que o normal", com
+"Tentar de novo". Nada de "Carregando..." no lugar da lista, e a tela não
+pula. Enquanto a nova não chega, a lista anterior não se redesenha
+(`ConteudoEmTroca`): o toque responde sem refazer a tabela. Na chegada, a
+lista nova volta a 1 da opacidade em que a anterior estava, por transição,
+subindo 4 px, em 150 ms (só opacidade no reduzido): nunca passa por 0, e a
+troca rápida não pisca. Na troca de cliente do Receber, só os avisos do
+cliente anterior ficam a 50% e inertes; o que a troca não relê segue com o
+toque. O filtro, a busca e a paginação ficam fora do que fica inerte, e a
+paginação fica ocupada com `aria-disabled`, sem `disabled`, também nas pontas
+(a primeira e a última página, a 50%): o foco fica onde a pessoa tocou. A
+página nova que chega com o topo do cartão acima da tela o traz à vista. A
+troca que falha mostra o aviso no lugar da lista (`FalhaNaLeitura`, com
+"Tentar de novo", que segue no aviso enquanto tenta), nunca o vazio, a lista
+do filtro anterior nem um zero ao lado; "Tentando de novo…" só na nova
+tentativa que a pessoa pede, no relógio da espera (depois de 300 ms, e pelo
+menos 500 ms: a que falha de novo antes não muda o alerta), e, quando ela dá
+certo, o foco vai à linha de estado. **A releitura que falha nunca apaga a lista nem a empurra**: a lista
+lida fica, e o erro vai para a linha de estado ("Não consegui atualizar ·
+lista de 10:42", ou a falta de conexão), sempre reservada. Só a leitura sem
+nada lido troca a lista pelo aviso. A releitura automática não fala; quem
+tocou em Atualizar ou em "Tentar de novo" e viu falhar de novo ouve "Não
+consegui atualizar", só com a tela aberta. O "Avançar" da bancada só volta
+depois da releitura e, até lá, fica ocupado, sem `disabled`. No celular, o shell da
+Armazenagem não lê o armazém (os contadores só aparecem no menu lateral), e o
+"Conferir" da separação lê a fila uma vez.
 
 **Cores com papel fixo:** tinta na espera; vermelho só na ação e na abertura;
 verde só no confirmado; `--destructive` só no erro; `#8A4B00` sobre âmbar suave

@@ -184,3 +184,29 @@ describe("as linhas da separação na ficha (padrão do nome, 06/11/2026)", () =
     expect(markup).not.toContain("BTG-000125");
   });
 });
+
+describe("o Avançar enquanto a tarefa avança (carregamento v2, a revisão da parte 10)", () => {
+  it("ocupado, não desabilitado: aria-disabled e aria-busy, a caixa do indicador e Avançando… com a reticência, até a bancada reler", () => {
+    const queue = normalizeQueues({ putaway: { key: "putaway", name: "Guarda", tasks: [guardTask] } }).find((entry) => entry.key === "putaway")!;
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <TaskDetailPanel
+          entry={{ task: queue.tasks[0]!, queue }}
+          alerts={[]}
+          lineConfirmations={{}}
+          onLineConfirmationChange={() => undefined}
+          onAdvance={() => undefined}
+          onOpenException={() => undefined}
+          advancingTaskId={guardTask.id}
+        />
+      </QueryClientProvider>,
+    );
+    const botao = markup.match(/<button[^>]*>(?:(?!<\/button>).)*Avançando(?:(?!<\/button>).)*<\/button>/)?.[0] ?? "";
+    expect(botao).toContain("Avançando…");
+    expect(botao).toContain('aria-disabled="true"');
+    expect(botao).toContain('aria-busy="true"');
+    expect(botao).toContain("data-spinner");
+    expect(botao).not.toMatch(/<button[^>]* disabled=""/);
+    expect(botao).not.toContain("animate-spin");
+  });
+});

@@ -3,7 +3,11 @@ import { ArrowLeft, ChevronDown, ChevronRight, MoreHorizontal, Package, Printer 
 import { Link } from "wouter";
 
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,7 +95,7 @@ export function acoesDoMenu(
 }
 
 const MENSAGENS: Record<Exclude<EstadoDaBancada, "pronto">, string> = {
-  carregando: "Carregando",
+  carregando: "Carregando o pedido…",
   nao_encontrado: "Pedido não encontrado",
   erro: "Não foi possível carregar o pedido.",
   concluida: "Separação concluída",
@@ -130,6 +134,7 @@ export function PedidosSepararView({
   onDividir,
   onFecharVolume,
   onConcluir,
+  onTentar,
 }: {
   estado: EstadoDaBancada;
   /** "PED-0001" */
@@ -152,8 +157,11 @@ export function PedidosSepararView({
    * parou no meio): as linhas não mudam mais, e "Concluir separação" continua.
    */
   fechada?: boolean;
-  /** As linhas com uma gravação em curso. */
-  ocupadas?: ReadonlySet<string>;
+  /**
+   * As linhas com uma gravação em curso; no mapa, com a ação de cada uma
+   * ("separar", "levar", "desfazer"), que mostra a espera no botão dela.
+   */
+  ocupadas?: ReadonlySet<string> | ReadonlyMap<string, string>;
   /**
    * De qual caixa cada linha sai: a sugestão do sistema, na linha por
    * separar; o que ficou gravado, na separada. A linha fora do mapa mostra só
@@ -195,6 +203,8 @@ export function PedidosSepararView({
   /** "Fechar volume": com o peso, opcional. */
   onFecharVolume?: (volume: VolumeDoPedido, pesoKg?: number) => void;
   onConcluir: () => void;
+  /** Lê o pedido de novo: "Tentar de novo" na demora, na desistência e na falha da primeira leitura. */
+  onTentar?: () => Promise<unknown>;
 }) {
   // A prateleira toda separada fecha sozinha; a pessoa abre a que quiser rever.
   const [abertas, setAbertas] = useState<ReadonlySet<string>>(new Set());
@@ -250,7 +260,14 @@ export function PedidosSepararView({
         ) : null}
       </header>
 
-      {mensagem ? (
+{/* A primeira leitura é a espera em bloco do carregamento v2 (parte 13c): nada antes de 300 ms, a caixa e o rótulo,
+          com o anúncio pelo Anunciador, no lugar do "Carregando" seco, com a saída: "Tentar de novo" aos 10 s e a
+          desistência aos 70 s; a falha também tenta de novo. */}
+      {estado === "carregando" ? (
+        <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota onTentar={onTentar} className="rounded-lg border border-border bg-card px-5 py-6" />
+      ) : estado === "erro" && onTentar ? (
+        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem={MENSAGENS.erro} />
+      ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>
@@ -273,9 +290,14 @@ export function PedidosSepararView({
                 <p className="text-xs text-muted-foreground">{textoDoAberto(aberto)}</p>
               </div>
               {fecharVolume ? (
-                <Button type="button" variant="outline" disabled={!aberto.id || aberto.unidades <= 0 || fechandoVolume} onClick={() => fecharVolume(aberto)}>
-                  Fechar volume
-                </Button>
+                <BotaoDeAcao
+                  variant="outline"
+                  estado={fechandoVolume ? "andamento" : "repouso"}
+                  rotulo="Fechar volume"
+                  andamento="Fechando…"
+                  bloqueado={!fechandoVolume && (!aberto.id || aberto.unidades <= 0)}
+                  onClick={() => fecharVolume(aberto)}
+                />
               ) : null}
             </div>
           ) : null}
@@ -289,6 +311,7 @@ export function PedidosSepararView({
               const nome = grupo.posicao || "sem endereço";
               const doGrupo = progressoDoGrupo(grupo);
               const aberta = !doGrupo.completo || abertas.has(grupo.posicao);
+              const idDoGrupo = `grupo-${grupo.posicao || "sem-endereco"}`;
               return (
                 <section key={grupo.posicao || "sem-endereco"} className="border-t border-border/60 first:border-t-0">
                   <h2 className="flex min-h-12 items-center gap-2.5 px-4 py-2 text-sm font-medium text-muted-foreground md:px-5">
@@ -301,6 +324,7 @@ export function PedidosSepararView({
                             separado
                           </Badge>
                           <Button
+                            id={idDoGrupo}
                             type="button"
                             variant="outline"
                             size="icon"
@@ -333,6 +357,8 @@ export function PedidosSepararView({
                           principal={linha.id === primeira}
                           operador={operador && !fechada}
                           ocupada={ocupadas?.has(linha.id) ?? false}
+                          acao={ocupadas && "get" in ocupadas ? ocupadas.get(linha.id) : undefined}
+                          grupo={idDoGrupo}
                           caixas={caixasDaLinha?.get(linha.id)}
                           volumes={volumes ? volumesDaLinha(linha.item, volumes) : undefined}
                           inteiras={caixasInteiras?.get(linha.id) ?? 0}
@@ -431,14 +457,14 @@ function Volumes({
               <Label htmlFor="peso-do-volume">Peso (kg)</Label>
               <Input id="peso-do-volume" inputMode="decimal" value={peso} maxLength={8} aria-invalid={pesoLido === null || undefined} onChange={(event) => setPeso(event.target.value)} />
             </div>
-            <Button
-              type="button"
+            <BotaoDeAcao
               variant="outline"
-              disabled={!aberto.id || aberto.unidades <= 0 || fechando || pesoLido === null}
+              estado={fechando ? "andamento" : "repouso"}
+              rotulo="Fechar volume"
+              andamento="Fechando…"
+              bloqueado={!fechando && (!aberto.id || aberto.unidades <= 0 || pesoLido === null)}
               onClick={() => onFechar(aberto, pesoLido ?? undefined)}
-            >
-              Fechar volume
-            </Button>
+            />
           </>
         ) : null}
       </div>
@@ -542,6 +568,8 @@ function Linha({
   principal,
   operador,
   ocupada,
+  acao,
+  grupo,
   caixas,
   volumes,
   inteiras,
@@ -558,6 +586,13 @@ function Linha({
   principal: boolean;
   operador: boolean;
   ocupada: boolean;
+  /** A ação da linha em curso ("separar", "levar", "desfazer"): o botão dela mostra a espera. */
+  acao?: string;
+  /**
+   * O id do botão do grupo da prateleira: separada a última linha, o grupo se
+   * fecha e o "Desfazer" não aparece, e o foco vai a ele.
+   */
+  grupo?: string;
   /** De qual caixa a linha sai (ou saiu); undefined sem a leitura das caixas. */
   caixas?: readonly CaixaDaLinha[];
   /** Em quais volumes a linha separada está: "Volume 12". */
@@ -642,21 +677,40 @@ function Linha({
         ) : null}
         <span className="whitespace-nowrap font-semibold tabular-nums">{numero.format(linha.quantidade)} un.</span>
       </div>
+      {/* A linha que muda de estado tira o botão tocado da tela ("Separar" vira "Desfazer"): o foco vai ao botão que
+          entra no lugar, nunca ao body (carregamento v2, parte 13c). */}
       {operador ? (
         pendente ? (
-          <div className="flex items-center gap-2 sm:shrink-0">
-            {/* A caixa que sai inteira pode virar o volume, sem reembalar. */}
+          <SaiComOFoco alvo={grupo ? [`desfazer-${linha.id}`, grupo] : `desfazer-${linha.id}`}>
+          {/* No celular, "Levar a caixa" fica numa linha só dele, e "Separar" e o "⋯" na de baixo: lado a lado, os três
+              não cabem, e o "⋯" encolhia abaixo do toque. */}
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
+            {/* A caixa que sai inteira pode virar o volume, sem reembalar. Ocupado não é desabilitado: o botão tocado
+                mostra a espera, com o gerúndio, e o foco fica nele; o outro espera com aria-disabled (parte 13c). */}
             {onLevarACaixa && inteiras > 0 ? (
-              <Button type="button" variant="outline" className="flex-1 sm:flex-none" disabled={ocupada} onClick={() => onLevarACaixa(linha)}>
-                {inteiras === 1 ? "Levar a caixa" : "Levar as caixas"}
-              </Button>
+              <BotaoDeAcao
+                variant="outline"
+                className="flex-1 max-sm:basis-full max-md:min-h-12 sm:flex-none"
+                estado={acao === "levar" ? "andamento" : "repouso"}
+                rotulo={inteiras === 1 ? "Levar a caixa" : "Levar as caixas"}
+                andamento="Levando…"
+                bloqueado={ocupada && acao !== "levar"}
+                onClick={() => onLevarACaixa(linha)}
+              />
             ) : null}
-            <Button type="button" variant={principal ? "default" : "outline"} className="flex-1 sm:flex-none" disabled={ocupada} onClick={() => onSeparar(linha)}>
-              Separar
-            </Button>
+            <BotaoDeAcao
+              id={`separar-${linha.id}`}
+              variant={principal ? "default" : "outline"}
+              className="flex-1 max-md:min-h-12 sm:flex-none"
+              estado={acao === "separar" ? "andamento" : "repouso"}
+              rotulo="Separar"
+              andamento="Separando…"
+              bloqueado={ocupada && acao !== "separar"}
+              onClick={() => onSeparar(linha)}
+            />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon" disabled={ocupada} aria-label={`Mais ações de ${linha.nome || linha.codigos}`}>
+                <Button type="button" variant="outline" size="icon" className="shrink-0 max-md:size-12" disabled={ocupada} aria-label={`Mais ações de ${linha.nome || linha.codigos}`}>
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -669,6 +723,7 @@ function Linha({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          </SaiComOFoco>
         ) : (
           <div className="flex items-center gap-3 self-start sm:shrink-0 sm:self-center">
             {/* Enquanto o que a linha pôs está no volume aberto, ela ainda se divide (decisão 30); no celular, com 44 px. */}
@@ -677,9 +732,20 @@ function Linha({
                 Dividir em volumes
               </Button>
             ) : null}
-            <Button type="button" variant="link" className="h-auto px-0" disabled={ocupada} onClick={() => onDesfazer(linha)}>
-              Desfazer
-            </Button>
+            <SaiComOFoco alvo={`separar-${linha.id}`}>
+              <BotaoDeAcao
+                id={`desfazer-${linha.id}`}
+                variant="link"
+                /* O texto fica no lado em que a linha alinha: à esquerda no celular, à direita no computador (a largura é a
+                   do rótulo mais largo, "Desfazendo…"). */
+                className="h-auto justify-items-start px-0 max-md:min-h-12 sm:justify-items-end"
+                estado={acao === "desfazer" ? "andamento" : "repouso"}
+                rotulo="Desfazer"
+                andamento="Desfazendo…"
+                bloqueado={ocupada && acao !== "desfazer"}
+                onClick={() => onDesfazer(linha)}
+              />
+            </SaiComOFoco>
           </div>
         )
       ) : null}

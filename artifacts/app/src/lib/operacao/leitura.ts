@@ -20,6 +20,13 @@ export type Leitura<T> = { itens: T[] | null; erro: boolean };
  */
 export type NovaTentativa = { tentando: boolean; tentar: () => void };
 
+/**
+ * A nova tentativa de uma leitura ao vivo de verdade: a promessa de `tentar`
+ * acaba quando a nova assinatura responde (o dado ou a falha), para quem diz
+ * "Tentando de novo…" até lá (a `FalhaNaLeitura`; parte 13c).
+ */
+export type NovaTentativaAoVivo = { tentando: boolean; tentar: () => Promise<void> };
+
 /** Sem nova tentativa (a tela montada sem a leitura de verdade, como nos testes da apresentação). */
 export const SEM_NOVA_TENTATIVA: NovaTentativa = { tentando: false, tentar: () => undefined };
 
@@ -47,36 +54,63 @@ function pedirNovaTentativa(chave: string) {
 
 /**
  * A tentativa da chave: a assinatura muda a cada `tentar`, e a chave que
- * falhou por último fica na falha até a nova assinatura responder.
+ * falhou por último fica na falha até a nova assinatura responder. A falha é
+ * da chave em que aconteceu: com a chave nova (outro pedido aberto), a leitura
+ * começa sem falha, na espera.
  *
  * Só a leitura sem resposta (a que falhou, ou a que ainda não chegou) assina
  * de novo: a já lida fica com o que leu, e a tela não volta a "carregando"
  * quando a nova tentativa é de outra leitura (a lateral do Início do
  * Financeiro, as faturas dos Relatórios). O pedido chega também às outras
- * leituras da mesma chave na tela que ainda não leram.
+ * leituras da mesma chave na tela que ainda não leram. A promessa de `tentar`
+ * acaba quando a assinatura de agora responde (o dado ou a falha), na hora
+ * para a já lida, ou quando a tela sai.
  */
 export function useNovaTentativa(chave: string | null) {
   const [tentativa, setTentativa] = useState(0);
   const falhou = useRef<string | null>(null);
-  // A resposta da assinatura de agora, como a tela a viu no último render.
+  // A resposta da assinatura de agora, como a tela a viu no último render: sem resposta (falhou ou não chegou)
+  // pede nova assinatura; respondeu (o dado ou a falha) solta quem esperava a nova tentativa.
   const semResposta = useRef(true);
+  const respondeu = useRef(false);
+  const esperando = useRef<Array<() => void>>([]);
   useEffect(() => {
     if (chave === null) return undefined;
     return ouvirNovaTentativa(chave, () => {
       if (semResposta.current) setTentativa((atual) => atual + 1);
     });
   }, [chave]);
-  const tentar = useCallback(() => {
-    if (chave !== null && semResposta.current) pedirNovaTentativa(chave);
-  }, [chave]);
+  const tentar = useCallback(
+    () =>
+      new Promise<void>((pronto) => {
+        // A já lida não assina de novo: a promessa acaba na hora.
+        if (chave === null || !semResposta.current) {
+          pronto();
+          return;
+        }
+        esperando.current.push(pronto);
+        pedirNovaTentativa(chave);
+      }),
+    [chave],
+  );
+  useEffect(() => {
+    if (respondeu.current && esperando.current.length) for (const pronto of esperando.current.splice(0)) pronto();
+  });
+  useEffect(
+    () => () => {
+      for (const pronto of esperando.current.splice(0)) pronto();
+    },
+    [],
+  );
   return {
     assinatura: chave === null ? null : `${chave}#${tentativa}`,
     /** A resposta da assinatura de agora: devolve se a nova tentativa ainda espera. */
-    tentando: (erro: boolean, respondeu: boolean) => {
+    tentando: (erro: boolean, respondeuAgora: boolean) => {
+      respondeu.current = erro || respondeuAgora;
       if (erro) falhou.current = chave;
-      else if (respondeu) falhou.current = null;
-      semResposta.current = erro || !respondeu;
-      return chave !== null && tentativa > 0 && falhou.current === chave && !erro && !respondeu;
+      else if (respondeuAgora) falhou.current = null;
+      semResposta.current = erro || !respondeuAgora;
+      return chave !== null && tentativa > 0 && falhou.current === chave && !erro && !respondeuAgora;
     },
     tentar,
   };
@@ -86,7 +120,7 @@ export function useLeitura<T>(
   chave: string | null,
   consulta: (db: Firestore) => Query<DocumentData>,
   mapear: (id: string, data: DocumentData) => T | null,
-): Leitura<T> & NovaTentativa {
+): Leitura<T> & NovaTentativaAoVivo {
   const nova = useNovaTentativa(chave);
   const { assinatura } = nova;
   const [estado, setEstado] = useState<Leitura<T> & { chave: string | null }>({ chave: null, itens: null, erro: false });
@@ -121,7 +155,7 @@ export function useDocumento<T>(
   chave: string | null,
   referencia: (db: Firestore) => DocumentReference<DocumentData>,
   mapear: (id: string, data: DocumentData) => T | null,
-): LeituraDeDocumento<T> & NovaTentativa {
+): LeituraDeDocumento<T> & NovaTentativaAoVivo {
   const nova = useNovaTentativa(chave);
   const { assinatura } = nova;
   const [estado, setEstado] = useState<LeituraDeDocumento<T> & { chave: string | null }>({ chave: null, item: undefined, erro: false });

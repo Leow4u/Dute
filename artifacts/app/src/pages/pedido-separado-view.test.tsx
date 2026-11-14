@@ -141,7 +141,6 @@ describe("Pedidos › o pedido separado", () => {
 
   it("enquanto os volumes não chegam, com falha ou sem volume, a mensagem no lugar da lista, sem as ações", () => {
     for (const [props, mensagem] of [
-      [{ estado: "carregando", volumes: [] }, "Carregando"],
       [{ estado: "erro", volumes: [] }, "Não foi possível carregar os volumes."],
       [{ estado: "pronto", volumes: [] }, "Nenhum volume"],
     ] as Array<[Props, string]>) {
@@ -161,5 +160,13 @@ describe("Pedidos › o pedido separado", () => {
       ),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(render({ estado: "carregando", volumes: [] }))).toEqual([]);
+  });
+});
+
+describe("os volumes carregando (carregamento v2, parte 13c)", () => {
+  it("a espera em bloco no lugar da lista, sem o \"Carregando\" seco", () => {
+    const html = render({ estado: "carregando", volumes: [] });
+    expect(textosDaTela(html)).toEqual(["PED-0001", "separado", RESUMO, "Volumes"]);
+    expect(html).toContain("data-carregando-na-regiao");
   });
 });

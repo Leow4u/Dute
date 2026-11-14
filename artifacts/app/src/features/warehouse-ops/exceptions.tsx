@@ -1,12 +1,12 @@
 /** Exception and return workspaces for warehouse ops. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock3,
   MessageSquareWarning,
-  RefreshCw,
   RotateCcw,
   ShieldAlert,
   Sparkles,
@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import {
   Card,
   CardContent,
@@ -29,9 +31,14 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -59,7 +66,13 @@ import {
   normalizeApiRows,
   normalizeProductKey,
 } from "@/features/warehouse-ops/receiving";
-import { ProductIdentityCard } from "./product-identity";
+import { CatalogoIndisponivel, CatalogoVerificando, ProductIdentityCard, useFalhaDoCatalogo } from "./product-identity";
+import { useAnuncio } from "@/lib/carregando/anunciador";
+import { relogioDaEspera } from "@/lib/carregando/tempo";
+import { desfechoDoErro, useAcaoNaLinha, type MotivoNaLinha } from "@/lib/carregando/use-acao-na-linha";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { humanApiError } from "@/lib/permissions";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { LEGACY_CUSTOMER_CODE, customerRows, recordCustomerCode } from "@/lib/active-customer";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 
@@ -90,6 +103,64 @@ export type ReturnDispositionDraft = {
   location: string;
   notes: string;
 };
+
+/** O nome de cada disposição na tela: o valor gravado fica em inglês, e a tela diz em português. */
+const ROTULO_DA_DISPOSICAO: Record<ReturnDispositionDraft["disposition"], string> = {
+  available: "Volta para disponível",
+  quarantine: "Quarentena",
+  damaged: "Avaria",
+  discard: "Descarte",
+};
+
+function rotuloDaDisposicao(valor: string | undefined): string {
+  return (valor && ROTULO_DA_DISPOSICAO[valor as ReturnDispositionDraft["disposition"]]) || valor || "";
+}
+
+/**
+ * O apoio da linha da disposição (carregamento v2, momento 4): aos 3 s, o
+ * objeto ("Registrando a disposição de Polo…"); aos 10 s, a demora com o
+ * relógio; sem resposta aos 70 s, que o servidor não confirmou; depois da
+ * recusa, o motivo, até a próxima ação na linha. O leitor de tela ouve a
+ * entrada na espera, a demora e a desistência pelo Anunciador; o resultado, o
+ * toast diz. Não é região viva.
+ */
+function ApoioDaDisposicao({
+  andando,
+  semResposta,
+  motivo,
+  produto,
+}: {
+  andando: boolean;
+  semResposta: boolean;
+  motivo: MotivoNaLinha | null;
+  produto: string;
+}) {
+  const espera = useEspera(andando);
+  const anunciar = useAnuncio();
+  const marco = andando && espera.visivel ? (espera.fase === "demorando" ? "demorando" : "espera") : semResposta ? "sem-resposta" : null;
+  useEffect(() => {
+    if (marco === "espera") return anunciar("Registrando a disposição");
+    if (marco === "demorando") return anunciar("Demorando mais que o normal");
+    if (marco === "sem-resposta") return anunciar("Sem confirmação do servidor");
+    return undefined;
+  }, [marco, anunciar]);
+  if (andando && espera.fase === "demorando") {
+    return (
+      <p className="text-sm font-bold text-amber-soft-foreground">
+        <Clock3 className="mr-1.5 inline size-3.5 align-middle" aria-hidden="true" />
+        <span>Demorando mais que o normal</span>
+        {" · "}
+        <span className="tabular-nums">{relogioDaEspera(espera.decorridoMs)}</span>
+      </p>
+    );
+  }
+  if (andando && espera.fase === "com-objeto") {
+    return <p className="text-sm font-bold text-foreground">Registrando a disposição de {produto}…</p>;
+  }
+  if (semResposta) return <p className="text-sm font-bold text-amber-soft-foreground">Sem confirmação do servidor.</p>;
+  if (motivo) return <p className="text-sm font-bold text-destructive">{humanApiError(motivo.erro, "Tente novamente em instantes.")}</p>;
+  return null;
+}
 
 function apiDateText(value: unknown) {
   if (typeof value === "string") return value;
@@ -151,6 +222,9 @@ function taskTypeLabel(type: string) {
   return labels[type] ?? (type || "WMS");
 }
 
+/** A linha de estado sob o título: o foco vai a ela quando o aviso da falha sai com ele. */
+const ID_DA_LINHA = "excecoes-linha-de-estado";
+
 export function ExceptionWorkspace() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -171,6 +245,16 @@ export function ExceptionWorkspace() {
     },
   });
 
+  // A leitura que falhou sem nada lido fica na tela enquanto tenta de novo, e nunca vira "Sem exceções abertas"; antes
+  // de ler, nem "0 aberta(s)" nem "Nada selecionado": o selo fica no lugar, com o bloco no lugar do número
+  // (carregamento v2, parte 13b; momento 2). O Atualizar é o das listas (o ícone que vira a caixa, 44 × 44 no
+  // celular), e só mostra a espera quando a pessoa toca nele: a releitura automática não o gira nem o desabilita
+  // (momento 7). A releitura que falha com a lista lida fica na linha de estado sob o título ("Não consegui atualizar
+  // · lista de 10:42"), e o foco vai a ela quando o aviso da falha sai com ele.
+  const leitura = useLeituraComFalha(exceptionsQuery);
+  const lida = exceptionsQuery.data !== undefined;
+  const falhou = leitura.isError && !lida;
+  const atualizarLista = useAtualizarLista([leitura]);
   const exceptions = exceptionsQuery.data ?? [];
   const openExceptions = exceptions.filter((item) =>
     ["open", "in_review"].includes(item.status),
@@ -241,32 +325,35 @@ export function ExceptionWorkspace() {
               <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive">
                 <ShieldAlert className="size-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <CardTitle>Exceções operacionais</CardTitle>
+                {/* A primeira leitura fica no lugar da lista ("Carregando exceções…"): a linha só diz depois dela. */}
+                <LinhaDeEstado id={ID_DA_LINHA} leitura={[leitura]} objeto="exceções" primeiraNaLista className="mt-1" />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-destructive/20 bg-destructive/10 text-destructive">
-                {formatNumber(openExceptions.length)} aberta(s)
-              </Badge>
-              <Button
-                type="button"
+            <div className="flex flex-wrap items-center gap-2">
+              {/* O selo fica no lugar desde o começo: antes de ler, o bloco no lugar do número, e nada pula quando ele chega. */}
+              <Badge
                 variant="outline"
-                onClick={() => exceptionsQuery.refetch()}
-                disabled={exceptionsQuery.isFetching}
+                aria-hidden={lida ? undefined : true}
+                className="border-destructive/20 bg-destructive/10 text-destructive"
               >
-                <RefreshCw
-                  data-icon="inline-start"
-                  className={cn(exceptionsQuery.isFetching && "animate-spin")}
-                />
-                Atualizar
-              </Button>
+                {/* O número e o bloco ocupam a mesma largura mínima (16 px): o selo não muda de tamanho quando ele chega. */}
+                <span className="inline-block min-w-4 text-center tabular-nums">
+                  {lida ? formatNumber(openExceptions.length) : falhou ? "—" : <Esqueleto forma="contagem" className="inline-block align-middle" />}
+                </span>
+                {" aberta(s)"}
+              </Badge>
+              <BotaoAtualizar atualizando={atualizarLista.atualizando} travado={leitura.isLoading} onAtualizar={atualizarLista.atualizar} />
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {exceptionsQuery.isLoading ? (
+          {falhou ? (
+            <FalhaNaLeitura leitura={exceptionsQuery} erro={leitura.error} mensagem="Não consegui carregar as exceções." focoAoSair={ID_DA_LINHA} />
+          ) : leitura.isLoading ? (
             <div className="space-y-3">
+              <CarregandoNaRegiao rotulo="Carregando exceções…" />
               <Skeleton className="h-28 rounded-lg" />
               <Skeleton className="h-28 rounded-lg" />
               <Skeleton className="h-28 rounded-lg" />
@@ -387,10 +474,15 @@ export function ExceptionWorkspace() {
                   />
                 </div>
 
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={!canResolve}
+                {/* Ocupado sem disabled: o foco fica no botão, com o gerúndio (carregamento v2, parte 13b). */}
+                <BotaoDeAcao
+                  // 48 px no celular (seção 7 e momento 3).
+                  className="w-full max-md:min-h-12"
+                  estado={resolveException.isPending ? "andamento" : "repouso"}
+                  icone={<CheckCircle2 aria-hidden="true" />}
+                  rotulo="Confirmar tratativa"
+                  andamento="Confirmando…"
+                  bloqueado={!resolveException.isPending && !canResolve}
                   onClick={() =>
                     selectedException &&
                     resolveException.mutate({
@@ -399,16 +491,9 @@ export function ExceptionWorkspace() {
                       resolution: resolutionText.trim(),
                     })
                   }
-                >
-                  {resolveException.isPending ? (
-                    <RefreshCw data-icon="inline-start" className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 data-icon="inline-start" />
-                  )}
-                  Confirmar tratativa
-                </Button>
+                />
               </>
-            ) : (
+            ) : !lida ? null : (
               <Empty className="min-h-[220px] border border-border bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -513,6 +598,15 @@ export function ReturnWorkspace() {
   });
 
   const productLookup = lookupQuery.data ?? [];
+  // Antes de o catálogo chegar, a linha digitada não diz "não localizado" nem manda não criar SKU duplicado: diz que
+  // está verificando; se ele não vem, a falha, com "Tentar de novo", que fica na tela enquanto tenta (o PR 2 da seção
+  // 6 do diagnóstico, carregamento v2, parte 13c). A devolução só aceita produto já cadastrado: sem o catálogo, nada
+  // se registra.
+  const catalogoNaTela = useLeituraComFalha(lookupQuery);
+  const catalogoLido = lookupQuery.data !== undefined;
+  // O aviso do catálogo é um só, o da primeira linha com código: a falha é do catálogo, não da linha.
+  const linhaDoCatalogo = lines.findIndex((line) => Boolean(line.clientCode.trim() || line.sku.trim()));
+  const catalogoFalhou = useFalhaDoCatalogo(!catalogoLido && catalogoNaTela.isError, !catalogoLido && linhaDoCatalogo >= 0);
   const pendingReturnLinesQuery = useQuery({
     queryKey: ["returns-pending", customerCode],
     staleTime: 20_000,
@@ -559,6 +653,7 @@ export function ReturnWorkspace() {
     return { duplicateInDraft, existing };
   });
   const canCreate =
+    catalogoLido &&
     lines.some((line) => line.clientCode.trim() || line.sku.trim()) &&
     lineIssues.every((issue) => !issue.duplicateInDraft && Boolean(issue.existing));
 
@@ -673,13 +768,19 @@ export function ReturnWorkspace() {
     },
   });
 
-  const setDisposition = useMutation<
-    unknown,
-    Error,
-    { line: CreatedReturnLine; draft: ReturnDispositionDraft }
-  >({
-    mutationFn: ({ line, draft }) =>
-      fetchJson(
+  // A disposição é por linha (carregamento v2, parte 13c): cada linha tem a espera dela, e a outra linha não apaga
+  // junto. A chave de idempotência é por tentativa: repete depois da falta de conexão e do "Conferir", e muda só
+  // quando o servidor recusa. Registrada, a linha vira "Disposição registrada", e o foco vai a ela.
+  const disposicao = useAcaoNaLinha<string>();
+  const pendentesDaTriagem = useLeituraComFalha(pendingReturnLinesQuery);
+  // A repetição leva o mesmo corpo da tentativa: o servidor compara o conteúdo inteiro com o da chave, e um
+  // `occurred_at` novo recusaria a repetição como outro conteúdo, em vez de devolver o recibo.
+  const momentoDaTentativa = useRef(new Map<string, string>());
+  function registrarDisposicao(line: CreatedReturnLine, draft: ReturnDispositionDraft) {
+    void disposicao.executar(line.itemId, "dispor", (chave) => {
+      const occurredAt = momentoDaTentativa.current.get(chave) ?? new Date().toISOString();
+      momentoDaTentativa.current.set(chave, occurredAt);
+      return fetchJson(
         `/api/warehouse/returns/items/${encodeURIComponent(line.itemId)}/disposition`,
         {
           method: "POST",
@@ -691,42 +792,45 @@ export function ReturnWorkspace() {
             unit_cost: line.unitCost || undefined,
             notes: draft.notes.trim() || undefined,
             expected_status: "pending_disposition",
-            occurred_at: new Date().toISOString(),
-            idempotency_key: crypto.randomUUID(),
+            occurred_at: occurredAt,
+            idempotency_key: chave,
           }),
         },
-      ),
-    onSuccess: (_result, variables) => {
-      setCreatedLines((current) =>
-        current.map((line) =>
-          line.itemId === variables.line.itemId
-            ? {
-                ...line,
-                status: "disposition_set",
-                disposition: variables.draft.disposition,
-              }
-            : line,
-        ),
+      ).then(
+        (resultado) => {
+          momentoDaTentativa.current.delete(chave);
+          setCreatedLines((current) => {
+            const marcada = { ...line, status: "disposition_set" as const, disposition: draft.disposition };
+            return current.some((item) => item.itemId === line.itemId)
+              ? current.map((item) => (item.itemId === line.itemId ? marcada : item))
+              : [marcada, ...current];
+          });
+          void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
+          void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
+          void queryClient.invalidateQueries({ queryKey: ["returns-pending"] });
+          toast({
+            title: "Disposição registrada",
+            description:
+              draft.disposition === "available"
+                ? "O item voltou para o estoque disponível com ledger auditado."
+                : "O item ficou fora do estoque disponível e entrou na memória operacional.",
+          });
+          return resultado;
+        },
+        (error: unknown) => {
+          // Sem resposta, a linha fica com o "Conferir"; o resto, o toast também diz.
+          if (desfechoDoErro(error) !== "sem-resposta") {
+            toast({
+              title: "Não consegui registrar a disposição",
+              description: getErrorMessage(error),
+              variant: "destructive",
+            });
+          }
+          throw error;
+        },
       );
-      void queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] });
-      void queryClient.invalidateQueries({ queryKey: ["ai-overview"] });
-      void queryClient.invalidateQueries({ queryKey: ["returns-pending"] });
-      toast({
-        title: "Disposição registrada",
-        description:
-          variables.draft.disposition === "available"
-            ? "O item voltou para o estoque disponível com ledger auditado."
-            : "O item ficou fora do estoque disponível e entrou na memória operacional.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Não consegui registrar a disposição",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
+    });
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -761,7 +865,7 @@ export function ReturnWorkspace() {
                   id="return-source"
                   value={source}
                   onChange={(event) => setSource(event.target.value)}
-                  placeholder="Loja, unidade, cliente..."
+                  placeholder="Loja, unidade, cliente…"
                 />
               </div>
               <div className="space-y-2">
@@ -770,7 +874,7 @@ export function ReturnWorkspace() {
                   id="return-reference"
                   value={reference}
                   onChange={(event) => setReference(event.target.value)}
-                  placeholder="Pedido, protocolo, romaneio..."
+                  placeholder="Pedido, protocolo, romaneio…"
                 />
               </div>
             </div>
@@ -797,6 +901,8 @@ export function ReturnWorkspace() {
                   const issue = lineIssues[index];
                   const existing = issue?.existing;
                   const hasKey = Boolean(line.clientCode.trim() || line.sku.trim());
+                  // "Não localizado" só depois de ler o catálogo.
+                  const naoLocalizado = hasKey && !existing && catalogoLido;
                   return (
                     <div
                       key={index}
@@ -806,7 +912,7 @@ export function ReturnWorkspace() {
                           ? "border-destructive/25 bg-destructive/5"
                           : existing
                             ? "border-primary/25 bg-primary/5"
-                            : hasKey
+                            : naoLocalizado
                               ? "border-warning-soft-border bg-warning-soft/70"
                               : "border-border",
                       )}
@@ -824,9 +930,14 @@ export function ReturnWorkspace() {
                             <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
                               cadastro localizado
                             </Badge>
-                          ) : hasKey ? (
+                          ) : naoLocalizado ? (
                             <Badge variant="outline" className="border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                               não localizado
+                            </Badge>
+                          ) : hasKey && catalogoFalhou ? (
+                            // A espera não tem selo: a caixa "Verificando o catálogo…" aparece aos 300 ms e diz.
+                            <Badge variant="outline" className="border-border bg-card text-muted-foreground">
+                              sem catálogo
                             </Badge>
                           ) : null}
                         </div>
@@ -843,11 +954,13 @@ export function ReturnWorkspace() {
                       </div>
                       <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.6fr_96px_120px]">
                         <Input
+                          id={`return-client-code-${index}`}
+                          aria-label={`Código do cliente da linha ${index + 1}`}
                           value={line.clientCode}
                           onChange={(event) =>
                             updateLine(index, { clientCode: event.target.value })
                           }
-                          placeholder="Cod. cliente"
+                          placeholder="Cód. cliente"
                         />
                         <Input
                           value={line.sku}
@@ -887,7 +1000,16 @@ export function ReturnWorkspace() {
                         <div className="mt-3">
                           <ProductIdentityCard product={existing} onSelect={() => applyExistingProduct(index, existing)} />
                         </div>
-                      ) : hasKey ? (
+                      ) : index === linhaDoCatalogo && catalogoFalhou ? (
+                        <CatalogoIndisponivel
+                          leitura={lookupQuery}
+                          erro={catalogoNaTela.error}
+                          focoAoSair={`return-client-code-${index}`}
+                          className="mt-3"
+                        />
+                      ) : index === linhaDoCatalogo && !catalogoLido ? (
+                        <CatalogoVerificando className="mt-3" />
+                      ) : naoLocalizado ? (
                         <Alert className="mt-3 border-warning-soft-border bg-warning-soft text-warning-soft-foreground">
                           <AlertTriangle className="size-4" />
                           <AlertTitle>Não crie SKU duplicado</AlertTitle>
@@ -909,7 +1031,7 @@ export function ReturnWorkspace() {
                 id="return-notes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Condição física, contato, foto, motivo da devolução..."
+                placeholder="Condição física, contato, foto, motivo da devolução…"
               />
             </div>
 
@@ -918,14 +1040,15 @@ export function ReturnWorkspace() {
                 Criar devolução não altera saldo. O estoque só muda quando a
                 disposição for “volta para disponível”.
               </p>
-              <Button type="submit" disabled={!canCreate || createReturn.isPending}>
-                {createReturn.isPending ? (
-                  <RefreshCw data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <RotateCcw data-icon="inline-start" />
-                )}
-                Registrar devolução
-              </Button>
+              {/* Ocupado não é desabilitado: o foco fica no botão, com o gerúndio (carregamento v2, parte 13c). */}
+              <BotaoDeAcao
+                type="submit"
+                estado={createReturn.isPending ? "andamento" : "repouso"}
+                icone={<RotateCcw aria-hidden="true" />}
+                rotulo="Registrar devolução"
+                andamento="Registrando…"
+                bloqueado={!createReturn.isPending && !canCreate}
+              />
             </div>
           </form>
         </CardContent>
@@ -934,7 +1057,9 @@ export function ReturnWorkspace() {
       <div className="flex flex-col gap-4">
         <Card className="rounded-lg border-border/80 bg-card">
           <CardHeader>
-            <CardTitle className="text-base">Disposição física</CardTitle>
+            <CardTitle id="disposicao-fisica" tabIndex={-1} className="text-base">
+              Disposição física
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {visibleReturnLines.length ? (
@@ -978,12 +1103,7 @@ export function ReturnWorkspace() {
                     {!isDone ? (
                       <div className="mt-4 space-y-3">
                         <div className="grid grid-cols-2 gap-2">
-                          {[
-                            ["available", "Volta para disponível"],
-                            ["quarantine", "Quarentena"],
-                            ["damaged", "Avaria"],
-                            ["discard", "Descarte"],
-                          ].map(([value, label]) => (
+                          {Object.entries(ROTULO_DA_DISPOSICAO).map(([value, label]) => (
                             <Button
                               key={value}
                               type="button"
@@ -1038,7 +1158,7 @@ export function ReturnWorkspace() {
                                 },
                               }))
                             }
-                            placeholder="Foto, avaria, motivo, orientação..."
+                            placeholder="Foto, avaria, motivo, orientação…"
                           />
                           {needsNotes && draft.notes.trim().length < 6 ? (
                             <p className="text-xs leading-5 text-warning-soft-foreground">
@@ -1047,36 +1167,48 @@ export function ReturnWorkspace() {
                             </p>
                           ) : null}
                         </div>
-                        <Button
-                          type="button"
-                          className="w-full"
-                          disabled={
-                            !canSubmitDisposition ||
-                            setDisposition.isPending
-                          }
-                          onClick={() =>
-                            setDisposition.mutate({ line, draft })
-                          }
-                        >
-                          {setDisposition.isPending &&
-                          setDisposition.variables?.line.itemId === line.itemId ? (
-                            <RefreshCw data-icon="inline-start" className="animate-spin" />
-                          ) : (
-                            <CheckCircle2 data-icon="inline-start" />
-                          )}
-                          Registrar disposição
-                        </Button>
+                        <SaiComOFoco alvo={`disposicao-${line.itemId}`}>
+                          <BotaoDeAcao
+                            className="w-full max-md:min-h-12"
+                            estado={disposicao.estado(line.itemId, "dispor")}
+                            icone={<CheckCircle2 aria-hidden="true" />}
+                            rotulo="Registrar disposição"
+                            andamento="Registrando…"
+                            erro="Não registrada"
+                            bloqueado={!disposicao.ocupada(line.itemId) && !canSubmitDisposition}
+                            onClick={() => registrarDisposicao(line, draft)}
+                          />
+                        </SaiComOFoco>
+                        <ApoioDaDisposicao
+                          andando={disposicao.estado(line.itemId, "dispor") === "andamento"}
+                          semResposta={disposicao.estado(line.itemId, "dispor") === "sem-resposta"}
+                          motivo={disposicao.motivo(line.itemId)}
+                          produto={line.productName}
+                        />
                       </div>
                     ) : (
-                      <div className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground">
-                        Disposição registrada: {line.disposition}.
+                      <div
+                        id={`disposicao-${line.itemId}`}
+                        tabIndex={-1}
+                        className="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-muted-foreground"
+                      >
+                        Disposição registrada: {rotuloDaDisposicao(line.disposition)}.
                       </div>
                     )}
                   </div>
                 );
               })
+            ) : pendentesDaTriagem.isError && pendingReturnLinesQuery.data === undefined ? (
+              // A leitura que falhou nunca vira "Nenhuma devolução recém registrada" (carregamento v2, parte 13c).
+              <FalhaNaLeitura
+                leitura={pendingReturnLinesQuery}
+                erro={pendentesDaTriagem.error}
+                mensagem="Não consegui carregar as devoluções pendentes."
+                focoAoSair="disposicao-fisica"
+              />
             ) : pendingReturnLinesQuery.isLoading ? (
               <div className="space-y-3">
+                <CarregandoNaRegiao rotulo="Carregando devoluções…" />
                 <Skeleton className="h-28 rounded-lg" />
                 <Skeleton className="h-28 rounded-lg" />
               </div>

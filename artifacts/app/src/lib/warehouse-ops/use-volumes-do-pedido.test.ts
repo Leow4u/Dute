@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { nameAndSize, volumeLabels } from "../warehouse-labels";
 import { folhaDoRomaneio } from "./romaneio";
 import { itemDaLinhaDeSeparacao } from "./separacao";
 import { tamanhosDoCatalogo } from "./tamanho-do-catalogo";
-import { leituraDosVolumes } from "./use-volumes-do-pedido";
+import { leituraDosVolumes, tentarOsQueFaltam } from "./use-volumes-do-pedido";
 
 /**
  * De onde vêm os volumes de um pedido (separação com caixas, parte 4): da
@@ -207,5 +207,31 @@ describe("o tamanho do campo Tamanho nos volumes do pedido", () => {
     const leitura = leituraDosVolumes({ ...BASE, tarefa: TAREFA_DO_COPO, linhas: LINHAS_DO_COPO, tamanhos: tamanhosDoCatalogo(CADASTRO.slice(1)) });
     const [copo] = volumeLabels(leitura.volumes[0]!, { ...ORDEM, total: null });
     expect(copo!.lines).toEqual([{ code: "B.0572.003.U.B", sku: "", name: "Copo Beercup em Inox", qty: 4 }]);
+  });
+});
+
+describe("a nova tentativa dos volumes do pedido (carregamento v2, junção das partes 10 e 13)", () => {
+  it("assina de novo só as leituras ativas que falharam ou não chegaram, e acaba quando todas respondem", async () => {
+    let responder: () => void = () => undefined;
+    const presa = vi.fn(() => new Promise<void>((pronto) => (responder = pronto)));
+    const lida = vi.fn(async () => undefined);
+    const semChave = vi.fn(async () => undefined);
+    let acabou = false;
+    const tentativa = tentarOsQueFaltam([
+      { ativa: true, semResposta: true, tentar: presa },
+      { ativa: true, semResposta: false, tentar: lida },
+      { ativa: false, semResposta: true, tentar: semChave },
+    ]).then(() => {
+      acabou = true;
+    });
+    await Promise.resolve();
+    expect(presa).toHaveBeenCalledTimes(1);
+    expect(lida).not.toHaveBeenCalled();
+    // A leitura sem chave nunca responderia: a nova tentativa não a espera.
+    expect(semChave).not.toHaveBeenCalled();
+    expect(acabou).toBe(false);
+    responder();
+    await tentativa;
+    expect(acabou).toBe(true);
   });
 });

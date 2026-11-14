@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Boxes } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -14,6 +14,27 @@ import { moduloAberto, opcoesDoSeletor } from "@/lib/seletor-de-modulo";
 import { rememberReturnPath } from "@/lib/settings-nav";
 import { useInicioDoWms } from "@/lib/use-inicio-do-wms";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
+
+/** O menu lateral do shell, com os contadores, aparece a partir do md (768 px); abaixo, a barra do celular, sem eles. */
+const COM_MENU_LATERAL = "(min-width: 768px)";
+
+/**
+ * O menu lateral está na tela. Lido já no primeiro desenho, para o celular não
+ * começar a leitura que não mostra.
+ */
+function useMenuLateral(): boolean {
+  const consulta = () => (typeof window === "undefined" || typeof window.matchMedia !== "function" ? true : window.matchMedia(COM_MENU_LATERAL).matches);
+  const [visivel, setVisivel] = useState(consulta);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia(COM_MENU_LATERAL);
+    const mudou = () => setVisivel(media.matches);
+    mudou();
+    media.addEventListener("change", mudou);
+    return () => media.removeEventListener("change", mudou);
+  }, []);
+  return visivel;
+}
 
 /**
  * Layout da Armazenagem para a equipe (docs/plataforma/fase-4-financeiro.md,
@@ -31,7 +52,11 @@ export default function WmsLayout({ children }: { children: ReactNode }) {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const role = user?.publicMetadata.role;
   const menu = getNavigationForProfileRole(role, profile);
-  const inicio = useInicioDoWms(role);
+  // A leitura leve no celular (carregamento v2, parte 10; o PR 5 do celular): os contadores do menu só aparecem no
+  // menu lateral, e a barra do celular não os mostra. Sem ele, o shell não lê o armazém (até cerca de 9.900
+  // documentos) nem o relê a cada 60 s; cada tela lê o que mostra.
+  const menuLateral = useMenuLateral();
+  const inicio = useInicioDoWms(role, menuLateral);
   const comClienteAtivo = Boolean(role) && INTERNAL_ROLES.includes(role!);
   const gerenciaClientes = role === "owner" || role === "admin";
   useAtalhoDoAgente(role);

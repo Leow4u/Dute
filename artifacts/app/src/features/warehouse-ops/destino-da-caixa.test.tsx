@@ -112,6 +112,8 @@ describe("o destino da caixa fechada", () => {
         "mesmo produto",
         "alternativas B-03 · B-01",
         "Confirmar destino em B-02",
+        "Confirmando…",
+        "Conferir",
         "Não cabe aqui",
       ]),
     ).toEqual([]);
@@ -146,6 +148,8 @@ describe("o destino da caixa fechada", () => {
         "Prateleira selecionada manualmente.",
         "Frente 48 × profundidade 38 × altura 30 cm",
         "Confirmar destino em A-03",
+        "Confirmando…",
+        "Conferir",
       ]),
     ).toEqual([]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
@@ -160,18 +164,45 @@ describe("o destino da caixa fechada", () => {
   });
 
   it("consultando, e a consulta que falhou com o tentar de novo", async () => {
-    expect(textosForaDaLista(render({ carregandoSugestao: true }), [...CABECALHO, "Consultando a sugestão…"])).toEqual([]);
+    // A espera em bloco: nada antes de 300 ms, e nunca um role="status" solto (carregamento v2, parte 13c).
+    const consultando = render({ carregandoSugestao: true });
+    expect(textosForaDaLista(consultando, [...CABECALHO, "Consultando a sugestão…"])).toEqual([]);
+    expect(consultando).not.toContain('role="status"');
+    expect(consultando).toContain("data-carregando-na-regiao");
+    // A falha é a FalhaNaLeitura: o motivo e "Tentar de novo", como alerta.
     const html = render({ erroSugestao: "Atualize a tela: a chegada mudou." });
     expect(
-      textosForaDaLista(html, [...CABECALHO, "Não foi possível consultar a sugestão", "Atualize a tela: a chegada mudou.", "Tentar de novo"]),
+      textosForaDaLista(html, [...CABECALHO, "Não consegui consultar a sugestão. Atualize a tela: a chegada mudou.", "Tentar de novo"]),
     ).toEqual([]);
+    expect(html).toContain('role="alert"');
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("ocupado, confirmar e não cabe ficam desligados", () => {
+  it("ocupado, confirmar e não cabe ficam ocupados, não desabilitados: o foco não cai no body", () => {
     const html = render({ sugestao }, true);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Confirmar destino em B-02<\/button>/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Não cabe aqui<\/button>/);
+    const confirmar = tagDoBotao(html, "Confirmar destino em B-02");
+    const naoCabe = tagDoBotao(html, "Não cabe aqui");
+    for (const tag of [confirmar, naoCabe]) {
+      expect(tag).toContain('aria-disabled="true"');
+      expect(tag).not.toMatch(/\sdisabled=""/);
+    }
+  });
+
+  it("confirmando, o confirmar mostra a espera dele, e o não cabe espera", () => {
+    const html = renderToStaticMarkup(
+      <DestinoDaCaixa
+        estado={{ ...destinoVazio(), sugestao }}
+        ocupado
+        confirmando
+        onModo={() => undefined}
+        onEscolher={() => undefined}
+        onConfirmar={() => undefined}
+        onNaoCabe={() => undefined}
+        onTentarDeNovo={() => undefined}
+      />,
+    );
+    expect(tagDoBotao(html, "Confirmar destino em B-02")).toContain('data-estado="andamento"');
+    expect(tagDoBotao(html, "Não cabe aqui")).toContain('aria-disabled="true"');
   });
 });
 

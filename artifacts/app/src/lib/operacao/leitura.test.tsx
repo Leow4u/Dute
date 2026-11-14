@@ -75,7 +75,9 @@ describe("useLeitura com a nova tentativa", () => {
     expect(visto).toMatchObject({ itens: null, erro: true, tentando: false });
 
     // Tentar de novo: assina outra vez, e a falha continua à vista enquanto espera.
-    act(() => visto!.tentar());
+    act(() => {
+      void visto!.tentar();
+    });
     expect(estado.assinaturas).toHaveLength(2);
     expect(estado.assinaturas[0]!.ativa).toBe(false);
     expect(visto).toMatchObject({ itens: null, erro: true, tentando: true });
@@ -84,9 +86,41 @@ describe("useLeitura com a nova tentativa", () => {
     act(() => ativa().falha(new Error("unavailable")));
     expect(visto).toMatchObject({ itens: null, erro: true, tentando: false });
 
-    act(() => visto!.tentar());
+    act(() => {
+      void visto!.tentar();
+    });
     act(() => ativa().proximo(lista(["col_1", "col_2"])));
     expect(visto).toMatchObject({ itens: ["col_1", "col_2"], erro: false, tentando: false });
+  });
+
+  it("a promessa da nova tentativa acaba quando a nova assinatura responde, o dado ou a falha (o \"Tentando de novo…\" da FalhaNaLeitura)", async () => {
+    let visto: ReturnType<typeof useLeitura<string>> | null = null;
+    function Sonda() {
+      visto = useLeitura("orders:em_aberto", () => ({}) as never, (id) => id);
+      return null;
+    }
+    act(() => raiz!.render(<Sonda />));
+    act(() => ativa().falha(new Error("unavailable")));
+    let acabou = 0;
+    act(() => {
+      void visto!.tentar().then(() => {
+        acabou += 1;
+      });
+    });
+    await act(async () => undefined);
+    expect(acabou).toBe(0);
+    act(() => ativa().falha(new Error("unavailable")));
+    await act(async () => undefined);
+    expect(acabou).toBe(1);
+    act(() => {
+      void visto!.tentar().then(() => {
+        acabou += 1;
+      });
+    });
+    act(() => ativa().proximo(lista(["ord_1"])));
+    await act(async () => undefined);
+    expect(acabou).toBe(2);
+    expect(visto).toMatchObject({ itens: ["ord_1"], erro: false, tentando: false });
   });
 
   it("outra chave no meio da falha volta a carregando, sem a falha da chave anterior", () => {
@@ -97,7 +131,9 @@ describe("useLeitura com a nova tentativa", () => {
     }
     act(() => raiz!.render(<Sonda chave="hoje:2026-11-14" />));
     act(() => ativa().falha(new Error("unavailable")));
-    act(() => visto!.tentar());
+    act(() => {
+      void visto!.tentar();
+    });
     act(() => raiz!.render(<Sonda chave="hoje:2026-11-15" />));
     expect(visto).toMatchObject({ itens: null, erro: false, tentando: false });
   });
@@ -113,7 +149,9 @@ describe("useDocumento com a nova tentativa", () => {
     act(() => raiz!.render(<Sonda />));
     act(() => ativa().falha(new Error("unavailable")));
     expect(visto).toMatchObject({ item: undefined, erro: true });
-    act(() => visto!.tentar());
+    act(() => {
+      void visto!.tentar();
+    });
     expect(visto).toMatchObject({ item: undefined, erro: true, tentando: true });
     act(() => ativa().proximo(documento(null)));
     expect(visto).toMatchObject({ item: null, erro: false, tentando: false });
@@ -128,7 +166,9 @@ describe("useDocumento com a nova tentativa", () => {
     act(() => raiz!.render(<Sonda />));
     act(() => ativa().falha(new Error("unavailable")));
     expect(visto).toMatchObject({ erro: true });
-    act(() => visto!.tentar());
+    act(() => {
+      void visto!.tentar();
+    });
     expect(visto).toMatchObject({ erro: true, tentando: true });
     expect(estado.assinaturas.filter((assinatura) => assinatura.ativa)).toHaveLength(1);
   });
@@ -179,7 +219,9 @@ describe("a nova tentativa não apaga o que já foi lido (necessidade 8)", () =>
     expect(faturas).toMatchObject({ itens: ["NF 1"], erro: false, tentando: false });
     expect(emissoes).toMatchObject({ itens: null, erro: true, tentando: true });
 
-    act(() => faturas!.tentar());
+    act(() => {
+      void faturas!.tentar();
+    });
     expect(estado.assinaturas).toHaveLength(3);
     expect(faturas).toMatchObject({ itens: ["NF 1"], erro: false });
   });
@@ -209,7 +251,9 @@ describe("a nova tentativa não apaga o que já foi lido (necessidade 8)", () =>
     expect(menu).toMatchObject({ erro: true });
     expect(inicio).toMatchObject({ erro: true });
 
-    act(() => inicio!.tentar());
+    act(() => {
+      void inicio!.tentar();
+    });
     const novas = estado.assinaturas.filter((assinatura) => assinatura.ativa);
     expect(estado.assinaturas).toHaveLength(4);
     expect(novas).toHaveLength(2);
@@ -243,7 +287,9 @@ describe("a nova tentativa não apaga o que já foi lido (necessidade 8)", () =>
     );
     act(() => estado.assinaturas[0]!.proximo(lista(["10045-01"])));
     act(() => estado.assinaturas[1]!.falha(new Error("permission-denied")));
-    act(() => falhou!.tentar());
+    act(() => {
+      void falhou!.tentar();
+    });
     expect(estado.assinaturas).toHaveLength(3);
     expect(estado.assinaturas[0]!.ativa).toBe(true);
     expect(lida).toMatchObject({ itens: ["10045-01"], erro: false });

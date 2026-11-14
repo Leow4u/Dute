@@ -5,8 +5,11 @@ import { useLocation } from "wouter";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { labelsUrl } from "@/lib/warehouse-labels";
@@ -70,8 +73,12 @@ export type GuardaDaCaixaProps = {
   task: WarehouseTask;
   /** A linha de endereço da prateleira de destino, quando o cadastro já chegou. */
   endereco: string | null;
+  /** O cadastro das prateleiras ainda não chegou: o lugar da linha do endereço fica reservado, com o bloco neutro. */
+  enderecoCarregando?: boolean;
   podeOperar: boolean;
   ocupado: boolean;
+  /** A guarda está sendo concluída: o "Concluir guarda" mostra a espera dele; as outras ações, ocupadas. */
+  guardando?: boolean;
   /** A recusa do servidor ao guardar, mostrada na própria guarda. */
   erro: string | null;
   destino: DestinoDaCaixaEstado;
@@ -159,7 +166,14 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
             {concluida ? "Guardada em" : "Destino"}
           </h3>
           <p className="text-4xl font-extrabold tracking-tight">{destino}</p>
-          {props.endereco ? <p className="text-sm">{props.endereco}</p> : null}
+          {props.endereco ? (
+            <p className="text-sm">{props.endereco}</p>
+          ) : props.enderecoCarregando ? (
+            // O endereço chega depois do destino: o lugar dele fica reservado, sem pular a guarda quando ele entra.
+            <span className="flex h-5 items-center">
+              <Esqueleto forma="texto" className="w-56 max-w-full" />
+            </span>
+          ) : null}
           {etiquetaAntiga ? (
             <p className="mt-2 rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground">
               Etiqueta impressa com {etiquetaAntiga.label_printed_location} · {horaCurta(etiquetaAntiga.label_printed_at)}
@@ -205,12 +219,28 @@ export function GuardaDaCaixaConteudo(props: GuardaDaCaixaProps) {
         </Alert>
       ) : null}
       {podeOperar ? (
+        // Ocupado não é desabilitado: "Concluir guarda" é o BotaoDeAcao, com "Guardando em B-02…" e o foco nele; o
+        // "Não cabe aqui" espera com aria-disabled (carregamento v2, parte 13c).
         <div className="flex flex-col gap-2 @md:flex-row">
-          <Button type="button" className="@md:flex-1" disabled={!destino || !caixa || ocupado} onClick={props.onGuardar}>
-            {destino ? `Concluir guarda em ${destino}` : "Concluir guarda"}
-          </Button>
+          <BotaoDeAcao
+            className="max-md:min-h-12 @md:flex-1"
+            estado={props.guardando ? "andamento" : "repouso"}
+            rotulo={destino ? `Concluir guarda em ${destino}` : "Concluir guarda"}
+            andamento={destino ? `Guardando em ${destino}…` : "Guardando…"}
+            bloqueado={!props.guardando && (!destino || !caixa || ocupado)}
+            onClick={props.onGuardar}
+          />
           {destino ? (
-            <Button type="button" variant="outline" disabled={!caixa || ocupado} onClick={props.onNaoCabe}>
+            <Button
+              type="button"
+              variant="outline"
+              className={cn("max-md:min-h-12", caixa && ocupado && "opacity-45 hover:bg-card active:bg-card")}
+              disabled={!caixa}
+              aria-disabled={ocupado || undefined}
+              onClick={() => {
+                if (!ocupado) props.onNaoCabe();
+              }}
+            >
               Não cabe aqui
             </Button>
           ) : null}
@@ -308,8 +338,10 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
     <GuardaDaCaixaConteudo
       task={task}
       endereco={enderecoDaPrateleira(posicao)}
+      enderecoCarregando={posicoes.isLoading}
       podeOperar={podeOperar}
       ocupado={ocupado}
+      guardando={guardar.isPending}
       erro={guardar.error ? (guardar.error instanceof Error ? guardar.error.message : String(guardar.error)) : null}
       destino={destinoDaCaixa.estado}
       recusando={destinoDaCaixa.recusando}

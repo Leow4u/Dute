@@ -5,7 +5,9 @@ import { Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
+import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
@@ -38,6 +40,8 @@ export type RetornoAberto = {
   retorno: RetornoAReceber;
   /** null enquanto as linhas do pedido carregam. */
   linhas: LinhaDoRetorno[] | null;
+  /** As linhas do pedido não vieram (e seguem assim enquanto tenta de novo): o aviso no lugar delas. */
+  linhasFalharam?: boolean;
   notas: string;
   problema: string | null;
   erro: string | null;
@@ -53,12 +57,34 @@ export type RetornosViewProps = {
     mudarLinha: (id: string, voltou: string) => void;
     mudarNotas: (notas: string) => void;
     receber: () => void;
+    /** Lê de novo as linhas do pedido; acaba quando elas respondem. */
+    tentarLinhas?: () => Promise<unknown>;
   };
   /** Sem "Receber retorno": quem não opera o armazém só consulta. */
   somenteConsulta?: boolean;
+  /**
+   * Os retornos não vieram: o aviso, com "Tentar de novo", no lugar do grupo
+   * que sumia (carregamento v2, parte 13c). Fica enquanto tenta de novo.
+   */
+  falha?: { tentar: () => Promise<unknown> } | null;
 };
 
-export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false }: RetornosViewProps) {
+/** A leitura ao vivo vista como a da `FalhaNaLeitura`: a nova tentativa assina de novo e acaba na resposta. */
+function leituraAoVivo(tentar: () => Promise<unknown>) {
+  return { error: new Error("Leitura ao vivo recusada."), refetch: tentar as never };
+}
+
+export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false, falha = null }: RetornosViewProps) {
+  if (falha && !aberto) {
+    return (
+      <section aria-labelledby="retornos-da-operacao" className="flex flex-col gap-3">
+        <h2 id="retornos-da-operacao" className="text-base font-semibold text-foreground">
+          Retornos da Operação
+        </h2>
+        <FalhaNaLeitura leitura={leituraAoVivo(falha.tentar)} mensagem="Não consegui carregar os retornos da Operação." />
+      </section>
+    );
+  }
   if (!retornos.length && !aberto) return null;
   return (
     <>
@@ -87,8 +113,12 @@ export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false 
               <DialogHeader>
                 <DialogTitle>{aberto.retorno.numero}: o que voltou</DialogTitle>
               </DialogHeader>
-              {aberto.linhas === null ? (
-                <p className="text-sm text-muted-foreground">Carregando...</p>
+              {/* As linhas que não vieram nunca ficam em "Carregando..." para sempre: o aviso, com "Tentar de novo"; antes,
+                  a espera em bloco, nada antes de 300 ms (carregamento v2, parte 13c). */}
+              {aberto.linhas === null && aberto.linhasFalharam && acoes.tentarLinhas ? (
+                <FalhaNaLeitura leitura={leituraAoVivo(acoes.tentarLinhas)} mensagem="Não consegui carregar os itens do pedido." />
+              ) : aberto.linhas === null ? (
+                <CarregandoNaRegiao rotulo="Carregando itens…" />
               ) : (
                 <ul className="grid gap-3">
                   {aberto.linhas.map((linha) => (
@@ -155,6 +185,8 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { code: customerCode } = useActiveCustomer();
+  // A leitura ao vivo que falha não se refaz sozinha: "Tentar de novo" assina de novo (`useLeitura`), e a falha fica na
+  // tela até a nova responder (carregamento v2, partes 13c e 13g).
   const leitura = useLeitura(
     OPERACAO_LIBERADO ? "orders:retorno_a_receber" : null,
     (db) => query(collection(db, "orders"), where("retorno.status", "==", "a_receber")),
@@ -163,6 +195,7 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
   const retornos = (leitura.itens ?? []).filter((item) => item.customerCode === customerCode).sort((a, b) => (a.chegouEm ?? "").localeCompare(b.chegouEm ?? ""));
   const [aberto, setAberto] = useState<{ retorno: RetornoAReceber; voltou: Record<string, string>; notas: string; tentou: boolean; erro: string | null; enviando: boolean } | null>(null);
   const chave = useRef<string | null>(null);
+  // A falha das linhas é do pedido aberto (a chave dele): a do pedido A não aparece no B.
   const linhas = useLeitura(
     aberto ? `order_items:${aberto.retorno.orderId}` : null,
     (db) => query(collection(db, "order_items"), where("order_id", "==", aberto?.retorno.orderId ?? "-")),
@@ -170,6 +203,8 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
   );
   const linhasDoAberto = aberto && linhas.itens ? linhas.itens.map((linha) => ({ ...linha, voltou: aberto.voltou[linha.id] ?? linha.voltou })) : null;
   const problema = aberto?.tentou && linhasDoAberto ? problemaDoRetorno(linhasDoAberto) : null;
+  const falhaDosRetornos = leitura.erro;
+  const falhaDasLinhas = linhas.erro;
 
   async function receber() {
     if (!aberto || !linhasDoAberto) return;
@@ -192,7 +227,8 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
     <RetornosView
       somenteConsulta={somenteConsulta}
       retornos={retornos}
-      aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
+      falha={falhaDosRetornos ? { tentar: leitura.tentar } : null}
+      aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, linhasFalharam: falhaDasLinhas, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
       acoes={{
         abrir: (retorno) => {
           chave.current = null;
@@ -208,6 +244,7 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
           setAberto((atual) => (atual ? { ...atual, notas } : atual));
         },
         receber: () => void receber(),
+        tentarLinhas: linhas.tentar,
       }}
     />
   );

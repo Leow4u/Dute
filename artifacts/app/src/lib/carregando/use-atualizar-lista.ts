@@ -12,11 +12,16 @@ import { useTentarDeNovo } from "./estado-da-conexao";
  * está lendo, se falhou e de quando é o dado. O `dataUpdatedAt` zero é a
  * lista que ainda não leu nada.
  */
-export type LeituraDaLista = Pick<UseQueryResult<unknown>, "isLoading" | "isFetching" | "isError" | "error" | "dataUpdatedAt" | "refetch">;
+export type LeituraDaLista = Pick<UseQueryResult<unknown>, "isLoading" | "isFetching" | "isError" | "error" | "dataUpdatedAt" | "refetch"> &
+  Partial<Pick<UseQueryResult<unknown>, "isPlaceholderData">>;
 
-/** A lista já leu tudo o que mostra: nenhuma das leituras está sem dado. */
+/**
+ * A lista já leu tudo o que mostra: nenhuma das leituras está sem dado. A que
+ * troca de filtro, mês ou cliente (`placeholderData`, momento 7, caso 4)
+ * mostra a lista anterior enquanto lê: a lista está lida.
+ */
 export function listaLida(leituras: readonly LeituraDaLista[]): boolean {
-  return leituras.length > 0 && leituras.every((leitura) => leitura.dataUpdatedAt > 0);
+  return leituras.length > 0 && leituras.every((leitura) => leitura.dataUpdatedAt > 0 || leitura.isPlaceholderData === true);
 }
 
 /** Alguma das leituras está com a falta de conexão: quem relê é o estado da conexão (parte 7a). */
@@ -47,7 +52,8 @@ export interface AtualizarLista {
  * por aqui e não mostra nada; aqui ficam as duas que a pessoa pediu:
  *
  * 1. o toque no Atualizar, que só muda o próprio botão e, no fim, diz "Lista
- *    atualizada" (só com a tela ainda aberta);
+ *    atualizada", ou "Não consegui atualizar" quando a releitura falha (só
+ *    com a tela ainda aberta);
  * 2. a volta do app ao primeiro plano (`visibilitychange`), que relê a lista
  *    já lida com a barra no topo do cartão. A lista ainda sem leitura já está
  *    lendo, e a com a falta de conexão o estado da conexão relê sozinho.
@@ -88,7 +94,10 @@ export function useAtualizarLista(leituras: readonly LeituraDaLista[], alemDaLis
       alem.current?.();
       void Promise.all(ultimas.current.map((leitura) => leitura.refetch()))
         .then((resultados) => {
-          if (montada.current && resultados.every((resultado) => !resultado.isError)) anunciar("Lista atualizada");
+          if (!montada.current) return;
+          if (resultados.every((resultado) => !resultado.isError)) anunciar("Lista atualizada");
+          // A lista fica, e a linha de estado diz que não atualizou; quem tocou ouve (a falta de conexão o Anunciador diz sozinho).
+          else if (resultados.some((resultado) => resultado.isError && !ehFaltaDeConexao(resultado.error))) anunciar("Não consegui atualizar");
         })
         .finally(() => {
           tocou.current = false;

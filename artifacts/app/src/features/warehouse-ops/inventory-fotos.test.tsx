@@ -114,8 +114,11 @@ async function esperar(condicao: () => boolean, oQue: string) {
   throw new Error(`Não aconteceu: ${oQue}`);
 }
 
+/** O botão pelo rótulo; no BotaoDeAcao (carregamento v2, parte 13b), pela camada de repouso. */
 function botao(texto: string) {
-  return Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === texto);
+  return Array.from(document.querySelectorAll("button")).find(
+    (button) => (button.querySelector('[data-camada="repouso"]') ?? button).textContent?.trim() === texto,
+  );
 }
 
 function campo(seletor: string) {

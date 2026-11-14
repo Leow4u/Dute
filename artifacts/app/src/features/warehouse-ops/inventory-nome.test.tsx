@@ -101,8 +101,14 @@ async function esperar(condicao: () => boolean, oQue: string) {
   throw new Error(`Não aconteceu: ${oQue}`);
 }
 
+/** O lançamento travado: o BotaoDeAcao espera com aria-disabled, nunca disabled (carregamento v2, parte 13b). */
+const travado = (botaoTravado: HTMLButtonElement) => botaoTravado.getAttribute("aria-disabled") === "true" && !botaoTravado.disabled;
+
+/** O botão pelo rótulo; no BotaoDeAcao (carregamento v2, parte 13b), pela camada de repouso. */
 function botao(texto: string) {
-  return Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === texto);
+  return Array.from(document.querySelectorAll("button")).find(
+    (button) => (button.querySelector('[data-camada="repouso"]') ?? button).textContent?.trim() === texto,
+  );
 }
 
 function campo(seletor: string) {
@@ -246,7 +252,7 @@ describe("a Contagem: o nome do produto novo no padrão", () => {
     await digitar(CONTAGEM, "24");
     await digitar(CUSTO, "39.9");
     await marcar("#opening-confirm-box");
-    await esperar(() => lancar().disabled === false, "o lançamento ligado");
+    await esperar(() => !travado(lancar()), "o lançamento ligado");
   }
 
   it("o nome com o tamanho desliga o lançamento e a mensagem aparece embaixo do Produto", async () => {
@@ -254,11 +260,11 @@ describe("a Contagem: o nome do produto novo no padrão", () => {
 
     // Enquanto a pessoa digita, a letra solta no fim não acende a mensagem.
     await digitar(PRODUTO, "Polo Feminino P");
-    expect(lancar().disabled).toBe(true);
+    expect(travado(lancar())).toBe(true);
     expect(document.getElementById("opening-product-problema")).toBeNull();
 
     await digitar(PRODUTO, "Polo Feminino Piquet Arpoador GG");
-    expect(lancar().disabled).toBe(true);
+    expect(travado(lancar())).toBe(true);
     await esperar(() => Boolean(document.getElementById("opening-product-problema")), "a mensagem do nome");
     expect(document.getElementById("opening-product-problema")!.textContent).toBe(
       "O tamanho GG fica no campo Tamanho. O nome é o mesmo em todos os tamanhos de A.02.0809.002.",
@@ -268,7 +274,7 @@ describe("a Contagem: o nome do produto novo no padrão", () => {
     expect(campo(TAMANHO).getAttribute("aria-invalid")).toBeNull();
 
     await digitar(PRODUTO, "Polo Feminino Piquet Arpoador");
-    expect(lancar().disabled).toBe(false);
+    expect(travado(lancar())).toBe(false);
     expect(document.getElementById("opening-product-problema")).toBeNull();
     expect(campo(PRODUTO).getAttribute("aria-invalid")).toBeNull();
   });
@@ -276,14 +282,14 @@ describe("a Contagem: o nome do produto novo no padrão", () => {
   it("o Tamanho que contradiz o código desliga o lançamento, com a mensagem embaixo do Tamanho", async () => {
     await produtoNovoCompleto();
     await digitar(TAMANHO, "G");
-    expect(lancar().disabled).toBe(true);
+    expect(travado(lancar())).toBe(true);
     await esperar(() => Boolean(document.getElementById("opening-size-problema")), "a mensagem do Tamanho");
     expect(document.getElementById("opening-size-problema")!.textContent).toBe("O código A.02.0809.002.GG é do tamanho GG, e o Tamanho informado é G.");
     expect(campo(TAMANHO).getAttribute("aria-describedby")).toBe("opening-size-problema");
     expect(document.getElementById("opening-product-problema")).toBeNull();
 
     await digitar(TAMANHO, "GG");
-    expect(lancar().disabled).toBe(false);
+    expect(travado(lancar())).toBe(false);
   });
 
   it("o produto novo vai com o nome da família, o tamanho do código e as fotos do irmão", async () => {

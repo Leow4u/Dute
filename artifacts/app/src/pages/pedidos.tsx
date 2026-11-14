@@ -81,6 +81,7 @@ import { OPERACAO_LIBERADO } from "@/lib/liberacao";
 import { chamarOperacao, novaChave } from "@/lib/operacao/api";
 import { hojeIso } from "@/lib/operacao/fila";
 import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import {
   buildOrderQueue,
   chaveDaPrincipal,
@@ -90,6 +91,7 @@ import {
   paraQuandoDoPedido,
 } from "@/lib/order-queue";
 import { useItemPhotos } from "@/lib/use-item-photos";
+import { Esqueleto } from "@/components/ui/esqueleto";
 import { labelsUrl } from "@/lib/warehouse-labels";
 import { etiquetasParaTrocar, textoDeEtiquetasParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { hrefDaListaDeSeparacao, resumoDoGrupo } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -257,7 +259,7 @@ export default function Pedidos() {
   // O suporte consulta: sem separar, entregar, tratar nem definir a entrega.
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const openingSession = useOpeningInventorySession();
-  const { active: cliente, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
+  const { active: cliente, isLoading: clienteCarregando, falhou: clienteFalhou, codeProvavel } = useActiveCustomer();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [view, setView] = useState<"open" | "delivered">("open");
@@ -283,11 +285,16 @@ export default function Pedidos() {
   const lembrarDaLinha = (chave: string) => {
     linhaDoDialogo.current = { chave, abridor: typeof document === "undefined" ? null : document.activeElement };
   };
+  // A leitura ao vivo das entregas que falha não se refaz sozinha: "Tentar de novo", na linha, assina de novo, e a
+  // falha fica até a nova responder (`useLeitura`; carregamento v2, partes 13c e 13g). Quando ela chega, o foco vai à
+  // entrega da linha.
+  const [tentandoEntregas, setTentandoEntregas] = useState(false);
   const entregas = useLeitura(
     OPERACAO_LIBERADO ? "orders:em_aberto" : null,
     (db) => query(collection(db, "orders"), where("status", "in", PEDIDOS_EM_ABERTO)),
     (id, data) => ({ id, entrega: entregaDoPedido(data) }),
   );
+  const entregasFalharam = entregas.erro;
   const entregaPorPedido = useMemo(() => new Map((entregas.itens ?? []).map((item) => [item.id, item.entrega])), [entregas.itens]);
   const entregaDe = (order: OrderGroup): EntregaDoPedido | null => (order.orderId ? entregaPorPedido.get(order.orderId) ?? null : null);
 
@@ -684,12 +691,34 @@ export default function Pedidos() {
   /** A entrega do pedido na linha e a ação de definir (ou abrir na Operação), com a Operação liberada. */
   const daEntrega = (order: OrderGroup) => {
     if (!OPERACAO_LIBERADO || !order.orderId) return {};
+    // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
+    // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
+    if (entregas.itens === null) {
+      if (!entregasFalharam) return {};
+      return {
+        detail: "Não consegui carregar a entrega.",
+        secondary: operador ? (
+          <SaiComOFoco alvo={`entrega-${order.key}`}>
+            <BotaoDeAcao
+              variant="outline"
+              estado={tentandoEntregas ? "andamento" : "repouso"}
+              rotulo="Tentar de novo"
+              andamento="Tentando de novo…"
+              onClick={() => {
+                setTentandoEntregas(true);
+                void entregas.tentar().finally(() => setTentandoEntregas(false));
+              }}
+            />
+          </SaiComOFoco>
+        ) : undefined,
+      };
+    }
     const entrega = entregaDe(order);
     const resumo = entrega ? [resumoDaEntrega(entrega), naOperacao(entrega)].filter(Boolean).join(" · ") : null;
     return {
       detail: resumo,
       secondary: operador ? (
-        <Button type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
+        <Button id={`entrega-${order.key}`} type="button" variant="outline" disabled={busy} onClick={() => abrirEntrega(order)}>
           {faltaAbrirNaOperacao(entrega) ? "Abrir na Operação" : entrega ? "Alterar entrega" : "Entrega"}
         </Button>
       ) : undefined,
@@ -732,10 +761,10 @@ export default function Pedidos() {
   const lendo = loading && !semLeitura;
   const idDaLinha = useId();
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
-  // escolhido neste aparelho. Só grava com o cliente confirmado, e só os grupos que quem vê tem: "Para aprovar"
-  // fica com a contagem de quem decide.
+  // escolhido neste aparelho. Só grava com o cliente confirmado (nem lendo, nem com a lista dos clientes que falhou),
+  // e só os grupos que quem vê tem: "Para aprovar" fica com a contagem de quem decide.
   const contagensLidas: ContagensDaLista | null =
-    lida && !clienteCarregando
+    lida && !clienteCarregando && !clienteFalhou
       ? {
           ...(decider ? { aprovar: chavesParaAprovar.length } : {}),
           separar: chavesParaSeparar.length,
@@ -773,7 +802,8 @@ export default function Pedidos() {
               aria-label="Pedidos em aberto ou entregues"
               cheioNoCelular
               options={[
-                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
+                // Lendo, o bloco; sem nada lido (a falha, a falta de conexão), o "—": nunca o rótulo só, como se não houvesse pedido.
+                { value: "open", label: "Em aberto", count: lendo ? null : semLeitura || (semRede && semRede.lidaEm === null) ? "falhou" : openCount },
                 { value: "delivered", label: "Entregues" },
               ]}
             />
@@ -1598,6 +1628,9 @@ export function ItemList({ items, cliente }: { items: NonNullable<WarehouseTask[
                       loading="lazy"
                       className="size-11 shrink-0 rounded-lg bg-muted object-cover"
                     />
+                  ) : photoFor.lendo ? (
+                    // As fotos ainda chegam: o lugar fica neutro, sem afirmar "sem foto" (carregamento v2, parte 13c).
+                    <Esqueleto forma="icone" className="size-11 shrink-0" />
                   ) : (
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
                       <Package className="size-4" aria-hidden="true" />

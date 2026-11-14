@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { type Product, useListProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getListProductsQueryKey } from "@workspace/api-client-react";
 import { tamanhoDoCodigo } from "@workspace/dominio";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { Esqueleto } from "@/components/ui/esqueleto";
+import { LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { useContagemLembrada } from "@/lib/carregando/contagem-lembrada";
+import { useChegada } from "@/lib/carregando/use-chegada";
+import { useEspera } from "@/lib/carregando/use-espera";
+import { ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Boxes, CircleDollarSign, Edit, PackageSearch, Plus, Tags, Trash2 } from "lucide-react";
@@ -29,6 +36,9 @@ import {
   StockTableCard,
   StockTablePagination,
   StockToolbar,
+  LinhaFantasmaDaTabela,
+  corpoDaTabela,
+  type ColunaFantasma,
 } from "@/components/stock/stock-workbench";
 import { atributosDoProblema, problemaDoNomeNoCadastro, seguirSugestao } from "@/features/warehouse-ops/product-identity";
 
@@ -78,12 +88,27 @@ export default function Products() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading } = useListProducts(
+  // A busca e a página leem no servidor: a lista anterior fica, a 50% e inert, até a nova chegar (carregamento
+  // v2, momento 7, caso 4); a releitura que falha não a apaga, e a troca que falha mostra o aviso no lugar dela.
+  const leitura = useListProducts(
     { search: debouncedSearch || undefined, limit, offset: page * limit },
-    { query: { queryKey: getListProductsQueryKey({ search: debouncedSearch || undefined, limit, offset: page * limit }) } }
+    { query: { queryKey: getListProductsQueryKey({ search: debouncedSearch || undefined, limit, offset: page * limit }), placeholderData: keepPreviousData } }
   );
+  const { data, isLoading } = leitura;
+  const lista = useListaComFiltro(leitura);
+  const troca = useListaEmTroca(lista.trocando);
+  const idDaLinha = useId();
 
   const products = data?.items ?? [];
+  // Antes da primeira leitura, o bloco no lugar de cada número e do resumo da página; com ela falhando, "—": nunca
+  // zero antes de ler, e a leitura não se confunde com a falha (carregamento v2, parte 13d; necessidade 3).
+  const lido = data !== undefined && !lista.falhou;
+  const numeroLido = (valor: ReactNode) => (lido ? valor : lista.falhou ? "—" : <Esqueleto forma="contagem" />);
+  // As linhas-fantasma entram aos 300 ms, quantas a última página trouxe (de 1 a 5; sem ela, 2), com o brilho.
+  const fantasmas = useEspera(isLoading);
+  // Na chegada, as linhas reais entram no lugar das fantasmas por opacidade, subindo 4 px, em cascata (momento 2).
+  const chegando = useChegada(isLoading);
+  const contagem = useContagemLembrada("produtos", "todos", lido && !lista.trocando ? { linhas: products.length } : null);
   const categoryOptions = useMemo(() => {
     const counts = new Map<string, number>();
     products.forEach((product) => {
@@ -120,29 +145,33 @@ export default function Products() {
       title="Produtos"
       icon={<PackageSearch className="h-6 w-6" />}
       actions={catalogWriter ? <ProductModal showPrice={showPrice} /> : undefined}
+      // A casa do estado da lista, sob o título: "Carregando produtos…" na primeira leitura, com as linhas-fantasma no
+      // lugar da tabela; "Atualizado às", a troca que passa de 5 s, a releitura que falha e a falta de conexão, sem
+      // empurrar a lista (carregamento v2, parte 13d).
+      estado={<LinhaDeEstado id={idDaLinha} leitura={leitura} objeto="produtos" />}
     >
       {/* "Peças na página" era soma do recorte visível — número que muda ao
           paginar e não sustenta decisão nenhuma. */}
       <StockMetricsGrid>
         <StockMetricCard
           label="Produtos cadastrados"
-          value={formatStockNumber(data?.total ?? 0)}
+          value={numeroLido(formatStockNumber(data?.total ?? 0))}
           icon={<Tags className="h-5 w-5" />}
           tone="blue"
         />
         {showPrice ? (
           <StockMetricCard
             label="Valor carregado"
-            value={formatStockMoney(pageCost)}
+            value={numeroLido(formatStockMoney(pageCost))}
             icon={<CircleDollarSign className="h-5 w-5" />}
           />
         ) : null}
         {showPrice ? (
           <StockMetricCard
             label="Sem custo válido"
-            value={formatStockNumber(missingCost)}
+            value={numeroLido(formatStockNumber(missingCost))}
             icon={<AlertTriangle className="h-5 w-5" />}
-            tone={missingCost ? "amber" : "default"}
+            tone={lido && missingCost ? "amber" : "default"}
           />
         ) : null}
       </StockMetricsGrid>
@@ -151,12 +180,20 @@ export default function Products() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Buscar por cod. cliente, produto, categoria, cor ou tamanho"
-        resultText={`${formatStockNumber(filteredProducts.length)} produto(s) nesta página`}
+        // A página que não chegou não tem contagem: o aviso está no lugar da lista, e "0" seria um falso zero. Lendo, o
+        // bloco guarda a linha do resumo.
+        resultText={
+          lista.falhou ? undefined : lido ? (
+            `${formatStockNumber(filteredProducts.length)} produto(s) nesta página`
+          ) : (
+            <span className="flex h-5 items-center"><Esqueleto forma="texto" className="w-40" /></span>
+          )
+        }
       >
         <StockFilterChip
           active={categoryFilter === "todos"}
           onClick={() => setCategoryFilter("todos")}
-          count={products.length}
+          count={lido ? products.length : undefined}
         >
           Todas categorias
         </StockFilterChip>
@@ -172,8 +209,17 @@ export default function Products() {
         ))}
       </StockToolbar>
 
-      <StockTableCard>
-          <div className="overflow-x-auto">
+      <StockTableCard trocando={lista.trocando} pagina={page}>
+          {lista.falhou ? (
+            <FalhaNaLeitura leitura={leitura} erro={lista.erro} mensagem="Não consegui carregar os produtos." className="rounded-none border-0" focoAoSair={idDaLinha} />
+          ) : (
+          <div
+            // Lendo, a faixa do brilho anda além do corpo da tabela (o tbody não recorta): quem recorta é a caixa, sem
+            // abrir a rolagem lateral.
+            className={isLoading ? "overflow-hidden" : "overflow-x-auto"}
+            {...troca.props}
+          >
+            <ConteudoEmTroca trocando={lista.trocando}>
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase border-b border-border/80 bg-card">
                 <tr>
@@ -188,11 +234,12 @@ export default function Products() {
                   <th className="px-4 py-3 font-medium text-center">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody {...corpoDaTabela({ lendo: isLoading, visivel: fantasmas.visivel, chegando, idDaLinha, className: "divide-y divide-border" })}>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={showPrice ? 9 : 7} className="px-4 py-8 text-center text-muted-foreground">Carregando produtos...</td>
-                  </tr>
+                  // As linhas-fantasma da primeira leitura, na altura da linha real; quem diz é a linha de estado.
+                  Array.from({ length: contagem.linhas("linhas") }, (_, ordem) => (
+                    <LinhaFantasmaDaTabela key={ordem} visivel={fantasmas.visivel} larguras={showPrice ? FANTASMA_COM_PRECO : FANTASMA_SEM_PRECO} />
+                  ))
                 ) : data?.items?.length === 0 ? (
                   <tr>
                     <td colSpan={showPrice ? 9 : 7} className="px-4 py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td>
@@ -239,11 +286,16 @@ export default function Products() {
                 )}
               </tbody>
             </table>
+            </ConteudoEmTroca>
           </div>
+          )}
           
           <StockTablePagination
             page={page}
             isLoading={isLoading}
+            ocupada={lista.trocando}
+            /* Sem a leitura, nem "Exibindo 0 de 0": a contagem só depois de ler (necessidade 3). */
+            semContagem={lista.falhou || data === undefined}
             count={data?.items?.length || 0}
             total={data?.total || 0}
             limit={limit}
@@ -351,8 +403,8 @@ export function ProductModal({ product, showPrice = false }: { product?: any; sh
     <Dialog open={open} ocupado={createProduct.isPending || updateProduct.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {isEdit ? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
-            <Edit className="h-4 w-4" />
+          <Button variant="ghost" size="icon" aria-label={`Editar ${product.cod_cliente}`} className="h-8 w-8 text-info-soft-foreground hover:text-info-soft-foreground hover:bg-info-soft">
+            <Edit className="h-4 w-4" aria-hidden="true" />
           </Button>
         ) : (
           <Button>
@@ -445,8 +497,8 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
   return (
     <Dialog open={open} ocupado={deleteProduct.isPending} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
-          <Trash2 className="h-4 w-4" />
+        <Button variant="ghost" size="icon" aria-label={`Excluir ${cod_cliente}`} className="h-8 w-8 text-destructive-soft-foreground hover:text-destructive-soft-foreground hover:bg-destructive-soft">
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
@@ -467,3 +519,7 @@ function DeleteProductButton({ id, cod_cliente }: { id: number, cod_cliente: str
     </Dialog>
   );
 }
+
+/** A largura do bloco de cada coluna da linha-fantasma (com e sem as colunas de preço). */
+const FANTASMA_COM_PRECO: readonly ColunaFantasma[] = ["w-28", "w-44", "w-20", "w-24", "w-16", "w-16", "w-12", "w-16", "acoes"];
+const FANTASMA_SEM_PRECO: readonly ColunaFantasma[] = ["w-28", "w-44", "w-20", "w-24", "w-16", "w-12", "acoes"];

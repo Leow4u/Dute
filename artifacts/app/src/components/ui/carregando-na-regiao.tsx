@@ -2,13 +2,12 @@ import { Clock3 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { DEMORANDO, SEM_RESPOSTA } from "@/components/ui/carregando-tela";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { ErroNaLeitura, useFocoAoSair } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio } from "@/lib/carregando/anunciador";
 import { novaEsperaDaRota, useEsperaDaRota, useEsperaDaRotaNaTela, type EsperaDaRota } from "@/lib/carregando/espera-da-rota";
 import { useTentarDeNovo } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,8 +43,9 @@ import { cn } from "@/lib/utils";
  * já foi anunciado não é anunciado de novo.
  *
  * Quando a leitura chega e a região sai com o foco nela (a pessoa tocou em
- * "Tentar de novo"), o foco vai ao título da seção ou da tela que chegou,
- * nunca ao `body` (WCAG 2.4.3).
+ * "Tentar de novo"), o foco vai a `focoAoSair` (o id de quem fica, como a
+ * volta da fatura; parte 13d) ou, sem ele, ao título da seção ou da tela que
+ * chegou, nunca ao `body` (WCAG 2.4.3).
  */
 export function CarregandoNaRegiao({
   rotulo,
@@ -54,16 +54,19 @@ export function CarregandoNaRegiao({
   passaAdiante = false,
   onTentar,
   id,
+  focoAoSair,
 }: {
   rotulo: string;
   className?: string;
   continuaARota?: boolean;
   /** A próxima região que entra lendo continua esta espera (a leitura da área antes da da tela). */
   passaAdiante?: boolean;
-  /** Repete a leitura: "Tentar de novo" aos 10 s e a desistência aos 70 s. */
-  onTentar?: () => void;
+  /** Repete a leitura: "Tentar de novo" aos 10 s e a desistência aos 70 s. A promessa que ela devolve não precisa ser tratada. */
+  onTentar?: () => unknown;
   /** O id da região, para a lista que lê apontar para ela (`aria-describedby`; momento 2). */
   id?: string;
+  /** O id de quem recebe o foco quando a região sai com ele dentro (a nova tentativa que deu certo). */
+  focoAoSair?: string;
 }) {
   const [tentativa, setTentativa] = useState(0);
   const raiz = useRef<HTMLDivElement>(null);
@@ -73,7 +76,8 @@ export function CarregandoNaRegiao({
     ? () => {
         levarOFoco.current = Boolean(raiz.current && raiz.current.contains(raiz.current.ownerDocument.activeElement));
         setTentativa((atual) => atual + 1);
-        tentarDeNovo(onTentar);
+        // A releitura que falha mostra a falha pela leitura: a promessa dela não fica sem tratar.
+        tentarDeNovo(() => void Promise.resolve(onTentar()).catch(() => undefined));
       }
     : undefined;
   // O botão tocado sai com a espera que recomeça: o foco fica na região.
@@ -82,13 +86,8 @@ export function CarregandoNaRegiao({
     levarOFoco.current = false;
     raiz.current?.focus({ preventScroll: true });
   }, [tentativa]);
-  // A leitura chegou e a região sai com o foco: ele vai ao título de onde ela morava, não ao `body`.
-  useLayoutEffect(() => {
-    const elemento = raiz.current;
-    return () => {
-      if (elemento) segurarOFocoQueSai(elemento);
-    };
-  }, []);
+  // A leitura chegou e a região sai com o foco: ele vai a `focoAoSair` ou ao título de onde ela morava, não ao `body`.
+  useFocoAoSair(raiz, focoAoSair);
   return (
     <div
       ref={raiz}

@@ -321,7 +321,9 @@ o Início) ou por URL.
 2. **Chegada avulsa, Devoluções e Contagem cíclica.** Esperar
    `lookupQuery` antes de `mustCreate` e de "não localizado", com o mesmo
    "Verificando o catálogo" da abertura; com erro, dizer que o catálogo não
-   veio e bloquear o "produto novo".
+   veio e bloquear o "produto novo". *A chegada avulsa entrou no PR 581; as
+   Devoluções e a contagem cíclica, na parte 13c do carregamento v2 (registro
+   em 10.5).*
 3. **Erro nunca vira vazio.** Pedidos e Receber ganham `error` próprio (e
    os avisos de Receber, `isLoading`); Exceções, Posições, histórico do item,
    Produtos, Movimentações, Retornos, conversa e Conhecimento do agente idem.
@@ -648,7 +650,9 @@ O PR 2 do celular (as telas da operação sem sinal) entrou no PR 610, com a
 parte 9 do carregamento v2 (10.5). Depois de entrar, a equipe guarda no
 aparelho os arquivos das telas que pode abrir, uma vez por versão, e o
 `ChunkErrorBoundary` separa a falta de rede, a versão nova e o erro da tela.
-Ficam para depois os PRs 3 a 5.
+O PR 3 do celular (as fotos) entrou com a parte 11, e o PR 5 (a leitura leve
+e a volta do segundo plano), com a parte 10 (10.5). O PR 4 (a ação no
+celular) não tem registro próprio.
 
 ## 10. Carregamento v2 (12/11/2026)
 
@@ -750,10 +754,10 @@ por PR:
 | 7 | A conexão (7a: "Reconectando…" com histerese e a releitura sozinha) e a linha de estado nas listas (7b: Pedidos, Receber, Estoque, Alertas) | PR 610 |
 | 8 | As listas com a forma final | PR 610 |
 | 9 | A abertura com a marca e a `CarregandoTela` no lugar do branco | PR 610 |
-| 10 | A troca de filtro e a releitura sem apagar a lista | a fazer |
+| 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos) e 13e (as Configurações, o sistema e o Início) no PR 610; o resto a fazer |
+| 13 | A migração por área e a trava (`animate-spin` só no `Spinner`) | 13a (os diálogos), 13b (o Estoque e o armazém), 13c (Receber, Operações, Pedidos e Solicitações), 13d (o Faturamento, os Relatórios, os Documentos e o Catálogo), 13e (as Configurações, o sistema e o Início), 13f (o portal) e 13g (o Comercial, a Operação, o campo, a TV, o Financeiro e o RH, com a revisão a fazer) no PR 610; a trava a fazer |
 
 Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código:
 
@@ -765,7 +769,19 @@ Pequenas escolhas das pranchas que esperam confirmação, sem bloquear o código
   enviada", com o "Tentar de novo", e não "Sem confirmação do servidor" com
   "Conferir", como no cartão "Quando demora · escrita" da prancha: o envio
   cancelado não tem o que conferir. A dúvida só existe na callable que vem
-  depois do último byte, e ela diz "Confira antes de tentar de novo".
+  depois do último byte, e ela diz "Confira antes de tentar de novo";
+- a releitura que falha por erro do servidor, com o aparelho conectado e a
+  lista lida, diz "Não consegui atualizar · lista de 10:42", com "Tentar de
+  novo", e não "Reconectando…" (parte 10). O momento 8 fala do servidor que
+  "demora ou falha", mas o "Reconectando…" relê sozinho, e o erro do servidor
+  não passa sozinho. No Fechamento, "lista de" fala da competência;
+- a lista que troca de filtro fica `inert` e com `aria-busy`, como na prancha
+  (parte 10). No Chromium, o `inert` a tira da árvore de acessibilidade, e o
+  `aria-busy` nunca chega ao leitor de tela: para ele, a lista some até a nova
+  chegar. Quem diz que ela está atualizando é a linha de estado, aos 5 s
+  ("Atualizando…", sem região viva) e aos 10 s (a demora, dita pelo
+  Anunciador). Deixar a lista fora do `inert` exporia ao leitor e ao teclado
+  uma lista de outro filtro.
 
 ### 10.5 Registro das partes
 
@@ -1284,6 +1300,218 @@ Ficam para depois:
   partes 9, 11 e 12);
 - a medição num Android de verdade e no Safari, que pode tratar a folha no
   corpo de outro jeito.
+
+**Parte 10, a troca de filtro e a releitura (PR 610, 13/11/2026).** O momento
+7 (casos 3 e 4) e a releitura do momento 8. Entraram aqui o item 9 da seção 6
+(a atualização) e o PR 5 do celular (9.3: a leitura leve e a volta do segundo
+plano).
+
+- **A troca de filtro, mês ou cliente** (`lib/carregando/use-lista-em-troca.tsx`),
+  com `placeholderData: keepPreviousData` nas listas com filtro no servidor:
+  Produtos e SKUs (a busca e a página), Movimentações (o tipo, a busca e a
+  página, também na aba Histórico do Estoque), Pedidos legado (o status, a
+  busca e a página), Relatórios (o período), o Fechamento do mês (o mês e o
+  cliente) e o Receber (a troca de cliente, que a parte 8 deixou para cá):
+  - a lista anterior fica, a 50% em 150 ms, `inert` e com `aria-busy`, que só
+    vale neste caso. Nada de "Carregando..." no lugar dela, e a tela não pula;
+  - a barra do topo do cartão (`BarraDaLista`, a `BarraDeEspera` com o fim em
+    tinta) entra aos 300 ms, inteira: o CSS esmaece tudo dentro da lista
+    menos o caminho até ela, desde o começo da troca;
+  - aos 5 s, a linha de estado diz "Atualizando…"; até lá, a hora da lista
+    na tela. Aos 10 s, a demora, com "Tentar de novo". A troca não fala até a
+    demora;
+  - na chegada, a lista nova volta a 1 da opacidade em que a anterior estava,
+    subindo 4 px, em 150 ms (só opacidade no reduzido);
+  - o filtro, a busca e a paginação ficam fora do que fica inerte, e o foco
+    fica onde a pessoa tocou. "Anterior" e "Próximo" ficam ocupados com
+    `aria-disabled`, sem `disabled`, até a página chegar, e o cursor das
+    Movimentações não pega o da página que ainda está na tela (antes, o
+    `disabled` tirava o foco do botão; com a página anterior na tela, o cursor
+    seguinte seria o dela);
+  - nos Relatórios, o "Baixar planilha" fica ocupado na troca: a prévia na
+    tela é do período anterior, e a planilha sairia com o nome do novo. "Nada
+    neste filtro" diz o período da prévia; no Fechamento, o cartão do total
+    diz o mês que está na tela;
+  - no Receber, os avisos do cliente anterior ficam até os do novo chegarem
+    (antes, sumiam na hora, e "Para conferir" contava sem eles), e a contagem
+    lembrada do cliente novo não é gravada com os do anterior;
+  - a troca que falha mostra o aviso no lugar da lista (`FalhaNaLeitura`: o
+    `ErroNaLeitura` ou, na falta de conexão, o `BlocoSemConexao`), nunca o
+    vazio. A nova tentativa segue com o aviso e "Tentando de novo…" (o
+    react-query voltaria a lista do filtro anterior por baixo,
+    `useListaComFiltro`). Antes, a busca de Produtos que falhava deixava a
+    tabela vazia e "Produtos cadastrados 0".
+- **A releitura que falha nunca apaga a lista** (momentos 7 e 8). Antes, o
+  Receber, o Estoque, os Alertas, os Relatórios e o Fechamento trocavam a
+  lista pelo aviso de erro; Pedidos dizia "Atualizado às 10:42" como se nada
+  tivesse falhado; Produtos, SKUs, Movimentações e Pedidos legado não diziam
+  nada. Agora só a leitura sem nada lido troca a lista pelo aviso:
+  - a linha de estado diz "Não consegui atualizar · lista de 10:42", com
+    "Tentar de novo" (o ícone em crítico, o texto em tinta, como o
+    "Reconectando…"). Além das quatro listas que já tinham a linha, ela entrou
+    sob o título de Produtos, SKUs, Movimentações, Pedidos legado e
+    Relatórios, e logo abaixo dos meses no Fechamento (a decisão 5:
+    "Atualizado às" sempre sob o título das listas). Essas telas também
+    passaram a dizer a falta de conexão ("Reconectando… · lista de 10:42",
+    "Sem conexão · lista de 10:42"), que não mostravam;
+  - a releitura automática não fala. Quem tocou em Atualizar ou em "Tentar de
+    novo" e viu falhar de novo ouve "Não consegui atualizar".
+- **O "Avançar" só volta depois da releitura** (o item 9 da seção 6 e a
+  linha "Tratar" de 4.3): a mutação de `useWarehouseTaskActions` espera a
+  bancada voltar. Antes, o botão voltava ativo com a tarefa ainda na etapa
+  antiga, até a releitura chegar.
+- **A leitura leve no celular** (o PR 5 do celular):
+  - abaixo de 768 px, onde o menu lateral com os contadores não aparece, o
+    shell da Armazenagem não lê o armazém (`/api/warehouse/ops`, até cerca
+    de 9.900 documentos) nem o relê a cada 60 s; cada tela lê o que mostra. O
+    menu lateral volta a ler quando aparece;
+  - o "Conferir" da separação que acha o pedido concluído usa a leitura que
+    acabou de fazer, e não lê a fila de novo (antes, duas leituras);
+  - a volta do app ao primeiro plano já relia as listas, com a barra no topo
+    e "Atualizado às" (parte 7b): nada a mais aqui.
+- **Medição no Chromium**, num harness com dados sintéticos e o servidor
+  simulado (a troca com o servidor a 2,5 s; antes é o `96ea50d`):
+  - a troca, nas sete telas: antes, a lista sumia por toda a espera (150
+    quadros de 151, cerca de 2,5 s), no lugar dela "Carregando..." ou
+    "Calculando…", e a tela encolhia de uma vez (de 2.265 a 2.965 px nas
+    listas legadas, 230 px nos Relatórios, 291 px no Fechamento e 315 px no
+    Receber, onde os avisos sumiam); depois, a lista anterior em todos os
+    quadros, nenhum "Carregando", `aria-busy` e `inert` em todos, a 0,5
+    depois de 150 ms, a barra do topo entre 287 e 338 ms, e 0 px de salto até
+    a chegada. No celular de 390 px, antes de 471 a 3.165 px; depois, 0 px.
+    No movimento reduzido, a mesma forma, com a barra parada e inteira;
+  - a chegada: a lista nova vai de 0 a 1 em cerca de 140 ms, e a barra
+    completa em tinta e esmaece;
+  - no Receber, com o servidor a 6,5 s: antes, "Carregando chegadas…" e os
+    avisos fora por todo o tempo; depois, "Atualizado às" e, a 5,22 s da
+    troca, "Atualizando…";
+  - a releitura que falha (um erro 500): antes, o Receber, o Fechamento e os
+    Relatórios ficavam com 0 linhas e o aviso de erro, e o Estoque com "Não
+    consegui carregar o estoque."; Produtos seguia sem dizer nada. Depois, as
+    mesmas linhas na tela (3, 2, 8 e 50), com "Não consegui atualizar · lista
+    de" na linha de estado ou na faixa (o "· lista de" com 6,07:1 no claro e
+    7,36:1 no escuro). A busca de Produtos que falhava deixava a tabela vazia;
+    agora, o aviso com "Tentar de novo";
+  - o shell no celular, em 3 min numa tela que não lê o armazém: antes, 1
+    leitura de `/api/warehouse/ops` ao abrir e 3 no intervalo; depois, 0 e 0.
+    No computador, segue 1 e 3;
+  - o axe-core no Chromium, com o contraste, no claro e no escuro: nenhuma
+    violação nova na troca (a lista `inert` sai da árvore) nem com as faixas
+    de falha. As que existem são de antes desta parte: nas telas legadas, os
+    botões de ícone sem nome (100 em Produtos), as barras de progresso sem
+    nome (50 em Pedidos legado) e o contraste; no escuro, o primário (4,3:1).
+
+- **A revisão (13/11/2026)**, com o que o navegador e o leitor de tela
+  mostraram:
+  - **A faixa saiu; a linha de estado entrou.** A `FaixaDaReleitura`, que
+    entrava logo acima da lista nas telas sem a linha, empurrava a lista 74 px
+    em Produtos e 66 px no Fechamento e nos Relatórios quando entrava, e de
+    novo quando saía, também na falta de conexão. Agora o estado dessas seis
+    telas mora na linha reservada (acima), e nada empurra a lista. A primeira
+    leitura delas ainda diz "Carregando..." na tabela, e a linha fica vazia e
+    calada até a lista chegar (`primeiraNaLista`). Na aba Histórico do
+    Estoque, a linha das movimentações fica reservada logo acima da lista, sem
+    a hora (a do Estoque, sob o título, é a dos itens; `semHora`): ela só diz
+    a troca que passa de 5 s, a demora, a falha e a falta de conexão;
+  - **A troca que demora.** Aos 5 s, "Atualizando…" nas sete telas (antes, só
+    no Receber; nas outras, a barra parada e nenhum texto). Aos 10 s, a pílula
+    "Demorando mais que o normal" com "Tentar de novo", como na primeira
+    leitura, dita uma vez pelo Anunciador (antes, a troca ficava parada no
+    estado dos 5 s para sempre). O "Tentar de novo" larga a leitura presa e lê
+    de novo o filtro novo, com a lista anterior na tela até ela chegar;
+  - **O toque.** A lista anterior não se redesenha enquanto a nova não chega
+    (`ConteudoEmTroca`): antes, o toque refazia a tabela inteira duas vezes. Com
+    a CPU 4× mais lenta, o primeiro quadro que muda depois do toque em
+    "Próximo" (Produtos, 50 linhas, o build de produção) passou de 150 a 171
+    ms para 102 a 116 ms no computador, e de 137 a 154 ms para 83 a 98 ms no
+    celular; o script nos primeiros 250 ms, de 94 para 21 ms. O que resta é o
+    recálculo de estilo do `inert` e do esmaecer na tabela inteira (cerca de
+    45 ms com a CPU 4×), que a troca pede;
+  - **A chegada sem piscar.** A lista nova volta a 1 da opacidade em que a
+    anterior estava, por uma transição, e sobe 4 px por `transform`
+    (`carregando-chega-troca`): nunca passa por 0. Antes, ela ia de 0,5 a 0 em
+    um quadro, o cartão ficava vazio por 2 ou 3 quadros, e a troca rápida
+    piscava. Com o servidor a 150 ms, a opacidade agora vai de 0,50 a 0,60,
+    0,87, 0,92… e 1; a 40 ms, de 1 a 0,90, 0,99 e 1;
+  - **A paginação.** Nas pontas, "Anterior" e "Próximo" ficam indisponíveis
+    com `aria-disabled` (a 50%), sem `disabled`: o foco fica no botão quando a
+    última ou a primeira página chega (antes, ia ao `body`). A página nova que
+    chega com o topo do cartão acima da tela o traz à vista, de uma vez, e a
+    pessoa lê a página do começo (antes, ficava no pé, vendo o fim da página
+    nova: no Chromium, a primeira linha visível era a A.085, e agora é a
+    A.051);
+  - **O aviso da troca que falha** (`FalhaNaLeitura`). "Tentando de novo…" só
+    na nova tentativa que a pessoa pede: a releitura automática não mexe mais
+    no aviso, que é um alerta e era lido de novo sem ninguém tocar. Quando a
+    nova tentativa dá certo, o foco vai à linha de estado, e não ao `body`. Ao
+    lado do aviso, nada de "Exibindo 0 de 0", "0 produto(s) nesta página" ou
+    as contagens dos filtros;
+  - **Os Relatórios de estoque.** A primeira leitura que falha segue com o
+    aviso e "Tentando de novo…" na nova tentativa; antes, o aviso virava
+    "Carregando..." e o foco caía no `body`;
+  - **O Receber.** A troca de cliente que falha mostra "Não consegui carregar
+    as chegadas." com "Tentar de novo" no lugar da lista; antes, a lista
+    ficava sem os avisos, a linha vazia, e "Para conferir" contava sem eles.
+    Na nova tentativa, "Tentando de novo…", sem os avisos do cliente anterior
+    por baixo, e o "Em aberto" fica com o bloco enquanto o aviso está na tela.
+    Na troca, só os avisos do cliente anterior ficam a 50% e `inert`: as
+    chegadas e as guardas do armazém, que a troca não relê, seguem com o
+    toque;
+  - **O "Não consegui atualizar"** que a pessoa pediu só é dito com a tela
+    aberta, e o que ainda espera o intervalo do Anunciador sai com ela;
+  - **O "Avançar" e o "Concluir entrada"**, que agora esperam a releitura,
+    ficam ocupados com `aria-disabled`, a caixa do indicador e "Avançando…",
+    sem `disabled`: antes, o foco caía no `body` e ficava lá durante toda a
+    releitura.
+- **Medição da revisão no Chromium**, no mesmo tipo de harness, com o
+  `5ad56f4` como antes:
+  - a releitura que falha e a falta de conexão de verdade
+    (`context.setOffline`): 0 px de salto em Produtos, Fechamento e Relatórios
+    (antes, 74, 66 e 66 px);
+  - a troca nas sete telas, com o servidor a 2,5 s: nenhum quadro sem lista,
+    a lista a 0,5 aos 150 ms, e só os 4 px da subida na chegada;
+  - na troca longa (80 s): "Atualizando…" aos 5,6 s, "Demorando mais que o
+    normal" com "Tentar de novo" aos 10,3 s, e "Atualizado às" na chegada;
+  - o foco: depois do "Tentar de novo" que dá certo, na linha de estado;
+    na última página e na primeira, no botão;
+  - o Receber: os três avisos do cliente anterior a 0,5 e `inert`, as duas
+    chegadas a 1 e com o toque; a troca que falha com o aviso, "Tentando de
+    novo…" e, na volta, "Atualizado às";
+  - o axe-core, nas sete telas, no claro, no escuro e no celular, em
+    repouso, na troca, com a releitura que falhou, em "Tentando de novo…" e
+    com o aviso da troca que falhou: nenhuma regra nova. As que aparecem são
+    de antes desta parte.
+
+Fica aberto:
+
+- na aba Histórico do Estoque, a linha sob o título continua dizendo a hora
+  dos itens; a das movimentações fica na linha delas, acima da lista, só com
+  o que muda;
+- a decisão do `inert` com o `aria-busy` na lista que troca e a frase "Não
+  consegui atualizar" esperam a confirmação do Leonardo (10.4);
+- aos 70 s, a troca segue com "Demorando mais que o normal" e "Tentar de
+  novo", como a primeira leitura das listas: a saída dos 70 s ("Sem resposta
+  do servidor.") não existe em nenhuma lista;
+- o toque em "Próximo" ainda leva de 102 a 116 ms no computador com a CPU 4×
+  mais lenta, pelo recálculo de estilo do `inert` na tabela inteira;
+- durante a troca, os números fora da lista (os cartões de Produtos, SKUs e
+  Pedidos legado, o "Exibindo 50 de 120" da paginação, a contagem do
+  relatório no menu dos Relatórios e o "Em aberto · N" do Receber) ficam com
+  os da lista anterior, inteiros, até a nova chegar; e, com a busca que
+  falhou, o cartão "Produtos cadastrados" ainda diz 0;
+- no Fechamento, os cartões dos meses do cliente novo dizem "Em aberto" até a
+  lista dos períodos chegar (o falso vazio de 4.8, de antes desta parte);
+- a primeira leitura dessas seis telas segue com "Carregando..." em texto (a
+  migração, parte 13);
+- "Anterior" e "Próximo" ocupados na troca não mudam de aspecto: quem diz é a
+  lista a 50% e a barra. Na paginação do pé de uma página longa, a barra do
+  topo fica fora da tela durante a troca;
+- o `realtime-sync` relê a fila do armazém quando as tarefas mudam: na
+  conclusão da separação, a releitura dela e a do app podem somar duas
+  leituras (a segunda cancela a primeira). O harness não tem o Firestore, e
+  isso não foi medido; o "Avançar" ocupado também não foi medido no
+  navegador (o harness não tem bancada com tarefa que avança);
+- a conferência num Android de verdade e com leitor de tela de verdade.
 
 **Parte 11, as operações longas (PR 610, 13/11/2026).** É também o PR 3 do
 celular (as fotos) e o item 8 da seção 6.
@@ -1806,12 +2034,839 @@ Fica aberto:
   Cancelar e o "Criar conferência"; e os diálogos fora da lista (Trocar de
   caixa, Conferir e fechar, Remover rascunho, Remover linha e caixa da
   abertura, o Comercial, a Operação e o RH), que seguram o diálogo do jeito
-  antigo, com `disabled`;
+  antigo, com `disabled` (*o `fieldset` saiu na parte 13c; os diálogos da
+  abertura seguram como os outros desde a 13b, e os do Comercial, da
+  Operação e do RH, desde a 13g; registros abaixo*);
 - o X do diálogo longo rola com o conteúdo, como antes;
 - o Recusar da linha (parte 4) ainda esmaece no toque, e não aos 300 ms; o
   "⋯" de Pedidos fica `disabled` enquanto outra ação grava;
 - a conferência com leitor de tela de verdade, num Android médio e no
   Safari; o anel do foco do `Button` (1,91:1), da parte 6.
+
+**Parte 13b, o Estoque e o armazém (PR 610, 13/11/2026).** A migração das
+seções 4.4, 4.6 e 4.7 (Estoque › Itens e Alertas, a Contagem com a abertura e
+a contagem cíclica, o Mapa, as Posições e as Etiquetas) e, de 4.5, as Exceções
+e o painel da tarefa (`task-detail.tsx`). As necessidades 2, 3, 5, 8 e 10 da
+seção 5, conferidas contra o código atual.
+
+- **O que já estava feito**, e ficou: o "Retomar guarda" que só gira com a
+  guarda retomada (PR 581); no Estoque e nos Alertas, a linha de estado, o
+  Atualizar, os filtros sem "0" antes de ler e a releitura que falha na linha
+  (partes 7b, 8 e 10); as fotos da ficha e da Contagem (parte 11); os
+  diálogos de Posições, do Concluir inventário e do Guardar do RECEBIMENTO
+  (parte 13a); o "Avançar" ocupado até a releitura (parte 10); e o `Skeleton`
+  neutro nas telas de desenho fixo (parte 3).
+- **O ícone antigo girando** (17 `RefreshCw` com `animate-spin` na Contagem,
+  no painel da tarefa, nas Exceções e no "Corrigir caixa") saiu:
+  - as ações viraram o `BotaoDeAcao`, ocupado sem `disabled` e com o
+    gerúndio: "Iniciar contagem" e "Iniciar conferência da caixa"
+    ("Iniciando…"), "Confirmar guarda em B-05" ("Guardando…"), o lançamento
+    ("Salvando…"), "Reabrir para ajustar", "Reabrir conferência"
+    ("Reabrindo…"), "Voltar à conferência" ("Voltando…"), "Retomar guarda",
+    "Registrar contagem" ("Registrando…"), os cinco "Registrar"/"Enviar
+    evidência" do painel da tarefa ("Registrando…"), "Confirmar tratativa"
+    ("Confirmando…"), "Carregar mapa inicial" ("Carregando o mapa…") e, nos
+    Alertas, "Enviar ao cliente" e "Descartar" ("Enviando…", "Descartando…"),
+    cada um só com a própria espera, no lugar do "Gravando..." dos dois;
+  - a alternativa tocada do "Se preferir" diz "Guardando em B-06…" com a
+    caixa, e as outras esperam com `aria-disabled`;
+  - as esperas em bloco ("Verificando o catálogo…", "Consultando a
+    sugestão…", "Conferindo o encaixe nesta prateleira…", "Carregando
+    posições…", "Carregando movimentos…", "Carregando caixas…",
+    "Carregando exceções…", "Carregando a contagem…", "Carregando as
+    etiquetas…" e "Verificando inventário de BTG Pactual…") são a
+    `CarregandoNaRegiao`: nada antes de 300 ms, a caixa de 24 px e o anúncio
+    pelo Anunciador. Os dois `role="status"` soltos (a sugestão da abertura e
+    a verificação do Mapa) saíram; o seletor de prateleira ganhou a caixa ao
+    lado de "Carregando prateleiras…";
+  - o Atualizar das Exceções passa pelo `useAtualizarLista`: só mostra a
+    espera quando a pessoa toca nele, e a releitura automática não o gira nem
+    o desabilita (antes, girava e desligava a cada releitura).
+- **Os diálogos que a parte 13a deixou abertos na abertura** seguram como os
+  outros (o `ocupado`, o `DialogCancelar` e o `BotaoDeAcao`): Conferir e
+  fechar ("Fechando…"), Remover rascunho, Remover para corrigir e Remover
+  caixa ("Removendo…") e Corrigir caixa ("Corrigindo…", com a mesma chave na
+  nova tentativa).
+- **Erro nunca vira vazio** (necessidade 2): a leitura que falhou sem nada
+  lido mostra o aviso com "Tentar de novo", que fica na tela enquanto tenta
+  (`useLeituraComFalha`), e diz "Tentando de novo…" só com a leitura que
+  falhou relendo:
+  - Estoque: os saldos ou as fotos que falham (antes, a lista aparecia com
+    "Sem endereço" e nenhum aviso; o catálogo que falhava dizia o erro sem
+    "Tentar de novo"); os últimos movimentos da ficha (antes, "Nenhum
+    movimento registrado.");
+  - Exceções: antes, "Sem exceções abertas";
+  - Posições: antes, a tabela vazia ("Nenhuma posição com esses filtros", "0
+    de 0 posições") junto do alerta;
+  - Mapa, Etiquetas, Alertas, a sessão e a conferência da abertura, as
+    prateleiras e o catálogo da abertura e as caixas da sessão.
+- **A releitura que falha não apaga a lista** (necessidade 8): o Mapa (antes,
+  a releitura do intervalo que falhava trocava o mapa pelo alerta), as
+  Etiquetas (a releitura depois de registrar a impressão) e a abertura (a
+  sessão relida depois de cada gravação, que trocava a bancada pelo alerta)
+  ficam na tela. O
+  Mapa e as Posições ganharam a linha de estado sob o título ("Carregando o
+  mapa…", "Carregando posições…", "Atualizado às", "Não consegui atualizar ·
+  lista de", "Reconectando…", "Sem conexão"), no lugar da faixa que empurrava
+  o mapa. No Mapa, enquanto ele lê, a caixa é só a da linha: "Verificando
+  inventário" entra depois.
+- **Nunca vazio nem zero antes de ler** (necessidade 3): a lista do Estoque
+  só entra com o catálogo, os saldos e as fotos lidos, e Parados e Sem giro
+  ficam sem número até os dias parado chegarem; o painel do progresso da
+  abertura mostra o bloco no lugar de Caixas e Posições ocupadas, "—" sem a
+  sessão e "Carregando caixas…" no lugar de "Nenhuma caixa nesta sessão."; o
+  Mapa espera também os saldos e o catálogo (a busca dizia "Nenhuma
+  prateleira" antes de ler); as Exceções não dizem "0 aberta(s)" nem "Nada
+  selecionado"; as Etiquetas não dizem "0 etiquetas · 0 folhas".
+- **A reticência**: "Gravando..." e o "Auditoria, foto, inventário..." da
+  contagem cíclica viraram "…"; "Carregando posições." e "Tentar novamente"
+  passaram a "Carregando posições…" e "Tentar de novo".
+- **O toque duplo nos Alertas**: o Enviar é o mesmo botão de um alerta para o
+  seguinte, e o segundo toque dentro de 1 s é ignorado (o toque único do
+  `BotaoDeAcao`): o toque duplo não envia o alerta que acabou de entrar na
+  tela sem ninguém o ver.
+- **A trava da área** (`features/warehouse-ops/carregamento-do-armazem.test.ts`):
+  nas telas da área, nenhum `animate-spin`, `animate-pulse` ou `Loader2`,
+  nenhum `role="status"` nem `aria-live` solto e nenhum texto com três
+  pontos. A trava do app inteiro é a parte 13h.
+- **Testes**: um por tela (`estoque.carregamento`, `warehouse-map.carregamento`,
+  `warehouse-positions.carregamento`, `warehouse-labels.carregamento`,
+  `exceptions`, `inventory-carregamento`, `task-detail.carregamento`,
+  `opening-line-correction`) e os de antes atualizados (Alertas, o resumo da
+  caixa, o seletor de prateleira, o Estoque e o Mapa), com a lista de textos e
+  o axe. Contra o `e6b449d`, 45 dos 100 testes dos 17 arquivos falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `e6b449d`):
+  - Estoque com o catálogo a 100 ms e os saldos e as fotos a 3 s: antes, as
+    linhas entravam aos 102 ms com "Sem endereço" e "Sem foto" por 2,9 s (174
+    quadros); depois, nenhum quadro com eles, e as linhas entram aos 2,99 s,
+    com os dados;
+  - os saldos que falham: antes, 3 linhas sem endereço e nenhum aviso;
+    depois, o aviso com "Tentar de novo" e nenhuma linha. Os movimentos da
+    ficha: antes, "Carregando..." seco de 11 ms a 2 s e, na falha, "Nenhum
+    movimento registrado."; depois, "Carregando movimentos…" aos 274 ms e o
+    aviso na falha;
+  - Posições na falha: antes, a tabela com "Nenhuma posição com esses
+    filtros" e "0 de 0 posições"; depois, só o aviso. "Carregar mapa
+    inicial" com o servidor a 3 s: antes, `disabled` e o foco no `body` de
+    40 ms ao fim (155 de 157 quadros), sem `aria-busy` nem rótulo, e quatro
+    botões do cabeçalho `disabled`; depois, o foco no botão em todos os
+    quadros, "Carregando o mapa…" e `aria-busy` aos 325 ms, e "Nova rua" e
+    "Nova posição" com `aria-disabled` (ficam `disabled` só os que não têm o
+    que fazer: "Imprimir etiquetas" e "Zona da rua", sem posição);
+  - Mapa: a releitura que falha apagava o mapa (o alerta no lugar); depois,
+    o mapa fica e a linha diz "Não consegui atualizar". Na primeira leitura,
+    antes, o texto "Verificando inventário…" num `role="status"` solto e
+    nada sobre o mapa; depois, "Carregando o mapa…" aos 285 ms, uma caixa só
+    e nenhuma região viva solta;
+  - Contagem com as caixas a 3 s: antes, "Caixas 0", "Posições ocupadas 0" e
+    "Nenhuma caixa nesta sessão." por 3 s (181 quadros); depois, nenhum.
+    "Iniciar conferência da caixa" com o servidor a 3 s: antes, o foco no
+    `body` de 42 ms ao fim e o `RefreshCw` girando; depois, o foco no botão,
+    a caixa chanfrada e "Iniciando…" aos 326 ms;
+  - Exceções: antes, "0 aberta(s)" e "Nada selecionado" por 2 s de leitura,
+    "Sem exceções abertas" na falha, e o Atualizar girando e `disabled` em
+    todos os quadros da releitura automática, com o foco no `body` no toque;
+    depois, nada disso, e o toque deixa o foco no botão, com `aria-busy` aos
+    305 ms;
+  - Alertas, "Enviar ao cliente" com o servidor a 3 s: antes, "Gravando..."
+    de 31 ms ao fim, o foco no `body` e as três marcas `disabled`; depois,
+    "Enviando…" aos 322 ms, o foco no botão e nenhuma marca `disabled`;
+  - Etiquetas com as caixas a 3 s: antes, "0 etiquetas · 0 folhas" em todos
+    os quadros (170); depois, nenhum;
+  - nenhuma rolagem lateral nas capturas de 1440 e 390 px; o axe-core, no
+    claro e no escuro, não acusa nada novo nas sete telas: ficam o
+    `aria-controls` das abas (Estoque e Contagem), o cabeçalho da tabela a
+    50% (Estoque, Alertas) e o primário no escuro (4,3:1), de antes desta
+    parte.
+- **A revisão (13/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **A falha vem da cópia.** O Estoque, o Mapa, os Alertas e as Etiquetas
+    juntam as leituras que falharam sem nada lido numa só para a
+    `FalhaNaLeitura` (`lib/carregando/falha-das-leituras.ts`), a partir das
+    cópias da `useLeituraComFalha`. Antes, a falta de conexão saía da leitura
+    crua, cujo erro o react-query zera na nova tentativa: com o servidor sem
+    resposta e nada lido, a releitura sozinha do estado da conexão (e o
+    "Tentar de novo" do bloco) trocava o "Reconectando…" por "Não consegui
+    carregar o estoque.", com o alerta, e no Estoque o foco saía do botão.
+    Agora o "Reconectando…" fica até a leitura responder;
+  - **"Tentando de novo…" só quando a pessoa pede.** Nenhuma tela da área usa
+    mais o `ErroNaLeitura` direto, com o `isFetching` da leitura (a trava da
+    área reprova): a releitura do intervalo (2 min no Estoque, no Mapa e nos
+    Alertas) e a que segue uma gravação não mudam o aviso, que é um alerta e
+    era lido de novo duas vezes. Nas Etiquetas e na abertura, a falta de
+    conexão sem nada lido volta a ser "Sem conexão." ou "Reconectando…", e
+    não o erro genérico;
+  - **A leitura de apoio não tira a lista.** No Estoque, a falha só das fotos
+    deixa a lista com o saldo e o endereço, e acima dela "Não consegui
+    carregar as fotos." com "Tentar de novo"; as linhas não afirmam "Sem foto"
+    (o lugar da foto fica neutro), e o filtro Sem foto fica sem número e sem
+    lista até ler. A primeira leitura continua esperando as fotos. No Mapa, o
+    mapa são as posições e as caixas: os saldos esperam a primeira leitura
+    (a prateleira com saldo sem caixa registrada não parece vazia), mas a
+    falha deles não tira o mapa ("Não consegui carregar os saldos das
+    prateleiras."); o catálogo nem espera, e a busca por nome diz "Carregando
+    o catálogo…" até ele chegar, no lugar de "Nenhuma prateleira tem o que
+    você buscou.";
+  - **O foco nunca cai no `body`.** Quando a nova tentativa dá certo e o aviso
+    sai com o foco nele, o foco vai à linha de estado (Exceções, Alertas e a
+    situação do inventário no Mapa), ao resumo da impressão (Etiquetas), ao
+    título da seção (os últimos movimentos da ficha) e, na abertura, ao
+    título das caixas da sessão, da caixa aberta, do "Guardar em" ou do
+    cartão. Quando a ação dá certo e o botão sai da tela, o foco vai ao que
+    entrou no lugar (`SaiComOFoco`, em `lib/carregando/use-foco-que-segue.tsx`;
+    desde a junção com a 13e, sobre a `segurarOFocoQueSai`): "Iniciar
+    conferência da caixa" e a guarda, ao título da caixa; "Iniciar contagem",
+    ao título do cartão; "Voltar à nova conferência", ao da nova caixa;
+    "Carregar mapa inicial", à linha de estado das Posições;
+  - **A abertura não afirma o que não leu.** As caixas da sessão precisam das
+    caixas e da sessão lidas: até lá, o bloco no lugar do número e
+    "Carregando caixas…"; sem a sessão, "—" e nada na lista, e o cabeçalho
+    não diz "sessão concluída". Na Contagem, a sessão que falha abre na aba
+    da abertura, onde está o aviso (antes, a tela abria na contagem cíclica e
+    a falha não aparecia); na nova tentativa, a tela não volta a "Carregando
+    a contagem…". Nas Etiquetas, a nota "Conteúdo da caixa" só aparece com a
+    sessão lida;
+  - **Os Alertas.** Cada alerta tem a chave dele: o "Enviando…" do decidido
+    não passa ao seguinte (antes, com a resposta entre 300 e 800 ms, o alerta
+    do outro cliente entrava com o Enviar ocupado e o toque ignorado). O foco
+    vai ao título do alerta seguinte, e não ao Enviar do outro cliente. O
+    toque repetido do mesmo gesto, no segundo depois da decisão, continua
+    sem efeito, agora de propósito, na tela (o `toqueRepetido`);
+  - **As Exceções.** O selo fica no lugar desde o começo, com o bloco no lugar
+    do número e a mesma largura: o Atualizar não pula quando a contagem chega
+    (antes, 86,7 px no celular). O Atualizar é o das listas (o
+    `BotaoAtualizar`, 44 × 44 no celular, em que só o ícone vira a caixa), e
+    a linha de estado sob o título do cartão diz "Atualizado às" e "Não
+    consegui atualizar · lista de" quando o toque falha com a lista lida
+    (antes, só o leitor de tela ficava sabendo). O teste delas passou ao
+    relógio simulado: a espera de 300 ms dependia da máquina e reprovou a
+    suíte uma vez;
+  - **As esperas feitas à mão.** A alternativa do "Se preferir" é o
+    `BotaoDeAcao`: a tocada fica cheia e diz "Guardando em A-04…" com a caixa
+    aos 300 ms, por pelo menos 500 ms, e as outras esperam a 0,45. O seletor
+    de prateleira espera com `aria-disabled`, sem o `disabled` a 50%, a caixa
+    entra aos 300 ms, e a releitura das posições não o desliga mais. A
+    releitura do catálogo depois de cada gravação não mostra a espera nem
+    fala: só a primeira leitura diz "Verificando o catálogo…". Na guarda,
+    "Carregando posições…" aparece uma vez, a da região;
+  - **Nenhum botão que troca de rótulo dentro de um alerta.** A "Situação do
+    inventário indisponível" do Mapa e o "Catálogo indisponível" da abertura
+    viraram o aviso da falha ("Não consegui confirmar o inventário de
+    abertura de BTG Pactual.", "Não consegui carregar o catálogo. O cadastro
+    de produto novo foi bloqueado para evitar duplicidade."), e o quadro
+    "Nenhuma posição cadastrada" das Posições deixou de ser alerta;
+  - **Os rótulos.** O gerúndio é o do próprio verbo: "Enviar evidência" diz
+    "Enviando…"; "Carregar mapa inicial", "Carregando mapa inicial…";
+    "Confirmar guarda em B-05", "Guardando em B-05…", como a alternativa. A
+    linha do Mapa diz "Carregando prateleiras…" (o objeto no plural, como nas
+    outras listas), e a espera das Etiquetas, "Carregando etiquetas…";
+  - **O toque no celular.** As ações migradas têm 48 px no celular:
+    "Carregar mapa inicial", "Iniciar contagem", "Iniciar conferência da
+    caixa", "Confirmar guarda", as alternativas, "Confirmar tratativa",
+    "Enviar ao cliente" e "Descartar". Os "Tentar de novo" são os do aviso
+    da falha, de 44 px;
+  - **Testes**: novos no Estoque, no Mapa (`warehouse-map.falhas`), nos
+    Alertas (`estoque-alertas.falhas`), nas Etiquetas
+    (`warehouse-labels.falhas`), na abertura (`inventory-falhas`), nas
+    Exceções, no seletor e no painel da tarefa, com a lista de textos dos
+    estados novos, e a trava da área reprova o `ErroNaLeitura` direto e o
+    gerúndio de outro verbo. Contra o `c8eaa31`, 48 dos 107 testes dos 15
+    arquivos mudados reprovam (um só em cascata: sozinho, passa).
+- **Medição da revisão no Chromium**, no mesmo harness (a API falsa, só
+  127.0.0.1):
+  - a releitura do intervalo com a leitura falhando, no Estoque, no Mapa e
+    nos Alertas: 181 quadros seguidos com "Tentar de novo" e o foco nele, sem
+    "Tentando de novo…" (antes, a troca a cada releitura);
+  - Alertas com o servidor a 400 ms: de 482 ms em diante, o alerta seguinte
+    com "Enviar ao cliente" em repouso e o foco no título dele (antes,
+    "Enviando…" no alerta seguinte até 881 ms);
+  - Estoque com só as fotos falhando: as 4 linhas, com o endereço e o saldo,
+    e o aviso das fotos (antes, nenhuma linha);
+  - Etiquetas sem rede: "Sem conexão." e, na volta, "Reconectando…" e as
+    etiquetas; as caixas da abertura sem rede: "Reconectando…";
+  - o foco depois do "Tentar de novo" que dá certo, em dez casos (Exceções,
+    Etiquetas, Alertas, caixas e sessão da abertura, Estoque, Mapa, situação
+    do inventário, Posições e movimentos): sempre no que ficou, nunca no
+    `body`; depois de "Iniciar conferência da caixa", "Iniciar contagem",
+    "Carregar mapa inicial" e da guarda, no que entrou no lugar;
+  - a alternativa tocada: cheia e "Guardando em A-04…" com a caixa aos
+    ~300 ms do toque, o texto a 14,4:1 (antes, 2,6:1, a 0,45), e as outras a
+    0,45; o seletor esperando: sem `disabled`, a caixa aos ~300 ms do toque,
+    o rótulo a 5,3:1 no claro e 7,4:1 no escuro (antes, 3,1:1);
+  - Exceções a 390 × 844 com a leitura a 3 s: o Atualizar parado em x =
+    133,7 do começo ao fim, com 44 × 44 e a caixa de 20 px;
+  - a Contagem com a sessão falhando abre na aba da abertura, com o aviso,
+    sem tocar;
+  - nenhuma rolagem lateral a 390 px, e o axe-core, no claro e no escuro, com
+    as mesmas violações de antes desta parte, nenhuma nova.
+
+Fica aberto:
+
+- as Devoluções (a `ReturnWorkspace`, no mesmo arquivo das Exceções) e a
+  espera do catálogo na contagem cíclica ("Produto ainda não localizado"
+  antes de ler) são da parte 13c (o PR 2 da seção 6);
+- na abertura, os botões vizinhos da ação em andamento (Trocar caixa,
+  Cadastrar caixa já armazenada, Não cabe aqui, Imprimir etiqueta, Abrir, o
+  Editar e o remover dos rascunhos) seguem `disabled`, também durante a
+  releitura da conferência (o `conferenceBusy` inclui o `isFetching`, que
+  guarda a revisão esperada); o botão tocado nunca fica;
+- o toque repetido nos Alertas, no segundo depois de uma decisão, não decide
+  o alerta seguinte: é proteção de propósito, mas muda o comportamento, e
+  vale confirmar com o Leonardo;
+- no painel da guarda, "Não consegui consultar as posições." ainda é texto
+  seco, sem "Tentar de novo";
+- o Mapa e as Posições não têm Atualizar, nem a barra do topo na volta do
+  app ao primeiro plano; aos 70 s, nenhuma lista desta área diz "Sem resposta
+  do servidor.", como as outras;
+- os dias parado que falham deixam Parados e Sem giro sem número e sem aviso;
+- a conferência com leitor de tela de verdade e num Android médio.
+
+**Parte 13c, Receber, Operações, Pedidos e Solicitações (PR 610, 13/11/2026).**
+A migração das seções 4.3 e 4.5 que as partes 6 a 13b não cobriram: o Receber
+(a ficha por linha, a chegada avulsa, a chegada por caixa, o destino e a guarda
+da caixa, o cancelamento e o Guardar do RECEBIMENTO), as Operações (a bancada,
+que hoje só abre na Qualidade), as Devoluções e os Retornos da Operação, o que
+sobrava de Pedidos (a bancada de separação, o romaneio, a lista de separação,
+o pedido separado, a entrega e as fotos), o Pedidos legado e as Solicitações.
+Fecha também o PR 2 da seção 6. As necessidades 2, 3, 5, 8 e 10 da seção 5,
+conferidas contra o código atual.
+
+- **O que já estava feito**, e ficou: a lista do Receber com a linha de estado,
+  os avisos com a falha e a troca de cliente (partes 7b, 8 e 10); a chegada
+  avulsa que espera o catálogo (PR 581) e as fotos dela (parte 11); "Para
+  aprovar" com a ação por linha (parte 6); o "Avançar" e o "Concluir entrada"
+  ocupados até a releitura (parte 10); os diálogos de Pedidos, da falta da
+  linha, da recusa da prateleira, do Guardar do RECEBIMENTO, do Registrar
+  exceção e do Receber retorno (parte 13a); e o painel da tarefa e as Exceções
+  (parte 13b). O alerta de erro da guarda já era `role="alert"` (o do `Alert`).
+- **O PR 2 da seção 6** (necessidade 1): as Devoluções e a contagem cíclica
+  esperam o catálogo antes de dizer "não localizado" ou "Produto ainda não
+  localizado", com a mesma espera da chegada avulsa e da abertura. As peças
+  `CatalogoVerificando` e `CatalogoIndisponivel`
+  (`features/warehouse-ops/product-identity.tsx`) passaram ao carregamento
+  v2: a espera em bloco (`CarregandoNaRegiao`, sem o `role="status"` solto) e
+  a `FalhaNaLeitura`, que fica na tela enquanto tenta de novo, diz "Sem
+  conexão." ou "Reconectando…" na falta de conexão e leva o foco ao código
+  digitado quando o catálogo chega. Com o catálogo falhando, a linha diz "sem
+  catálogo", e nada se registra (as duas telas só aceitam produto já
+  cadastrado). Na chegada avulsa, a falha também vem da cópia
+  (`useLeituraComFalha`): antes, "Tentar de novo" sumia com o foco nele e
+  voltava a "Verificando o catálogo".
+- **O ícone antigo girando** (o `RefreshCw` e o `Loader2` com `animate-spin`)
+  saiu da área, e as ações viraram o `BotaoDeAcao`, ocupado sem `disabled` e
+  com o gerúndio: "Salvar conferência" ("Salvando…"), "Divergência"
+  ("Registrando…"), "Concluir entrada" ("Concluindo…"), "Criar conferência"
+  ("Criando…", com o rodapé fora do `fieldset` que desligava o Cancelar e o
+  envio, o que a 13a deixou aberto), "Cancelar recebimento" ("Cancelando…"),
+  "Confirmar destino em B-02" ("Confirmando…"), "Concluir guarda em B-02"
+  ("Guardando em B-02…"), "Registrar devolução" e "Registrar disposição"
+  ("Registrando…"), "Encerrar" e "Aprovar e separar" ("Encerrando…",
+  "Aprovando…", no lugar dos três pontos), "Registrar diferença" e "Confirmar
+  caixas" (que seguram o diálogo, como os da 13a), "Fechar volume"
+  ("Fechando…") e, na bancada de separação, "Separar", "Levar a caixa" e
+  "Desfazer" ("Separando…", "Levando…", "Desfazendo…"). Na chegada por caixa,
+  "Iniciar caixa", "Adicionar à caixa" e "Salvar quantidade", "Remover produto
+  da caixa", "Remover caixa", "Fechar caixa", "Reabrir para ajustar",
+  "Concluir entrada" e "Desmarcar" mostram a espera de cada um (a ação em
+  curso fica num estado da tela, fora da chave de idempotência). O Atualizar
+  das Solicitações e da bancada de Operações é o das listas
+  (`BotaoAtualizar` com o `useAtualizarLista`): a releitura automática não o
+  gira nem o desliga. A caixa do "Conferindo saldo" das Solicitações é o
+  `Spinner`.
+- **A ação por linha** (necessidade 5): a disposição das Devoluções é o
+  `useAcaoNaLinha` (antes, a espera de uma linha desligava todas), com a chave
+  por tentativa; registrada, o foco vai à linha registrada. A bancada de
+  separação guarda a ação de cada linha (o `ocupadas` virou um mapa), e o
+  "Separar menos" e o "Outra caixa" só esperam a gravação da linha deles, não
+  a de qualquer linha. A linha que muda de estado leva o foco ao botão que
+  entra no lugar ("Separar" vira "Desfazer", e o contrário). O vínculo do
+  aviso no Receber mostra a caixa na opção tocada, e as outras esperam com
+  `aria-disabled`. "Concluir entrada" espera a conferência que salva, e a
+  conferência espera a entrada que conclui (antes, a entrada concluía com a
+  contagem de antes).
+- **Nenhuma região viva solta**: os `role="status"` e o `aria-live` da
+  chegada por caixa saíram; o retorno ("Quantidade salva nesta caixa") fica
+  escrito e o Anunciador diz a primeira frase dele; a espera é a do botão.
+  "Consultando a sugestão…" e "Conferindo o encaixe nesta prateleira…" são a
+  `CarregandoNaRegiao`.
+- **Erro nunca vira vazio nem some** (necessidade 2): as pendentes das
+  Devoluções que falham não dizem mais "Nenhuma devolução recém registrada";
+  os Retornos da Operação que falham não somem (o aviso com "Tentar de novo",
+  que assina a leitura ao vivo de novo e fica até ela responder), e as linhas
+  do retorno que falham não ficam em "Carregando..." para sempre; a sugestão
+  do destino que falha fica na tela enquanto tenta de novo; o Guardar do
+  RECEBIMENTO diz o motivo, com "Tentar de novo"; a bancada de Operações é a
+  `FalhaNaLeitura`; as Solicitações sem nada lido mostram a falha com "Tentar
+  de novo", e a entrega dos pedidos que não carregou diz "Não consegui
+  carregar a entrega.".
+- **A releitura que falha não apaga a lista** (necessidade 8): nas
+  Solicitações, a releitura que falhava trocava a fila lida por "Não consegui
+  carregar a fila."; agora a fila fica, e a linha de estado sob o título diz
+  "Não consegui atualizar · lista de 10:42" (a falta de conexão também, no
+  lugar da `FaixaSemConexao`). A sugestão do destino já lida não sai mais da
+  tela na releitura.
+- **Nunca vazio nem zero antes de ler** (necessidade 3): o Pedidos legado
+  mostra "—" nos quatro cartões até ler (antes, "0" por toda a leitura e na
+  falha), com as linhas-fantasma e "Carregando pedidos…" na linha de estado,
+  no lugar do texto seco numa célula; a foto dos itens de Pedidos e das
+  Solicitações fica neutra até as três leituras chegarem (antes, o ícone de
+  "sem foto"); a linha do pedido em "Para entregar" só oferece a entrega
+  depois de ler as entregas (antes, "Entrega" no lugar de "Alterar entrega",
+  e o formulário abria vazio sobre a entrega que existia); o endereço da
+  prateleira na guarda tem o lugar reservado até chegar. As Solicitações têm
+  a linha de estado ("Carregando solicitações…") e os cartões-fantasma, no
+  lugar de "Carregando solicitações...". A bancada de separação, o romaneio,
+  a lista de separação e os volumes do pedido separado trocaram o
+  "Carregando" seco pela espera em bloco ("Carregando o pedido…",
+  "Carregando volumes…").
+- **A reticência**: os rótulos e os placeholders da área com três pontos
+  passaram a "…", e "Tentar novamente" a "Tentar de novo".
+- **A trava da área** (`features/warehouse-ops/carregamento-do-recebimento.test.ts`):
+  nos 31 arquivos da área, nenhum `animate-spin`, `animate-pulse` ou
+  `Loader2`, nenhum `role="status"` nem `aria-live` solto (os cartões de
+  identificação de `product-identity.tsx`, que não são espera, ficam fora; o
+  catálogo, não), nenhum texto ou placeholder com três pontos e nenhum
+  "Carregando" seco. A trava do app inteiro é a parte 13h.
+- **Testes**: novos nas Devoluções e na contagem cíclica
+  (`devolucoes-e-contagem.carregamento`), na ficha da chegada
+  (`receiving.carregamento`), nas Solicitações
+  (`customer-requests.carregamento`), no Pedidos legado e na bancada de
+  Operações (`orders.carregamento`), no Guardar do RECEBIMENTO
+  (`guardar-da-area.carregamento`), na entrega de Pedidos
+  (`pedidos.entrega-lida`), nos Retornos, nas fotos dos itens e nas vistas de
+  Pedidos; os de antes atualizados (a chegada por caixa, o destino e a guarda,
+  o cancelamento, o "Separar menos", o "Outra caixa", a bancada de separação,
+  a chegada avulsa, o catálogo e o Receber), com a lista de textos (as
+  camadas do `BotaoDeAcao` incluídas) e o axe. Contra o `67ff53c`, 57 dos 287
+  testes dos 29 arquivos novos ou mudados falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `67ff53c`):
+  - Devoluções com o catálogo a 3 s: antes, "não localizado" e "Não crie SKU
+    duplicado" em 160 de 193 quadros (de 15 ms a 2,7 s); depois, nenhum, e
+    "Verificando o catálogo…" de 310 ms até o catálogo chegar. Com o catálogo
+    falhando: antes, "não localizado" e nenhum aviso; depois, "Não consegui
+    carregar o catálogo." com "Tentar de novo";
+  - contagem cíclica com o catálogo a 3 s: antes, "Produto ainda não
+    localizado" em 161 quadros; depois, nenhum, e "Verificando o catálogo…"
+    aos 295 ms;
+  - "Registrar disposição" com o servidor a 3 s: antes, o foco no `body` em
+    173 de 175 quadros, o botão tocado e o da outra linha `disabled` o tempo
+    todo e o ícone girando; depois, o foco no botão, "Registrando…" aos
+    307 ms, a outra linha livre e nada girando;
+  - Solicitações a 390 px com a leitura a 2,5 s: antes, "Carregando
+    solicitações..." de 1 ms ao fim; depois, "Carregando solicitações…" na
+    linha de estado aos 285 ms, os cartões-fantasma e nenhuma rolagem
+    lateral. A releitura que falha: antes, a fila sumia ("Não consegui
+    carregar a fila."); depois, ela fica, e a linha diz "Não consegui
+    atualizar". "Aprovar e separar" com o servidor a 3 s: antes, o foco no
+    `body` em 174 quadros, "Aprovando..." e os dois botões `disabled`;
+    depois, o foco no botão, "Aprovando…" aos 318 ms e nenhum `disabled`;
+  - a ficha da chegada, "Salvar conferência" com o servidor a 3 s: antes, o
+    foco no `body` em 173 de 175 quadros, o ícone girando e "Concluir
+    entrada" livre em todos os quadros; depois, o foco no botão, "Salvando…"
+    aos 320 ms e "Concluir entrada" ocupado (livre só no primeiro quadro, o do
+    toque);
+  - Pedidos legado com a leitura a 2,5 s: antes, os quatro cartões em "0" e
+    "Carregando pedidos..." em todos os quadros; depois, "—" e "Carregando
+    pedidos…" na linha de estado aos 253 ms;
+  - o axe-core nas Devoluções esperando o catálogo: nada no claro; no
+    escuro, o mesmo contraste do primário de antes desta parte (4 nós, os
+    botões de disposição).
+- **A revisão (13/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **A repetição da disposição é a mesma tentativa.** A chave da disposição
+    se repete depois da falha incerta (o `useAcaoNaLinha`), mas o corpo
+    levava um `occurred_at` novo a cada toque, e o servidor, que compara o
+    conteúdo inteiro com o da chave, recusava a repetição como "outro
+    conteúdo" em vez de devolver o recibo. Agora a tentativa guarda o
+    `occurred_at` da primeira vez, e a repetição manda o mesmo corpo. A
+    callable e o resto do corpo não mudam. Na recusa, o botão diz "Não
+    registrada" por 2 s e o motivo fica na linha até a próxima ação; aos 3 s,
+    a linha diz "Registrando a disposição de Polo…"; aos 10 s, "Demorando mais
+    que o normal · 0:12"; o Anunciador diz a espera, a demora e a desistência.
+    A linha registrada diz a disposição em português ("Volta para
+    disponível", e não "available");
+  - **A bancada de Operações diz o estado dela.** O título e a linha de estado
+    ficam desde a primeira leitura: "Carregando tarefas…" aos 300 ms, com o
+    anúncio e a região ocupada apontando para ela; lida, "Atualizado às"; a
+    releitura que falha com a bancada lida, "Não consegui atualizar · lista
+    de 10:42", com "Tentar de novo" (antes, a bancada velha ficava sem nenhum
+    sinal, e só o Anunciador dizia, quando a pessoa tocava no Atualizar);
+  - **A entrada espera a releitura da conferência.** "Salvar conferência" só
+    acaba quando a bancada relê: até lá, "Concluir entrada" espera, porque a
+    chegada na ficha ainda é a de antes (sem a divergência que pede a
+    justificativa). A gravação e a chave seguem as de antes;
+  - **A falha é da leitura em que aconteceu.** Nos Retornos da Operação, a
+    falha dos itens do pedido A não aparece mais no pedido B aberto em
+    seguida: B espera os itens dele ("Carregando itens…"). A nova assinatura
+    da leitura ao vivo virou uma peça, que a entrega dos pedidos também usa
+    (na junção com a 13g, ela passou à própria `useLeitura`, em
+    `lib/operacao/leitura.ts`): a entrega que não carregou diz "Não
+    consegui carregar a entrega." com "Tentar de novo" na linha, que assina de
+    novo e fica até a resposta; quando ela chega, o foco vai à entrega;
+  - **Nada aparece antes de 300 ms.** Os cartões-fantasma das Solicitações e
+    as linhas-fantasma do Pedidos legado ficam no lugar, invisíveis, e entram
+    aos 300 ms, com o brilho; a leitura rápida não pisca nada. Os fantasmas
+    têm a altura do dado (o cartão de 98 px, a linha de 61 px) e o legado
+    reserva quantas linhas a última leitura trouxe, entre 1 e 5. A caixa do
+    vínculo do aviso e a do "Conferindo o saldo" (agora em tinta) também
+    esperam os 300 ms; vinculando, a opção diz "Vinculando…", que entra no
+    nome dela, e o Anunciador diz. Nos cartões do Pedidos legado, o bloco no
+    lugar do número enquanto lê, e "—" só na falha; a paginação não diz
+    "Exibindo 0 de 0" antes de ler. O bloco no lugar da foto e do endereço
+    ficou como estava: é o lugar de um dado dentro da linha real, como o
+    bloco da contagem, que entra com a estrutura;
+  - **O catálogo.** "Verificando o catálogo…" que apareceu fica o mínimo de
+    500 ms antes de a falha tomar o lugar (`useFalhaDoCatalogo`, nas
+    Devoluções, na contagem cíclica e na chegada avulsa). Nas Devoluções, o
+    aviso da falha é um só, na primeira linha com código (antes, um por linha,
+    cada um com o próprio "Tentar de novo"), e a linha não tem mais o selo
+    "verificando o catálogo", que piscava antes dos 300 ms e repetia a caixa.
+    O campo do código diz "Código do cliente da linha 1" e "Cód. cliente";
+  - **O foco nunca cai no `body`.** Aprovada ou encerrada a solicitação, o
+    foco vai ao título da seguinte no detalhe (sem ela, à linha de estado);
+    separada a última linha de uma prateleira, que se fecha, ao botão do
+    grupo; o "Tentar de novo" que dá certo leva ao título "Guardar em" (o
+    destino da caixa), à linha de estado (a bancada) e ao título "Disposição
+    física" (as devoluções pendentes); a entrada por caixa concluída, ao
+    título "Detalhes do recebimento"; a falta desmarcada, ao "Marcar falta"
+    que entra no lugar, que espera com `aria-disabled` em vez de `disabled`;
+  - **O leitor de tela ouve uma vez.** O "Desmarcar" tem o nome do rótulo na
+    tela ("Desmarcar", "Desmarcando…"), e a linha vem pela descrição (antes, o
+    `aria-label` fixo escondia a espera). Na chegada por caixa, o resultado
+    que o toast diz (a entrada concluída) não é repetido pelo Anunciador; o
+    destino confirmado, a busca sem produto e a quantidade não salva, que
+    tinham a região viva solta, são ditos pelo Anunciador quando aparecem;
+  - **O Guardar da área.** A recusa do servidor (a área não é de passagem, o
+    item sem saldo livre) diz o motivo sem "Tentar de novo", porque a nova
+    tentativa não muda nada; a falha de leitura segue com ele. O título e o
+    aviso dizem "da EXPEDICAO";
+  - **O celular.** As ações de linha migradas têm 48 px: "Separar", "Levar a
+    caixa", "Desfazer", "Registrar disposição", "Aprovar e separar",
+    "Recusar com motivo" e os dois "Concluir entrada". Na bancada de
+    separação, o "Levar a caixa" fica numa linha dele, e o "Separar" e o "⋯"
+    (48 × 48) na de baixo: lado a lado, o "⋯" encolhia a 18 px. O texto do
+    "Desfazer" volta ao lado em que a linha alinha (à esquerda no celular, à
+    direita no computador), dentro da largura do rótulo mais largo;
+  - **Os testes.** Os gerúndios da bancada de separação entram na lista do
+    teste (antes, o teste aceitava qualquer camada terminada em "…": um
+    gerúndio errado passava); o Pedidos legado lendo, a bancada lendo e
+    falhando, o Guardar lendo, falhando e recusado, a ficha salvando e a
+    entrega que falhou ganharam a lista de textos. Contra o `5cd002a`, 28 dos
+    108 testes dos 10 arquivos novos ou mudados reprovam; a troca de
+    "Levando…" por outro gerúndio reprova a lista nova e passava na de antes.
+- **Medição da revisão no Chromium**, no harness com a API falsa (só
+  127.0.0.1):
+  - "Aprovar e separar" pelo teclado, a 1440 e a 390 px: o foco no botão
+    durante a espera e, no fim, no título da solicitação seguinte (antes, no
+    `body` de 2,3 s em diante);
+  - destino da caixa: depois do "Tentar de novo" que dá certo, o foco no
+    título "Guardar em" (antes, no `body` de 3,4 s a 7 s); bancada de
+    Operações: "Carregando tarefas" anunciado aos 345 ms e, depois da nova
+    tentativa, o foco na linha de estado; com a bancada lida e a releitura
+    falhando, "Não consegui atualizar · lista de 19:15" sob o título;
+  - a disposição recusada: "Não registrada" no botão de 3,06 s a 4,5 s e
+    "Saldo insuficiente" na linha depois que o botão volta, a 6,5:1 no claro
+    e 5,5:1 no escuro; o anúncio "Registrando a disposição" aos 349 ms;
+  - o vínculo do aviso com o servidor a 150 ms: nenhuma caixa (antes, de 28 a
+    149 ms); a 3 s, a caixa aos ~380 ms, o nome "Aviso 0412 · Loja Faria
+    Lima Vinculando…" e o anúncio aos 355 ms; o saldo a 400 ms: nenhuma caixa
+    (antes, de 168 a 427 ms); a 2 s, a caixa em tinta, rgb(31, 42, 61);
+  - o catálogo que falha aos 420 ms, nas Devoluções e na contagem cíclica:
+    "Verificando o catálogo…" de ~330 a ~805 ms, e só então a falha (antes,
+    cortado aos 408 ms, ainda entrando); com duas linhas digitadas, um aviso
+    só, e o foco volta ao código quando o catálogo chega;
+  - Pedidos legado com a leitura a 2,5 s: os cartões no bloco, as linhas-
+    fantasma invisíveis até ~300 ms depois da montagem e a 61 px, como a
+    linha real (antes, quatro de 73 px desde o primeiro quadro, e a tabela
+    encolhia de 292 a 122 px na chegada); com a leitura a 150 ms, nenhum
+    fantasma visível. Solicitações a 390 px: o cartão-fantasma com 98 px,
+    como o real, no mesmo lugar (antes, 84 px);
+  - o foco em dez casos (a última linha da prateleira, a outra linha, o
+    Levar a caixa, o destino, a bancada, as devoluções pendentes, as
+    Solicitações, o catálogo da cíclica e o das Devoluções, a disposição):
+    nunca no `body`; a entrada por caixa concluída: o foco no título e só o
+    toast falando; o "Desmarcar": o nome "Desmarcando…" na espera, a
+    descrição "2 · TESTE-000002" e o foco no "Marcar falta" no fim;
+  - a 390 px, a linha da Lancheira com o "Levar a caixa" de 324 × 48, o
+    "Separar" de 268 × 48 e o "⋯" de 48 × 48 (antes, 18 × 40, fora do
+    cartão); o "Desfazer" com o texto em x = 33 a 390 px e terminando em
+    1375 a 1440 px, como antes desta parte; os "Concluir entrada" com 48 px;
+  - o axe-core em 19 estados, no claro e no escuro: as mesmas violações de
+    antes desta revisão, nenhuma nova; no movimento reduzido, nada gira nem
+    desliza nos estados novos.
+
+Fica aberto:
+
+- a `idempotency_key` nova a cada toque no "Salvar conferência" da ficha por
+  linha (4.5): mudar é mudar a escrita, e esta parte não muda;
+- na chegada por caixa e na bancada de separação, os vizinhos da ação em
+  andamento (a seleção da caixa, "Revisar caixa", "Revisar entrada", "Editar
+  conteúdo", o "⋯" e "Dividir em volumes") seguem `disabled` durante a ação,
+  como na abertura (13b); o botão tocado nunca fica, e o "Marcar falta"
+  passou a `aria-disabled`. O toque repetido dentro de 1 s do `BotaoDeAcao`
+  também vale ali (a nova tentativa logo depois de uma falha espera o
+  segundo);
+- a chave da disposição é por tentativa (o `useAcaoNaLinha`), e não mais um
+  UUID novo a cada toque: a repetição depois da falha incerta devolve o
+  recibo. A pessoa que muda a nota ou o endereço entre as duas tentativas
+  manda outro conteúdo com a mesma chave, e o servidor recusa se a primeira
+  tiver gravado; vale confirmar com o Leonardo;
+- os Retornos da Operação que voltam a ler depois da falha e não têm retorno
+  somem com o foco no aviso; desde a junção com o PR, o foco vai ao título da
+  página (a `segurarOFocoQueSai`), e não mais ao `body`;
+- a mensagem da falha do romaneio, da lista de separação, da bancada de
+  separação e do pedido separado ("Não foi possível carregar o pedido.")
+  ficou sem "Tentar de novo", porque a leitura ao vivo não relia; depois da
+  junção, a `useLeitura` relê (13g), e a correção da junção deu às quatro a
+  saída (a demora, a desistência e a falha com "Tentar de novo");
+- a foto dos itens que não veio (a leitura das fotos que falhou) volta ao
+  "sem foto", sem aviso;
+- os `role="status"` dos cartões de identificação (o produto novo e a
+  família), que não são espera, ficam como estavam;
+- a linha da disposição recusada cresce uma linha com o motivo (o cartão de
+  baixo desce 20 px);
+- a entrega dos pedidos e os Retornos da Operação não têm medição no
+  navegador: o harness simula a leitura ao vivo; os testes cobrem;
+- a conferência com leitor de tela de verdade e num Android médio.
+
+**Parte 13d, o Faturamento, os Relatórios, os Documentos e o Catálogo (PR 610,
+13/11/2026).** A migração das seções 4.8 e 4.9 que as partes 6 a 13c não
+cobriram: o Fechamento do mês, a fatura, a Tabela de preços com a Cobrança, a
+aba Contratos do Faturamento, os Relatórios, os Documentos, Produtos, SKUs e o
+"Numerar pedidos e envios antigos" (em Configurações › Sistema). A foto e o
+estúdio de foto ficaram com a parte 11. As necessidades 2, 3, 5, 8 e 10 da
+seção 5, conferidas contra o código atual. As chamadas, as callables e as
+escritas seguem as de antes.
+
+- **O que já estava feito**, e ficou: a `CarregandoTela` nos `Suspense` do
+  Faturamento e do Catálogo (parte 9); a troca de mês, período e página com a
+  lista anterior, e a releitura que falha na linha de estado, no Fechamento,
+  nos Relatórios, em Produtos e em SKUs (parte 10); a confirmação de Emitir e
+  a do Remover item, e os diálogos de item, produto, SKU e documento (parte
+  13a); as etapas de "Adicionar documento" (parte 11); a tabela de preços que
+  falha sem nada lido (PR 581); os Relatórios com o perfil não lido (o
+  `ProtectedRoute` já espera o usuário).
+- **A forma final na primeira leitura** (necessidade 3):
+  - o Fechamento deixa o "Calculando…": o esqueleto do mês (o cobrado
+    automaticamente, os serviços e o cartão do total), com as linhas lembradas
+    por cliente, e "Carregando outubro de 2026…" na linha de estado, logo
+    abaixo dos meses, que continua a espera também enquanto o cliente ativo
+    lê. Os meses mostram o bloco no lugar do estado antes da lista e "—" na
+    falha, nunca "Em aberto";
+  - a Tabela de preços tem a linha de estado sob "Serviços e valores" e as
+    linhas-fantasma; a Cobrança mostra o esqueleto dos campos até a
+    configuração chegar (antes, os campos vazios e um "Salvar" que gravava a
+    taxa 0);
+  - nos Relatórios, a linha diz o objeto de cada relatório ("Carregando a
+    posição de estoque…"), a prévia tem a forma final (o resumo, as linhas
+    lembradas, até 8, e o rodapé) e a lateral guarda a casa do número;
+  - os Documentos têm a linha de estado e as linhas-fantasma, na tabela e nos
+    cartões do celular;
+  - Produtos e SKUs mostram o bloco no lugar dos números e do resumo da
+    página antes de ler, e "—" na falha, sem "0 produto(s)" nem "Exibindo 0 de
+    0". Nos SKUs, o endereço fica neutro até os saldos chegarem (antes, "Sem
+    endereço" em todas as linhas);
+  - a fatura tem a espera em bloco, "Carregando a fatura…", e a aba Contratos
+    mostra a `CarregandoTela` enquanto o cliente ativo lê, no lugar da aba em
+    branco.
+- **Erro nunca vira vazio nem some** (necessidade 2): a fatura, a tabela, a
+  cobrança, os Documentos e os saldos dos SKUs que falham sem nada lido
+  mostram a `FalhaNaLeitura`, com "Tentar de novo"; a falha dos avisos de
+  chegada tem aviso próprio e não afirma mais "Nenhum documento ainda".
+- **A releitura que falha não apaga a lista** (necessidade 8): nos Documentos,
+  ela trocava a lista pelo texto do erro; agora a lista fica, e a linha de
+  estado diz.
+- **As ações** (necessidade 5): "Salvar quantidades", "Marcar como paga",
+  "Salvar cobrança", "Ver o que muda" e "Numerar agora" são o `BotaoDeAcao`,
+  ocupados sem `disabled`; quando o botão do Fechamento sai, o foco vai ao
+  link da fatura, e o Emitir devolve o foco a ele ao fechar a confirmação. As
+  ações do menu "⋯" de cada documento são por linha (`useAcaoNaLinha`): a
+  linha tocada mostra a espera dela, as outras seguem livres, e o segundo
+  toque na linha ocupada não grava de novo.
+- **A trava da área** (`pages/carregamento-do-faturamento.test.ts`): nos
+  arquivos da área, nenhum `animate-spin`, `animate-pulse` ou `Loader2`,
+  nenhuma região viva solta, nenhum "Carregando" seco, nenhum texto com três
+  pontos e nenhum botão que só apaga durante a ação.
+- **Testes**: novos no Fechamento e na fatura (`billing.carregamento`), na
+  Tabela de preços, nos Relatórios, nos Documentos, no Catálogo, no Numerar e
+  no Faturamento com a aba Contratos, com a lista de textos e o axe. Contra o
+  `c4066b4`, 33 dos 39 testes dos 9 arquivos novos ou mudados falham.
+- **Medição no Chromium** (harness com a API falsa, só 127.0.0.1; antes é o
+  `c4066b4`), o quanto a tela cresce na chegada, a 1440 px: o Fechamento, de
+  365 px a 0, e a Tabela de preços, 0 antes e depois; na segunda visita, os
+  Documentos, de 228 a 0, e os Relatórios, de 184 a −1. Produtos e SKUs
+  crescem menos (de 703 a 475 px e de 575 a 355), pela regra das cinco
+  linhas lembradas. A 390 px, o Fechamento, de 767 a 78.
+- **A revisão (14/11/2026)**, com o que a lógica, o navegador e o leitor de
+  tela mostraram:
+  - **O cliente ativo é a fronteira também enquanto lê.** Com a lista dos
+    clientes demorando, o "Tentar de novo" da demora do Fechamento lia o mês
+    do cliente padrão e o mostrava como se fosse o escolhido, com as ações
+    ligadas: "Salvar quantidades", "Emitir" e "Marcar como paga" gravariam no
+    cliente errado. Agora, enquanto o cliente ativo lê, nenhum mês nem fatura
+    do cliente padrão entra na tela, e o "Tentar de novo" do Fechamento e da
+    fatura lê de novo a lista dos clientes (hoje o `tentar` do
+    `ActiveCustomerProvider`), cancelando a que ficou presa: sem isso, o
+    react-query só esperava a mesma leitura. O esqueleto do mês usa as linhas
+    lembradas do cliente que a tela vai operar (o provável), como Pedidos e
+    Receber;
+  - **O menu "⋯" do documento não reabre sozinho.** Ele passou a ser
+    controlado e ficava aberto por dentro quando a linha ficava ocupada antes
+    de o menu fechar: quando a ação terminava, no sucesso ou no erro, o menu
+    abria sozinho e puxava o foco, e o que a pessoa digitava depois caía nele
+    (um "o" e Enter ocultavam o documento). Agora a escolha fecha o menu, e o
+    ocupado só impede que ele abra;
+  - **A linha diz o fim.** Do fim da chamada até a lista relida chegar, a
+    linha diz o que mudou ("Arquivado", "Oculto do cliente", "Enviado para o
+    Conhecimento"), com o check verde, no lugar da origem do documento (antes,
+    a linha não dizia nada, e o "⋯" parecia livre sem abrir). A espera, a
+    demora, o "Sem confirmação do servidor" e o motivo da falha também ficam
+    nesse lugar, na mesma linha de 16 px: a linha não cresce nem empurra as de
+    baixo;
+  - **O "Conferir" relê e diz que relê.** Ele fica na tela com "Conferindo…",
+    `aria-busy` e o foco, e o "⋯" se chama "Conferindo NF 48213…"; antes, a
+    linha voltava a "Arquivando…" e o Anunciador dizia de novo "Arquivando NF
+    48213", como se a escrita fosse refeita. A lista que diz que não valeu
+    devolve a linha e leva o foco ao "⋯" dela. A resposta da escrita que chega
+    depois disso relê a lista, e o documento arquivado sai;
+  - **A chave da tentativa vai ao servidor** no "Enviar para o Conhecimento",
+    no Aprovar e no Recusar: a repetição depois do resultado incerto leva a
+    mesma `idempotency_key` e devolve o recibo. O Mostrar, o Ocultar e o
+    Arquivar vão por rotas que não recebem a chave;
+  - **O relógio é da ação, não da linha na tela.** A linha que sai da lista
+    (a busca, o filtro) e volta no meio da ação segue a demora de onde estava,
+    e o Anunciador não repete o que já disse dessa espera, nem pela linha da
+    tabela e pelo cartão do celular, que existem os dois;
+  - **Os botões mostram o fim.** "Salvar quantidades", "Marcar como paga",
+    "Salvar cobrança" e "Numerar agora" seguem o relógio da ação: o sucesso
+    ("Quantidades salvas", "Marcada como paga", "Cobrança salva", "Numerado")
+    fica pelo menos 1 s e até a releitura chegar (antes, o gerúndio ficava até
+    a releitura, depois do toast de sucesso), e o erro ("Quantidades não
+    salvas", "Não marcada como paga", "Cobrança não salva", "Não numerado")
+    fica 2 s. Aos 70 s sem resposta, "Conferir" relê o mês ou a configuração e
+    nunca grava de novo;
+  - **Os meses.** A lista dos meses que falha diz "Não consegui carregar os
+    meses.", com "Tentar de novo" (antes, o "—" nos cartões e a linha dizendo
+    "Atualizado às"). A faixa nasce com a forma final: os meses que a lista
+    vai trazer entram como cartões-fantasma à esquerda, quantos a última lista
+    deste cliente trouxe (sem lembrança, a faixa cheia, com quatro); antes, o
+    mês escolhido saltava 330 px para a direita na chegada e, no celular,
+    tudo abaixo descia;
+  - **O que lê à parte tem estado.** A Cobrança tem a linha de estado dela,
+    sob o título ("Carregando a cobrança…", a demora com "Tentar de novo",
+    "Atualizado às"), que descreve a seção ocupada, e o "Tentar de novo" da
+    falha leva o foco a ela quando a cobrança chega (antes, ao `body`). Nos
+    SKUs, a linha diz "Carregando os endereços…" até os saldos chegarem, com a
+    demora aos 10 s; com o filtro "Sem endereço", a tabela espera os
+    endereços com as linhas-fantasma, sem "0 SKU(s) exibido(s)" nem a tabela
+    vazia, e a falha deles fica no aviso;
+  - **A Tabela de preços no celular.** A linha de estado fica na largura do
+    cartão, abaixo da fileira do título e do "Novo item": a demora não cobre
+    mais o botão nem sai do cartão;
+  - **A fatura presa tem saída.** A espera em bloco (`CarregandoNaRegiao`)
+    ganhou o "Tentar de novo" aos 10 s, quando quem lê sabe ler de novo, com
+    44 px; a leitura presa é cancelada e lida de novo, e o foco vai à volta
+    para o Fechamento quando a fatura chega. Na junção com o PR, o "Tentando
+    de novo…" do botão saiu: a nova tentativa é uma espera nova, que diz o
+    gerúndio de novo aos 300 ms, com o foco na região;
+  - **A aba Contratos é uma espera só.** A espera do cliente ativo e a do
+    arquivo da aba usam o mesmo relógio, desde que a aba abriu: a caixa não
+    some na troca, e a demora vem aos 10 s do começo;
+  - **Um brilho por cartão e a chegada em cascata.** O brilho saiu de cada
+    bloco e ficou no cartão (o corpo das linhas-fantasma, a prévia, a
+    Cobrança, cada cartão do Fechamento, a 120 ms um do outro); nas tabelas, o
+    `corpoDaTabela` do `stock-workbench` liga o brilho, o `aria-busy` e a
+    chegada. Na chegada, as linhas reais entram por opacidade, subindo 4 px,
+    em cascata (`useChegada`), em todas as telas da parte;
+  - **"Adicionar documento" diz que espera.** Com o cliente ativo lendo, a
+    caixa entra no lugar do ícone aos 300 ms, com `aria-busy` (antes, só a
+    opacidade de 0,45). O "⋯" dos documentos tem 48 px no celular;
+  - **A segunda visita aos Documentos não cresce.** As linhas-fantasma lembram
+    quantos documentos têm o selo do Conhecimento ("Aguardando aprovação para
+    o Conhecimento"), que dá à linha uma terceira linha de texto;
+  - **Os testes.** A lista de textos passou a valer também nos estados das
+    ações (o gerúndio, o fim, o erro, "Sem confirmação do servidor" e
+    "Conferir") e na espera da aba Contratos. A tabela que falhou e é relida
+    sem a pessoa pedir ganhou o teste que faltava. Contra o `3078d17`, 33 dos
+    68 testes dos 9 arquivos novos ou mudados reprovam.
+- **Medição da revisão no Chromium**, no harness com a API falsa (só
+  127.0.0.1):
+  - o menu "⋯" com Mostrar, Aprovar e a falha do servidor, pelo clique a 1440
+    px, pelo toque a 390 px e pelo teclado: fechado nos 4 a 6 s seguintes, com
+    o foco no "⋯" (antes, aberto de novo cerca de 1 s depois da resposta);
+  - Arquivar com o servidor a 1,2 s e a releitura a 2,5 s: "Arquivando…" de
+    690 ms a 1,5 s e "Arquivado" de 1,57 s a 4 s; a linha de baixo parada em
+    todos os quadros (antes, descia 14 px e voltava); quando a linha sai, o
+    foco vai à linha de estado. A 390 px, o "⋯" com 48 × 48 e o cartão de
+    baixo parado (antes, 40 × 40 e 18 px de salto);
+  - o "Conferir" dos 70 s pelo teclado, a 1440 e a 390 px: "Conferindo…" com
+    `aria-busy` e o foco nele, o toque de 44 px, um GET só, a linha na mesma
+    altura e, quando a lista diz que não valeu, o foco no "⋯"; o Anunciador
+    diz "Conferindo NF 48213", nunca "Arquivando" de novo;
+  - o Fechamento com o cliente ativo preso: aos 10,8 s, o "Tentar de novo"
+    relê a lista dos clientes, e nenhum mês é lido nem aparece;
+  - a chegada do Fechamento: o mês escolhido anda 13,5 px (antes, 329,5) e o
+    "Outro mês" 34 px (antes, 350); a 390 px, a linha de estado e o cartão do
+    total não descem (antes, 62 px);
+  - "Salvar quantidades" com o servidor a 3 s: "Salvando…" aos 357 ms,
+    "Quantidades salvas" de 3,1 s até o mês relido (4,55 s) e o foco em "Ver
+    prévia da fatura (PDF)", sem nenhum quadro no `body`;
+  - a Cobrança a 90 s: "Carregando a cobrança…" aos 300 ms e, aos 10,5 s, a
+    demora com "Tentar de novo" (antes, nada); a fatura presa: o "Tentar de
+    novo" aos 10,8 s lê de novo, e o foco vai a "Fechamento do mês";
+  - SKUs com os saldos a 8 s e "Sem endereço": as linhas-fantasma e
+    "Carregando os endereços…", sem "0 SKU(s)"; lidos, "4 SKU(s) exibido(s)";
+  - a Tabela de preços a 390 e 360 px com a demora: a linha não cobre o "Novo
+    item" nem sai do cartão, e nada rola de lado;
+  - em laço depois do primeiro segundo, 4 animações no Fechamento e na Tabela
+    de preços e 2 nas outras telas (antes, de 19 a 31); o brilho para entre
+    4,27 e 4,49 s; só `transform` e `opacity`. Na chegada, a cascata em todas;
+    no movimento reduzido, só por opacidade;
+  - a segunda visita aos Documentos: 0 px de salto a 1440 e a 390 px (antes,
+    14 e 20);
+  - o axe-core em 26 estados no claro e no escuro a 1440 px e em 17 a 390 px:
+    só as violações de antes desta parte.
+
+Fica aberto:
+
+- as colunas das tabelas mudam de largura na chegada (o layout automático da
+  tabela segue o conteúdo, que os blocos não conhecem): nos Documentos, os
+  títulos andam até 63 px de lado. Fixar as larguras muda a tabela lida;
+  fica para decidir;
+- Produtos e SKUs ainda crescem na chegada: a contagem lembrada vai de 1 a 5
+  linhas, e a página tem até 50 (na segunda visita, 475 e 355 px a 1440 px); é
+  a regra do Pedidos legado e vale confirmar com o Leonardo. Na primeira
+  visita, sem lembrança, os Relatórios crescem 184 px e os Documentos 130 px.
+  Na chegada do Fechamento, o cartão do mês escolhido se alarga 21 px com o
+  estado;
+- no computador, a demora da Cobrança passa o "Tentar de novo" à linha de
+  baixo na coluna de 340 px e empurra os campos 28 px aos 10 s;
+- as linhas dos Documentos não têm a `BarraDeEspera` da linha;
+- o Mostrar, o Ocultar e o Arquivar não levam a chave da tentativa: as rotas
+  deles não a recebem, e mudar é mudar a escrita;
+- "Ver o que muda" é uma leitura: o fim dela é o texto da seção ("Vai numerar
+  2 solicitação(ões)"), e o botão não tem o sucesso;
+- se a releitura do mês falha depois de "Salvar quantidades", o botão volta a
+  "Salvar quantidades" com as quantidades na tela (a linha de estado diz que
+  não atualizou); gravar de novo grava as mesmas quantidades;
+- a fatura lida rola de lado a 390 px (o `InvoiceDocument`, de antes desta
+  parte);
+- as violações do axe de antes desta parte: o cabeçalho das tabelas a 3,01:1
+  (que o esqueleto dos Documentos repete), o primário no escuro a 4,3:1, os
+  códigos em `text-primary` no escuro a 4,38:1, a pílula do estado do mês a
+  4,4:1, o toast de erro no escuro a 3,3:1, o `scrollable-region-focusable`
+  das tabelas no celular e o `aria-controls` das abas do Faturamento;
+- o Numerar mora em `pages/settings-system.tsx`, a área da 13e: o merge desse
+  bloco pode dar conflito. O resto da tela não foi tocado;
+- o Remover da Tabela de preços devolve o foco ao título da página pelo
+  foco-de-volta, sem medição no navegador;
+- com a suíte inteira carregada, testes de outras partes falham às vezes e
+  passam sozinhos (`inventory-carregamento`, `opening-line-correction`,
+  `agent-knowledge`);
+- a conferência num Android médio, com leitor de tela de verdade e na
+  homologação.
 
 **Parte 13e, as Configurações, o sistema e o Início (PR 610, 13/11/2026).** A
 parte 13 em Pessoas e acessos, Clientes, Chaves de API, Sistema e
@@ -1977,7 +3032,8 @@ Fica aberto:
 - o Cancelar convite continua sem confirmação, que pede um desenho;
 - as telas que esperam o `isLoading` do cliente ativo (Faturamento,
   Contratos) não leem o `falhou`: com a lista que falhou, seguem com o
-  cliente legado (área 13d);
+  cliente legado (área 13d; resolvido na correção da junção das partes 10 e
+  13);
 - quando tudo lê ao mesmo tempo, aparecem três indicadores juntos (o seletor,
   o item do menu e a tela), a confirmar com o Leonardo;
 - a conferência com leitor de tela de verdade, num Android médio e no
@@ -2323,3 +3379,129 @@ Fica aberto:
   carregar…" na seção, e a falta de conexão fica com o aviso do shell;
 - a fila do campo não diz o fim do envio;
 - na primeira visita, o Início com o "Precisa de você" vazio ainda salta.
+
+**A junção das partes 10 e 13b a 13d com as 13a, 13e a 13g (PR 610,
+14/11/2026).** A parte 10 e as 13b, 13c e 13d foram feitas numa cópia, ao
+mesmo tempo que a revisão da 13a, as 13e, 13f e 13g e a correção do relógio
+(`99ee4b6`) no PR. Na junção, cada peça feita dos dois lados ficou uma só:
+
+- **A `CarregandoNaRegiao`** é a do PR (a demora com "Tentar de novo" que
+  recomeça o relógio, a desistência aos 70 s, `continuaARota`,
+  `passaAdiante`, o `id`), com o que a da 13d tinha a mais: o `focoAoSair`
+  (o foco vai à volta para o Fechamento quando a fatura chega) e a promessa
+  do `onTentar`, que nunca fica sem tratar. O "Tentando de novo…" no botão da
+  13d saiu: a nova tentativa é uma espera nova, que diz o gerúndio de novo
+  aos 300 ms. A fatura, a separação, o romaneio e as Etiquetas continuam a
+  espera da rota (`continuaARota`), como as telas do PR.
+- **O "Tentar de novo" do cliente ativo** é um só, o `tentar` do
+  `useActiveCustomer` (13e), agora pela `relerDoZero`: relê a falha e
+  cancela a leitura presa sem dado, como fazia o `recarregar` da 13d, que
+  saiu. O Fechamento e a fatura usam o `tentar`.
+- **A nova tentativa da leitura ao vivo** é a da `useLeitura` (13g). A
+  `useNovaAssinatura` da 13c (`lib/operacao/nova-assinatura.ts`) saiu; o que
+  ela tinha a mais, a promessa do `tentar` que acaba quando a nova assinatura
+  responde (o "Tentando de novo…" da `FalhaNaLeitura`), passou à
+  `useLeitura`. A entrega dos Pedidos e os Retornos da Operação usam a
+  `useLeitura` direto.
+- **O foco que sai com o pedaço da tela** é um mecanismo só, a
+  `segurarOFocoQueSai` (13e): a `SaiComOFoco` da 13b passou a ser ela, dita
+  na tela, sem o pedido que a tela levava (`useFocoQueSegue` saiu); sem o
+  alvo na tela, o foco vai ao título da seção, e nunca fica no `body`. O "⋯"
+  dos Documentos usa a `segurarOFocoQueSai` direto. O `useFocoAoSair` do
+  `ErroNaLeitura`, sem o alvo na tela, também vai ao título.
+- **O Numerar do Sistema** (13d e 13e): os dois `BotaoDeAcao` com 44 px no
+  celular, "Conferindo a numeração…" no "Ver o que muda", o fim do "Numerar
+  agora" ("Numerado" pelo menos 1 s, "Não numerado" por 2 s) e o aviso dos
+  10 s embaixo dos botões.
+- **Os registros e a regra**: a 10.5 em ordem de parte, a linha 13 da
+  tabela 10.4 com as sete partes e, no sistema visual, uma linha só para a
+  `CarregandoNaRegiao`.
+
+Fica aberto (no registro da junção; a revisão abaixo resolveu o primeiro e o
+último):
+
+- a `FalhaNaLeitura` (parte 10) ainda diz "Tentando de novo…" no toque, sem
+  o relógio, no `ErroNaLeitura`; na falta de conexão, o `BlocoSemConexao` já
+  usa o relógio. O `useTentandoNoRelogio` (13f) é a peça, e os testes da
+  parte 10 que pedem o texto na hora mudam com ela;
+- a `useLeituraDoPortal` (13f) tenta de novo por cima da `useLeitura`, que já
+  tenta desde a 13g: fica para a revisão da 13g;
+- o "Conferir" do "Numerar agora" aos 70 s não relê nada enquanto a
+  numeração não responde (a 13d não deu a ele o que conferir).
+
+**A revisão da junção (14/11/2026).** Três revisões (a lógica entre as
+partes, o app inteiro no Chromium e o leitor de tela) acharam o que a junção
+deixou entre as duas metades; cada achado foi reproduzido e corrigido com o
+teste que falha antes:
+
+- **O cliente ativo que falhou não segura mais as telas da cópia.** Com a
+  lista dos clientes que falhou, a 13e diz "Não carregou" no seletor e não
+  conta mais como lendo (o `isLoading` cai, também na nova tentativa); o
+  Fechamento, a fatura, os Contratos, o Receber e "Adicionar documento" só
+  esperavam o `isLoading` e liam e gravavam com o cliente padrão, também com
+  outro escolhido no aparelho ("Marcar como paga" e "Emitir" iam ao padrão).
+  Agora, com o `falhou`, a tela diz "Não consegui carregar o cliente ativo."
+  no lugar do dado (`FalhaDoClienteAtivo`), com "Tentar de novo", que lê de
+  novo a lista dos clientes e nunca o dado da tela; os meses do Fechamento
+  dizem "—", o Receber não lê os avisos e a "Chegada avulsa" e o "Adicionar
+  documento" ficam `aria-disabled`. A contagem lembrada de Pedidos não grava
+  com o cliente que não se confirmou;
+- **O "Numerar agora" aos 70 s confere.** A junção juntou o botão da 13d,
+  que vira "Conferir", ao aviso da escrita da 13e. O "Conferir" ficava mudo
+  enquanto a chamada não respondia e depois só voltava ao repouso, com a
+  prévia velha na tela. Agora ele relê a prévia (a numeração sem gravar),
+  também com a chamada a caminho, e diz "Conferindo…": sem nada a numerar,
+  valeu ("Numerado"); com o que falta, a prévia nova, e o "Numerar agora"
+  fica `aria-disabled` até a primeira chamada responder; nunca numera de
+  novo. O aviso é o apoio do botão: "Sem confirmação do servidor" fica com o
+  "Conferir", também depois de a chamada cair no prazo, e sai com o fim que
+  ele achou. O tipo do aviso é o da chamada feita, e a numeração que acaba
+  depois dos 10 s não faz o Anunciador dizer a demora de novo;
+- **A nova tentativa da `FalhaNaLeitura` e dos Clientes no relógio.** O
+  "Tentando de novo…" entra depois de 300 ms e fica pelo menos 500 ms (o
+  `useTentandoNoRelogio`, como o bloco da conexão e o portal): a nova
+  tentativa que responde antes, com o dado ou com a falha de novo, não pisca
+  o botão nem muda o alerta, que o leitor de tela relia inteiro duas vezes em
+  100 ms. A que demora mais diz "Tentando de novo…" e, se falhar de novo,
+  volta ao "Tentar de novo": o alerta muda e é relido, o que diz a falha
+  nova. O toque repetido com a leitura a caminho não lê de novo;
+- **A lista de separação, o romaneio, a bancada e o pedido separado têm
+  saída.** A lista continua a espera da rota, como o romaneio. As quatro
+  ganharam o `onTentar`: "Tentar de novo" aos 10 s, a desistência aos 70 s e
+  a falha com "Tentar de novo" (a `FalhaNaLeitura`). A lista e a bancada
+  leem do zero a fila e o que a folha espera; o romaneio e o pedido separado
+  assinam de novo só a leitura ao vivo que não chegou
+  (`tentarOsQueFaltam`, na `useVolumesDoPedido`);
+- **A `SaiComOFoco` com o alvo travado.** O alvo que está na tela mas não
+  pode receber o foco (o "Entrega" `disabled` enquanto outra ação grava, o
+  que está numa lista inerte ou escondida) conta como ausente: o foco vai ao
+  título da seção, e não ao da página;
+- **A contagem do segmentado na falha** é "—" em Pedidos e no Receber, como
+  a `NumeroLido` e os SKUs: o Receber ficava com o bloco de quem ainda lê, e
+  Pedidos com o rótulo só;
+- **No Chromium** (harness com a API falsa, só 127.0.0.1): com a lista dos
+  clientes em 500 e ACME no aparelho, o Fechamento não chama `/api/billing`
+  e diz a falha, com os meses em "—"; com o prazo de 70 s, aos 71 s, a
+  mesma tela, e nenhuma leitura do mês; o Receber diz "Em aberto · —" e a
+  falha do cliente. O "Tentar de novo" com a nova tentativa em 150 ms não
+  mostra mais "Tentando de novo…" no Catálogo, no Estoque nem nos Clientes.
+  O "Conferir" do Numerar com o Enter diz "Conferindo…" (`aria-busy`) e
+  volta à prévia nova; o Anunciador diz a demora uma vez. A `SaiComOFoco`
+  com o alvo `disabled` leva o foco ao H2 da seção. Pedidos e Receber em
+  falha, a 1440 e a 390 no escuro: "Em aberto · —", sem rolagem lateral e o
+  axe limpo.
+
+Fica aberto:
+
+- o Estoque, o Catálogo e as outras telas que leem pelo `code` sem esperar o
+  cliente ativo (nem enquanto lê, nem na falha) seguem com o cliente padrão
+  quando a lista falha (o título diz "Estoque · BTG Pactual"): elas não
+  esperavam o `isLoading` antes da junção, e a regra precisa de uma espera
+  que essas telas não têm;
+- enquanto a lista dos clientes lê, o Receber lê os avisos com o provisório,
+  como na parte 8 (a contagem lembrada não grava com ele);
+- o Pedidos e as outras telas que passam o `isFetching` cru ao
+  `ErroNaLeitura` (Pedidos, as Chaves, a Central da IA) ainda dizem
+  "Tentando de novo…" na hora;
+- o diálogo "Cancelar pedido" de Pedidos diz o nome do cliente ativo, e não
+  o do pedido.

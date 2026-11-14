@@ -110,6 +110,8 @@ let criacaoPresa: Array<() => void> | null;
 let patchPreso: Array<() => void> | null;
 /** As posições não respondem (a zona ainda lendo, parte 13e). */
 let posicoesPresas: boolean;
+/** A leitura dos clientes espera a vez: cada uma fica aqui até o teste a soltar. */
+let clientesPresos: Array<() => void> | null;
 let chamadas: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let assinaturas: Array<{ value: string; next: (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void }>;
 
@@ -243,6 +245,7 @@ beforeEach(() => {
   criacaoPresa = null;
   patchPreso = null;
   posicoesPresas = false;
+  clientesPresos = null;
   chamadas = [];
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
@@ -259,6 +262,8 @@ beforeEach(() => {
     const resposta = (payload: unknown, status = 200) =>
       new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } });
     if (path === "/api/customers" && method === "GET") {
+      const presa = clientesPresos;
+      if (presa) await new Promise<void>((soltar) => presa.push(soltar));
       return falharClientes ? resposta({ message: mensagemDaFalhaDosClientes }, 500) : resposta({ items: clientes });
     }
     if (path === "/api/customers" && method === "POST") {
@@ -868,5 +873,38 @@ describe("Configurações › Clientes enquanto lê", () => {
     await esperar(() => expect(container.querySelector("[data-falta]")).not.toBeNull());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.textContent).toMatch(/Sem conexão\.|Reconectando…/);
+  });
+});
+
+/**
+ * A nova tentativa da leitura dos clientes no relógio da espera (carregamento
+ * v2, junção das partes 10 e 13): "Tentando de novo…" só depois de 300 ms. A
+ * que falha de novo logo não pisca o botão nem muda o alerta, que o leitor de
+ * tela releria inteiro (antes, o `isFetching` cru ia direto ao botão).
+ */
+describe("Configurações › Clientes, a nova tentativa rápida", () => {
+  it.each([
+    ["na galeria", "/configuracoes/clientes"],
+    ["na página do cliente", `/configuracoes/clientes?cliente=${encodeURIComponent("BTG")}`],
+  ])("%s, a que falha de novo antes de 300 ms não muda o botão nem o alerta", async (_onde, endereco) => {
+    falharClientes = true;
+    await montar(endereco);
+    await esperar(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
+    const alerta = container.querySelector('[role="alert"]')!;
+    const antes = alerta.textContent;
+    const vistos: string[] = [];
+    const observador = new MutationObserver(() => vistos.push(alerta.textContent ?? ""));
+    observador.observe(alerta, { subtree: true, childList: true, characterData: true });
+    // A nova leitura fica presa até o teste a soltar: a tela desenha com ela a caminho, e ela falha de novo logo.
+    clientesPresos = [];
+    const presos = clientesPresos;
+    await tocar("Tentar de novo");
+    await esperar(() => expect(presos.length).toBe(1));
+    expect(botao("Tentar de novo")).toBeDefined();
+    await act(async () => presos.splice(0).forEach((soltar) => soltar()));
+    await esperar(() => expect(client.isFetching()).toBe(0));
+    observador.disconnect();
+    expect(vistos.filter((texto) => texto.includes("Tentando de novo"))).toEqual([]);
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(antes);
   });
 });

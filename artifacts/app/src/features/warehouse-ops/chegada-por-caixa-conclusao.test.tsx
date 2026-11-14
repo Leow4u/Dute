@@ -81,8 +81,17 @@ async function montar(entry: TaskQueueEntry) {
 }
 
 function concluir() {
-  return [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "Concluir entrada")!;
+  // O BotaoDeAcao empilha as camadas: o rótulo é o da camada atual (carregamento v2).
+  return [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => (button.querySelector(".botao-acao-camada[data-atual]")?.textContent ?? button.textContent)?.trim() === "Concluir entrada",
+  )!;
 }
+
+/** Travado: o `disabled` (o que não tem o que fazer) ou o `aria-disabled` do botão ocupado (carregamento v2, parte 13c). */
+function travado(button: HTMLButtonElement | null | undefined) {
+  return Boolean(button && (button.disabled || button.getAttribute("aria-disabled") === "true"));
+}
+
 
 async function enviar() {
   await act(async () => concluir().click());
@@ -96,7 +105,7 @@ async function enviar() {
 describe("o pedido real de conclusão por caixa", () => {
   it("sem divergência, omite note no JSON da callable em vez de enviar null", async () => {
     await montar(entrada);
-    expect(concluir().disabled).toBe(false);
+    expect(travado(concluir())).toBe(false);
     await enviar();
     expect(enviados[0]).toEqual({ data: {
       receipt_id: "inb_teste", customer_code: "CLIENTE-TESTE", expected_status: "checking",
@@ -109,14 +118,14 @@ describe("o pedido real de conclusão por caixa", () => {
       ...entrada.task.items![0], expected_quantity: 5,
       shortage: { qty: 1, boxed_qty: 4, expected_qty: 5, reason: "falta" },
     }] } });
-    expect(concluir().disabled).toBe(true);
+    expect(travado(concluir())).toBe(true);
     expect(enviados).toEqual([]);
     await act(async () => {
       const campo = document.getElementById("justificativa-da-divergencia") as HTMLTextAreaElement;
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(campo, "  Fornecedor enviará a peça faltante.  ");
       campo.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(concluir().disabled).toBe(false);
+    expect(travado(concluir())).toBe(false);
     await enviar();
     expect(enviados[0]?.data.note).toBe("Fornecedor enviará a peça faltante.");
   });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -30,6 +31,9 @@ const SAFRA: AlertaProposto = { ...ITAU, id: "alerta_fedcba9876543210fedcba98", 
 
 const nomes: Record<string, string> = { ITAU: "Itaú Unibanco", SAFRA: "Banco Safra" };
 
+/** A leitura que falhou sem nada lido (a `falhaDasLeituras`): a falha e a nova tentativa. */
+const falhaCom = (erro: Error) => ({ erro, leitura: { error: erro, refetch: async () => undefined } as never });
+
 function elemento(props: Partial<AlertasParadosViewProps> = {}) {
   return (
     <div className="v3">
@@ -51,6 +55,22 @@ function elemento(props: Partial<AlertasParadosViewProps> = {}) {
 function tela(props: Partial<AlertasParadosViewProps> = {}) {
   return renderToStaticMarkup(elemento(props));
 }
+
+function documento(html: string) {
+  return new DOMParser().parseFromString(html, "text/html");
+}
+
+/** O botão pelo rótulo do repouso (o BotaoDeAcao empilha as camadas). */
+function botaoDe(html: string, rotulo: string): HTMLButtonElement {
+  const achado = Array.from(documento(html).querySelectorAll("button")).find((botao) => {
+    const repouso = botao.querySelector('[data-camada="repouso"]') ?? botao;
+    return repouso.textContent?.trim() === rotulo;
+  });
+  if (!achado) throw new Error(`Sem o botão ${rotulo}`);
+  return achado as HTMLButtonElement;
+}
+
+const marcasDe = (html: string) => Array.from(documento(html).querySelectorAll('[role="checkbox"]'));
 
 // 13:42 UTC são 10:42 no armazém.
 const LEITURA: LeituraDaLista = {
@@ -88,18 +108,42 @@ describe("Estoque › Alertas na v3", () => {
       "12/07/2026",
       "100 dias",
       "Enviar ao cliente",
+      "Enviando…",
+      "Conferir",
       "Descartar",
+      "Descartando…",
     ]);
   });
 
   it("uma ação principal; sem item marcado ela espera; enquanto grava, tudo espera", () => {
     const html = tela();
     expect(html.match(/bg-primary text-primary-foreground/g)).toHaveLength(1);
-    expect(html).toMatch(/bg-primary text-primary-foreground[^"]*"[^>]*>Enviar ao cliente<\/button>/);
-    expect(tela({ marcados: new Set() })).toMatch(/<button[^>]*disabled=""[^>]*>Enviar ao cliente<\/button>/);
-    const gravando = tela({ ocupado: true });
-    expect(gravando).toContain("Gravando...");
-    expect(gravando).toMatch(/<button[^>]*disabled=""[^>]*>Descartar<\/button>/);
+    expect(botaoDe(html, "Enviar ao cliente").className).toContain("bg-primary text-primary-foreground");
+    // Sem item marcado, o Enviar espera: aria-disabled, nunca disabled (carregamento v2, seção 7).
+    const semMarcado = botaoDe(tela({ marcados: new Set() }), "Enviar ao cliente");
+    expect(semMarcado.getAttribute("aria-disabled")).toBe("true");
+    expect(semMarcado.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("enviando: o Enviar no BotaoDeAcao (\"Enviando…\"), o Descartar e as marcas travados sem disabled (parte 13b)", () => {
+    const enviando = tela({ ocupado: true, decidindo: "aprovar" });
+    expect(enviando).not.toContain("Gravando...");
+    expect(enviando).not.toMatch(/disabled=""/);
+    const enviar = botaoDe(enviando, "Enviar ao cliente");
+    expect(enviar.getAttribute("data-estado")).toBe("andamento");
+    expect(enviar.getAttribute("aria-disabled")).toBe("true");
+    expect(enviar.textContent).toContain("Enviando…");
+    const descartar = botaoDe(enviando, "Descartar");
+    expect(descartar.getAttribute("data-estado")).toBe("repouso");
+    expect(descartar.getAttribute("aria-disabled")).toBe("true");
+    const marcas = marcasDe(enviando);
+    expect(marcas.length).toBe(3);
+    for (const marca of marcas) expect(marca.getAttribute("aria-disabled")).toBe("true");
+
+    const descartando = tela({ ocupado: true, decidindo: "descartar" });
+    expect(botaoDe(descartando, "Descartar").getAttribute("data-estado")).toBe("andamento");
+    expect(botaoDe(descartando, "Descartar").textContent).toContain("Descartando…");
+    expect(botaoDe(descartando, "Enviar ao cliente").getAttribute("data-estado")).toBe("repouso");
   });
 
   it("com mais de um cliente, a escolha do cliente com a contagem", () => {
@@ -112,7 +156,12 @@ describe("Estoque › Alertas na v3", () => {
     expect(textosDaTela(tela({ estado: "carregando", leitura: [{ ...LEITURA, isLoading: true, isFetching: true, dataUpdatedAt: 0 }] }))).toEqual([
       "Alertas de itens parados",
     ]);
-    expect(textosDaTela(tela({ estado: "erro" }))).toEqual(["Alertas de itens parados", "Não consegui carregar os alertas."]);
+    // A falha nunca vira vazio e tem a nova tentativa (parte 13b).
+    expect(textosDaTela(tela({ estado: "erro", falha: falhaCom(new Error("Falha no servidor")) }))).toEqual([
+      "Alertas de itens parados",
+      "Não consegui carregar os alertas.",
+      "Tentar de novo",
+    ]);
     expect(textosDaTela(tela({ erro: "O alerta já foi decidido." })).at(-1)).toBe("O alerta já foi decidido.");
   });
 
@@ -126,6 +175,8 @@ describe("Estoque › Alertas na v3", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(tela())).toEqual([]);
     expect(await violacoesDeAcessibilidade(tela({ alertas: [SAFRA, ITAU] }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(tela({ ocupado: true, decidindo: "aprovar" }))).toEqual([]);
+    expect(await violacoesDeAcessibilidade(tela({ estado: "erro", falha: falhaCom(new Error("Falha no servidor")) }))).toEqual([]);
   });
 });
 
@@ -136,14 +187,13 @@ describe("Estoque › Alertas na v3", () => {
  * v2, parte 7a).
  */
 describe("Estoque › Alertas sem conexão", () => {
-  const tentar = { tentando: false, onTentar: () => undefined };
   // 13:42 UTC são 10:42 no armazém.
   const lidaEm = Date.parse("2026-11-06T13:42:00Z");
   const naConexao = (estado: EstadoDaConexao, props: Partial<AlertasParadosViewProps>) =>
     renderToStaticMarkup(<ProvedorDaConexao value={conexaoEm(estado)}>{elemento(props)}</ProvedorDaConexao>);
 
   // A leitura com a falta e a lista lida: a hora dela fica na linha de estado, sob o título (parte 7b).
-  const comFalta = { leitura: [{ ...LEITURA, isError: true, error: new SemResposta(), dataUpdatedAt: lidaEm }], semConexao: { lidaEm, ...tentar } };
+  const comFalta = { leitura: [{ ...LEITURA, isError: true, error: new SemResposta(), dataUpdatedAt: lidaEm }] };
 
   it("com a lista lida: o alerta fica, com a hora da leitura na linha de estado", () => {
     const textos = textosDaTela(naConexao("sem-conexao", comFalta));
@@ -155,7 +205,7 @@ describe("Estoque › Alertas sem conexão", () => {
   });
 
   it("sem nada lido: o aviso, nunca \"Nenhum alerta para aprovar\"", () => {
-    const semNada = { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } };
+    const semNada = { alertas: [], alerta: null, estado: "erro" as const, falha: falhaCom(new SemResposta()) };
     expect(textosDaTela(naConexao("sem-conexao", semNada))).toEqual(["Alertas de itens parados", "Sem conexão.", "Tentar de novo"]);
     expect(textosDaTela(naConexao("reconectando", semNada))).toEqual(["Alertas de itens parados", "Reconectando…", "Tentar de novo"]);
   });
@@ -164,7 +214,7 @@ describe("Estoque › Alertas sem conexão", () => {
     for (const estado of ["sem-conexao", "reconectando"] as const) {
       expect(await violacoesDeAcessibilidade(naConexao(estado, comFalta)), estado).toEqual([]);
       expect(
-        await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, semConexao: { lidaEm: null, ...tentar } })),
+        await violacoesDeAcessibilidade(naConexao(estado, { alertas: [], alerta: null, estado: "erro", falha: falhaCom(new SemResposta()) })),
         estado,
       ).toEqual([]);
     }

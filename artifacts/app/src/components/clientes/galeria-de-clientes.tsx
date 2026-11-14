@@ -6,7 +6,7 @@ import { Codigo, Pilula, QuadroDoCliente, Selo, SeloDaSituacao } from "@/compone
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
-import { BlocoSemConexao, ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
 import { Input } from "@/components/ui/input";
 import {
@@ -200,6 +200,9 @@ export function GaleriaDeClientes({
   tentarLeituras,
   semConexao = false,
 }: GaleriaProps) {
+  // A nova tentativa no relógio da espera (junção das partes 10 e 13): "Tentando de novo…" só depois de 300 ms, e a
+  // que falha de novo antes não pisca o botão nem muda o alerta. O bloco da conexão já tem o relógio dele.
+  const tentandoNoRelogio = useTentandoNoRelogio(tentando);
   const falhaNosNumeros = estado === "pronto" && rows.length > 0 ? falhaDosNumeros(zonas, pessoas) : null;
   const contagem = countCustomerFilters(rows);
   const visiveis = searchCustomerRows(
@@ -257,7 +260,13 @@ export function GaleriaDeClientes({
       ) : estado === "erro" && semConexao ? (
         <BlocoSemConexao tentando={tentando} onTentar={onTentar} />
       ) : estado === "erro" ? (
-        <ErroNaLeitura mensagem={erro ?? "Não foi possível carregar os clientes."} tentando={tentando} onTentar={onTentar} />
+        <ErroNaLeitura
+          mensagem={erro ?? "Não foi possível carregar os clientes."}
+          tentando={tentandoNoRelogio}
+          onTentar={() => {
+            if (!tentando) onTentar();
+          }}
+        />
       ) : rows.length === 0 ? (
         <p role="status" className="rounded-lg border border-border bg-card px-5 py-12 text-center text-sm font-bold text-muted-foreground">
           Nenhum cliente cadastrado

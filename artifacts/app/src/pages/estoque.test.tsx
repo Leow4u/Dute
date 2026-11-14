@@ -329,15 +329,17 @@ describe("Estoque sem conexão", () => {
   const fonte = readFileSync(new URL("./estoque.tsx", import.meta.url), "utf8");
 
   it("a lista lida fica com a hora; sem nada lido, o aviso; a falta de conexão não troca a lista pelo erro", () => {
-    expect(fonte).toContain("const semRede = semConexaoNaLeitura(skus, balances, products);");
+    // A falha sai das cópias da useLeituraComFalha: na nova tentativa, a falta de conexão continua a falta, e o aviso
+    // fica com o foco nele (parte 13b). As fotos ficam fora da falha da lista: a falha delas tem o aviso próprio.
+    expect(fonte).toContain("const leiturasComFalha = [catalogo, saldos, fotosDoCatalogo];");
+    expect(fonte).toContain("const falhaDaLista = falhaDasLeituras([");
+    expect(fonte).toContain("const leiturasDaLista = leiturasComFalha;");
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(fonte).toContain("const leiturasDaLista = [skus, balances, products];");
-    expect(fonte).toContain('estado={<LinhaDeEstado leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}');
+    expect(fonte).toContain('estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDaLista} objeto="estoque" pedidaPelaPessoa={atualizarLista.voltando} />}');
     expect(fonte).not.toContain("FaixaSemConexao");
     expect(fonte).not.toContain("Carregando estoque...");
-    // Na primeira leitura, nada no lugar da lista (a linha de estado diz); depois, o aviso, antes do erro.
-    expect(fonte).toContain("{skus.isLoading ? null : semRede && semRede.lidaEm === null ? (");
-    expect(fonte.indexOf("semRede && semRede.lidaEm === null ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
-    expect(fonte).toContain(") : skus.error && !semRede ? (");
+    // Sem nada lido (com ou sem rede), a FalhaNaLeitura no lugar da lista; na primeira leitura, nada (a linha de estado diz).
+    expect(fonte.indexOf("{falhaDaLista ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
+    expect(fonte.indexOf("Não consegui carregar o estoque.")).toBeLessThan(fonte.indexOf(") : aindaLendo ? null : ("));
   });
 });

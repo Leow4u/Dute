@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Check, Forklift, Inbox, PackageOpen, X } from "lucide-react";
 
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarraDeEspera } from "@/components/ui/barra-de-espera";
 import { BlocoSemConexao, useFocoAoSair } from "@/components/ui/erro-na-leitura";
 import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
 import { PageHeader } from "@/components/ui/page-header";
@@ -33,6 +33,7 @@ import { useContagemLembrada, type ContagensDaLista } from "@/lib/carregando/con
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { resumoDaLista } from "@/lib/carregando/resumo-da-lista";
 import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { BarraDaLista, ConteudoEmTroca, useListaComFiltro, useListaEmTroca } from "@/lib/carregando/use-lista-em-troca";
 import { useFalhaNaReleituraAutomatica } from "@/lib/carregando/use-leitura-com-falha";
 import { semConexaoNaLeitura } from "@/lib/conexao";
 import { canOperateWarehouse } from "@/lib/permissions";
@@ -83,7 +84,7 @@ import { formatRequestAge } from "./customer-requests";
 export default function Receber() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { code: customerCode, isLoading: clienteCarregando, codeProvavel } = useActiveCustomer();
+  const { code: customerCode, isLoading: clienteCarregando, falhou: clienteFalhou, erro: erroDoCliente, codeProvavel } = useActiveCustomer();
   // O suporte consulta: sem chegada avulsa, sem conferir, concluir ou guardar.
   const { user } = useAppUser();
   const operador = canOperateWarehouse(user?.publicMetadata.role);
@@ -128,22 +129,43 @@ export default function Receber() {
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
   });
+  // Trocar o cliente lê os avisos dele no servidor: a lista anterior fica, a 50% e inert, com a barra no topo do
+  // primeiro cartão, até os avisos do novo chegarem (carregamento v2, momento 7, caso 4).
   const requests = useQuery({
     queryKey: ["customer-requests", "receber", customerCode],
     queryFn: () =>
       fetchJson<{ items?: Array<Record<string, unknown>> }>(
         `/api/customer-requests?customer_code=${encodeURIComponent(customerCode)}&status=open&limit=200`,
       ),
+    // Com a lista dos clientes que falhou, o `code` é o do cliente padrão: os avisos dele não são lidos, e a tela diz a
+    // falha do cliente ativo (o customer_code é a fronteira; junção das partes 10 e 13).
+    enabled: !clienteFalhou,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
+  // A troca de cliente que falha (os avisos do novo não vieram) mostra o aviso no lugar da lista, também na nova
+  // tentativa (o react-query voltaria os avisos do cliente anterior por baixo): erro nunca vira vazio. Sem as filas
+  // lidas, a nova tentativa volta à primeira leitura, com as linhas-fantasma, como sempre.
+  const avisos = useListaComFiltro(requests);
+  const trocandoDeCliente = avisos.trocando;
   // A falha sem nada lido fica na tela durante a releitura automática (o intervalo de 60 s): o aviso e o foco no
   // "Tentar de novo". Só a nova tentativa que a pessoa pede volta às linhas-fantasma.
   const opsNaTela = useFalhaNaReleituraAutomatica(ops);
-  const requestsNaTela = useFalhaNaReleituraAutomatica(requests);
+  const avisosLidos = useFalhaNaReleituraAutomatica(requests);
+  const requestsNaTela = clienteFalhou
+    ? // Sem o cliente ativo, os avisos não foram lidos: a linha de estado fica vazia, ao lado da falha do cliente.
+      { ...avisosLidos, data: undefined, error: erroDoCliente as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+    : avisos.falhou && ops.data !== undefined
+      ? { ...avisosLidos, data: undefined, error: avisos.erro as Error, isError: true, isLoading: false, isPlaceholderData: false, dataUpdatedAt: 0 }
+      : avisosLidos;
+  // Os avisos na tela são do cliente da leitura: na troca, ainda os do anterior, que somem com a lista dele.
+  const clienteDosAvisos = useRef(customerCode);
+  if (!trocandoDeCliente) clienteDosAvisos.current = customerCode;
+  const codigoDosAvisos = clienteDosAvisos.current;
   const notices = useMemo(
-    () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === customerCode),
-    [requests.data?.items, customerCode],
+    () => openShipmentNotices(requests.data?.items ?? []).filter((notice) => notice.customer_code === codigoDosAvisos),
+    [requests.data?.items, codigoDosAvisos],
   );
   const noticeById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);
   const queues = useMemo(() => normalizeQueues(ops.data?.queues), [ops.data?.queues]);
@@ -218,11 +240,12 @@ export default function Receber() {
   // Sem rede, a lista que já estava fica, com a hora da leitura; sem nada
   // lido, o aviso. A falta de conexão não troca a lista pelo erro
   // (decisão 2 do celular).
-  const semRede = semConexaoNaLeitura(ops, requests);
-  const recarregar = () => {
-    refresh();
-    void queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] });
-  };
+  const semRede = semConexaoNaLeitura(ops, requestsNaTela);
+  const recarregar = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["warehouse-ops"] }),
+      queryClient.invalidateQueries({ queryKey: ["customer-requests", "receber"] }),
+    ]);
   const openCount = pendingNotices.length + board.check.length + board.guardando.length + board.store.length;
   // A linha de estado sob o título e o Atualizar (carregamento v2, parte 7b):
   // a releitura automática de 60 s não mostra nada; o Atualizar só mostra a
@@ -230,7 +253,8 @@ export default function Receber() {
   // com a barra no topo do primeiro cartão.
   const leiturasDaLista = [opsNaTela, requestsNaTela];
   const atualizarLista = useAtualizarLista(leiturasDaLista);
-  const barraDoTopo = <BarraDeEspera lugar="topo" ativa={atualizarLista.voltando} resultado="fim" />;
+  const troca = useListaEmTroca(trocandoDeCliente);
+  const barraDoTopo = <BarraDaLista ativa={atualizarLista.voltando || trocandoDeCliente} />;
 
   // A lista com a forma final na primeira leitura (carregamento v2, momento 2, decisão P3): os títulos reais
   // desde 0 ms, com o bloco no lugar do número; as linhas-fantasma na altura da última contagem lida deste
@@ -241,12 +265,16 @@ export default function Receber() {
   // avisos: o aviso entra no lugar da lista na hora.
   const [listaJaLida, setListaJaLida] = useState(false);
   if (!listaJaLida && ops.data && (requests.data || requests.isError)) setListaJaLida(true);
-  const lendo = !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
+  const lendo = !clienteFalhou && !listaJaLida && !opsNaTela.isError && (opsNaTela.isLoading || requestsNaTela.isLoading);
   const idDaLinha = useId();
+  // O aviso no lugar da lista: sem nada lido das filas, ou sem os avisos do cliente (a troca que falhou). A contagem
+  // do "Em aberto" fica com o "—": sem a lista, ela seria um falso número, e o bloco diria que ainda lê.
+  const falhaNaTela = !lendo && !semRede && ((Boolean(opsNaTela.error) && !opsNaTela.data) || avisos.falhou);
+  const semAListaNaTela = falhaNaTela || (!lendo && semRede !== null && semRede.lidaEm === null);
   // A contagem lembrada é do cliente que a tela vai operar: na abertura, antes de a lista dos clientes chegar, o
   // escolhido neste aparelho. Só grava com o cliente confirmado e os avisos dele lidos.
   const contagensLidas: ContagensDaLista | null =
-    ops.data && requests.data && !clienteCarregando
+    ops.data && requests.data && !requests.isPlaceholderData && !clienteCarregando
       ? {
           conferir: pendingNotices.length + board.check.length,
           guardando: board.guardando.length,
@@ -280,6 +308,8 @@ export default function Receber() {
             ],
             "Nenhuma chegada em aberto",
           );
+  // Na troca de cliente, só os avisos são do cliente anterior: eles ficam a 50% e inert, e as chegadas e guardas do
+  // armazém, que a troca não relê, seguem com o toque.
   const listaOcupada = lendo ? { "aria-busy": true, "aria-describedby": idDaLinha } : {};
 
   const taskPanel = selectedNotice ? (
@@ -292,6 +322,7 @@ export default function Receber() {
       actions={actions}
       noticeChoice={noticeChoice}
       linking={linkNotice.isPending}
+      linkingId={linkNotice.isPending ? (linkNotice.variables?.requestId ?? "") : undefined}
       onLinkNotice={
         operador && noticeChoice?.editable
           ? (requestId) => linkNotice.mutate({ receiptId: selected.task.id, requestId })
@@ -374,7 +405,7 @@ export default function Receber() {
     <div className="flex flex-col gap-6 pb-24">
       {!fichaLarga ? <PageHeader
         title="Receber"
-        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
+        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="chegadas" pedidaPelaPessoa={atualizarLista.voltando || trocandoDeCliente} resumo={resumo} />}
         actions={
           <>
             <Segmented<"open" | "done" | "cancelled">
@@ -387,13 +418,21 @@ export default function Receber() {
               aria-label="Situação das chegadas"
               cheioNoCelular
               options={[
-                { value: "open", label: "Em aberto", count: lendo ? null : openCount },
+                { value: "open", label: "Em aberto", count: lendo ? null : semAListaNaTela || clienteFalhou ? "falhou" : openCount },
                 { value: "done", label: "Recebidos" },
                 { value: "cancelled", label: "Cancelados" },
               ]}
             />
             {operador ? (
-              <Button type="button" variant="outline" onClick={() => setUnplannedOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                // A chegada avulsa nasce para o cliente ativo: espera a lista dos clientes, travada, nunca com o padrão.
+                aria-disabled={clienteCarregando || clienteFalhou || undefined}
+                onClick={() => {
+                  if (!clienteCarregando && !clienteFalhou) setUnplannedOpen(true);
+                }}
+              >
                 <PackageOpen className="size-4" />
                 Chegada avulsa
               </Button>
@@ -405,9 +444,11 @@ export default function Receber() {
 
       {/* A falta com a lista lida fica na linha de estado, sob o título; a primeira leitura, também, com a lista
           na forma final, com as linhas-fantasma. */}
-      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : !lendo && semRede && semRede.lidaEm === null ? (
+      {fichaLarga ? <section aria-label="Bancada de conferência" className="min-w-0">{panel}</section> : clienteFalhou ? (
+        <FalhaDoClienteAtivo focoAoSair={idDaLinha} />
+      ) : !lendo && semRede && semRede.lidaEm === null ? (
         <BlocoSemConexao tentando={ops.isFetching || requests.isFetching} onTentar={recarregar} focoAoSair={idDaLinha} />
-      ) : !lendo && opsNaTela.error && !semRede ? (
+      ) : falhaNaTela ? (
         <FalhaDasChegadas focoAoSair={idDaLinha} onTentar={recarregar} />
       ) : (
         <div
@@ -445,6 +486,9 @@ export default function Receber() {
                   barraDoTopo={barraDoTopo}
                   carregando={fantasmas("conferir", 0)}
                 >
+                  {pendingNotices.length ? (
+                  <div className="divide-y divide-border/60" {...troca.props}>
+                  <ConteudoEmTroca trocando={trocandoDeCliente}>
                   {pendingNotices.map((notice) => (
                     <QueueRow
                       key={notice.id}
@@ -472,6 +516,9 @@ export default function Receber() {
                       }
                     />
                   ))}
+                  </ConteudoEmTroca>
+                  </div>
+                  ) : null}
                   {board.check.map((entry) => (
                     <QueueRow
                       key={entry.task.id}
@@ -682,6 +729,7 @@ function TaskPanel({
   actions,
   noticeChoice,
   linking,
+  linkingId,
   onLinkNotice,
   lineConfirmations,
   onLineConfirmationChange,
@@ -693,6 +741,7 @@ function TaskPanel({
   actions: ReturnType<typeof useWarehouseTaskActions>;
   noticeChoice: NoticeLinkChoice | null;
   linking: boolean;
+  linkingId?: string;
   onLinkNotice?: (requestId: string | null) => void;
   lineConfirmations: LineConfirmationMap;
   onLineConfirmationChange: Parameters<typeof TaskDetailPanel>[0]["onLineConfirmationChange"];
@@ -721,6 +770,7 @@ function TaskPanel({
         alerts={alerts}
         noticeChoice={noticeChoice}
         linking={linking}
+        linkingId={linkingId}
         advancingTaskId={actions.advancingTaskId}
         registeringExceptionId={actions.registeringExceptionId}
         onAdvance={(id, note) => actions.advanceTask.mutate({ id, note })}
@@ -748,21 +798,42 @@ function TaskPanel({
  * nova tentativa é pedida pela pessoa (a linha de estado fala de novo), e o
  * foco vai à linha de estado quando o aviso sai da tela.
  */
-function FalhaDasChegadas({ focoAoSair, onTentar }: { focoAoSair: string; onTentar: () => void }) {
+/**
+ * As chegadas não vieram (as filas, ou os avisos do cliente): o aviso no lugar
+ * da lista, com "Tentar de novo". Na nova tentativa que não tira o aviso da
+ * tela (os avisos do cliente), o botão diz "Tentando de novo…", ocupado e não
+ * desabilitado; quando o aviso sai com o foco nele, o foco vai à linha de
+ * estado.
+ */
+function FalhaDasChegadas({ focoAoSair, onTentar }: { focoAoSair: string; onTentar: () => Promise<unknown> }) {
   const raiz = useRef<HTMLParagraphElement>(null);
   useFocoAoSair(raiz, focoAoSair);
+  const [tentando, setTentando] = useState(false);
+  const montada = useRef(true);
+  useEffect(() => {
+    montada.current = true;
+    return () => {
+      montada.current = false;
+    };
+  }, []);
   return (
     <p ref={raiz} className="text-sm text-destructive">
       Não consegui carregar as chegadas.{" "}
       <button
         type="button"
-        className="font-medium underline"
+        className="font-medium underline aria-disabled:no-underline"
+        aria-disabled={tentando || undefined}
+        aria-busy={tentando || undefined}
         onClick={() => {
+          if (tentando) return;
           marcarPedidoDaPessoa();
-          onTentar();
+          setTentando(true);
+          void onTentar().finally(() => {
+            if (montada.current) setTentando(false);
+          });
         }}
       >
-        Tentar de novo
+        {tentando ? "Tentando de novo…" : "Tentar de novo"}
       </button>
     </p>
   );

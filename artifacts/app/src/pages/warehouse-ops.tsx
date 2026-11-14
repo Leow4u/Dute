@@ -62,6 +62,10 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
+import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BotaoAtualizar, LinhaDeEstado } from "@/components/ui/linha-de-estado";
+import { useAtualizarLista } from "@/lib/carregando/use-atualizar-lista";
+import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -338,13 +342,14 @@ function WmsModuleEmptyState({ module }: { module: WarehouseOpsModule }) {
   );
 }
 
-function WarehouseOpsLoading() {
+/**
+ * A bancada na primeira leitura: os blocos com a forma dela, sob o título real
+ * e a linha de estado, que diz "Carregando tarefas…" aos 300 ms e é quem a
+ * região ocupada aponta (carregamento v2, parte 13c).
+ */
+function WarehouseOpsLoading({ estado }: { estado: string }) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-11 w-72 rounded-lg" />
-        <Skeleton className="h-4 w-full max-w-[560px]" />
-      </div>
+    <div className="flex flex-col gap-6" aria-busy="true" aria-describedby={estado}>
       <Skeleton className="h-20 rounded-lg" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[1, 2, 3, 4, 5].map((item) => (
@@ -1003,6 +1008,9 @@ function AgentAlertsPanel({
   );
 }
 
+/** A linha de estado da bancada, que recebe o foco quando o aviso da falha sai com ele. */
+const ID_DA_LINHA_DA_BANCADA = "linha-de-estado-da-bancada";
+
 type WarehouseOpsProps = {
   initialModule?: WarehouseOpsModuleKey;
 };
@@ -1029,6 +1037,11 @@ export default function WarehouseOps({
     refetchOnWindowFocus: false,
     enabled: activeModuleKey !== "inventory",
   });
+  // A bancada que falhou sem nada lido mostra a falha com "Tentar de novo", que fica enquanto tenta; o Atualizar é o
+  // das listas, que só mostra a espera quando a pessoa toca nele: a releitura de 60 s não o gira nem o desliga
+  // (carregamento v2, parte 13c).
+  const opsNaTela = useLeituraComFalha(ops);
+  const atualizarBancada = useAtualizarLista([opsNaTela]);
 
   const queues = useMemo(
     () => normalizeQueues(ops.data?.queues),
@@ -1111,51 +1124,45 @@ export default function WarehouseOps({
 
   const pageTitle = initialModule === "receiving" ? "Receber" : activeModule.label;
 
-  if (ops.isLoading) return <WarehouseOpsLoading />;
+  // O título e a linha de estado ficam desde o começo: "Carregando tarefas…" na primeira leitura, "Atualizado às" e a
+  // releitura que falha com a bancada lida ("Não consegui atualizar · lista de 10:42"), que nunca apaga a bancada
+  // (carregamento v2, parte 13c; momentos 2 e 7). Quando o aviso da falha sai com o foco nele, o foco vai à linha.
+  const cabecalho = (
+    <PageHeader
+      title={pageTitle}
+      estado={<LinhaDeEstado id={ID_DA_LINHA_DA_BANCADA} leitura={[opsNaTela]} objeto="tarefas" />}
+      actions={
+        <>
+          {blockedEntries.length > 0 ? (
+            <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
+          ) : null}
+          <BotaoAtualizar atualizando={atualizarBancada.atualizando} travado={!ops.data} onAtualizar={atualizarBancada.atualizar} />
+        </>
+      }
+    />
+  );
 
-  if (ops.error || !ops.data) {
+  if (!ops.data && opsNaTela.isError) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={pageTitle} />
+        {cabecalho}
+        <FalhaNaLeitura leitura={ops} erro={opsNaTela.error} mensagem="Não consegui carregar a bancada WMS." focoAoSair={ID_DA_LINHA_DA_BANCADA} />
+      </div>
+    );
+  }
 
-        <Alert variant="destructive" className="bg-destructive/10">
-          <AlertCircle className="size-4" />
-          <AlertTitle>Não foi possível carregar a bancada WMS</AlertTitle>
-          <AlertDescription>
-            <div className="flex flex-col gap-4">
-              <p>{getErrorMessage(ops.error)}</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-fit"
-                onClick={() => ops.refetch()}
-              >
-                <RefreshCw data-icon="inline-start" />
-                Tentar novamente
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
+  if (!ops.data) {
+    return (
+      <div className="flex flex-col gap-6">
+        {cabecalho}
+        <WarehouseOpsLoading estado={ID_DA_LINHA_DA_BANCADA} />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={pageTitle}
-        actions={
-          <>
-            {blockedEntries.length > 0 ? (
-              <Badge variant="destructive">{formatNumber(blockedEntries.length)} bloqueio(s)</Badge>
-            ) : null}
-            <Button type="button" variant="outline" onClick={() => ops.refetch()} disabled={ops.isFetching}>
-              <RefreshCw data-icon="inline-start" className={cn(ops.isFetching && "animate-spin")} />
-              Atualizar
-            </Button>
-          </>
-        }
-      />
+      {cabecalho}
 
       {activeModule.key === "returns" ? (
         <ReturnWorkspace />
