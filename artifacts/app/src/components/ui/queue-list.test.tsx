@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 
@@ -71,6 +72,32 @@ describe("a fila e o cabeçalho na v3", () => {
     );
     expect(html).toMatch(/<p class="[^"]*">Guardar caixa CX-000132<span class="ml-2 inline-flex align-middle"><span>sem prateleira<\/span><\/span><\/p>/);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  /**
+   * O selo do pedido em separação, em Pedidos ("em separação desde 12/11 ·
+   * 2 de 5 itens"), é um Badge dentro do parágrafo do título: um <div> ali
+   * fazia o React avisar "<div> cannot be a descendant of <p>" no console,
+   * e o navegador fechava o parágrafo antes do selo.
+   */
+  it("o selo com o Badge fica no parágrafo do título, sem bloco dentro dele", () => {
+    const html = renderToStaticMarkup(
+      <QueueGroup title="Para separar" count={1} empty="Nenhum pedido para separar.">
+        <QueueRow
+          icon={Package}
+          tone="pick"
+          title="PED-0118"
+          badge={<Badge variant="outline">em separação desde 12/11 · 2 de 5 itens</Badge>}
+          meta="BTG Pactual · 3 itens"
+          detail={<span>Para 15/11</span>}
+          note={<span>Falta saldo</span>}
+        />
+      </QueueGroup>,
+    );
+    const doc = new JSDOM(html).window.document;
+    expect(doc.querySelectorAll("p div, p p")).toHaveLength(0);
+    const titulo = [...doc.querySelectorAll("p")].find((p) => p.textContent?.startsWith("PED-0118"));
+    expect(titulo?.textContent).toBe("PED-0118em separação desde 12/11 · 2 de 5 itens");
   });
 
   it("o atalho opcional fica ao lado de Ver itens, sem mudar a linha sem atalho", async () => {
