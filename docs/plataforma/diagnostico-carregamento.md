@@ -2158,3 +2158,168 @@ Fica aberto:
   relógio; o `useTentandoNoRelogio` é a peça para elas;
 - a conferência com leitor de tela de verdade, num Android médio e no
   Safari.
+
+**Parte 13g, os outros módulos (PR 610, 14/11/2026).** A parte 13 nos shells
+e nas telas do Comercial, da Operação (com a Agenda), do campo, da TV da sala,
+do Financeiro e do RH. Fecha também, nesses módulos, as necessidades 2, 3, 5,
+8 e 10 (seção 5). As escritas, as callables, as chaves de idempotência e o
+`customer_code` como fronteira não mudam, e a Operação e o campo continuam
+sem ver valor.
+
+- **O que já estava feito**: o `Dialog`, o `AlertDialog` e o `Sheet` já
+  aceitavam o `ocupado` da parte 13a, mas os diálogos destes módulos não o
+  usavam; o Início da Operação já tinha "Carregando o que precisa de você…" e
+  parte dos blocos; a `useLeituraComFalha` já segurava a falha das leituras do
+  react-query. O resto dizia "Carregando..." ou "Carregando" solto, pulsava o
+  `Skeleton` antigo (5 telas), tinha 10 regiões vivas soltas, botões
+  `disabled` que só trocavam o texto e leituras ao vivo cuja falha não tinha
+  saída.
+- **A leitura de cada tela**:
+  - lendo, a `CarregandoNaRegiao`, que continua a espera da rota, com o
+    gerúndio e o objeto ("Carregando os contratos…", "Carregando o Hoje…",
+    "Carregando suas OS…", "Carregando as emissões…", "Carregando as
+    pessoas…"); os Inícios do Comercial, da Operação, do Financeiro e do RH
+    ficam com o título, a frase reservada e os blocos neutros; os Relatórios
+    da Operação e do Financeiro mostram os números e as linhas em blocos, com
+    o brilho de dois ciclos;
+  - nenhuma contagem diz zero antes de ler (`NumeroLido`): lendo, o bloco;
+    na falha, "—", fora da árvore (Contratos, Clientes, Orçamentos,
+    Autorizações, Faturas, A faturar, Pessoas, Exportação);
+  - a leitura ao vivo que falha tem "Tentar de novo" (`useNovaTentativa`,
+    `novaTentativaDe`): o `onSnapshot` que falha não volta sozinho. A falha
+    fica à vista até a nova assinatura responder, e só a leitura que não
+    respondeu assina de novo: a lida fica com o que leu (a lateral do Início
+    do Financeiro não some quando a nova tentativa é das emissões). O pedido
+    chega às outras leituras da mesma chave na tela, e o contador do menu
+    volta junto com o Início;
+  - as leituras de cada parte da tela também têm a saída: os pagamentos da
+    NF aberta e a receita do mês (antes, os pagamentos que falhavam ficavam
+    girando para sempre), as autorizadas a faturar, os locais, os contatos e
+    os contratos do cliente, as tabelas e os aditivos do contrato, a medição e
+    a tabela do orçamento. Lendo, "Tentar de novo" aos 10 s e "Sem resposta
+    do servidor." aos 70 s; na falha, a frase com "Tentar de novo";
+  - as consultas que a tela junta (as fontes da via da NF, o rateio dos
+    Relatórios do Financeiro) ficam na falha durante a nova tentativa
+    (`useConsultasComFalha`), como a A faturar: o aviso não sai com o foco
+    nele;
+  - a releitura que falha não apaga o que já estava lido (necessidade 8):
+    Pessoas, a ficha e a Exportação do RH e as Emissões mantêm a lista, e
+    "Não foi possível atualizar…" fica escrita em cima dela, sem falar, com
+    "Tentar de novo". Antes, a lista dava lugar ao alerta;
+  - a TV sem quadro lido fica na falha durante a releitura dos 30 s, sem
+    voltar a "Carregando o quadro…" nem falar a cada ciclo. A caixa de 40 px
+    continua a espera da rota ("Abrindo TV da sala…"), sem o vão de 300 ms e
+    sem outro anúncio;
+  - o relatório só é o papel claro da impressão quando está lido: lendo e na
+    falha, ele fica nas cores do tema (no escuro, a caixa e o rótulo da espera
+    sumiam em tinta escura sobre o fundo escuro);
+  - sem rede, as leituras do RH e do Financeiro pelas callables dizem a falta
+    de conexão no erro, e são relidas sozinhas quando a rede volta, como as do
+    WMS.
+- **As ações**:
+  - cerca de 40 ações passaram ao `BotaoDeAcao`, com o gerúndio, `aria-busy`
+    e `aria-disabled`, nunca `disabled`; o Cancelar e o Voltar, ao
+    `DialogCancelar`, travado durante a gravação. Uma chave por linha
+    (`emAndamento`: o local, o contato, o aplicar, o baixar, a emissão e a
+    baixa) diz qual linha grava, com as chaves de idempotência de sempre. As
+    confirmações destrutivas mantêm a variante;
+  - a ação de uma linha entre várias iguais leva o objeto (`objeto` no
+    `BotaoDeAcao`): o nome é o rótulo à vista com ele ("Retomando…, Itaú
+    Unibanco"), e aos 300 ms o Anunciador diz "Retomando, Itaú Unibanco"
+    (momento 4). Antes, o nome fixo dizia "Tentar de novo" com "Retomando…"
+    na tela. Vale para as Emissões, a Exportação, os locais e os contatos do
+    Clientes e o aplicar da tarifa nas Medições;
+  - o botão que sai da tela no fim da ação (`focoAoSair`) leva o foco ao
+    título da seção, nunca ao `body`: o formulário dos Colaboradores, dos
+    Veículos e da ficha do RH que fecha, a emissão que vai para Em andamento,
+    a medição que muda de situação. No Aprovar do celular, o foco vai ao
+    Próximo que entra no lugar dos botões;
+  - o Ctrl+S e a "Prévia do PDF" do orçamento dizem "Salvando…" como o
+    clique no Salvar;
+  - o "Anexar arquivo" da ficha do RH segue o relógio da espera ("Enviando o
+    arquivo…" aos 300 ms, e pelo menos 500 ms), e o seletor de arquivo nunca
+    fica `disabled`: o foco de quem o usou pelo teclado fica nele;
+  - a faixa da fila do campo também segue o relógio: o registro que vai na
+    hora, com sinal, não mostra "Enviando" nem fala; quando o sinal volta, o
+    "Sem sinal" fica até o envio aparecer. A fila sem sinal (`lib/campo`) não
+    mudou.
+- **Acessibilidade**:
+  - quem fala é o Anunciador; as regiões vivas soltas saíram, também o aviso
+    do recálculo do orçamento, e a trava do módulo pega o papel que escolhe
+    entre dois (`role={erro ? "alert" : "status"}`). O resultado da A faturar
+    e das Faturas sai só pelo toast, e não duas vezes;
+  - a nova tentativa pedida que falha de novo deixa o mesmo alerta, que o
+    leitor de tela não repete: 300 ms depois, se o aviso continua, o
+    Anunciador diz a frase de novo (`FalhaNaSecao`, em todas as telas);
+  - os rótulos com a reticência dos seis módulos estão numa lista só
+    (`modulos-carregando-v2`), com os que a `SemLeitura` monta: o gerúndio que
+    só aparece aos 300 ms também passa pela trava;
+  - a lista de clientes vazia do Novo orçamento não é `listbox` sem opção.
+- **Testes**: as travas do módulo (`modulos-carregando-v2`, a fonte;
+  `modulos-carregando`; `modulos-acoes`), as leituras ao vivo com a nova
+  tentativa (`lib/operacao/leitura.test.tsx`), as releituras do Financeiro e
+  do RH, a TV, a fila do campo, o Anexar, a leitura sem rede, os anúncios e o
+  axe dos diálogos e das telas do Comercial que não o tinham, com a lista dos
+  textos. Contra o código de antes da parte, 75 dos 451 testes dela falham;
+  contra o código da parte, 39 dos 317 da revisão falham, e os que passam são
+  as travas e o axe que faltava. A suíte do app fica em 425 arquivos e 5.021
+  testes.
+- **Medição no Chromium** (harness com o SDK falso, só 127.0.0.1):
+  - nada antes de 300 ms, salvo a continuação da espera da rota; aos 400 ms,
+    o gerúndio com a caixa de 24 px em 17 telas, e nenhuma contagem "0"
+    antes de ler (antes, "Carregando..." em 0 ms e "0" em Contratos e
+    Pessoas); aos 10 s, a demora com "Tentar de novo"; aos 70 s, "Sem
+    resposta do servidor." com o botão de 44 px;
+  - Colaboradores › Salvar: o foco fica no "Salvando…" com `aria-disabled`, e
+    dois Enter fazem uma chamada (antes, `disabled` e o foco no `body`); no
+    fim, o foco vai ao título "Colaboradores". Na ficha do RH, ao "Ana
+    Souza"; nas Emissões, a "Precisam de você"; no Aprovar a 390 px, ao
+    Próximo. Antes, ao `body` nos quatro;
+  - Emissões e Exportação aos 400 ms: o nome "Retomando…, Itaú Unibanco" e
+    "Baixando…, Setembro de 2026 · versão 1", e o axe não acusa
+    `label-content-name-mismatch` (antes, um nó em cada);
+  - o relatório no escuro, lendo: a caixa e "Carregando o relatório…" em
+    #F8FAFC sobre #070A13, 18,9:1 (antes, #1F2A3D, 1,37:1); na falha, o
+    "Tentar de novo" escuro. O axe não acusa nada lendo, na demora e na falha;
+  - a TV com o arquivo da tela em 1,5 s: "Abrindo TV da sala…" até 1.962 ms
+    e "Carregando o quadro…" a partir de 1.986 ms, inteira desde o primeiro
+    quadro, com uma fala só (antes, nada de 2.628 a 2.900 ms, a caixa entrando
+    de novo e duas falas);
+  - a fila do campo com a rede de volta em 1 s: com o envio de 60 ms, nenhuma
+    faixa "Enviando" e nenhuma fala (antes, a caixa por 77 ms e a fala 1,6 s
+    depois do fim); com 300 ms, "Enviando" de 1.322 a 1.802 ms, o mínimo, e a
+    fala retirada; com 3 s, de 1.322 a 4.003 ms, e a fala aos 2,9 s, no
+    intervalo de 2 s depois de "Sem conexão";
+  - Pessoas, Exportação e Emissões sem rede: na volta da rede, aos 14 s, a
+    lista chega sozinha em cerca de 15,3 s (antes, a falha ficava até o
+    toque);
+  - as autorizadas que nunca respondem: aos 71 s, "Sem resposta do
+    servidor." com "Tentar de novo" (antes, a caixa girando sem saída);
+  - o axe em Emissões, Exportação, Pessoas, Contratos e Clientes, lendo, na
+    falha e lidas, no claro e no escuro, só acusa o azul do primário no escuro
+    (4,3:1), o token registrado na seção 4.3 da especificação;
+  - os Inícios do Financeiro, do RH e da Operação com o "Precisa de você"
+    vazio: na primeira visita, sem a contagem lembrada, a lateral ainda muda
+    de lugar (CLS de 0,32, 0,15 e 0,18, como antes); na segunda, 0.
+
+Fica aberto:
+
+- a assinatura ao vivo que falha depois de ter lido (a permissão que mudou, o
+  índice) ainda troca a lista pela falha, com "Tentar de novo": guardar a
+  lista com a frase em cima pede um estado a mais em cada tela;
+- as ações de linha não usam a `useAcaoNaLinha`: falta o apoio da linha aos
+  3 s ("Retomando a emissão…") e o "Conferir" da própria linha aos 70 s;
+- os campos dos formulários e os botões que abrem painéis ou diálogos (Novo
+  contrato, Editar, Fechar, Novo local) continuam `disabled` durante a
+  gravação;
+- a troca de filtro nos Relatórios ainda mostra "Carregando o relatório…" no
+  lugar da tabela anterior (o padrão da parte 10 não chegou à tela de
+  relatórios compartilhada);
+- o "Abrir arquivo" da ficha do RH e o "Recarregar" do Aprovar no celular não
+  têm espera;
+- a caixa da TV continua a da rota, mas muda de lugar: a rota a mostra no
+  alto, e o quadro, no meio da tela;
+- sem rede, as leituras do RH e do Financeiro dizem "Não foi possível
+  carregar…" na seção, e a falta de conexão fica com o aviso do shell;
+- a fila do campo não diz o fim do envio;
+- na primeira visita, o Início com o "Precisa de você" vazio ainda salta.
