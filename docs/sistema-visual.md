@@ -316,7 +316,23 @@ lida, ela fica, e o `FaixaSemConexao` acima dela diz "Sem conexão · lista de
 10:42", a hora em que ela deixou de estar em dia (`FaixaAoVivo`); o erro do
 servidor (a permissão, outro erro) segue com a `FalhaNaSecao`
 (`FalhaAoVivo` escolhe). A leitura de apoio sem conexão não repete o aviso
-que a lista principal já dá. O cache vale como lido quando outra escuta
+que a lista principal já dá. A faixa segue a histerese do momento 8: fica
+pelo menos 2 s depois de entrar, e na volta da rede (como o aviso e a
+`LinhaDeEstado`, pela `useVoltaDaRede`) "Sem conexão" fica até a leitura
+voltar, sem passar por "Reconectando…". Ela é baixa (34 px; o "Tentar de
+novo" é o da linha de estado, de 24 px com o toque de 44 px pelo `::before`),
+a frase nunca quebra (o que não cabe é o "Tentar de novo", que passa à linha
+de baixo), diz o que está na tela (`objeto`: "lista", ou "OS de 10:42",
+"demanda", "orçamento", "comprovante", "relatório" nas telas de um documento
+só) e, com o foco no "Tentar de novo", leva o foco ao título quando sai. O
+toque diz "Tentando de novo…" enquanto o SDK é acordado. A lista lida e
+vazia também tem a faixa: o vazio sem conexão pode ser velho. Enquanto uma
+escuta segue sem o servidor, a volta de outra leitura (a callable) não tira
+o estado único de "Reconectando"; a escuta trocada pelo "Tentar de novo", ou
+que saiu da tela com a falta, deixa a conexão esperando a próxima resposta do
+servidor a uma escuta (ou a volta do SDK) para voltar a "conectado". As telas
+do WMS com escuta seguem a mesma regra da leitura, com a falha da seção no
+lugar do aviso da conexão. O cache vale como lido quando outra escuta
 aberta da mesma consulta já leu do servidor (o shell e a página) ou quando o
 documento está nele (o cache é só de memória), com a falta e a hora; com o
 aparelho conectado e o SDK em dia, o cache que chega antes do servidor vale,

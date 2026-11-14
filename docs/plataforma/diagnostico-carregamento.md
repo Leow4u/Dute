@@ -4179,15 +4179,166 @@ Fica aberto:
   os contatos, o catálogo da Nova demanda) seguem com a falha da seção: o
   "Sem conexão" dentro do diálogo pede desenho (13a);
 - as telas do WMS com escuta (Pedidos › separar, a lista, o romaneio, as
-  devoluções, os avisos do cliente) seguem como estavam;
+  devoluções, os avisos do cliente) não ganharam o aviso da conexão: a falha
+  delas segue a da seção. A regra da escuta, que é a mesma `useLeitura`,
+  mudou também para elas (a revisão abaixo diz como);
 - na volta da rede, o `FaixaSemConexao` passa por "Reconectando…" por 30 a
   65 ms antes de sair: a peça não segura o "Sem conexão" até a leitura voltar,
-  como a `LinhaDeEstado`; e a faixa que entra e sai empurra a lista (não
-  reserva a altura);
+  como a `LinhaDeEstado` (*resolvido na revisão da parte 13j*); e a faixa que
+  entra e sai empurra a lista (não reserva a altura) (*menor e espaçada na
+  revisão; segue empurrando*);
 - o servidor que cai com a escuta aberta e o aparelho conectado não aparece:
   o SDK não se dá por offline (acima);
 - a escuta que o `onSnapshot` recusa não volta sozinha: o "Tentar de novo"
   assina de novo;
 - o cache que valeu antes do servidor, com o aparelho conectado e nenhuma
   outra leitura que ache o SDK só no cache, fica como lido;
+- o aceite num Android médio e a conferência com leitor de tela de verdade.
+
+**A revisão da parte 13j (14/11/2026).** Três revisões (a lógica e o tempo, a
+tela no Chromium e o leitor de tela) acharam o que a parte deixou; cada achado
+foi reproduzido e corrigido com o teste que falha antes:
+
+- **A faixa fica pelo menos 2 s.** Ela entrava e saía com a falta da própria
+  escuta, sem a histerese do momento 8: num soluço de 300 ms do servidor, a
+  faixa aparecia, sumia em 300 ms e empurrava a lista duas vezes. Agora, uma
+  vez na tela, ela fica pelo menos 2 s (`FaixaAoVivo`), e a falta que volta
+  nesse tempo não recomeça a conta.
+- **Na volta da rede, "Sem conexão" fica até a leitura voltar.** A faixa e o
+  aviso no lugar da lista liam o estado único direto e passavam por
+  "Reconectando…" antes de sair (de 1,2 a 1,3 s no Slow 4G com a CPU 4x mais
+  lenta). Agora seguem a regra da `LinhaDeEstado` (`useVoltaDaRede`, que mora
+  em `erro-na-leitura.tsx` e vale para as três peças): "Sem conexão" fica até
+  a leitura voltar e sai dali direto; "Reconectando…" só se o servidor ainda
+  não respondeu depois dos 2 s do aviso.
+- **A faixa baixa, com a frase inteira.** Ela tinha 50 px, porque o "Tentar
+  de novo" tinha 44 px de altura dentro dela, e a 390 px a hora caía sozinha
+  na linha de baixo ("Sem conexão · lista de" / "06:54"). Agora o "Tentar de
+  novo" é o da linha de estado (`.linha-de-estado-tentar`: 24 px na faixa e o
+  toque de 44 px pelo `::before`), e a faixa tem 34 px. A frase não quebra:
+  o que não cabe é o "Tentar de novo", que passa à linha de baixo (a 360 px,
+  e a 390 px no comprovante, que tem margem dobrada; aí a faixa tem 54 px).
+  A faixa ainda empurra a lista quando entra e quando sai, agora menos e com
+  2 s ou mais entre os dois saltos.
+- **O que a faixa diz que está na tela.** Nas fichas de um documento só, ela
+  dizia "lista de 10:42". Agora a `FaixaAoVivo` recebe `objeto`: "OS de
+  10:42" na OS da Operação, na impressão, na OS do campo e no Concluir;
+  "demanda de 10:42" na ficha da demanda e no Planejar; "orçamento de 10:42"
+  na montagem e no documento do orçamento; "comprovante de 10:42" no
+  comprovante do portal; "relatório de 10:42" nos Relatórios. As listas
+  seguem com "lista de".
+- **O foco não cai no `body` quando a faixa sai.** Com o foco no "Tentar de
+  novo" da faixa, a volta do servidor a tirava da tela, e o foco caía no
+  `body` (o Tab recomeçava do topo). Agora a faixa segura o foco que sai como
+  o aviso já fazia (`useFocoAoSair`): ele vai ao título da seção ou da
+  página.
+- **O "Tentar de novo" da faixa diz que está tentando.** Com a lista lida, o
+  toque só acorda o SDK (a escuta não assina de novo), e o botão nunca dizia
+  "Tentando de novo…". Agora o pedido conta desde o toque, enquanto o SDK é
+  acordado, até a releitura responder, no relógio da espera (300 ms para
+  aparecer, 500 ms de mínimo), na faixa e no aviso. Sem rede, nada há para
+  acordar e o toque não muda a tela, como na linha de estado.
+- **A callable que volta não desliga o despertar das escutas.** A escuta
+  avisa a falta uma vez por queda; uma leitura do react-query que voltava (a
+  callable que respondeu, com o Firestore ainda fora) punha o estado único em
+  "conectado" e parava a releitura sozinha, e a escuta, já marcada, não
+  avisava de novo: a tela ficava em "Reconectando…" sem ninguém acordar o
+  SDK, à espera do relógio dele, de até 60 s. Agora, enquanto alguma escuta
+  segue sem o servidor, a volta de outra leitura não tira o estado de
+  "Reconectando", e a releitura segue acordando o SDK.
+- **O estado único volta depois do "Tentar de novo" que deu certo.** A nova
+  assinatura tinha outra marca, e o servidor que respondia a ela não contava
+  como volta: o estado ficava em "Reconectando" para sempre. Agora a escuta
+  que sai com a falta (a assinatura trocada, a tela que a pessoa deixou)
+  deixa a conexão esperando a volta: a próxima resposta do servidor a uma
+  escuta, ou a volta do SDK que o perfil escuta, a devolve a "conectado".
+  Outra leitura que deu certo paga a espera, e a escuta em dia não tira o
+  "Reconectando" de uma callable que segue sem resposta.
+- **A junção das tentativas classifica como a `novaTentativaDe`.** A
+  `juntarTentativas` contava toda tentativa como falha, e a lida que só tinha
+  perdido o servidor passava na frente do erro do servidor de outra: nos
+  Relatórios do Financeiro, o erro do servidor podia aparecer como "Sem
+  conexão." Agora a tentativa diz se falhou sem nada lido (`falhou`), e a
+  junção usa a mesma regra.
+- **A lista lida e vazia também diz de quando é.** Em Para aprovar e em
+  Medições, a faixa ficava só no ramo com conteúdo: sem conexão, "Nenhum
+  orçamento para aprovar" e "Nenhum contrato cobra por medição mensal"
+  apareciam como definitivos. Agora a faixa fica acima do vazio, como nas
+  outras listas. No comprovante do portal, a OS lida sem comprovante também
+  ganha a faixa ("Sem conexão · OS de 10:42").
+- **As contagens das Autorizações sem a fila lida.** O contador do título
+  da fila dizia 0 com a falha da leitura; agora diz "—", como os dos filtros.
+- **As telas do WMS com escuta.** O registro da parte dizia que elas
+  seguiam como estavam, mas a escuta é a mesma `useLeitura`: em Pedidos (as
+  entregas e o "Para quando"), Separar, a lista, o romaneio, os volumes e as
+  devoluções, a primeira resposta vazia do cache e o cache que valeu antes
+  do servidor passam a ser a falha da seção quando o SDK se dá por offline (as
+  Devoluções trocam o "nada" pela falha), e as escutas delas alimentam o
+  estado único e a releitura sozinha. Elas ainda não mostram o aviso da
+  conexão.
+- **A trava dos textos e o axe nos estados da falta.** As telas da parte
+  tinham teste do aviso, da faixa e do erro do servidor só numa amostra por
+  área. Agora cada tela mudada tem o seu (`src/test/sem-conexao.tsx`: sem
+  nada lido, sem conexão e reconectando; com a lista lida, nos dois; e o
+  erro do servidor), que confere que só entram os rótulos da falta e roda o
+  axe: Agenda, Hoje, Revisão, os cadastros, a ficha da demanda, a OS, a
+  impressão, o Planejar, os Relatórios da Operação e do Financeiro, Para
+  aprovar, Autorizações (a fila e as autorizadas), Contratos, Medições, a
+  montagem do orçamento e a tabela dela, o documento do orçamento, a OS e o
+  Concluir do campo, o comprovante e as NFs das Faturas do portal.
+- **No Chromium** (o harness das revisões, com as telas de verdade, o SDK de
+  verdade e um emulador do Firestore só em 127.0.0.1, dados sintéticos; antes
+  = `312347c`):
+  - a rede que cai por 300 ms com a lista lida: antes, a faixa ficava de 30 a
+    340 ms e os dois saltos caíam na mesma janela do CLS (a 390 px, 0,101 em
+    Demandas, 0,149 na OS e 0,111 no campo; a 360 px, 0,093, 0,159 e 0,129);
+    depois, a faixa fica até os 2,0 s, e cada salto é a sua janela (a 390 px,
+    0,040, 0,058 e 0,042; a 360 px, 0,049, 0,084 e 0,068);
+  - a altura da faixa: 50 px antes; 34 px depois, a 1440 e a 390 px, e 54 px
+    a 360 px, com o "Tentar de novo" na linha de baixo;
+  - a frase a 360, 390 e 414 px: "Sem conexão · lista de 07:48" numa linha
+    só (antes, "Sem conexão · lista " / "de 07:17" a 360 px e "Sem conexão ·
+    lista de " / "07:17" a 390 px);
+  - a rede que volta depois de 5 s sem ela: antes, a faixa passava por
+    "Reconectando…" por 30 ms; depois, sai direto do "Sem conexão". Com o
+    Slow 4G e a CPU 4x mais lenta, a faixa sai do "Sem conexão" 1,26 s depois
+    da volta, sem "Reconectando…", e o aviso sem nada lido fica em "Sem
+    conexão." até a lista chegar (antes, de 1,2 a 1,3 s de "Reconectando…");
+  - o foco no "Tentar de novo" da faixa e a rede que volta: o foco vai ao
+    título ("Demandas", "Olá, Carlos"; antes, o `body`), e o anel é o da
+    linha de estado, 2 px na cor do texto;
+  - o comprovante a 390 px com a OS lida sem comprovante e a rede cortada:
+    "Sem conexão · OS de 07:49" acima de "A OS 10045-01 ainda não tem
+    comprovante." (antes, nada);
+  - o "Tentar de novo" com 24 px de altura e o toque de 44 px, com 24 px de
+    vão acima e abaixo da faixa;
+  - o axe (WCAG 2.1 A e AA, com o contraste) na lista lida, na faixa e no
+    aviso, em Demandas, na OS e no campo, a 1440 px no claro, a 390 px no
+    escuro e a 360 px no claro: nada das peças. Seguem o branco sobre o
+    primário no escuro (4,3:1, da 13k) e o link da demanda na ficha da OS
+    (4,21:1), de antes.
+- **Testes**: contra o código da parte, 29 dos 40 testes novos e mudados
+  falham. Os 11 que passam são a trava dos textos e o axe nas telas que já
+  diziam "lista de" (Agenda, Hoje, Revisão, os cadastros, Para aprovar,
+  Contratos, Medições, as autorizadas, a tabela do orçamento e as NFs das
+  Faturas) e a guarda de que a escuta em dia não tira o "Reconectando" de uma
+  callable. A suíte do app fica em 488 arquivos e 5.499 testes (antes, 488 e
+  5.460).
+
+Fica aberto:
+
+- a faixa ainda empurra a lista quando entra e quando sai: o momento 8 quer
+  a linha de estado com a altura reservada, e reservar o lugar nas telas ao
+  vivo muda o desenho de cada uma (fica para o alinhamento das telas);
+- as telas do WMS com escuta ainda mostram a falha da seção, e não o aviso da
+  conexão;
+- o Financeiro (A faturar, Faturas, a NF, Emissões) segue com a falha da
+  seção, e a leitura das faturas dos Relatórios dele não leva a falta;
+- as listas dos formulários (`LeituraPendente`) seguem com a falha da seção;
+- o servidor que cai com a escuta aberta e o aparelho conectado não aparece
+  (o SDK não se dá por offline), e a escuta recusada pelo `onSnapshot` só
+  volta com o "Tentar de novo";
+- a escuta que sai da tela com a falta, sem outra escuta nem a volta do SDK
+  depois, deixa o estado único em "Reconectando" até a próxima leitura que dê
+  certo (nenhuma peça o mostra sem uma falta na tela);
 - o aceite num Android médio e a conferência com leitor de tela de verdade.
