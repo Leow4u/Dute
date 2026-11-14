@@ -7,7 +7,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { NumeroLido } from "@/components/ui/numero-lido";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Input } from "@/components/ui/input";
@@ -223,7 +223,8 @@ function Lista({ filtro, estado, faturas, busca, hoje, aberta, acoes, leitura = 
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as NFs…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar as NFs." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    // Sem conexão, o aviso da conexão no lugar da lista; o erro do servidor, a falha da seção (parte 13l).
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as NFs." className="px-5 py-7" semCartao />;
   else if (!doFiltro.length) conteudo = <Vazio>{VAZIO_DO_FILTRO[filtro]}</Vazio>;
   else if (!lista.length) conteudo = <Vazio>Nenhuma NF encontrada</Vazio>;
   else conteudo = lista.map((fatura, indice) => <Linha key={fatura.id} fatura={fatura} hoje={hoje} aberta={aberta?.id === fatura.id} primeira={indice === 0} onAbrir={acoes.abrir} />);
@@ -263,7 +264,7 @@ function Pagamentos({
   podeEstornar: boolean;
 }) {
   // A falha dos pagamentos nunca vira espera: a frase e o "Tentar de novo".
-  if (leitura?.erro) return <FalhaNaSecao mensagem="Não foi possível carregar os pagamentos." tentando={leitura.tentando} onTentar={leitura.tentar} />;
+  if (leitura?.erro) return <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os pagamentos." estreito />;
   if (pagamentos === null) return <CarregandoNaRegiao rotulo="Carregando os pagamentos…" onTentar={leitura?.tentar} />;
   if (!pagamentos.length) return <p className="text-sm font-bold text-muted-foreground">Nenhum pagamento</p>;
   return (
@@ -538,7 +539,7 @@ function Receita({ receita, hoje, acoes }: { receita: ReceitaDoMes; hoje: string
   const dados = receita.dados;
   let conteudo: ReactNode;
   const leitura = receita.leitura ?? SEM_NOVA_TENTATIVA;
-  if (receita.erro) conteudo = <FalhaNaSecao mensagem="Não foi possível carregar os pagamentos." tentando={leitura.tentando} onTentar={leitura.tentar} />;
+  if (receita.erro) conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os pagamentos." estreito />;
   else if (!dados) conteudo = <CarregandoNaRegiao rotulo="Carregando os pagamentos…" onTentar={receita.leitura?.tentar} />;
   else if (!dados.pagamentos) conteudo = <p className="text-sm font-bold text-muted-foreground">{`Nenhum pagamento em ${mes}`}</p>;
   else {
@@ -598,6 +599,8 @@ export function FaturasView(props: FaturasViewProps) {
           {resultado}
         </div>
       ) : null}
+      {/* A lista lida, sem conexão: ela fica, com a hora (parte 13l). */}
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Lista {...props} />
         {aberta ? <Painel {...props} aberta={aberta} /> : receita ? <Receita receita={receita} hoje={hoje} acoes={acoes} /> : null}

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 import { Router } from "wouter";
 
 import {
@@ -438,3 +439,20 @@ describe("a medição aprovada em A faturar (pergunta 64)", () => {
   });
 });
 
+
+/**
+ * Sem conexão (carregamento v2, parte 13l): sem nada lido, o aviso da conexão
+ * no lugar da fila; com a fila lida, ela fica, com a hora; o erro do servidor,
+ * a falha da seção. Só os rótulos da falta, e o axe sem violação.
+ */
+describe("Financeiro › A faturar sem conexão", () => {
+  it("os estados da falta", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/financeiro/a-faturar">
+          <AFaturarView {...props({ estado: situacao, linhas: situacao === "pronto" ? LINHAS : [], painel: { ...props().painel, aberto: false }, leitura })} />
+        </Router>
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar a fila." }));
+  });
+});

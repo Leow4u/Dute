@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { SaiComOFoco } from "@/lib/carregando/use-foco-que-segue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -135,6 +135,7 @@ export function PedidosSepararView({
   onFecharVolume,
   onConcluir,
   onTentar,
+  leitura,
 }: {
   estado: EstadoDaBancada;
   /** "PED-0001" */
@@ -205,6 +206,13 @@ export function PedidosSepararView({
   onConcluir: () => void;
   /** Lê o pedido de novo: "Tentar de novo" na demora, na desistência e na falha da primeira leitura. */
   onTentar?: () => Promise<unknown>;
+  /**
+   * O que falta às leituras da bancada (parte 13l): sem conexão e sem nada
+   * lido, o aviso da conexão no lugar da falha; com o pedido na tela, a faixa
+   * com a hora, ou o aviso da conexão quando o que não chegou (as linhas, a
+   * tarefa, as caixas) não tem hora.
+   */
+  leitura?: LeituraAoVivoNaTela;
 }) {
   // A prateleira toda separada fecha sozinha; a pessoa abre a que quiser rever.
   const [abertas, setAbertas] = useState<ReadonlySet<string>>(new Set());
@@ -266,13 +274,16 @@ export function PedidosSepararView({
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota onTentar={onTentar} className="rounded-lg border border-border bg-card px-5 py-6" />
       ) : estado === "erro" && onTentar ? (
-        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem={MENSAGENS.erro} />
+        <FalhaNaLeitura leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: onTentar }} mensagem={MENSAGENS.erro} />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>
       ) : (
         <>
+          {/* Sem conexão: o pedido fica, com a hora; o que não chegou sem hora, o aviso da conexão (parte 13l). */}
+          {leitura ? <FaixaAoVivo leitura={leitura} objeto="pedido" /> : null}
+          {leitura?.falta === "conexao" && leitura.lidaEm == null ? <BlocoSemConexao tentando={leitura.tentando} onTentar={() => leitura.tentar()} /> : null}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <p className="text-sm text-muted-foreground">
               <b className="font-bold text-foreground">{itensDoProgresso(progresso)}</b> · {unidadesDoProgresso(progresso)}

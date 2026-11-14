@@ -148,6 +148,7 @@ export function NovoOrcamentoDialog({
                   falha="Não foi possível carregar os clientes."
                   className="px-3 py-4"
                   focoAoSair="novo-cliente"
+                  semCartao
                 />
               ) : lista.length ? (
                 lista.map((cadastro) => (

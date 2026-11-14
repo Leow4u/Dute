@@ -375,6 +375,8 @@ export function useEscutaAoVivo<R>(
     };
     const parar = escutar(escuta.alvo, responder, (erro) => {
       ultima = null;
+      // A escuta recusada parou: já não espera o servidor nem conta como a falta no estado único (parte 13l).
+      naConexao.fechar();
       // O `unavailable` é a conexão; a permissão e o resto, o servidor. A escuta que falhou não volta sozinha.
       setEstado({ assinatura, valor: undefined, erro: true, falta: firestoreSemConexao(erro) ? "conexao" : "servidor", lidaEm: null });
     });

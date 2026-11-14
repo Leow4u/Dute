@@ -156,3 +156,46 @@ describe("a entrega do pedido antes de ler as entregas", () => {
     expect(document.activeElement?.textContent).toBe("Entrega");
   });
 });
+
+/**
+ * As entregas sem conexão (carregamento v2, parte 13l). Até a 13k, a falta de
+ * conexão das entregas era a falha do servidor na linha ("Não consegui
+ * carregar a entrega.", com "Tentar de novo" em cada pedido), e as entregas
+ * lidas que perdiam o servidor ficavam sem dizer de quando eram. Agora a
+ * linha de estado da lista diz a falta, com a hora do que está na tela, e o
+ * "Tentar de novo" dela assina as entregas de novo; o erro do servidor segue
+ * na linha. Dados sintéticos.
+ */
+describe("as entregas sem conexão", () => {
+  const linhaDeEstado = () => container.querySelector<HTMLElement>("[data-linha-de-estado]");
+
+  it("sem nada lido: a linha de estado diz a falta e tenta de novo; o pedido não diz que falhou", async () => {
+    estado.entregas = { itens: null, erro: true, falta: "conexao", lidaEm: null } as never;
+    await montar();
+    await esperar(() => linhaDeEstado()?.dataset.estado === "reconectando", "a falta na linha de estado");
+    expect(naTela()).not.toContain("Não consegui carregar a entrega.");
+    expect(botoes()).not.toContain("Entrega");
+    expect(linhaDeEstado()!.textContent).toMatch(/^Reconectando…· lista de \d\d:\d\dTentar de novo$/);
+    estado.daNovaAssinatura = { itens: [], erro: false };
+    const tentar = linhaDeEstado()!.querySelector<HTMLButtonElement>(".linha-de-estado-tentar")!;
+    await act(async () => tentar.click());
+    await esperar(() => botoes().includes("Entrega"), "a entrega depois da nova tentativa");
+    expect(estado.chaves).toContain("orders:em_aberto#1");
+  });
+
+  it("lidas: ficam na linha, e a linha de estado diz de quando elas são", async () => {
+    // 10:42 no armazém, antes da fila: a hora mais antiga do que está na tela.
+    estado.entregas = { itens: [], erro: false, falta: "conexao", lidaEm: Date.parse("2026-11-14T13:42:00Z") } as never;
+    await montar();
+    await esperar(() => linhaDeEstado()?.dataset.estado === "reconectando", "a falta na linha de estado");
+    expect(botoes()).toContain("Entrega");
+    expect(linhaDeEstado()!.textContent).toContain("· lista de 10:42");
+  });
+
+  it("o erro do servidor segue na linha do pedido, e a linha de estado diz a hora da lista", async () => {
+    estado.entregas = { itens: null, erro: true, falta: "servidor", lidaEm: null } as never;
+    await montar();
+    expect(naTela()).toContain("Não consegui carregar a entrega.");
+    await esperar(() => linhaDeEstado()?.dataset.estado === "lida", "a hora da lista");
+  });
+});

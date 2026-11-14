@@ -95,7 +95,7 @@ describe("Pedidos na v3", () => {
     expect(FONTE).toMatch(/<BlocoSemConexao tentando=\{relendo\} onTentar=\{refreshAll\} focoAoSair=\{idDaLinha\} \/>/);
     expect(FONTE).toMatch(/<ErroNaLeitura\s+mensagem="Não consegui carregar os pedidos\."\s+tentando=\{relendo\}\s+onTentar=\{refreshAll\}\s+focoAoSair=\{idDaLinha\}/);
     // A lista lida, com a falta: a hora dela fica na linha de estado sob o título (parte 7b), não na faixa que empurra a lista.
-    expect(FONTE).toContain('estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}');
+    expect(FONTE).toMatch(/estado=\{\s*<LinhaDeEstado\s+id=\{idDaLinha\}\s+leitura=\{leiturasDaLista\}\s+objeto="pedidos"\s+pedidaPelaPessoa=\{atualizarLista\.voltando\}\s+resumo=\{resumo\}/);
     expect(FONTE).not.toContain("FaixaSemConexao");
     expect(FONTE).not.toContain("Carregando pedidos...");
   });

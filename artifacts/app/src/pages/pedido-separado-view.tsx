@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { textoDaEtiqueta, textoDasAbertas, textoDasVazias, type CaixaVazia, type EtiquetaParaTrocar } from "@/lib/warehouse-ops/caixas-da-separacao";
 import {
   conteudoDoVolume,
@@ -45,6 +45,7 @@ export function PedidoSeparadoView({
   etiquetasHref,
   vazias = [],
   onTentar,
+  leitura,
 }: {
   /** "PED-0001" */
   numero: string;
@@ -65,6 +66,8 @@ export function PedidoSeparadoView({
   vazias?: readonly CaixaVazia[];
   /** Lê os volumes de novo (a leitura ao vivo): "Tentar de novo" na demora, na desistência e na falha. */
   onTentar?: () => Promise<unknown>;
+  /** O que falta às leituras dos volumes (parte 13l): a conexão, com a hora do que ficou na tela, ou o servidor. */
+  leitura?: LeituraAoVivoNaTela;
 }) {
   const [todos, setTodos] = useState(false);
   const visiveis = todos ? volumes : volumes.slice(0, VOLUMES_A_VISTA);
@@ -108,6 +111,8 @@ export function PedidoSeparadoView({
         ) : null}
       </header>
 
+      {/* Os volumes lidos, sem conexão: ficam, com a hora (parte 13l). */}
+      {estado === "pronto" && leitura ? <FaixaAoVivo leitura={leitura} objeto="pedido" /> : null}
       <div className={comLateral ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_372px] lg:items-start" : undefined}>
         <section aria-labelledby="volumes-do-pedido" className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex items-baseline gap-2.5 border-b border-border bg-muted/40 px-4 py-3 md:px-5">
@@ -121,7 +126,11 @@ export function PedidoSeparadoView({
           {estado === "carregando" ? (
             <CarregandoNaRegiao rotulo="Carregando volumes…" onTentar={onTentar} className="px-5 py-6" />
           ) : estado !== "pronto" && onTentar ? (
-            <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem="Não foi possível carregar os volumes." className="rounded-none border-0" />
+            <FalhaNaLeitura
+              leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: onTentar }}
+              mensagem="Não foi possível carregar os volumes."
+              className="rounded-none border-0"
+            />
           ) : estado !== "pronto" ? (
             <p role="alert" className="px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
               Não foi possível carregar os volumes.

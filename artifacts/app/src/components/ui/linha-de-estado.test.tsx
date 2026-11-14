@@ -780,3 +780,42 @@ describe("a linha de estado no tempo", () => {
     expect(regra(".linha-de-estado:focus-visible")).toContain("outline: 2px solid hsl(var(--foreground));");
   });
 });
+
+/**
+ * As leituras ao vivo que a lista mostra junto dela (parte 13l: as entregas de
+ * Pedidos): a falta de conexão delas é dita na linha de estado, com a hora da
+ * mais antiga do que está na tela, e "Tentar de novo" as relê também. O erro
+ * do servidor delas fica com quem as mostra.
+ */
+describe("a linha de estado com as leituras ao vivo da lista", () => {
+  const aoVivo = (falta: "conexao" | "servidor" | null, lidaEm: number | null = null) => ({ tentando: false, tentar: vi.fn(), falta, lidaEm });
+
+  it("a ao vivo lida, sem conexão: a hora dela, a mais antiga; sem nada lido, a da lista", async () => {
+    const lida = naConexao("sem-conexao", <LinhaDeEstado leitura={leitura()} objeto="pedidos" aoVivo={[aoVivo("conexao", LIDA_EM - 60 * 60_000)]} />);
+    expect(textosDaTela(lida)).toEqual(["Sem conexão · lista de 09:42", "Tentar de novo"]);
+    expect(await violacoesDeAcessibilidade(lida)).toEqual([]);
+    const semNada = naConexao("reconectando", <LinhaDeEstado leitura={leitura()} objeto="pedidos" aoVivo={[aoVivo("conexao")]} />);
+    expect(textosDaTela(semNada)).toEqual(["Reconectando…", "· lista de 10:42", "Tentar de novo"]);
+    expect(await violacoesDeAcessibilidade(semNada)).toEqual([]);
+  });
+
+  it("o erro do servidor da ao vivo não muda a linha", () => {
+    expect(textosDaTela(naConexao("conectado", <LinhaDeEstado leitura={leitura()} objeto="pedidos" aoVivo={[aoVivo("servidor")]} />))).toEqual(["Atualizado às 10:42"]);
+  });
+
+  it("Tentar de novo relê a lista e a ao vivo sem conexão", async () => {
+    const lista = leitura();
+    const entregas = aoVivo("conexao");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const raiz = createRoot(container);
+    onTestFinished(() => {
+      act(() => raiz.unmount());
+      container.remove();
+    });
+    act(() => raiz.render(<ProvedorDaConexao value={conexaoEm("reconectando")}><LinhaDeEstado leitura={lista} objeto="pedidos" aoVivo={[entregas]} /></ProvedorDaConexao>));
+    await act(async () => container.querySelector<HTMLButtonElement>(".linha-de-estado-tentar")!.click());
+    await vi.waitFor(() => expect(entregas.tentar).toHaveBeenCalledTimes(1), { timeout: 3_000 });
+    expect(lista.refetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -2,7 +2,7 @@ import { doc } from "firebase/firestore";
 import { useSearch } from "wouter";
 
 import { useActiveCustomer } from "@/lib/active-customer-context";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
 import { folhaDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { hrefDaBancada } from "@/lib/warehouse-ops/separacao";
@@ -53,9 +53,11 @@ export default function PaginaPedidosRomaneio() {
       estado={estado}
       folha={folha}
       voltar={pedido && pedidoId ? { href: hrefDaBancada(pedidoId), rotulo: pedido.numero || "Pedidos" } : null}
-      avisos={solicitacao.erro ? ["Não foi possível carregar o prazo do pedido."] : []}
+      // Sem conexão, o prazo que não chegou é dito pelo aviso da conexão (parte 13l).
+      avisos={solicitacao.erro && solicitacao.falta !== "conexao" ? ["Não foi possível carregar o prazo do pedido."] : []}
       onImprimir={() => window.print()}
       onTentar={tentar}
+      leitura={{ ...juntarTentativas(leitura.aoVivo, novaTentativaDe([solicitacao])), tentar }}
     />
   );
 }

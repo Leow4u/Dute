@@ -342,8 +342,9 @@ faixa "Sem conexão" do shell segue o mesmo estado, sem região viva: quem diz
 "Sem conexão", uma vez, é o `Anunciador` (antes do app, a região da abertura;
 o `Anunciador` não repete o que ela já disse).
 
-**As leituras ao vivo sem rede** (parte 13j; `useLeitura` e `useDocumento` da
-Operação, e por elas o Comercial, o campo, o portal e o Financeiro): a
+**As leituras ao vivo sem rede** (partes 13j e 13l; `useLeitura` e
+`useDocumento` da Operação, e por elas o Comercial, o campo, o portal, o
+Financeiro, as telas do WMS com escuta e as listas dos formulários): a
 resposta só do cache é a falta de conexão, pela mesma regra do
 `lib/cloud-api.ts` (`lib/carregando/respostas-do-firestore.ts`), com o
 aparelho sem rede ou com o SDK do Firestore que se deu por offline; a escuta
@@ -371,9 +372,26 @@ vazia também tem a faixa: o vazio sem conexão pode ser velho. Enquanto uma
 escuta segue sem o servidor, a volta de outra leitura (a callable) não tira
 o estado único de "Reconectando"; a escuta trocada pelo "Tentar de novo", ou
 que saiu da tela com a falta, deixa a conexão esperando a próxima resposta do
-servidor a uma escuta (ou a volta do SDK) para voltar a "conectado". As telas
-do WMS com escuta seguem a mesma regra da leitura, com a falha da seção no
-lugar do aviso da conexão. O cache vale como lido quando outra escuta
+servidor a uma escuta aberta (ou a volta do SDK) para voltar a "conectado";
+sem escuta à espera e sem outra leitura com a falta (outra escuta, uma
+consulta na tela), a saída da última com a falta limpa o que ela pôs no
+estado, que volta a "conectado" (com o aparelho sem rede, o "Sem conexão" é
+do aparelho e fica). Onde a tela já mostra a falha no cartão do lugar da
+lista (a bancada de Separar, a lista de separação, o romaneio, o pedido
+separado, as devoluções, os volumes das Etiquetas), a falta de conexão vira o
+aviso da conexão pela `FalhaNaLeitura` (`erroDaLeituraAoVivo`), e o erro do
+servidor segue com o cartão e a frase da tela; com o que está lido, a
+`FaixaAoVivo` ("romaneio de", "pedido de"); a leitura de apoio sem conexão e
+sem hora (o prazo do romaneio, o destino da lista) diz o aviso da conexão no
+lugar da frase dela. Onde a tela tem a `LinhaDeEstado` (Pedidos), a leitura
+ao vivo que a lista mostra junto (as entregas) entra por `aoVivo`: a linha
+diz a falta, com a hora mais antiga do que está na tela, e o "Tentar de novo"
+dela assina de novo; o pedido não repete a falha. No Financeiro, a consulta
+do react-query (as emissões, as baixas) leva a falta pela `faltaDaConsulta`.
+As listas dos formulários (`LeituraPendenteNaRegiao`) dizem a falta de
+conexão na peça empilhada das seções estreitas (nos diálogos; em linha onde
+a lista tem a largura da página, como a busca da Nova demanda), sem desenho
+novo de diálogo. O cache vale como lido quando outra escuta
 aberta da mesma consulta já leu do servidor (o shell e a página) ou quando o
 documento está nele (o cache é só de memória), com a falta e a hora; com o
 aparelho conectado e o SDK em dia, o cache que chega antes do servidor vale,

@@ -19,7 +19,9 @@ const estado = vi.hoisted(() => ({ separado: false, leiturasDaFila: 0 }));
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u-1", publicMetadata: { role: "admin" } }, isLoaded: true }) }));
 vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ options: [], code: "BTG", isLoading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
-vi.mock("@/lib/operacao/leitura", () => ({
+// A junção das tentativas é a de verdade (parte 13l); as escutas são as do teste.
+vi.mock("@/lib/operacao/leitura", async (original) => ({
+  ...(await original<object>()),
   useLeitura: () => ({ itens: undefined, erro: false }),
   useDocumento: () => ({ item: undefined, erro: false }),
 }));

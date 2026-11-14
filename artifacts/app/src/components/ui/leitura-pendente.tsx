@@ -1,5 +1,5 @@
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,13 @@ import { cn } from "@/lib/utils";
  * lugar dela; quando a leitura chega com o foco na espera ou na falha, vai a
  * `focoAoSair` (o campo de onde a pessoa vinha: a busca, o contato), perto de
  * onde ela estava, e não ao título da página (revisão da parte 13i).
+ *
+ * Sem conexão, a falha diz a falta de conexão ("Sem conexão." ou
+ * "Reconectando…", com "Tentar de novo"), na peça empilhada das seções
+ * estreitas (os diálogos; `estreito={false}` onde a lista tem a largura da
+ * página, como a busca da Nova demanda); `semCartao` tira a borda dela quando a
+ * lista já mora numa caixa (parte 13l). O erro do servidor segue com a frase e
+ * "Tentar de novo".
  */
 export function LeituraPendenteNaRegiao({
   leitura,
@@ -20,6 +27,8 @@ export function LeituraPendenteNaRegiao({
   falha,
   className,
   focoAoSair,
+  semCartao = false,
+  estreito = true,
 }: {
   leitura: LeituraPendente;
   /** "Carregando clientes…", no gerúndio e com a reticência de um caractere. */
@@ -29,17 +38,22 @@ export function LeituraPendenteNaRegiao({
   className?: string;
   /** O id do campo que recebe o foco quando a leitura chega com ele na espera ou na falha. */
   focoAoSair?: string;
+  /** A lista mora numa caixa com borda: o aviso da conexão fica sem a dele. */
+  semCartao?: boolean;
+  /** A lista é estreita (o diálogo): o aviso da conexão fica empilhado também no computador. */
+  estreito?: boolean;
 }) {
   if (leitura.estado === "carregando") {
     return <CarregandoNaRegiao rotulo={carregando} onTentar={leitura.tentar} className={className} focoAoSair={focoAoSair} />;
   }
   return (
-    <FalhaNaSecao
+    <FalhaAoVivo
+      leitura={leitura}
       mensagem={falha}
-      tentando={leitura.tentando}
-      onTentar={leitura.tentar}
       className={cn("justify-center", className)}
       focoAoSair={focoAoSair}
+      semCartao={semCartao}
+      estreito={estreito}
     />
   );
 }

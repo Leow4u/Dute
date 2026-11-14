@@ -7,7 +7,8 @@ import { useSearch } from "wouter";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { relerDoZero } from "@/lib/carregando/reler-do-zero";
-import { useDocumento } from "@/lib/operacao/leitura";
+import { faltaDaConsulta } from "@/lib/carregando/use-leitura-com-falha";
+import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { folhaDaLista, pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
@@ -77,7 +78,8 @@ export default function PaginaPedidosLista() {
   const avisos = [
     lista.semPosicoes ? "Não foi possível carregar a ordem das prateleiras." : null,
     lista.semCaixas ? "Não foi possível carregar as caixas." : null,
-    solicitacao.erro ? "Não foi possível carregar o destino do pedido." : null,
+    // Sem conexão, o destino que não chegou é dito pelo aviso da conexão (parte 13l).
+    solicitacao.erro && solicitacao.falta !== "conexao" ? "Não foi possível carregar o destino do pedido." : null,
   ].filter((aviso): aviso is string => Boolean(aviso));
   // "Tentar de novo" (na demora, na desistência e na falha): lê do zero a fila, as prateleiras e as caixas que ainda
   // leem (o react-query não recomeça a leitura presa sem dado), e assina de novo a solicitação que não chegou.
@@ -92,5 +94,7 @@ export default function PaginaPedidosLista() {
     flushSync(() => setAgora(new Date()));
     window.print();
   };
-  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} onTentar={tentar} />;
+  // A fila (a consulta) e o destino (a escuta), com o que falta a cada um (parte 13l).
+  const leitura = { ...juntarTentativas(novaTentativaDe([solicitacao]), { tentando: false, tentar, ...faltaDaConsulta(ops) }), tentar };
+  return <PedidosListaView estado={estado} folha={folha} avisos={avisos} onImprimir={imprimir} onTentar={tentar} leitura={leitura} />;
 }

@@ -9,7 +9,7 @@ import { useConexao, useTentarDeNovo } from "@/lib/carregando/estado-da-conexao"
 import { marcarPedidoDaPessoa } from "@/lib/carregando/pedido-da-pessoa";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
+import { SemConexao, ehFaltaDeConexao, horaDaLeitura } from "@/lib/conexao";
 import { focoPerdido, lugarDaSecao, podeReceberFoco, segurarOFocoQueSai } from "@/lib/foco-de-volta";
 import { cn } from "@/lib/utils";
 
@@ -464,6 +464,17 @@ export function FalhaAoVivo({
     );
   }
   return <FalhaNaSecao mensagem={mensagem} tentando={leitura.tentando} onTentar={leitura.tentar} className={className} focoAoSair={focoAoSair} />;
+}
+
+/**
+ * A falha da leitura ao vivo como o erro que a `FalhaNaLeitura` lê (parte
+ * 13l), para as telas do WMS que mostram a falha no cartão do lugar da lista
+ * (a bancada, a lista de separação, o romaneio, as devoluções): a falta de
+ * conexão vira o aviso da conexão ("Sem conexão." ou "Reconectando…"); o erro
+ * do servidor segue com o cartão e a frase da tela.
+ */
+export function erroDaLeituraAoVivo(falta: LeituraAoVivoNaTela["falta"]): Error | null {
+  return falta === "conexao" ? new SemConexao() : null;
 }
 
 /**

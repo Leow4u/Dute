@@ -1,6 +1,8 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { ehFaltaDeConexao } from "../conexao";
+
 import { usePedidosDaPessoa } from "./pedido-da-pessoa";
 
 /** O pedaço da leitura do react-query que a falha precisa para ficar na tela. */
@@ -89,4 +91,21 @@ export function useConsultasComFalha(consultas: ReadonlyArray<ConsultaQueTenta>)
       });
     },
   };
+}
+
+/**
+ * O que falta à consulta do react-query (a callable das emissões, a das
+ * baixas), no formato da leitura ao vivo (parte 13l): a conexão, com a hora da
+ * lista lida (`lidaEm`), ou o servidor; `falhou` quando falhou sem nada lido.
+ * É o que a `juntarTentativas` e a `FalhaAoVivo` leem.
+ */
+export function faltaDaConsulta(consulta: Pick<UseQueryResult<unknown>, "isError" | "error" | "data" | "dataUpdatedAt">): {
+  falta: "conexao" | "servidor" | null;
+  lidaEm: number | null;
+  falhou: boolean;
+} {
+  if (!consulta.isError) return { falta: null, lidaEm: null, falhou: false };
+  const lida = consulta.data !== undefined;
+  if (!ehFaltaDeConexao(consulta.error)) return { falta: "servidor", lidaEm: null, falhou: !lida };
+  return { falta: "conexao", lidaEm: lida ? consulta.dataUpdatedAt : null, falhou: !lida };
 }

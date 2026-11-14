@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 
 import { baixasLidas, type BaixaDoFinanceiro } from "@/lib/financeiro/baixas";
 import { emissoesLidas, type EmissaoDoFinanceiro } from "@/lib/financeiro/emissoes";
@@ -340,5 +341,21 @@ describe("Emissões: a releitura que falha não apaga as listas (revisão da par
     expect(html).not.toMatch(/role="alert"[^>]*>Não foi possível atualizar/);
     expect(html).toContain("Precisam de você");
     expect(html).toMatch(/Não foi possível atualizar as emissões\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});
+
+/**
+ * Sem conexão (carregamento v2, parte 13l): sem nada lido, o aviso da conexão;
+ * com as listas lidas, elas ficam, com a hora, e não "Não foi possível
+ * atualizar"; o erro do servidor, a falha da seção.
+ */
+describe("Financeiro › Emissões sem conexão", () => {
+  it("os estados da falta", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        // Sem emissão na tela: a parada já tem um "Tentar de novo" dela.
+        <EmissoesView {...props({ estado: situacao, emissoes: [], leitura, falhaNaReleitura: situacao === "pronto" && leitura.falta !== null })} />
+      )),
+    ).toEqual(rotulosDaFalta({ mensagem: "Não foi possível carregar as emissões." }));
   });
 });

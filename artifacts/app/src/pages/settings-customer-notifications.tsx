@@ -7,6 +7,7 @@ import { Selo } from "@/components/clientes/partes";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
+import { BlocoSemConexao, FaixaAoVivo } from "@/components/ui/erro-na-leitura";
 import { chamarComercial, novaChave } from "@/lib/comercial/api";
 import {
   contatoDoDocumento,
@@ -16,13 +17,15 @@ import {
   type FormContato,
 } from "@/lib/comercial/clientes";
 import { useLeitura, type Leitura } from "@/lib/comercial/leitura";
+import type { LeituraAoVivo } from "@/lib/operacao/leitura";
 import { cn } from "@/lib/utils";
 import { ContatoDialog } from "./comercial/clientes-dialogos";
 
 const MODELOS_DO_ESTOQUE: readonly ModeloDeAviso[] = ["estoque_parado", "estoque_disponivel"];
 
 export type ContatosDeAviso = {
-  leitura: Leitura<ContatoResumo>;
+  /** Com o que falta (a conexão, com a hora da lista lida, ou o servidor) e a nova tentativa (parte 13l). */
+  leitura: Leitura<ContatoResumo> & Partial<LeituraAoVivo>;
   /** Os contatos do cliente, os ativos primeiro, por nome. */
   lista: ContatoResumo[];
   reler: () => void;
@@ -73,6 +76,8 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
   const gravando = useRef(false);
   const alternancias = useRef(new Map<string, { ativo: boolean; chave: string }>());
   const { leitura, lista } = contatos;
+  // A escuta como o aviso da conexão a lê: "Tentar de novo" assina de novo e acaba na resposta (parte 13l).
+  const aoVivo = { tentando: leitura.tentando ?? false, tentar: leitura.tentar ?? contatos.reler, falta: leitura.falta ?? null, lidaEm: leitura.lidaEm ?? null };
   const empresas = [...new Set([customer.name, ...lista.flatMap((contato) => (contato.empresa ? [contato.empresa] : []))])];
 
   function abrirEditor(contato: ContatoResumo | null) {
@@ -144,7 +149,12 @@ function CustomerNotificationsSection({ customer, contatos }: Props) {
           Novo contato
         </Button>
       </div>
-      {leitura.erro ? (
+      {/* A lista lida, sem conexão: ela fica, com a hora (parte 13l). */}
+      {!leitura.erro && leitura.itens !== null ? <FaixaAoVivo leitura={aoVivo} className="mx-5 mt-3" /> : null}
+      {leitura.erro && aoVivo.falta === "conexao" ? (
+        // Sem conexão e sem nada lido: o aviso da conexão no lugar da lista, e não a falha (parte 13l).
+        <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} className="rounded-none border-0" />
+      ) : leitura.erro ? (
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
           <p role="alert" className="text-sm font-semibold text-destructive">
             Não foi possível carregar os contatos.

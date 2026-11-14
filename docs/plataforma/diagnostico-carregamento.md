@@ -800,7 +800,7 @@ por PR:
 | 10 | A troca de filtro e a releitura sem apagar a lista | PR 610 |
 | 11 | As operações longas: fotos com progresso e etapas | PR 610 |
 | 12 | A trilha do Agent Dute | PR 610 |
-| 13 | A migração por área (13a a 13g), a trava, o anel do foco e o aceite (13h), o que a conferência final achou (13i) e as chaves por tentativa e o primário no escuro (13k) | PR 610 |
+| 13 | A migração por área (13a a 13g), a trava, o anel do foco e o aceite (13h), o que a conferência final achou (13i), o Sem conexão nas telas ao vivo (13j e 13l) e as chaves por tentativa e o primário no escuro (13k) | PR 610 |
 
 Escolhas que esperam a confirmação do Leonardo, sem bloquear o código:
 
@@ -850,7 +850,11 @@ Escolhas que esperam a confirmação do Leonardo, sem bloquear o código:
   do cliente, o item do menu e a tela (parte 13e);
 - na guarda, no celular, o aviso dos 10 s do Avançar fica por cima do
   conteúdo, logo acima do rodapé preso, e cobre essa faixa enquanto dura,
-  para os botões não subirem sob o dedo (13i).
+  para os botões não subirem sob o dedo (13i);
+- a faixa "Sem conexão · lista de 10:42" das telas ao vivo ainda empurra a
+  lista quando entra e quando sai (2 s ou mais entre os dois saltos): o
+  momento 8 quer a linha de estado com a altura reservada, e reservar o lugar
+  pede um lugar por tela, no alinhamento das telas (13j e 13l).
 
 Pedem desenho: o "Sem conexão" dentro do diálogo (13a) e a confirmação do
 Cancelar convite (13e). E o aceite do indicador num Android médio de verdade,
@@ -4184,14 +4188,17 @@ Fica aberto:
 
 - o Financeiro (A faturar, Faturas, a NF, Emissões) já recebe a `falta` da
   mesma leitura, mas as telas seguem com a `FalhaNaSecao`; os Relatórios dele
-  já mostram pela tela comum;
+  já mostram pela tela comum (*resolvido na parte 13l*);
 - as listas dos formulários (`LeituraPendente`: os clientes do Novo orçamento,
   os contatos, o catálogo da Nova demanda) seguem com a falha da seção: o
-  "Sem conexão" dentro do diálogo pede desenho (13a);
+  "Sem conexão" dentro do diálogo pede desenho (13a) (*resolvido na parte
+  13l, na peça que já existe; o diálogo inteiro sem conexão segue pedindo
+  desenho*);
 - as telas do WMS com escuta (Pedidos › separar, a lista, o romaneio, as
   devoluções, os avisos do cliente) não ganharam o aviso da conexão: a falha
   delas segue a da seção. A regra da escuta, que é a mesma `useLeitura`,
-  mudou também para elas (a revisão abaixo diz como);
+  mudou também para elas (a revisão abaixo diz como) (*resolvido na parte
+  13l*);
 - na volta da rede, o `FaixaSemConexao` passa por "Reconectando…" por 30 a
   65 ms antes de sair: a peça não segura o "Sem conexão" até a leitura voltar,
   como a `LinhaDeEstado` (*resolvido na revisão da parte 13j*); e a faixa que
@@ -4339,18 +4346,22 @@ Fica aberto:
 
 - a faixa ainda empurra a lista quando entra e quando sai: o momento 8 quer
   a linha de estado com a altura reservada, e reservar o lugar nas telas ao
-  vivo muda o desenho de cada uma (fica para o alinhamento das telas);
+  vivo muda o desenho de cada uma (fica para o alinhamento das telas) (*na
+  lista da 10.4 das escolhas que esperam o Leonardo, desde a parte 13l*);
 - as telas do WMS com escuta ainda mostram a falha da seção, e não o aviso da
-  conexão;
+  conexão (*resolvido na parte 13l*);
 - o Financeiro (A faturar, Faturas, a NF, Emissões) segue com a falha da
-  seção, e a leitura das faturas dos Relatórios dele não leva a falta;
-- as listas dos formulários (`LeituraPendente`) seguem com a falha da seção;
+  seção, e a leitura das faturas dos Relatórios dele não leva a falta
+  (*resolvido na parte 13l*);
+- as listas dos formulários (`LeituraPendente`) seguem com a falha da seção
+  (*resolvido na parte 13l*);
 - o servidor que cai com a escuta aberta e o aparelho conectado não aparece
   (o SDK não se dá por offline), e a escuta recusada pelo `onSnapshot` só
   volta com o "Tentar de novo";
 - a escuta que sai da tela com a falta, sem outra escuta nem a volta do SDK
   depois, deixa o estado único em "Reconectando" até a próxima leitura que dê
-  certo (nenhuma peça o mostra sem uma falta na tela);
+  certo (nenhuma peça o mostra sem uma falta na tela) (*resolvido na parte
+  13l*);
 - o aceite num Android médio e a conferência com leitor de tela de verdade.
 
 **Parte 13k, as chaves por tentativa e o primário no escuro (PR 610,
@@ -4592,3 +4603,108 @@ Fica aberto:
 - o `text-primary` no cartão escuro (4,39:1) segue aberto, como acima;
 - as pranchas `WmsCarregandoV2*` e a especificação (4.3) com o azul de
   antes no escuro.
+
+**Parte 13l, o Sem conexão no resto das telas ao vivo (PR 610, 14/11/2026).**
+Fecha os quatro itens que a revisão da 13j deixou abertos sobre as leituras ao
+vivo, com as peças que já existiam (nenhuma peça nova):
+
+- **As telas do WMS com escuta.** Onde a tela mostra a falha no cartão do
+  lugar da lista (a `FalhaNaLeitura`), a falta de conexão vira o aviso da
+  conexão por ela (`erroDaLeituraAoVivo`, em `erro-na-leitura.tsx`), e o erro
+  do servidor segue com o cartão e a frase de antes; com o que está lido, a
+  `FaixaAoVivo` com a hora:
+  - o romaneio ("Sem conexão · romaneio de 10:42"), a lista de separação
+    ("lista de"), a bancada de Separar e o pedido separado ("pedido de"),
+    com a fila (a consulta, pela `faltaDaConsulta`) e as escutas juntas
+    (`juntarTentativas`); a leitura de apoio sem conexão e sem hora (o prazo
+    do romaneio, o destino da lista, as caixas da bancada) diz o aviso da
+    conexão no lugar da frase dela, e não se repete quando a faixa já diz;
+  - os volumes do pedido (`useVolumesDoPedido` leva `aoVivo`, com a falta das
+    seis escutas), também nas Etiquetas ("pedido de"; os volumes que não
+    chegaram sem conexão dizem o aviso da conexão, e o erro do servidor segue
+    com o alerta de antes);
+  - as devoluções (os retornos da Operação e os itens do pedido no diálogo) e
+    os avisos do cliente (Configurações › Clientes, o aviso da conexão sem a
+    borda, dentro do cartão da seção, e a faixa acima dos contatos);
+  - em Pedidos, que tem a `LinhaDeEstado`, as entregas entram nela
+    (`aoVivo`): sem conexão, a linha de estado diz a falta, com a hora mais
+    antiga do que está na tela (a das entregas lidas, ou a da lista quando
+    elas não chegaram), e o "Tentar de novo" dela assina as entregas de novo;
+    a linha do pedido não diz mais "Não consegui carregar a entrega." sem
+    conexão (o erro do servidor segue ali).
+- **O Financeiro.** A faturar, A receber (a lista, os pagamentos da NF aberta
+  e a receita do mês), a via comercial da NF e Emissões escolhem pela
+  `FalhaAoVivo` e pela `FaixaAoVivo`, como a 13j fez nas outras áreas. A
+  leitura das faturas (`use-faturas`) passa a levar a falta (a da escuta,
+  com `falhou` e `lidaEm`), e por ela os Relatórios, A receber e o Início;
+  os pagamentos também. As emissões e as baixas, que são consultas da
+  callable, levam a falta pela `faltaDaConsulta` (`use-leitura-com-falha.ts`):
+  com as listas lidas e sem conexão, a faixa, e não "Não foi possível
+  atualizar as emissões.".
+- **As listas dos formulários.** A `LeituraPendente` leva a falta, e a
+  `LeituraPendenteNaRegiao` escolhe pela `FalhaAoVivo`: sem conexão, "Sem
+  conexão." ou "Reconectando…" com "Tentar de novo", na peça empilhada das
+  seções estreitas nos diálogos (os clientes do Novo orçamento, sem a borda,
+  dentro da caixa da lista; os contatos da resposta do orçamento) e em linha
+  no catálogo da Nova demanda, que tem a largura da página; o erro do
+  servidor segue com a frase. O "Sem conexão" do diálogo inteiro segue
+  pedindo desenho.
+- **A saída da última escuta com a falta.** A escuta que saía da tela com a
+  falta deixava a conexão esperando a próxima resposta do servidor a uma
+  escuta, ou a volta do SDK; sem nenhuma das duas, o estado único ficava em
+  "Reconectando" até a próxima leitura que desse certo. Agora a saída dela
+  confere, depois do commit (a troca de assinatura do "Tentar de novo" abre a
+  nova no mesmo commit em que a velha sai), se alguma escuta segue com a falta
+  ou à espera da primeira resposta e se alguma consulta na tela segue com a
+  falta (`aoConferirFaltas`, ligado pelo `ligarConexaoDoApp`); sem nenhuma,
+  o que ela pôs no estado sai (`faltaDeForaSaiu`), e ele volta a "conectado"
+  com o mínimo de 2 s do aviso. Com o aparelho sem rede, nada muda: o "Sem
+  conexão" é do aparelho, e a volta do SDK ou a da rede dizem quando ele
+  voltou. A escuta recusada pelo `onSnapshot` parou: deixa de esperar o
+  servidor e de contar a falta.
+- **No Chromium** (harness fora do repositório, com as telas de verdade, o SDK
+  de verdade e um emulador do Firestore só em 127.0.0.1, dados sintéticos;
+  antes = `8659dde`; uma tela de cada grupo: o romaneio, A receber e a busca
+  do catálogo da Nova demanda):
+  - a primeira visita sem rede, a 1440 px: antes, "Não foi possível carregar
+    o pedido." (as NFs, o catálogo) de 0,1 s até o fim; depois,
+    "Reconectando…" a partir de 0,12 s e "Sem conexão." aos 3,0 s, nas três,
+    e a 390 px no escuro também. Com a rede de volta aos 4,5 s, o aviso sai
+    0,1 a 0,2 s depois, com o que a escuta leu;
+  - lida, e a rede que cai por 3,6 s: antes, nada muda em 7,7 s; depois, a
+    faixa "Reconectando… · romaneio de 08:41" (e "· lista de" em A receber) a
+    partir de 0,11 s e "Sem conexão · romaneio de 08:41" aos 3,1 s, com a
+    folha e a lista no lugar; na volta, a faixa sai 0,3 s depois em A
+    receber e 2,2 s depois no romaneio (seis escutas, a última a ouvir o
+    servidor de novo). A 390 px, igual;
+  - na Nova demanda a 1440 px, o aviso em linha tem 78 px de altura e o
+    "Tentar de novo", 44 px;
+  - o axe-core (WCAG 2.1 A e AA, com o contraste) na primeira visita e na
+    lista lida, a 1440 px no claro e a 390 px no escuro: nada das peças. No
+    romaneio, antes e depois, o link de volta em vermelho e, a 390 px, a
+    folha que rola para o lado sem foco (de antes).
+- **Testes**: 31 testes novos; contra o código de antes, 26 falham. Os cinco
+  que passam guardam o que deve continuar igual: a consulta na tela e o
+  aparelho sem rede seguram o "Reconectando" e o "Sem conexão", a troca de
+  assinatura do "Tentar de novo" não passa pelo conectado, e o erro do
+  servidor das entregas segue na linha do pedido e fora da linha de estado.
+  A suíte do app fica em 491 arquivos e 5.569 testes
+  (antes, 490 e 5.538).
+
+Fica aberto:
+
+- a faixa ainda empurra a lista quando entra e quando sai (na lista da 10.4);
+- o "Para quando" de cada pedido (a solicitação lida pelo id) segue calado
+  quando a leitura falha, como antes;
+- na lista de separação, as posições e as caixas (consultas) que falham sem
+  conexão ainda dizem "Não foi possível carregar…"; nas Etiquetas, o erro do
+  servidor dos volumes segue no alerta sem "Tentar de novo", de antes;
+- em Emissões, com uma lista lida sem conexão e a outra recusada pelo
+  servidor, a faixa da conexão esconde o "Não foi possível atualizar";
+- no navegador, só o romaneio, A receber e a Nova demanda: Pedidos (as
+  entregas na linha de estado), Separar, as devoluções, os avisos do cliente
+  e a saída da última escuta foram vistos só nos testes;
+- o servidor que cai com a escuta aberta e o aparelho conectado segue sem
+  aparecer (o SDK não se dá por offline), e o diálogo inteiro sem conexão
+  segue pedindo desenho;
+- o aceite num Android médio e a conferência com leitor de tela de verdade.

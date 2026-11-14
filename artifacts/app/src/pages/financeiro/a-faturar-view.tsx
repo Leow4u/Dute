@@ -6,7 +6,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { NumeroLido } from "@/components/ui/numero-lido";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -230,7 +230,8 @@ function Prontas(props: AFaturarViewProps & { marcando: boolean }) {
   let conteudo: ReactNode;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando a fila…" continuaARota onTentar={leitura.tentar} className="px-5 py-7" />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar a fila." tentando={leitura.tentando} onTentar={leitura.tentar} className="px-5 py-7" />;
+    // Sem conexão, o aviso da conexão no lugar da lista; o erro do servidor, a falha da seção (parte 13l).
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a fila." className="px-5 py-7" semCartao />;
   else if (!prontas.length) conteudo = <Vazio>Nada a faturar</Vazio>;
   else if (!grupos.length) conteudo = <Vazio>Nada encontrado</Vazio>;
   else {
@@ -479,6 +480,8 @@ export function AFaturarView(props: AFaturarViewProps) {
         </div>
       </header>
       {!painelAberto && painel.resultado ? <Caixa>{painel.resultado}</Caixa> : null}
+      {/* A fila lida, sem conexão: ela fica, com a hora (parte 13l). */}
+      {estado === "pronto" && props.leitura ? <FaixaAoVivo leitura={props.leitura} /> : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <Prontas {...props} marcando={painelAberto} />
         {painelAberto ? <Painel {...props} /> : null}

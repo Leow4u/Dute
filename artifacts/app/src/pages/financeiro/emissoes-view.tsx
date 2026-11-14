@@ -5,6 +5,7 @@ import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { DialogCancelar } from "@/components/ui/dialog";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { useAnunciarAoMudar } from "@/lib/carregando/anunciador";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
@@ -275,7 +276,8 @@ export function EmissoesView(props: EmissoesViewProps) {
   let conteudo;
   if (estado === "carregando") conteudo = <CarregandoNaRegiao rotulo="Carregando as emissões…" continuaARota onTentar={leitura.tentar} className={caixa} />;
   else if (estado === "erro")
-    conteudo = <FalhaNaSecao mensagem="Não foi possível carregar as emissões." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />;
+    // Sem conexão, o aviso da conexão no lugar da lista; o erro do servidor, a falha da seção (parte 13l).
+    conteudo = <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar as emissões." className={caixa} />;
   else if (!emissoes.length && !baixas.length) conteudo = <Vazio>Nenhuma emissão</Vazio>;
   else
     conteudo = (
@@ -301,7 +303,9 @@ export function EmissoesView(props: EmissoesViewProps) {
           {falha}
         </p>
       ) : null}
-      {estado === "pronto" && props.falhaNaReleitura ? (
+      {/* As listas lidas, sem conexão: elas ficam, com a hora; o erro do servidor diz que não atualizou (parte 13l). */}
+      {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
+      {estado === "pronto" && props.falhaNaReleitura && leitura.falta !== "conexao" ? (
         <FalhaNaSecao
           mensagem="Não foi possível atualizar as emissões."
           alerta={false}

@@ -41,6 +41,7 @@ vi.mock("firebase/firestore", () => ({
     };
   },
   doc: (_db: unknown, caminho: string) => ({ type: "document", caminho }),
+  collection: (_db: unknown, nome: string) => ({ type: "query", chave: nome }),
   getDoc: async () => ({ exists: () => false }),
   queryEqual: (a: { chave?: string }, b: { chave?: string }) => a.chave === b.chave,
   refEqual: (a: { caminho?: string }, b: { caminho?: string }) => a.caminho === b.caminho,
@@ -494,5 +495,198 @@ describe("a tela que junta as tentativas de várias leituras (revisão da 13j)",
     expect(m.leitura.juntarTentativas(m.leitura.novaTentativaDe([lida]), { tentando: false, tentar: noop })).toMatchObject({ falta: "conexao", lidaEm: 1_000 });
     // A junção de junções classifica do mesmo jeito.
     expect(m.leitura.juntarTentativas(porJuntar, m.leitura.novaTentativaDe([lida])).falta).toBe("servidor");
+  });
+});
+
+/**
+ * A parte 13l: a última escuta que sai da tela com a falta, sem outra escuta
+ * nem a volta do SDK depois, deixava o estado único em "Reconectando" até a
+ * próxima leitura que desse certo. Agora a saída dela limpa o que ela pôs no
+ * estado, sem apagar a falta que outra leitura ainda tem (outra escuta, uma
+ * consulta do react-query na tela, o aparelho sem rede), e a troca de
+ * assinatura do "Tentar de novo" não passa pelo conectado.
+ */
+describe("a última escuta que sai da tela com a falta (parte 13l)", () => {
+  const passar = async (ms: number) => {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+      await Promise.resolve();
+    });
+  };
+
+  async function comConexao() {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const acordar = vi.fn(() => Promise.resolve());
+    const desligar = m.conexao.ligarConexaoDoApp(queryClient, conexao, window, undefined, { acordar });
+    const estados: string[] = [];
+    conexao.assinar(() => estados.push(conexao.estado()));
+    const provedor = (filhos: ReactNode) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>;
+    return { m, conexao, queryClient, acordar, estados, provedor, fim: () => (desligar(), conexao.fechar()) };
+  }
+
+  it("sem outra escuta nem a volta do SDK, a saída dela devolve o estado a conectado, e o despertar para", async () => {
+    const { m, conexao, acordar, provedor, fim } = await comConexao();
+    const { trocar } = montarListas(m, ["ordens"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    expect(conexao.estado()).toBe("reconectando");
+    // A pessoa vai a uma tela sem escuta, e nada mais lê.
+    trocar([]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    const vezes = acordar.mock.calls.length;
+    await passar(120_000);
+    expect(acordar.mock.calls.length).toBe(vezes);
+    fim();
+  });
+
+  it("outra escuta com a falta segue na tela: o estado fica em Reconectando", async () => {
+    const { m, conexao, provedor, fim } = await comConexao();
+    const { trocar } = montarListas(m, ["ordens", "pessoas"], provedor);
+    for (const chave of ["ordens", "pessoas"]) act(() => daChave(chave)[0]!.proximo(lista(["x"], false)));
+    for (const chave of ["ordens", "pessoas"]) act(() => daChave(chave)[0]!.proximo(lista(["x"], true)));
+    trocar(["pessoas"]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("reconectando");
+    // A que fica sai também: aí sim, conectado.
+    trocar([]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    fim();
+  });
+
+  it("uma consulta do react-query na tela com a falta: o estado fica em Reconectando", async () => {
+    const { m, conexao, queryClient, provedor, fim } = await comConexao();
+    const { SemResposta } = await import("../conexao");
+    const { QueryObserver } = await import("@tanstack/react-query");
+    const observador = new QueryObserver(queryClient, { queryKey: ["callable"], queryFn: () => Promise.reject(new SemResposta()) });
+    const deixar = observador.subscribe(() => undefined);
+    await act(async () => {
+      await observador.refetch();
+    });
+    const { trocar } = montarListas(m, ["ordens"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    trocar([]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("reconectando");
+    // A consulta sai da tela também: nada mais tem a falta.
+    deixar();
+    fim();
+  });
+
+  it("a troca de assinatura do Tentar de novo não passa pelo conectado", async () => {
+    const { m, conexao, estados, provedor, fim } = await comConexao();
+    const { vistos } = montarListas(m, ["ordens"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista([], true)));
+    await passar(5_000);
+    expect(conexao.estado()).toBe("reconectando");
+    await act(async () => {
+      vistos.ordens!.tentar();
+      await Promise.resolve();
+    });
+    await passar(2_000);
+    // A nova assinatura ainda não respondeu: o estado espera por ela, sem passar pelo conectado.
+    expect(estados).not.toContain("conectado");
+    act(() => daChave("ordens")[0]!.proximo(lista([], true)));
+    await passar(2_000);
+    expect(estados).not.toContain("conectado");
+    expect(conexao.estado()).toBe("reconectando");
+    fim();
+  });
+
+  it("a escuta recusada que segue na tela não espera o servidor: a saída da que tinha a falta devolve o conectado", async () => {
+    const { m, conexao, provedor, fim } = await comConexao();
+    const { trocar } = montarListas(m, ["ordens", "pessoas"], provedor);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    act(() => daChave("pessoas")[0]!.falha(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" })));
+    expect(conexao.estado()).toBe("reconectando");
+    trocar(["pessoas"]);
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    fim();
+  });
+
+  it("sem rede, o Sem conexão é do aparelho: a saída da escuta não o tira, e a volta do SDK devolve o conectado", async () => {
+    vi.useFakeTimers();
+    const m = await carregar();
+    const conexao = m.conexao.criarConexao({ temRede: () => !semRede });
+    let voltou: (() => void) | null = null;
+    const desligar = m.conexao.ligarConexaoDoApp(new QueryClient(), conexao, window, undefined, {
+      acordar: () => Promise.resolve(),
+      aoVoltar: (ouvinte) => {
+        voltou = ouvinte;
+        return () => undefined;
+      },
+    });
+    const { trocar } = montarListas(m, ["ordens"], (filhos) => <m.conexao.ProvedorDaConexao value={conexao}>{filhos}</m.conexao.ProvedorDaConexao>);
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], false)));
+    semRede = true;
+    conexao.redeMudou();
+    act(() => daChave("ordens")[0]!.proximo(lista(["OS-1"], true)));
+    await passar(3_000);
+    expect(conexao.estado()).toBe("sem-conexao");
+    trocar([]);
+    await passar(5_000);
+    expect(conexao.estado()).toBe("sem-conexao");
+    // A rede volta, e o SDK volta a ouvir o servidor (o perfil, no app).
+    semRede = false;
+    conexao.redeMudou();
+    act(() => voltou!());
+    await passar(2_000);
+    expect(conexao.estado()).toBe("conectado");
+    desligar();
+    conexao.fechar();
+  });
+});
+
+/**
+ * As faturas do Financeiro (parte 13l): a releitura delas leva a falta, para
+ * os Relatórios (pela `juntarTentativas`), A receber e o Início dizerem se é a
+ * conexão ou o servidor, e de quando é a lista lida. Até a 13k, ela só levava
+ * a nova tentativa, e a falha sem rede era sempre a do servidor.
+ */
+describe("as faturas do Financeiro levam a falta (parte 13l)", () => {
+  it("sem nada lido, a conexão; com a lista lida, a hora; recusada, o servidor", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-14T13:42:00Z"));
+    const m = await carregar();
+    vi.doMock("../liberacao", async (original) => ({ ...(await original<object>()), FINANCEIRO_LIBERADO: true }));
+    const { useFaturas } = await import("../financeiro/use-faturas");
+    vi.doUnmock("../liberacao");
+    let vista: ReturnType<typeof useFaturas> | null = null;
+    function Faturas() {
+      vista = useFaturas("financeiro");
+      return null;
+    }
+    act(() => raiz!.render(<Faturas />));
+    semRede = true;
+    act(() => estado.assinaturas.at(-1)!.proximo(lista([], true)));
+    expect(vista!.falhas).toEqual(["faturas"]);
+    expect(vista!.releitura).toMatchObject({ falta: "conexao", lidaEm: null, falhou: true });
+
+    // A nova assinatura lê do servidor e, depois, a rede cai: a lista fica, com a hora.
+    semRede = false;
+    await act(async () => {
+      vista!.releitura.tentar();
+      await Promise.resolve();
+    });
+    act(() => estado.assinaturas.at(-1)!.proximo({ docs: [], metadata: { fromCache: false } }));
+    expect(vista!.releitura).toMatchObject({ falta: null });
+    semRede = true;
+    act(() => estado.assinaturas.at(-1)!.proximo({ docs: [], metadata: { fromCache: true } }));
+    expect(vista!.releitura).toMatchObject({ falta: "conexao", lidaEm: new Date("2026-11-14T13:42:00Z").getTime(), falhou: false });
+    // A tela que junta as leituras (os Relatórios) diz a mesma falta.
+    expect(m.leitura.juntarTentativas(vista!.releitura, { tentando: false, tentar: () => undefined })).toMatchObject({ falta: "conexao" });
+
+    // A escuta recusada é o servidor.
+    act(() => raiz!.render(<></>));
+    act(() => raiz!.render(<Faturas />));
+    act(() => estado.assinaturas.at(-1)!.falha(Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" })));
+    expect(vista!.releitura).toMatchObject({ falta: "servidor" });
   });
 });

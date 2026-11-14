@@ -16,7 +16,8 @@ import type { EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { CARREGANDO } from "@/lib/carregando/tempo";
 import { prazoEsgotado } from "@/lib/conexao";
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { juntarTentativas, novaTentativaDe, useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { faltaDaConsulta } from "@/lib/carregando/use-leitura-com-falha";
 import { textoDoParaQuando } from "@/lib/order-queue";
 import { canDecideRequests, canOperateWarehouse } from "@/lib/permissions";
 import { useItemPhotos } from "@/lib/use-item-photos";
@@ -411,9 +412,20 @@ export default function PaginaPedidosSeparar() {
         etiquetasHref={etiquetas.length ? labelsUrl({ boxes: etiquetas.map((etiqueta) => etiqueta.code), order: pedidoId }) : null}
         vazias={caixasVazias}
         onTentar={doPedidoSeparado.tentar}
+        leitura={doPedidoSeparado.aoVivo}
       />
     );
   }
+
+  // O que falta às leituras da bancada (parte 13l): a fila (a consulta) e as escutas (as linhas, a tarefa, as caixas, a
+  // entrada e o prazo). O "Tentar de novo" lê do zero a fila que falhou e assina de novo as escutas sem resposta.
+  const leituraDaBancada = juntarTentativas(novaTentativaDe([linhasAoVivo, tarefaAoVivo, caixasAoVivo, entradaAoVivo, solicitacao]), {
+    tentando: false,
+    tentar: () => {
+      if (ops.isError) void relerDoZero(queryClient, [["warehouse-ops"]]);
+    },
+    ...faltaDaConsulta(ops),
+  });
 
   // Enquanto a divisão da linha do diálogo vai ao servidor, ele mostra o que foi mandado: a leitura ao vivo pode chegar antes da resposta.
   // O que outra linha grava (o diálogo dela fechado no meio, "Separar" em outra) não entra neste.
@@ -426,6 +438,7 @@ export default function PaginaPedidosSeparar() {
         estado={estado}
         // A primeira leitura é a da fila: "Tentar de novo" a lê do zero (o react-query não recomeça a leitura presa).
         onTentar={() => relerDoZero(queryClient, [["warehouse-ops"]])}
+        leitura={leituraDaBancada}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
         comecouEm={situacao?.separation_started_at}

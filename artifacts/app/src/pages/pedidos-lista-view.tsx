@@ -3,7 +3,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { BlocoSemConexao, FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListaDeSeparacaoDocumento } from "@/features/warehouse-ops/lista-de-separacao-documento";
 import type { FolhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -23,6 +23,7 @@ export function PedidosListaView({
   avisos = [],
   onImprimir,
   onTentar,
+  leitura,
 }: {
   estado: EstadoDaLista;
   folha: FolhaDaLista | null;
@@ -31,6 +32,12 @@ export function PedidosListaView({
   onImprimir: () => void;
   /** Lê de novo o que ainda não chegou: "Tentar de novo" na demora, na desistência e na falha. */
   onTentar?: () => Promise<unknown>;
+  /**
+   * O que falta às leituras (parte 13l): sem conexão e sem nada lido, o aviso
+   * da conexão no lugar da falha; com a lista lida, a faixa com a hora; o
+   * destino que não chegou sem conexão, o aviso da conexão.
+   */
+  leitura?: LeituraAoVivoNaTela;
 }) {
   const mensagem =
     estado === "carregando"
@@ -63,13 +70,18 @@ export function PedidosListaView({
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando o pedido…" continuaARota onTentar={onTentar} className="no-print rounded-lg border border-border bg-card px-5 py-6" />
       ) : estado === "erro" && onTentar ? (
-        <FalhaNaLeitura leitura={{ error: null, refetch: onTentar }} mensagem="Não foi possível carregar o pedido." className="no-print" />
+        <FalhaNaLeitura leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: onTentar }} mensagem="Não foi possível carregar o pedido." className="no-print" />
       ) : mensagem ? (
         <p role={estado === "erro" ? "alert" : undefined} className="no-print rounded-lg border border-border bg-card px-5 py-7 text-center text-sm font-semibold text-muted-foreground">
           {mensagem}
         </p>
       ) : folha ? (
         <>
+          {/* Sem conexão: a lista lida fica, com a hora; o que não chegou (o destino), o aviso da conexão (parte 13l). */}
+          {leitura ? <FaixaAoVivo leitura={leitura} className="no-print" /> : null}
+          {leitura?.falta === "conexao" && leitura.lidaEm == null ? (
+            <BlocoSemConexao tentando={leitura.tentando} onTentar={() => leitura.tentar()} className="no-print" />
+          ) : null}
           {avisos.map((aviso) => (
             <p key={aviso} role="alert" className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-warning-soft-foreground">
               {aviso}

@@ -477,6 +477,8 @@ export function DemandaNovaView({
                   falha="Não foi possível carregar o catálogo."
                   className="py-2"
                   focoAoSair="demanda-busca"
+                  // A busca tem a largura da página: o aviso da conexão fica numa linha (parte 13l).
+                  estreito={false}
                 />
               ) : resultados.length ? (
                 <ul aria-label="Itens do catálogo" className="flex flex-col divide-y divide-border rounded-lg border border-border">

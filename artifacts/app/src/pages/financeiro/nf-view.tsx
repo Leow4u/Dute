@@ -4,7 +4,7 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { NfDocumento } from "@/components/financeiro/nf-documento";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
+import { FaixaAoVivo, FalhaAoVivo } from "@/components/ui/erro-na-leitura";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "@/lib/operacao/leitura";
 import { cn } from "@/lib/utils";
 import type { DemonstrativoDaNf } from "@/lib/financeiro/nf-documento";
@@ -53,14 +53,18 @@ export function NfView({
       {estado === "carregando" ? (
         <CarregandoNaRegiao rotulo="Carregando a NF…" continuaARota onTentar={leitura.tentar} className={caixa} />
       ) : estado === "erro" ? (
-        <FalhaNaSecao mensagem="Não foi possível carregar a NF." tentando={leitura.tentando} onTentar={leitura.tentar} className={caixa} />
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar a NF." className={caixa} />
       ) : mensagem ? (
         <p className={cn(caixa, "text-center text-sm font-semibold text-muted-foreground")}>{mensagem}</p>
       ) : documento ? (
-        // O papel tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela.
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <NfDocumento documento={documento} />
-        </div>
+        <>
+          {/* A NF lida, sem conexão: ela fica, com a hora; a faixa não sai no papel (parte 13l). */}
+          <FaixaAoVivo leitura={leitura} objeto="NF" className="no-print" />
+          {/* O papel tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela. */}
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <NfDocumento documento={documento} />
+          </div>
+        </>
       ) : null}
     </div>
   );

@@ -4,7 +4,7 @@ import { AlertCircle, Clock3, RefreshCw, WifiOff } from "lucide-react";
 
 import { ArcosDoWifi } from "@/components/ui/arcos-do-wifi";
 import { Button } from "@/components/ui/button";
-import { useFaltaNaTela, useVoltaDaRede } from "@/components/ui/erro-na-leitura";
+import { useFaltaNaTela, useVoltaDaRede, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnuncio, useRetirarAnuncio } from "@/lib/carregando/anunciador";
 import { useEsperaDaRota } from "@/lib/carregando/espera-da-rota";
@@ -67,6 +67,14 @@ export interface LinhaDeEstadoProps {
    * passa de 5 s, a demora, a falha e a falta de conexão).
    */
   semHora?: boolean;
+  /**
+   * As leituras ao vivo que a lista mostra junto dela (as entregas de
+   * Pedidos; parte 13l): a falta de conexão delas é dita aqui, como a das
+   * leituras da lista ("Sem conexão · lista de 10:42", com a hora da mais
+   * antiga do que está na tela), e "Tentar de novo" as relê também. O erro do
+   * servidor delas fica com quem as mostra.
+   */
+  aoVivo?: readonly LeituraAoVivoNaTela[];
   className?: string;
 }
 
@@ -156,6 +164,7 @@ export function LinhaDeEstado({
   resumo,
   primeiraNaLista = false,
   semHora = false,
+  aoVivo = SEM_LEITURAS_AO_VIVO,
   className,
 }: LinhaDeEstadoProps) {
   const leituras: readonly LeituraDaLista[] = Array.isArray(leitura) ? leitura : [leitura as LeituraDaLista];
@@ -169,7 +178,9 @@ export function LinhaDeEstado({
   const comFalta = leituras.filter((uma) => uma.isError && ehFaltaDeConexao(uma.error));
   // A releitura que falhou por outro motivo, com a lista lida: a lista fica, e a linha diz (momento 7).
   const comErro = leituras.filter((uma) => uma.isError && !ehFaltaDeConexao(uma.error) && uma.dataUpdatedAt > 0);
-  const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0);
+  // As leituras ao vivo que a lista mostra junto dela, sem conexão (parte 13l).
+  const aoVivoComFalta = aoVivo.filter((uma) => uma.falta === "conexao");
+  const falta = useVoltaDaRede(useFaltaNaTela(), comFalta.length > 0 || aoVivoComFalta.length > 0);
   const anunciar = useAnuncio();
   const retirarAnuncio = useRetirarAnuncio();
   const pedidosDaPessoa = usePedidosDaPessoa();
@@ -197,6 +208,19 @@ export function LinhaDeEstado({
     horaVista.current = achada;
     return achada;
   };
+  // Na falta, a hora mais antiga do que está na tela: a das leituras com a falta e a das ao vivo que ficaram (a ao
+  // vivo sem nada lido não tem hora própria: vale a da lista em que ela falta).
+  const horaDaFalta = () => {
+    const daLista = leituras.map((uma) => uma.dataUpdatedAt).filter((quando) => quando > 0);
+    const instantes = [
+      ...comFalta.map((uma) => uma.dataUpdatedAt),
+      ...aoVivoComFalta.map((uma) => uma.lidaEm ?? (daLista.length ? Math.min(...daLista) : 0)),
+    ].filter((quando) => quando > 0);
+    if (!instantes.length) return hora(comFalta.length ? comFalta : leituras, "antiga");
+    const achada = horaDaLeitura(Math.min(...instantes));
+    horaVista.current = achada;
+    return achada;
+  };
   // A releitura pedida (a troca de filtro, a volta do app) que passa de 10 s: a demora, com "Tentar de novo", como na
   // primeira leitura (o relógio da espera, seção 3); antes, aos 5 s, "Atualizando…".
   const releituraDemorando = releitura.visivel && (releitura.fase === "demorando" || releitura.fase === "sem-resposta");
@@ -206,8 +230,8 @@ export function LinhaDeEstado({
       : primeira && espera.visivel
         ? { tipo: espera.fase === "andamento" || espera.fase === "com-objeto" ? "carregando" : "demorando", calmo: espera.calmo }
         : { tipo: "vazia" }
-    : comFalta.length
-      ? { tipo: falta, hora: hora(comFalta, "antiga") }
+    : comFalta.length || aoVivoComFalta.length
+      ? { tipo: falta, hora: horaDaFalta() }
       : falta === "sem-conexao"
         ? // O aparelho sem rede há 3 s, antes de qualquer leitura falhar (momento 8).
           { tipo: "sem-conexao", hora: hora(leituras, "antiga") }
@@ -307,9 +331,12 @@ export function LinhaDeEstado({
               consulta.observers.some((observador) => daLista.has(observador.refetch)),
           })
         : Promise.resolve();
+      // As ao vivo sem conexão também: a já lida só espera o SDK acordado; a sem nada lido assina de novo.
+      const dasAoVivo = aoVivoComFalta.map((uma) => Promise.resolve(uma.tentar()).catch(() => undefined));
       void presas
-        .then(() => Promise.all(leituras.map((uma) => uma.refetch())))
-        .then((resultados) => {
+        .then(() => Promise.all([...leituras.map((uma) => uma.refetch()), ...dasAoVivo]))
+        .then((todos) => {
+          const resultados = todos.slice(0, leituras.length) as Awaited<ReturnType<LeituraDaLista["refetch"]>>[];
           // A pessoa pediu e a releitura falhou de novo: o Anunciador diz (a falta de conexão ele diz sozinho), só com
           // a linha ainda na tela, e o que ainda espera o intervalo dele sai com ela.
           if (!montada.current) return;
@@ -348,6 +375,9 @@ export function LinhaDeEstado({
     </div>
   );
 }
+
+/** Sem leituras ao vivo junto da lista: a mesma lista vazia a cada render. */
+const SEM_LEITURAS_AO_VIVO: readonly LeituraAoVivoNaTela[] = [];
 
 /** O "Tentar de novo" da linha: texto sublinhado, com o toque estendido a 44 px. Ocupado não é desabilitado. */
 function TentarDeNovo({ mostrando, aviso = false, onTentar }: { mostrando: boolean; aviso?: boolean; onTentar: () => void }) {

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 import { Router } from "wouter";
 
 import { faturaDoFinanceiro, formDoEnvio, formDoPagamento, pagamentoDaNf, receitaPorCliente, type FaturaDoFinanceiro } from "@/lib/financeiro/faturas";
@@ -312,5 +313,43 @@ describe("Faturas: os pagamentos que falham têm saída (revisão da parte 13g)"
   it("a falha da receita do mês também tem o Tentar de novo", () => {
     const html = render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true, leitura: { tentando: false, tentar: () => undefined } } });
     expect(html).toMatch(/<p role="alert"[^>]*>Não foi possível carregar os pagamentos\.<\/p><button[^>]*>[\s\S]*?Tentar de novo<\/button>/);
+  });
+});
+
+/**
+ * Sem conexão (carregamento v2, parte 13l): sem nada lido, o aviso da conexão
+ * no lugar da lista; com a lista lida, ela fica, com a hora; o erro do
+ * servidor, a falha da seção. O painel da NF aberta e a receita do mês também.
+ */
+/** Sem nada lido, o contador do título diz "—" (o `NumeroLido`), como antes da parte. */
+function comOContadorSemLeitura(rotulos: ReturnType<typeof rotulosDaFalta>) {
+  for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) rotulos[nome].novos.unshift("—");
+  return rotulos;
+}
+
+describe("Financeiro › Faturas sem conexão", () => {
+  it("os estados da falta na lista", async () => {
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/financeiro/a-receber">
+          <FaturasView {...props({ estado: situacao, faturas: situacao === "pronto" ? FATURAS : [], aberta: null, leitura })} />
+        </Router>
+      )),
+    ).toEqual(comOContadorSemLeitura(rotulosDaFalta({ mensagem: "Não foi possível carregar as NFs." })));
+  });
+
+  it("os pagamentos da NF aberta e a receita do mês: sem conexão, o aviso da conexão; o servidor, a falha da seção", async () => {
+    type Falta = { tentando: boolean; tentar: () => undefined; falta: "conexao" | "servidor"; lidaEm: null; erro: boolean };
+    const semConexao: Falta = { tentando: false, tentar: noop, falta: "conexao", lidaEm: null, erro: true };
+    const doServidor: Falta = { ...semConexao, falta: "servidor" };
+    const painel = render({ pagamentos: null, leituraDosPagamentos: semConexao });
+    expect(painel).toContain("Reconectando…");
+    expect(painel).not.toContain("Não foi possível carregar os pagamentos.");
+    expect(render({ pagamentos: null, leituraDosPagamentos: doServidor })).toContain("Não foi possível carregar os pagamentos.");
+    const receita = (leitura: Falta) => render({ filtro: "pagos", aberta: null, receita: { mes: "2026-10", dados: null, erro: true, leitura } });
+    expect(receita(semConexao)).toContain("Reconectando…");
+    expect(receita(semConexao)).not.toContain("Não foi possível carregar os pagamentos.");
+    expect(receita(doServidor)).toContain("Não foi possível carregar os pagamentos.");
+    expect(await violacoesDeAcessibilidade(painel)).toEqual([]);
   });
 });

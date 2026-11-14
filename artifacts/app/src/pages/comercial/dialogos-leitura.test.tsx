@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
 import { CARREGANDO } from "@/lib/carregando/tempo";
-import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
+import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
+import { leituraPendente, type LeituraPendente } from "@/lib/carregando/leitura-pendente";
+import { conexaoEm } from "@/test/conexao";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
 
@@ -435,3 +437,127 @@ describe("os textos da leitura pendente nos formulários", () => {
     expect(textosForaDaLista(regiao(), lista)).toEqual([]);
   });
 });
+
+/**
+ * Sem conexão (carregamento v2, parte 13l): a lista do formulário que falhou
+ * por falta de conexão diz "Sem conexão." (ou "Reconectando…", pelo estado
+ * único) com "Tentar de novo", na peça empilhada das seções estreitas, e não
+ * a frase da falha do servidor, que segue para a escuta recusada. Dados
+ * sintéticos.
+ */
+describe("as listas dos formulários sem conexão", () => {
+  const semConexao = (): LeituraPendente => ({ estado: "erro", tentando: false, tentar: vi.fn(), falta: "conexao" });
+  const doServidor = (): LeituraPendente => ({ estado: "erro", tentando: false, tentar: vi.fn(), falta: "servidor" });
+  const na = (estado: "sem-conexao" | "reconectando", elemento: React.ReactElement) => (
+    <ProvedorDaConexao value={conexaoEm(estado)}>{elemento}</ProvedorDaConexao>
+  );
+
+  const FORMULARIOS: Array<[string, (leitura?: LeituraPendente) => React.ReactElement, string]> = [
+    ["o Novo orçamento", (leitura) => novoOrcamentoCom(leitura), "Não foi possível carregar os clientes."],
+    ["a resposta do orçamento", (leitura) => respostaCom(leitura), "Não foi possível carregar os contatos."],
+    ["a Nova demanda", (leitura) => novaDemandaCom(leitura), "Não foi possível carregar o catálogo."],
+  ];
+
+  for (const [nome, formulario, frase] of FORMULARIOS) {
+    it(`${nome}: sem conexão, o aviso da conexão com Tentar de novo, que relê; o servidor, a frase`, async () => {
+      for (const estado of ["sem-conexao", "reconectando"] as const) {
+        const leitura = semConexao();
+        // Cada estado na tela nova: na troca de "Sem conexão" para "Reconectando", o aviso segura o primeiro (a volta da rede).
+        act(() => raiz!.render(<></>));
+        act(() => raiz!.render(na(estado, formulario(leitura))));
+        expect(document.body.textContent).toContain(estado === "sem-conexao" ? "Sem conexão." : "Reconectando…");
+        expect(document.body.textContent).not.toContain(frase);
+        // Nos diálogos, a peça empilhada das seções estreitas; na Nova demanda, que tem a largura da página, em linha.
+        const empilhado = document.querySelector("[data-falta]")?.className.includes("sm:flex-col");
+        expect(empilhado).toBe(nome !== "a Nova demanda");
+        await act(async () => botao("Tentar de novo")!.click());
+        expect(leitura.tentar).toHaveBeenCalled();
+      }
+      const html = document.body.innerHTML;
+      act(() => raiz!.render(formulario(doServidor())));
+      expect(document.body.textContent).toContain(frase);
+      expect(document.body.textContent).not.toMatch(/Sem conexão|Reconectando/);
+      vi.useRealTimers();
+      expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    });
+  }
+
+  it("no Novo orçamento, a lista já mora numa caixa: o aviso fica sem a borda dele, e só os rótulos da falta", () => {
+    act(() => raiz!.render(na("sem-conexao", novoOrcamentoCom(semConexao()))));
+    expect(document.querySelector("[data-falta]")?.className).toContain("border-0");
+    const dialogo = document.querySelector('[role="dialog"]')!;
+    expect(
+      textosForaDaLista(dialogo.outerHTML, ["Novo orçamento", "Cliente", "Sem conexão.", "Tentar de novo", "Novo prospect", "Contrato", "Sem contrato", "Variante", "Comercial", "Noturna", "Cancelar", "Criar orçamento", "Criando o orçamento…", "Conferir", "Fechar"]),
+    ).toEqual([]);
+  });
+
+  it("a leitura ao vivo leva a falta à lista pendente; lendo, nenhuma", () => {
+    expect(leituraPendente({ itens: null, erro: true, falta: "conexao" })).toMatchObject({ estado: "erro", falta: "conexao" });
+    expect(leituraPendente({ itens: null, erro: true, falta: "servidor" })).toMatchObject({ estado: "erro", falta: "servidor" });
+    expect(leituraPendente({ itens: null, erro: false, falta: null })).toMatchObject({ estado: "carregando", falta: null });
+    expect(leituraPendente({ itens: [], erro: false, falta: "conexao" })).toBeUndefined();
+  });
+});
+
+function novoOrcamentoCom(leitura?: LeituraPendente) {
+  return (
+    <NovoOrcamentoDialog
+      aberto
+      ocupado={false}
+      erro={null}
+      onCancelar={noop}
+      cadastros={[]}
+      leituraDosCadastros={leitura}
+      contratos={[]}
+      hoje="2026-10-23"
+      onCriar={noop}
+      onCriarProspect={async () => null}
+    />
+  );
+}
+
+function respostaCom(leitura?: LeituraPendente) {
+  return (
+    <DialogoDepoisDoEnvio
+      acao="fechar"
+      rotulo="10045 – RV01"
+      comprometida={false}
+      contatoId={null}
+      contatos={[]}
+      leituraDosContatos={leitura}
+      envioEm="2026-10-20T10:00:00.000Z"
+      agora={AGORA}
+      hoje="2026-10-23"
+      ocupado={false}
+      erro={null}
+      onCancelar={noop}
+      onConfirmar={noop}
+    />
+  );
+}
+
+function novaDemandaCom(leitura?: LeituraPendente) {
+  return (
+    <Router ssrPath="/operacao/nova-demanda">
+      <DemandaNovaView
+        agora={AGORA}
+        form={formularioVazio(AGORA)}
+        onForm={noop}
+        clientes={[]}
+        locais={[]}
+        busca="cadeira"
+        onBusca={noop}
+        resultados={[]}
+        leituraDoCatalogo={leitura}
+        onAdicionar={noop}
+        onAvulso={noop}
+        corrigindo={false}
+        onCorrigir={noop}
+        problemas={[]}
+        ocupado={false}
+        erro={null}
+        onAbrir={noop}
+      />
+    </Router>
+  );
+}

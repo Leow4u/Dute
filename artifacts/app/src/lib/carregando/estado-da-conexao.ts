@@ -63,6 +63,20 @@ export interface Conexao {
   aoAcordar(acordar: (() => Promise<void> | null) | null): void;
   /** Acorda a conexão de quem lê; devolve a espera, ou nulo quando não há o que acordar. */
   acordar(): Promise<void> | null;
+  /**
+   * Quem diz se alguma leitura do react-query na tela ainda está com a falta
+   * (no app, as consultas ativas com a falta de conexão): a saída da última
+   * escuta com a falta não apaga a delas (parte 13l).
+   */
+  aoConferirFaltas(conferir: (() => boolean) | null): void;
+  /**
+   * A última leitura de fora do react-query com a falta saiu da tela sem ver a
+   * volta do servidor (parte 13l): sem outra leitura com a falta, o que ela pôs
+   * no estado sai, e ele volta a "conectado" (com o mínimo de 2 s do aviso).
+   * Com o aparelho sem rede, nada muda: o "Sem conexão" é do aparelho, e a
+   * volta do SDK ou a da rede dizem quando ele voltou.
+   */
+  faltaDeForaSaiu(): void;
   /** Para os relógios. */
   fechar(): void;
 }
@@ -79,6 +93,7 @@ export function criarConexao(opcoes: OpcoesDaConexao = {}): Conexao {
   const ouvintes = new Set<() => void>();
   let reler: (() => boolean) | null = null;
   let acordar: (() => Promise<void> | null) | null = null;
+  let conferirFaltas: (() => boolean) | null = null;
 
   /** O que a tela mostra, e desde quando. */
   let exibido: EstadoDaConexao = "conectado";
@@ -235,6 +250,18 @@ export function criarConexao(opcoes: OpcoesDaConexao = {}): Conexao {
       acordar = funcao;
     },
     acordar: () => (temRede() ? (acordar?.() ?? null) : null),
+    aoConferirFaltas: (funcao) => {
+      conferirFaltas = funcao;
+    },
+    faltaDeForaSaiu: () => {
+      if (temFaltaDeFora(conexao) || conferirFaltas?.() || !temRede()) return;
+      devendoAVolta.delete(conexao);
+      esquecerFalhas();
+      if (alvo === "conectado") return;
+      alvo = "conectado";
+      pararReleitura();
+      aplicar();
+    },
     fechar: () => {
       parar(troca);
       parar(relogioSemRede);
@@ -280,7 +307,12 @@ export interface LeituraDeFora {
    * tela com ela antes da volta), a conexão fica sabendo que ele voltou.
    */
   leuDoServidor(): void;
-  /** Saiu da tela: deixa de contar como falta; com ela, a conexão espera a volta da próxima resposta do servidor. */
+  /**
+   * Saiu da tela: deixa de contar como falta; com ela, a conexão espera a volta
+   * da próxima resposta do servidor a uma escuta aberta (a nova assinatura do
+   * "Tentar de novo"). Sem outra leitura com a falta e sem escuta à espera da
+   * primeira resposta, o que ela pôs no estado sai (parte 13l).
+   */
   fechar(): void;
 }
 
@@ -301,22 +333,53 @@ function faltasDe(conexao: Conexao): Set<object> {
   return faltas;
 }
 
+/**
+ * As leituras de fora do react-query abertas que ainda não responderam (nem o
+ * servidor, nem a falta), por conexão: a nova assinatura que o "Tentar de
+ * novo" abre no mesmo commit em que a anterior sai, ou a escuta da tela nova.
+ * Enquanto alguma espera, a volta que a que saiu deve fica com ela (parte 13l).
+ */
+const esperandoAResposta = new WeakMap<Conexao, Set<object>>();
+
+function esperandoDe(conexao: Conexao): Set<object> {
+  let esperando = esperandoAResposta.get(conexao);
+  if (!esperando) esperandoAResposta.set(conexao, (esperando = new Set()));
+  return esperando;
+}
+
+/**
+ * A volta devida sem ninguém para pagá-la: nenhuma leitura de fora com a falta
+ * nem à espera da primeira resposta. Conferida depois do commit (a limpeza da
+ * escuta que sai roda antes de a nova assinatura abrir).
+ */
+function conferirAVoltaDevida(conexao: Conexao) {
+  queueMicrotask(() => {
+    if (devendoAVolta.has(conexao) && !temFaltaDeFora(conexao) && !esperandoDe(conexao).size) conexao.faltaDeForaSaiu();
+  });
+}
+
 export function leituraDeFora(conexao: Conexao = conexaoDoApp): LeituraDeFora {
   const marca = {};
+  esperandoDe(conexao).add(marca);
   return {
     ficouSemResposta: (inicio) => {
+      esperandoDe(conexao).delete(marca);
       const faltas = faltasDe(conexao);
       if (faltas.has(marca)) return;
       faltas.add(marca);
       conexao.ficouSemResposta(inicio);
     },
     leuDoServidor: () => {
+      esperandoDe(conexao).delete(marca);
       // A falta desta escuta, ou a de uma que saiu da tela antes de ver a volta: o servidor respondeu.
       if (faltasDe(conexao).delete(marca) || devendoAVolta.has(conexao)) conexao.leuDoServidor();
     },
     fechar: () => {
-      // Saiu da tela com a falta: deixa de contar, e a conexão fica devendo a volta (revisão da parte 13j).
+      esperandoDe(conexao).delete(marca);
+      // Saiu da tela com a falta: deixa de contar, e a conexão fica devendo a volta (revisão da parte 13j). Sem quem
+      // a pague (outra escuta com a falta, ou a que acabou de abrir), o que ela pôs no estado sai (parte 13l).
       if (faltasDe(conexao).delete(marca)) devendoAVolta.add(conexao);
+      if (devendoAVolta.has(conexao)) conferirAVoltaDevida(conexao);
     },
   };
 }
@@ -486,6 +549,8 @@ export function ligarConexaoDoApp(
   };
   conexao.aoAcordar(opcoes.acordar ?? null);
   conexao.aoReler(reler);
+  // A saída da última escuta com a falta não apaga a de uma consulta na tela (parte 13l).
+  conexao.aoConferirFaltas(() => queryClient.getQueryCache().findAll({ type: "active", predicate: temAFalta }).length > 0);
   const deixarAVolta = opcoes.aoVoltar?.(() => {
     // O SDK voltou a ouvir o servidor: é a volta que a escuta que saiu da tela com a falta não chegou a ver.
     if (devendoAVolta.has(conexao)) conexao.leuDoServidor();
@@ -520,5 +585,6 @@ export function ligarConexaoDoApp(
     deixarAVolta?.();
     conexao.aoReler(null);
     conexao.aoAcordar(null);
+    conexao.aoConferirFaltas(null);
   };
 }

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { collection, doc, query, where } from "firebase/firestore";
 
-import { useDocumento, useLeitura } from "@/lib/operacao/leitura";
+import { novaTentativaDe, useDocumento, useLeitura, type NovaTentativa } from "@/lib/operacao/leitura";
 
 import { itemDaLinhaDeSeparacao } from "./separacao";
 import { comTamanhoDoCatalogo, type TamanhosDoCatalogo } from "./tamanho-do-catalogo";
@@ -122,7 +122,12 @@ export function leituraDosVolumes(dados: {
   return { estado: "pronto", pedido, volumes };
 }
 
-export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes & { tentar: () => Promise<void> } {
+/**
+ * `aoVivo`: a nova tentativa com o que falta às leituras (parte 13l): a
+ * conexão, sem nada lido ou com a hora do que ficou na tela, ou o servidor,
+ * para a tela escolher o aviso da conexão, a faixa ou a falha.
+ */
+export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes & { tentar: () => Promise<void>; aoVivo: NovaTentativa } {
   const id = texto(pedidoId) || null;
   const pedido = useDocumento(
     id ? `orders/${id}:volumes` : null,
@@ -196,5 +201,5 @@ export function useVolumesDoPedido(pedidoId: string | null): LeituraDosVolumes &
       { ativa: Boolean(id && concluido), semResposta: pacotes.erro || pacotes.itens === null, tentar: pacotes.tentar },
       { ativa: Boolean(id && concluido), semResposta: itensDosPacotes.erro || itensDosPacotes.itens === null, tentar: itensDosPacotes.tentar },
     ]);
-  return { ...lida, tentar };
+  return { ...lida, tentar, aoVivo: { ...novaTentativaDe([pedido, remessa, tarefa, linhas, pacotes, itensDosPacotes]), tentar } };
 }

@@ -31,7 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo } from "@/components/ui/erro-na-leitura";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -350,6 +350,8 @@ export default function WarehouseLabelsPage() {
         ) : null}
       </div>
 
+      {/* Os volumes do pedido lidos, sem conexão: ficam, com a hora (parte 13l). */}
+      {wantsVolumes && orderVolumes.estado === "pronto" ? <FaixaAoVivo leitura={orderVolumes.aoVivo} objeto="pedido" className="no-print" /> : null}
       {falhaDaLeitura ? (
         // "Tentando de novo…" só na nova tentativa que a pessoa pede; sem rede, "Sem conexão." ou "Reconectando…".
         <FalhaNaLeitura
@@ -357,6 +359,14 @@ export default function WarehouseLabelsPage() {
           leitura={falhaDaLeitura.leitura}
           erro={falhaDaLeitura.erro}
           mensagem="Não consegui carregar as etiquetas."
+          focoAoSair={ID_DO_RESUMO}
+        />
+      ) : wantsVolumes && orderVolumes.estado === "erro" && orderVolumes.aoVivo.falta === "conexao" ? (
+        // Os volumes que não chegaram sem conexão: o aviso da conexão, com "Tentar de novo", e não a falha (parte 13l).
+        <FalhaNaLeitura
+          className="no-print"
+          leitura={{ error: erroDaLeituraAoVivo("conexao"), refetch: orderVolumes.tentar }}
+          mensagem="Não foi possível carregar os volumes do pedido."
           focoAoSair={ID_DO_RESUMO}
         />
       ) : error ? (

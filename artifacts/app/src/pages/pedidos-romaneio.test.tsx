@@ -26,7 +26,9 @@ vi.mock("wouter", async (original) => ({
 }));
 vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ code: "BTG", options: [{ code: "BTG", name: "BTG Pactual" }] }) }));
 // O Firestore ao vivo devolve os documentos gravados; o mapeamento é o da tela.
-vi.mock("@/lib/operacao/leitura", () => ({
+// A junção das tentativas é a de verdade (parte 13l); as escutas são as do teste.
+vi.mock("@/lib/operacao/leitura", async (original) => ({
+  ...(await original<object>()),
   useLeitura: (chave: string | null, _consulta: unknown, mapear: (id: string, data: Record<string, unknown>) => unknown) => {
     const docs = chave ? estado.consultas[chave] : undefined;
     return { itens: docs ? docs.map((data) => mapear(String(data.id), data)).filter((item) => item !== null) : null, erro: false };

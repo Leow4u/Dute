@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FalhaNaLeitura } from "@/components/ui/erro-na-leitura";
+import { FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QueueGroup, QueueRow } from "@/components/ui/queue-list";
@@ -42,6 +42,8 @@ export type RetornoAberto = {
   linhas: LinhaDoRetorno[] | null;
   /** As linhas do pedido não vieram (e seguem assim enquanto tenta de novo): o aviso no lugar delas. */
   linhasFalharam?: boolean;
+  /** O que faltou às linhas: a conexão (o aviso da conexão) ou o servidor (a falha; parte 13l). */
+  faltaDasLinhas?: LeituraAoVivoNaTela["falta"];
   notas: string;
   problema: string | null;
   erro: string | null;
@@ -66,28 +68,34 @@ export type RetornosViewProps = {
    * Os retornos não vieram: o aviso, com "Tentar de novo", no lugar do grupo
    * que sumia (carregamento v2, parte 13c). Fica enquanto tenta de novo.
    */
-  falha?: { tentar: () => Promise<unknown> } | null;
+  falha?: { tentar: () => Promise<unknown>; falta?: LeituraAoVivoNaTela["falta"] } | null;
+  /** A leitura ao vivo dos retornos: lidos e sem conexão, eles ficam, com a hora (parte 13l). */
+  leitura?: LeituraAoVivoNaTela;
 };
 
-/** A leitura ao vivo vista como a da `FalhaNaLeitura`: a nova tentativa assina de novo e acaba na resposta. */
-function leituraAoVivo(tentar: () => Promise<unknown>) {
-  return { error: new Error("Leitura ao vivo recusada."), refetch: tentar as never };
+/**
+ * A leitura ao vivo vista como a da `FalhaNaLeitura`: a nova tentativa assina de novo e acaba na resposta. Sem conexão,
+ * o aviso da conexão; recusada, a falha (parte 13l).
+ */
+function leituraAoVivo(tentar: () => Promise<unknown>, falta: LeituraAoVivoNaTela["falta"] = null) {
+  return { error: erroDaLeituraAoVivo(falta) ?? new Error("Leitura ao vivo recusada."), refetch: tentar as never };
 }
 
-export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false, falha = null }: RetornosViewProps) {
+export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false, falha = null, leitura }: RetornosViewProps) {
   if (falha && !aberto) {
     return (
       <section aria-labelledby="retornos-da-operacao" className="flex flex-col gap-3">
         <h2 id="retornos-da-operacao" className="text-base font-semibold text-foreground">
           Retornos da Operação
         </h2>
-        <FalhaNaLeitura leitura={leituraAoVivo(falha.tentar)} mensagem="Não consegui carregar os retornos da Operação." />
+        <FalhaNaLeitura leitura={leituraAoVivo(falha.tentar, falha.falta)} mensagem="Não consegui carregar os retornos da Operação." />
       </section>
     );
   }
   if (!retornos.length && !aberto) return null;
   return (
     <>
+      {leitura ? <FaixaAoVivo leitura={leitura} /> : null}
       <QueueGroup title="Retornos da Operação" hint="a receber" count={retornos.length} empty="Nenhum retorno a receber.">
         {retornos.map((retorno) => (
           <QueueRow
@@ -116,7 +124,7 @@ export function RetornosView({ retornos, aberto, acoes, somenteConsulta = false,
               {/* As linhas que não vieram nunca ficam em "Carregando..." para sempre: o aviso, com "Tentar de novo"; antes,
                   a espera em bloco, nada antes de 300 ms (carregamento v2, parte 13c). */}
               {aberto.linhas === null && aberto.linhasFalharam && acoes.tentarLinhas ? (
-                <FalhaNaLeitura leitura={leituraAoVivo(acoes.tentarLinhas)} mensagem="Não consegui carregar os itens do pedido." />
+                <FalhaNaLeitura leitura={leituraAoVivo(acoes.tentarLinhas, aberto.faltaDasLinhas)} mensagem="Não consegui carregar os itens do pedido." />
               ) : aberto.linhas === null ? (
                 <CarregandoNaRegiao rotulo="Carregando itens…" />
               ) : (
@@ -227,8 +235,9 @@ export function RetornosDaOperacao({ somenteConsulta = false }: { somenteConsult
     <RetornosView
       somenteConsulta={somenteConsulta}
       retornos={retornos}
-      falha={falhaDosRetornos ? { tentar: leitura.tentar } : null}
-      aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, linhasFalharam: falhaDasLinhas, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
+      falha={falhaDosRetornos ? { tentar: leitura.tentar, falta: leitura.falta } : null}
+      leitura={leitura}
+      aberto={aberto ? { retorno: aberto.retorno, linhas: linhasDoAberto, linhasFalharam: falhaDasLinhas, faltaDasLinhas: linhas.falta, notas: aberto.notas, problema, erro: aberto.erro, enviando: aberto.enviando } : null}
       acoes={{
         abrir: (retorno) => {
           chave.current = null;

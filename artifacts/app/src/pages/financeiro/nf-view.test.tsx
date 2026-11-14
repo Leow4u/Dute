@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { estadosDaFalta, rotulosDaFalta } from "@/test/sem-conexao";
 import { Router } from "wouter";
 
 import { faturaDoFinanceiro } from "@/lib/financeiro/faturas";
@@ -119,5 +120,26 @@ describe("via comercial da NF", () => {
   it("passa nas regras WCAG 2.1 A e AA do axe", async () => {
     expect(await violacoesDeAcessibilidade(render())).toEqual([]);
     expect(await violacoesDeAcessibilidade(render("carregando"))).toEqual([]);
+  });
+});
+
+/** Sem a NF lida, o título é o da via, sem o número (como antes da parte). */
+function semODocumento(rotulos: ReturnType<typeof rotulosDaFalta>) {
+  for (const nome of ["sem nada lido, sem conexão", "sem nada lido, reconectando", "erro do servidor"] as const) rotulos[nome].novos.unshift("Via comercial");
+  return rotulos;
+}
+
+/** Sem conexão (carregamento v2, parte 13l): o aviso da conexão, a faixa com a hora da NF lida e o erro do servidor. */
+describe("Financeiro › Via comercial da NF sem conexão", () => {
+  it("os estados da falta", async () => {
+    const documento = DOCUMENTO;
+    if (!documento) throw new Error("documento ilegível no teste");
+    expect(
+      await estadosDaFalta((leitura, situacao) => (
+        <Router ssrPath="/financeiro/faturas/nf">
+          <NfView estado={situacao} documento={situacao === "pronto" ? documento : null} voltar="/financeiro/faturas" onImprimir={() => undefined} leitura={leitura} />
+        </Router>
+      )),
+    ).toEqual(semODocumento(rotulosDaFalta({ mensagem: "Não foi possível carregar a NF.", objeto: "NF" })));
   });
 });

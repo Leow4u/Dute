@@ -695,7 +695,8 @@ export default function Pedidos() {
     // Antes de ler as entregas, a linha não oferece "Entrega" (o formulário abriria vazio sobre a entrega que já
     // existe); a leitura que falhou diz, e não some (carregamento v2, parte 13c; o diagnóstico, 4.3).
     if (entregas.itens === null) {
-      if (!entregasFalharam) return {};
+      // Sem conexão, a linha de estado diz a falta e tenta de novo (parte 13l): a linha não repete a falha do servidor.
+      if (!entregasFalharam || entregas.falta === "conexao") return {};
       return {
         detail: "Não consegui carregar a entrega.",
         secondary: operador ? (
@@ -794,7 +795,17 @@ export default function Pedidos() {
     <div ref={palco.ref} className="mx-auto flex max-w-5xl flex-col gap-6 pb-24">
       <PageHeader
         title="Pedidos"
-        estado={<LinhaDeEstado id={idDaLinha} leitura={leiturasDaLista} objeto="pedidos" pedidaPelaPessoa={atualizarLista.voltando} resumo={resumo} />}
+        estado={
+          <LinhaDeEstado
+            id={idDaLinha}
+            leitura={leiturasDaLista}
+            objeto="pedidos"
+            pedidaPelaPessoa={atualizarLista.voltando}
+            resumo={resumo}
+            // As entregas ao vivo sem conexão: a linha diz a falta, com a hora do que está na tela (parte 13l).
+            aoVivo={OPERACAO_LIBERADO ? [entregas] : undefined}
+          />
+        }
         actions={
           <>
             <Segmented<"open" | "delivered">

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { useLeituraComFalha } from "../carregando/use-leitura-com-falha";
+import { faltaDaConsulta, useLeituraComFalha } from "../carregando/use-leitura-com-falha";
 import { OMIE_LIBERADA } from "../liberacao";
 import type { ProfileRole } from "../modules";
 import { SEM_NOVA_TENTATIVA, type NovaTentativa } from "../operacao/leitura";
@@ -54,6 +54,8 @@ export function useEmissoesDoFinanceiro(role: ProfileRole | null | undefined, li
       tentar: () => {
         if (comFalha.isError) void leitura.refetch();
       },
+      // A conexão ou o servidor, e a hora da lista lida (parte 13l).
+      ...faltaDaConsulta(comFalha),
     },
   };
 }
