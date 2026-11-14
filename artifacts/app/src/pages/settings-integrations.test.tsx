@@ -10,7 +10,8 @@ vi.mock('@/lib/auth', () => ({ useAppUser: () => ({ user: { uid: 'user', publicM
 import SettingsIntegrations from './settings-integrations';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root; let container: HTMLDivElement; let client: QueryClient;
-async function wait(assertion: () => void) { await vi.waitFor(async () => { await act(async () => {}); assertion(); }); }
+// Até 3 s: as esperas aparecem aos 300 ms, e com a máquina ocupada o 1 s padrão do waitFor não basta.
+async function wait(assertion: () => void) { await vi.waitFor(async () => { await act(async () => {}); assertion(); }, { timeout: 3_000 }); }
 // O botão pelo rótulo; o botão de ação (BotaoDeAcao, parte 13e), pela camada que está na tela.
 async function click(label: string) { let button: HTMLButtonElement | undefined; await wait(() => { button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === label || b.querySelector('.botao-acao-camada[data-atual]')?.textContent?.trim() === label); expect(button).toBeTruthy(); }); await act(async () => button!.click()); }
 // O segundo toque do botão de ação dentro de 1 s é o toque duplo: a nova tentativa vem depois.

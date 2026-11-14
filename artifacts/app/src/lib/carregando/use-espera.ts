@@ -34,7 +34,9 @@ export interface Espera {
 
 type Relogio =
   | { modo: "parado" }
-  | { modo: "correndo"; inicio: number; agora: number; apareceuEm: number | null }
+  // `alcancado`: o último marco (desde o início) que um tique confirmou. O decorrido nunca fica abaixo dele: em ponto
+  // flutuante, (início + 300) − início pode dar 299,99…, e o marco dos 300 ms só seria visto no seguinte, aos 3 s.
+  | { modo: "correndo"; inicio: number; agora: number; alcancado: number; apareceuEm: number | null }
   | { modo: "segurando"; inicio: number; fim: number; apareceuEm: number };
 
 const PARADO: Relogio = { modo: "parado" };
@@ -46,14 +48,14 @@ const agora = () => performance.now();
 function comecar(desde: number | undefined): Relogio {
   const instante = agora();
   const inicio = desde !== undefined && Number.isFinite(desde) && desde <= instante ? desde : instante;
-  return { modo: "correndo", inicio, agora: instante, apareceuEm: instante - inicio >= CARREGANDO.atrasoMs ? instante : null };
+  return { modo: "correndo", inicio, agora: instante, alcancado: 0, apareceuEm: instante - inicio >= CARREGANDO.atrasoMs ? instante : null };
 }
 
 function ligar(relogio: Relogio, instante: number): Relogio {
   if (relogio.modo === "correndo") return relogio;
   // Voltar a esperar durante o mínimo não pisca: o indicador continua na tela.
   const apareceuEm = relogio.modo === "segurando" ? relogio.apareceuEm : null;
-  return { modo: "correndo", inicio: instante, agora: instante, apareceuEm };
+  return { modo: "correndo", inicio: instante, agora: instante, alcancado: 0, apareceuEm };
 }
 
 function desligar(relogio: Relogio, instante: number, segurarMinimo: boolean): Relogio {
@@ -65,11 +67,16 @@ function desligar(relogio: Relogio, instante: number, segurarMinimo: boolean): R
   return PARADO;
 }
 
-/** O tique da espera que começou em `inicio`; o de uma espera que já acabou não muda nada. */
-function avancar(relogio: Relogio, inicio: number, instante: number): Relogio {
+/**
+ * O tique da espera que começou em `inicio`, no `instante`, com o marco que ele alcançou (desde o início); o de uma
+ * espera que já acabou não muda nada.
+ */
+function avancar(relogio: Relogio, inicio: number, instante: number, marco = 0): Relogio {
   if (relogio.modo !== "correndo" || relogio.inicio !== inicio) return relogio;
-  const apareceuEm = relogio.apareceuEm ?? (instante - relogio.inicio >= CARREGANDO.atrasoMs ? instante : null);
-  return { ...relogio, agora: instante, apareceuEm };
+  const alcancado = Math.max(relogio.alcancado, marco);
+  const decorrido = Math.max(instante - relogio.inicio, alcancado);
+  const apareceuEm = relogio.apareceuEm ?? (decorrido >= CARREGANDO.atrasoMs ? instante : null);
+  return { ...relogio, agora: instante, alcancado, apareceuEm };
 }
 
 /** O próximo instante (desde o início) em que algo muda; nulo quando nada mais muda. */
@@ -87,7 +94,8 @@ function proximoMarco(decorridoMs: number, desisteMs: number): number | null {
 
 function esperaDoRelogio(relogio: Relogio, desisteMs: number): Espera {
   if (relogio.modo === "parado") return OCULTA;
-  const decorridoMs = (relogio.modo === "correndo" ? relogio.agora : relogio.fim) - relogio.inicio;
+  const decorridoMs =
+    relogio.modo === "correndo" ? Math.max(relogio.agora - relogio.inicio, relogio.alcancado) : relogio.fim - relogio.inicio;
   if (relogio.apareceuEm === null) return { ...OCULTA, decorridoMs };
   const fase = faseDaEspera(decorridoMs, desisteMs);
   return {
@@ -142,7 +150,7 @@ export function useEspera(ativa: boolean, opcoes: OpcoesDaEspera = {}): Espera {
       if (marco === null) return;
       tique = setTimeout(() => {
         const disparo = Math.max(agora(), corrida + marco);
-        setRelogio((atual) => avancar(atual, corrida, disparo));
+        setRelogio((atual) => avancar(atual, corrida, disparo, marco));
         armar(marco);
       }, Math.max(0, corrida + marco - instante));
     };
