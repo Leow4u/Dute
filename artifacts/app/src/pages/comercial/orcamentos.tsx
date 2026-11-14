@@ -22,6 +22,7 @@ import {
   type ResultadoDoEnvio,
   type TentativaDeChamada,
 } from "@/lib/comercial/envio";
+import { leituraPendente } from "@/lib/carregando/leitura-pendente";
 import { novaTentativaDe, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import { classificarErro, payloadCriar } from "@/lib/comercial/montar";
 import {
@@ -131,7 +132,7 @@ export default function ComercialOrcamentosPage() {
       : [],
   );
 
-  const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [], contratos: contratos.itens ?? [] });
+  const depois = useDepoisDoEnvio({ contatos: contatos.itens ?? [], leituraDosContatos: leituraPendente(contatos), contratos: contratos.itens ?? [] });
   // O aviso da recusa vale para o orçamento em que aconteceu: ao trocar de ficha, sai.
   const numeroSelecionado = selecionado?.numero ?? null;
   useEffect(() => {
@@ -289,6 +290,7 @@ export default function ComercialOrcamentosPage() {
           if (!ocupado) setDialogo(null);
         }}
         cadastros={cadastros.itens ?? []}
+        leituraDosCadastros={leituraPendente(cadastros)}
         contratos={contratos.itens ?? []}
         hoje={hojeLocal()}
         onCriar={(novo) => void criar(novo)}

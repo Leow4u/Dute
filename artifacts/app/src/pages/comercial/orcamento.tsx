@@ -19,6 +19,7 @@ import {
 } from "@/lib/comercial/clientes";
 import { abrirPreviaSalva, hrefDoDocumento } from "@/lib/comercial/documento";
 import { enviarEAbrirDocumento, type AcaoDeEnvio } from "@/lib/comercial/envio";
+import { leituraPendente } from "@/lib/carregando/leitura-pendente";
 import { novaTentativaDe, useDocumento, useLeitura, useNomes } from "@/lib/comercial/leitura";
 import {
   SINCRONIA_INICIAL,
@@ -181,6 +182,7 @@ function MontarOrcamento({ numero }: { numero: string }) {
   // orçamento, a tela espera a gravação chegar pelo onSnapshot como em qualquer avanço.
   const depois = useDepoisDoEnvio({
     contatos: contatos.itens ?? [],
+    leituraDosContatos: leituraPendente(contatos),
     aoGravar: (pedido, resultado) => {
       if (pedido.callable === "advanceQuote" && typeof resultado.edicao === "number" && typeof resultado.status === "string") {
         despacharRef.current({ tipo: "gravou", edicao: resultado.edicao, status: resultado.status });

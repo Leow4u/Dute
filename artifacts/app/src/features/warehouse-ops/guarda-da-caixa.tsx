@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { useLocation } from "wouter";
@@ -17,7 +17,7 @@ import { statusLabel, type TaskQueueEntry, type WarehouseTask } from "@/lib/ware
 import { destinoDaGuarda } from "@/lib/warehouse-ops/receiving";
 import type { WarehousePosition } from "@/lib/warehouse-positions";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
-import { guardarCaixa, horaCurta, naoCabeNaPrateleira, timelineDaCaixa, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
+import { guardarCaixa, horaCurta, naoCabeNaPrateleira, pedidoFoiRejeitado, timelineDaCaixa, type CaixaDaChegada } from "@/lib/wms/caixas-do-recebimento";
 
 import {
   DestinoDaCaixa,
@@ -279,8 +279,35 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
   const [revisoes, setRevisoes] = useState<Record<string, number>>({});
   const [liberando, setLiberando] = useState(false);
   const revisao = caixa ? Math.max(caixa.conference_revision, revisoes[caixa.code] ?? 0) : 0;
+  // O destino da caixa sem prateleira guarda a tentativa dele (useDestinoDaCaixa); esta chave só começa cada uma.
   const chave = () => crypto.randomUUID();
   const destino = destinoDaCaixaNaGuarda(task);
+  /**
+   * A tentativa de cada escrita da guarda (carregamento v2, parte 13i; a
+   * necessidade 5 do celular), como a do destino: pela ação e pelo pedido
+   * (a caixa, a prateleira e o motivo), sem a revisão. A repetição depois do
+   * resultado incerto leva a mesma chave e o mesmo pedido, com a revisão que
+   * foi na primeira: se ela valeu, o servidor devolve o recibo dela, e não
+   * "já foi guardada". A chave é nova quando a escrita vale, quando o
+   * servidor recusa (a revisão que mudou, a prateleira que não é a reservada)
+   * ou quando a pessoa muda o pedido.
+   */
+  const tentativas = useRef(new Map<string, Record<string, unknown>>());
+  function comTentativa<T extends Record<string, unknown>, R>(tipo: string, dados: T, chamar: (pedido: T & { idempotency_key: string }) => Promise<R>): Promise<R> {
+    const assinatura = JSON.stringify([tipo, { ...dados, expected_revision: undefined }]);
+    const pedido = (tentativas.current.get(assinatura) ?? { ...dados, idempotency_key: chave() }) as T & { idempotency_key: string };
+    tentativas.current.set(assinatura, pedido);
+    return chamar(pedido).then(
+      (resultado) => {
+        tentativas.current.delete(assinatura);
+        return resultado;
+      },
+      (erro: unknown) => {
+        if (pedidoFoiRejeitado(erro)) tentativas.current.delete(assinatura);
+        throw erro;
+      },
+    );
+  }
 
   const anotarRevisao = (valor: unknown, code: string) => {
     if (typeof valor === "number") setRevisoes((atual) => ({ ...atual, [code]: valor }));
@@ -312,10 +339,9 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
     customer_code: customerCode || undefined,
     box_code: caixa!.code,
     expected_revision: revisao,
-    idempotency_key: chave(),
   });
   const guardar = useMutation({
-    mutationFn: () => guardarCaixa({ ...daCaixa(), location_id: destino }),
+    mutationFn: () => comTentativa("guardar", { ...daCaixa(), location_id: destino }, guardarCaixa),
     onSuccess: () => {
       toast({ title: `Caixa ${caixa?.code ?? ""} guardada em ${destino}` });
       void releitura();
@@ -323,7 +349,7 @@ export function GuardaDaCaixa({ entry }: { entry: TaskQueueEntry }) {
     },
   });
   const liberar = useMutation({
-    mutationFn: (motivo: string) => naoCabeNaPrateleira({ ...daCaixa(), reason: motivo }),
+    mutationFn: (motivo: string) => comTentativa("liberar", { ...daCaixa(), location_id: destino, reason: motivo }, ({ location_id: _prateleira, ...pedido }) => naoCabeNaPrateleira(pedido)),
     onSuccess: (resultado) => {
       setLiberando(false);
       if (caixa) anotarRevisao(resultado.conference_revision, caixa.code);

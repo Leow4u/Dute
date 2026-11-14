@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onSnapshot, type DocumentData, type DocumentReference, type Firestore, type Query } from "firebase/firestore";
 
+import { aparelhoSemRede } from "../conexao";
 import { firestore } from "../firebase";
 
 /**
@@ -9,6 +10,27 @@ import { firestore } from "../firebase";
  */
 
 export type Leitura<T> = { itens: T[] | null; erro: boolean };
+
+/**
+ * A escuta ao vivo pede as mudanças de metadados: sem elas, o servidor que
+ * responde o mesmo que o cache já tinha (a lista vazia, o documento que não
+ * existe) não chega à tela, que ficaria na falta de conexão.
+ */
+export const ESCUTA_COM_METADADOS = { includeMetadataChanges: true } as const;
+
+/**
+ * A resposta da escuta que não vale como lida (carregamento v2, parte 13i;
+ * o momento 8 e a decisão 9.4.2): sem rede, o `onSnapshot` não falha, responde
+ * com o que estiver no cache, vazio na primeira visita, e a tela dizia
+ * "Nenhuma OS" ou que o documento não existe. A resposta só do cache, sem
+ * nenhuma resposta do servidor antes nesta escuta e com o aparelho sem rede,
+ * é falta de conexão, como no `lib/cloud-api.ts`. Com o aparelho conectado,
+ * o cache que chega antes do servidor vale (o servidor vem logo depois); o
+ * que já veio do servidor fica na tela quando a rede cai.
+ */
+export function respostaSemLeitura(snapshot: { metadata?: { fromCache?: boolean } }, jaLeuDoServidor: boolean): boolean {
+  return snapshot.metadata?.fromCache === true && !jaLeuDoServidor && aparelhoSemRede();
+}
 
 /**
  * A nova tentativa da leitura ao vivo (carregamento v2, parte 13g, a mesma do
@@ -130,14 +152,20 @@ export function useLeitura<T>(
       setEstado({ chave: assinatura, itens: null, erro: true });
       return undefined;
     }
+    let doServidor = false;
     return onSnapshot(
       consulta(firestore),
-      (snapshot) =>
+      ESCUTA_COM_METADADOS,
+      (snapshot) => {
+        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
+        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, itens: null, erro: true });
+        if (snapshot.metadata?.fromCache !== true) doServidor = true;
         setEstado({
           chave: assinatura,
           itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
           erro: false,
-        }),
+        });
+      },
       () => setEstado({ chave: assinatura, itens: null, erro: true }),
     );
     // A consulta e o mapeamento dependem só da chave (e da tentativa).
@@ -165,9 +193,16 @@ export function useDocumento<T>(
       setEstado({ chave: assinatura, item: undefined, erro: true });
       return undefined;
     }
+    let doServidor = false;
     return onSnapshot(
       referencia(firestore),
-      (snapshot) => setEstado({ chave: assinatura, item: snapshot.exists() ? mapear(snapshot.id, snapshot.data()) : null, erro: false }),
+      ESCUTA_COM_METADADOS,
+      (snapshot) => {
+        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
+        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, item: undefined, erro: true });
+        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        setEstado({ chave: assinatura, item: snapshot.exists() ? mapear(snapshot.id, snapshot.data()) : null, erro: false });
+      },
       () => setEstado({ chave: assinatura, item: undefined, erro: true }),
     );
     // A referência e o mapeamento dependem só da chave (e da tentativa).

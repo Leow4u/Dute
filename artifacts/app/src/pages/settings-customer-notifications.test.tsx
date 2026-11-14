@@ -181,7 +181,9 @@ beforeEach(() => {
   clientes = [CLIENTE];
   assinaturas = [];
   fronteiras.chamar.mockReset().mockResolvedValue({ data: { contato_id: "ct_novo" } });
-  fronteiras.escutar.mockReset().mockImplementation((consulta: Consulta, next: Assinatura["next"], error: Assinatura["error"]) => {
+  // A escuta pede as mudanças de metadados (as opções antes do next, desde a parte 13i do carregamento v2).
+  fronteiras.escutar.mockReset().mockImplementation((consulta: Consulta, ...resto: unknown[]) => {
+    const [next, error] = (typeof resto[0] === "function" ? resto : resto.slice(1)) as [Assinatura["next"], Assinatura["error"]];
     const item: Assinatura = { consulta, next, error, ativa: true, parar: vi.fn(() => { item.ativa = false; }) };
     assinaturas.push(item);
     return item.parar;
@@ -216,6 +218,7 @@ describe("destinatários de avisos na página do cliente, em Configurações ›
     expect(container.querySelector('a[href="#avisos-por-email"]')).not.toBeNull();
     expect(fronteiras.escutar).toHaveBeenCalledWith(
       { collection: { path: "customer_contacts" }, constraints: [{ field: "customer_code", operator: "==", value: CLIENTE.code }] },
+      { includeMetadataChanges: true },
       expect.any(Function), expect.any(Function),
     );
     expect(fronteiras.chamar).not.toHaveBeenCalled();

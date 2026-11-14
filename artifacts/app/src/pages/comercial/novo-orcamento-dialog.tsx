@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeituraPendenteNaRegiao } from "@/components/ui/leitura-pendente";
 import {
   contratoVigente,
   filtrarCadastros,
@@ -13,6 +14,7 @@ import {
   type ContratoResumo,
 } from "@/lib/comercial/clientes";
 import { problemasDaExecucao } from "@/lib/comercial/depois-do-envio";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import { VARIANTE_PADRAO, contratosParaOrcamento } from "@/lib/comercial/montar";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,8 @@ export type NovoOrcamentoDialogProps = {
   modo?: "orcamento" | "execucao";
   onCancelar: () => void;
   cadastros: CadastroComercial[];
+  /** Os clientes ainda lendo, ou a leitura que falhou: a espera ou a falha no lugar da lista, nunca "Nenhum cliente". */
+  leituraDosCadastros?: LeituraPendente;
   contratos: ContratoResumo[];
   /** "AAAA-MM-DD", para o contrato vigente. */
   hoje: string;
@@ -75,6 +79,7 @@ export function NovoOrcamentoDialog({
   modo = "orcamento",
   onCancelar,
   cadastros,
+  leituraDosCadastros,
   contratos,
   hoje,
   onCriar,
@@ -135,7 +140,15 @@ export function NovoOrcamentoDialog({
             </div>
             {/* A lista sem cliente não é listbox: o listbox sem opção falha no leitor de tela (aria-required-children). */}
             <div role={lista.length ? "listbox" : "group"} aria-label="Clientes" className="max-h-56 overflow-y-auto rounded-md border border-border">
-              {lista.length ? (
+              {leituraDosCadastros && !lista.length ? (
+                // Lendo, ou a leitura que falhou: a espera ou a falha, nunca "Nenhum cliente" (carregamento v2, parte 13i).
+                <LeituraPendenteNaRegiao
+                  leitura={leituraDosCadastros}
+                  carregando="Carregando clientes…"
+                  falha="Não foi possível carregar os clientes."
+                  className="px-3 py-4"
+                />
+              ) : lista.length ? (
                 lista.map((cadastro) => (
                   <button
                     key={cadastro.id}

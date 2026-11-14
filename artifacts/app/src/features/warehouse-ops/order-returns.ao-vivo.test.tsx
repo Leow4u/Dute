@@ -24,7 +24,9 @@ vi.mock("firebase/firestore", () => ({
   collection: (_db: unknown, nome: string) => ({ nome }),
   where: (campo: string, _op: string, valor: unknown) => ({ campo, valor }),
   query: (colecao: { nome: string }, filtro: { valor: unknown }) => ({ chave: `${colecao.nome}:${String(filtro.valor)}` }),
-  onSnapshot: (consulta: { chave: string }, ok: (foto: unknown) => void, erro: (erro: unknown) => void) => {
+  // A escuta pede as mudanças de metadados (as opções antes do ok, desde a parte 13i do carregamento v2).
+  onSnapshot: (consulta: { chave: string }, ...resto: unknown[]) => {
+    const [ok, erro] = (typeof resto[0] === "function" ? resto : resto.slice(1)) as [(foto: unknown) => void, (erro: unknown) => void];
     fs.ouvintes.set(consulta.chave, { ok, erro });
     return () => fs.ouvintes.delete(consulta.chave);
   },

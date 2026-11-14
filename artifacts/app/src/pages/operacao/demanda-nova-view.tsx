@@ -6,6 +6,7 @@ import { SeloDoTipo, type OpcaoDeFiltro } from "@/components/operacao/partes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeituraPendenteNaRegiao } from "@/components/ui/leitura-pendente";
 import { Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,6 +20,7 @@ import {
   type LinhaDoPedido,
 } from "@/lib/operacao/demanda-direta";
 import { TIPOS_DA_DEMANDA, TIPO_ROTULO, prazoDaDemanda, type TipoDaDemanda } from "@/lib/operacao/hoje";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import { ROTA_HOJE, hrefDaDemanda } from "@/lib/operacao/navegacao";
 import { pedidoEmTexto, type SolicitacaoDaOperacao } from "@/lib/operacao/solicitacoes";
 import { cn } from "@/lib/utils";
@@ -283,6 +285,7 @@ export function DemandaNovaView({
   busca,
   onBusca,
   resultados,
+  leituraDoCatalogo,
   onAdicionar,
   onAvulso,
   corrigindo,
@@ -302,6 +305,8 @@ export function DemandaNovaView({
   busca: string;
   onBusca: (busca: string) => void;
   resultados: readonly ItemDoCatalogo[];
+  /** O catálogo ainda lendo, ou a leitura que falhou: a busca mostra a espera ou a falha, nunca "Nenhum item do catálogo". */
+  leituraDoCatalogo?: LeituraPendente;
   onAdicionar: (item: ItemDoCatalogo) => void;
   onAvulso: () => void;
   /** O seletor do tipo aberto ("Corrigir"). */
@@ -463,7 +468,10 @@ export function DemandaNovaView({
               </Button>
             </div>
             {busca.trim() ? (
-              resultados.length ? (
+              leituraDoCatalogo && !resultados.length ? (
+                // Lendo, ou a leitura que falhou: a espera ou a falha, nunca "Nenhum item do catálogo" (carregamento v2, parte 13i).
+                <LeituraPendenteNaRegiao leitura={leituraDoCatalogo} carregando="Carregando o catálogo…" falha="Não foi possível carregar o catálogo." className="py-2" />
+              ) : resultados.length ? (
                 <ul aria-label="Itens do catálogo" className="flex flex-col divide-y divide-border rounded-lg border border-border">
                   {resultados.map((item) => (
                     <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">

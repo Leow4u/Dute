@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ban, MessageSquareWarning } from "lucide-react";
 
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { desfechoDoErro } from "@/lib/carregando/use-acao-na-linha";
 import { type SavedLineCodes } from "@/lib/product-match";
 import {
   type AdvanceTaskPayload,
@@ -83,12 +84,25 @@ export function useWarehouseTaskActions({
     },
   });
 
+  /**
+   * A tentativa de cada exceção, pela tarefa, pela fila e pela nota que a
+   * pessoa escreveu (carregamento v2, parte 13i; a necessidade 5 do celular):
+   * a repetição depois de um resultado incerto (sem resposta, sem conexão) leva
+   * a mesma chave e o mesmo corpo, e o servidor devolve o recibo da primeira,
+   * se ela valeu. O corpo fica o da primeira tentativa: a tarefa relida (a
+   * contagem de exceções que a primeira já subiu) não muda o pedido. A chave é
+   * nova quando a exceção é registrada, quando o servidor recusa ou quando a
+   * nota muda. Antes, o corpo ia sem chave, e a rota punha uma nova a cada
+   * chamada: nada no servidor barrava a segunda exceção.
+   */
+  const tentativasDaExcecao = useRef(new Map<string, Record<string, unknown>>());
+
   const registerException = useMutation<unknown, Error, ExceptionPayload>({
-    mutationFn: ({ task, queue, note }) =>
-      fetchJson(`/api/warehouse/tasks/${encodeURIComponent(task.id)}/exception`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    mutationFn: ({ task, queue, note }) => {
+      const assinatura = JSON.stringify([task.id, queue, note ?? ""]);
+      let corpo = tentativasDaExcecao.current.get(assinatura);
+      if (!corpo) {
+        corpo = {
           note: note || task.blocked_reason || "Exceção registrada na bancada WMS.",
           severity:
             task.priority === "critical" || task.blocked_reason
@@ -105,8 +119,25 @@ export function useWarehouseTaskActions({
             blocked_reason: task.blocked_reason,
             exception_count: task.exception_count,
           },
-        }),
-      }),
+          idempotency_key: crypto.randomUUID(),
+        };
+        tentativasDaExcecao.current.set(assinatura, corpo);
+      }
+      return fetchJson(`/api/warehouse/tasks/${encodeURIComponent(task.id)}/exception`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(corpo),
+      }).then(
+        (resultado) => {
+          tentativasDaExcecao.current.delete(assinatura);
+          return resultado;
+        },
+        (erro: unknown) => {
+          if (desfechoDoErro(erro) === "recusado") tentativasDaExcecao.current.delete(assinatura);
+          throw erro;
+        },
+      );
+    },
     onSuccess: () => {
       setExceptionOpen(false);
       setExceptionTaskId(undefined);

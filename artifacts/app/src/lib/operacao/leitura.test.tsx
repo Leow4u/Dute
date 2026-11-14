@@ -20,7 +20,9 @@ const estado = vi.hoisted(() => ({ assinaturas: [] as Assinatura[] }));
 vi.mock("../firebase", () => ({ firestore: {} }));
 vi.mock("../auth", () => ({ useAppUser: () => ({ user: null, isLoaded: true }) }));
 vi.mock("firebase/firestore", () => ({
-  onSnapshot: (_alvo: unknown, proximo: Assinatura["proximo"], falha: Assinatura["falha"]) => {
+  // A escuta pede as mudanças de metadados (as opções antes do próximo, desde a parte 13i).
+  onSnapshot: (_alvo: unknown, ...resto: unknown[]) => {
+    const [proximo, falha] = (typeof resto[0] === "function" ? resto : resto.slice(1)) as [Assinatura["proximo"], Assinatura["falha"]];
     const assinatura: Assinatura = { proximo, falha, ativa: true };
     estado.assinaturas.push(assinatura);
     return () => {

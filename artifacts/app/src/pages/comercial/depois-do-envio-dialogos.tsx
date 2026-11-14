@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogCancelar, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LeituraPendenteNaRegiao } from "@/components/ui/leitura-pendente";
 import { Textarea } from "@/components/ui/textarea";
 import { vigenciaDoContrato, type ContatoResumo, type ContratoResumo } from "@/lib/comercial/clientes";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import {
   LINK_MAXIMO,
   MOTIVOS_DE_REVISAO,
@@ -180,6 +182,7 @@ export function CorpoDoDialogo({
   onForm,
   problemas,
   contatos,
+  leituraDosContatos,
   contratos = [],
   motivosDePerda,
   hoje,
@@ -190,6 +193,8 @@ export function CorpoDoDialogo({
   onForm: (muda: (form: FormDoDialogo) => FormDoDialogo) => void;
   problemas: Problemas;
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contatos ainda lendo, ou a leitura que falhou: a espera ou a falha sob o campo, nunca "Nenhum contato". */
+  leituraDosContatos?: LeituraPendente;
   /** Os contratos do cliente, para o Orçar execução da direta da Operação. */
   contratos?: readonly ContratoResumo[];
   motivosDePerda: readonly Motivo[];
@@ -221,13 +226,22 @@ export function CorpoDoDialogo({
             aria-invalid={Boolean(problemas.contato)}
             className={CAMPO_SELECT}
           >
-            <option value="">{contatos.length ? "Escolher…" : "Nenhum contato"}</option>
+            {/* "Nenhum contato" só com a leitura feita (carregamento v2, parte 13i). */}
+            <option value="">{contatos.length || leituraDosContatos ? "Escolher…" : "Nenhum contato"}</option>
             {contatos.map((contato) => (
               <option key={contato.id} value={contato.id}>
                 {rotuloDoContato(contato)}
               </option>
             ))}
           </select>
+          {leituraDosContatos && !contatos.length ? (
+            <LeituraPendenteNaRegiao
+              leitura={leituraDosContatos}
+              carregando="Carregando os contatos…"
+              falha="Não foi possível carregar os contatos."
+              className="justify-start"
+            />
+          ) : null}
         </Campo>
         <Campo id="resposta-link" rotulo="Link do e-mail" problema={problemas.link}>
           <Input
@@ -363,6 +377,8 @@ export type DialogoDepoisDoEnvioProps = {
   contatoId: string | null;
   /** Os contatos do cliente do orçamento. */
   contatos: ReadonlyArray<Pick<ContatoResumo, "id" | "nome" | "empresa">>;
+  /** Os contatos ainda lendo, ou a leitura que falhou. */
+  leituraDosContatos?: LeituraPendente;
   /** Os contratos que o cliente pode usar (Orçar execução da direta da Operação). */
   contratos?: readonly ContratoResumo[];
   /** O contrato que abre escolhido: o vigente do cliente, ou o da demanda. */
@@ -430,6 +446,7 @@ export function DialogoDepoisDoEnvio(props: DialogoDepoisDoEnvioProps) {
             onForm={(muda) => setForm((atual) => (atual ? muda(atual) : atual))}
             problemas={mostrados}
             contatos={contatos}
+            leituraDosContatos={props.leituraDosContatos}
             contratos={contratos}
             motivosDePerda={motivosDePerdaPermitidos(comprometida)}
             hoje={hoje}

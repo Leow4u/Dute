@@ -31,10 +31,10 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AvisoDeEspera } from "@/components/ui/aviso-de-espera";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { Spinner } from "@/components/ui/spinner";
 import {
   Card,
   CardContent,
@@ -60,6 +60,7 @@ import {
   guardQueryDestination,
   type GuardPosition,
 } from "@/lib/warehouse-positions";
+import { useEspera } from "@/lib/carregando/use-espera";
 import { cn } from "@/lib/utils";
 import {
   type AdvanceOperationPayload,
@@ -1581,6 +1582,9 @@ export function TaskDetailPanel({
     );
   }, [positionsQuery.data]);
 
+  // O Avançar no relógio da espera (carregamento v2, parte 13i): o botão é o BotaoDeAcao, e aos 10 s o aviso da demora.
+  const esperaDoAvanco = useEspera(Boolean(activeTask && advancingTaskId === activeTask.id));
+
   if (!entry) {
     return (
       <Card className="min-w-0 xl:sticky xl:top-6">
@@ -1938,29 +1942,25 @@ export function TaskDetailPanel({
         {canAdvance || showGenericExceptionAction || !hasVisibleAction ? (
           <div
             className={cn(
-              "flex flex-col gap-3 sm:flex-row",
+              "flex flex-col gap-3 sm:flex-row sm:flex-wrap",
               isPutaway &&
                 "order-last sticky bottom-0 z-10 -mx-6 border-t border-border bg-card px-6 py-3 sm:flex-col lg:order-first lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0",
             )}
           >
             {canAdvance ? (
-              // Ocupado não é desabilitado: enquanto avança (até a bancada reler), `aria-disabled` e a trava aqui, para o
-              // foco ficar no botão (carregamento v2, seção 7).
-              <Button
-                type="button"
+              // O BotaoDeAcao, no relógio da espera (carregamento v2, seção 3; parte 13i): o toque afunda e trava na
+              // hora, mas a caixa e "Avançando…" só entram aos 300 ms e ficam pelo menos 500 ms, até a bancada reler
+              // (parte 10). Ocupado ou travado pelo que falta conferir, nunca `disabled`: o foco fica no botão.
+              <BotaoDeAcao
                 size={isPutaway ? "lg" : "default"}
                 className="w-full sm:flex-1"
-                onClick={() => {
-                  if (advancingTaskId === task.id) return;
-                  onAdvance(task.id, operationForAdvance, advanceNote);
-                }}
-                disabled={advancingTaskId !== task.id && !canSubmitAdvance}
-                aria-disabled={advancingTaskId === task.id || undefined}
-                aria-busy={advancingTaskId === task.id || undefined}
-              >
-                {advancingTaskId === task.id ? <Spinner data-icon="inline-start" /> : <PlayCircle data-icon="inline-start" />}
-                {advancingTaskId === task.id ? "Avançando…" : advanceGate.label}
-              </Button>
+                estado={advancingTaskId === task.id ? "andamento" : "repouso"}
+                icone={<PlayCircle aria-hidden="true" />}
+                rotulo={advanceGate.label}
+                andamento="Avançando…"
+                bloqueado={advancingTaskId !== task.id && !canSubmitAdvance}
+                onClick={() => onAdvance(task.id, operationForAdvance, advanceNote)}
+              />
             ) : null}
             {/* Lendo as posições, quem diz a espera é a caixa da região ("Carregando posições…" aos 300 ms): o motivo
                 do bloqueio não repete o texto seco desde 0 ms (parte 13b). O avanço continua travado até ler. */}
@@ -1979,6 +1979,11 @@ export function TaskDetailPanel({
                 andamento="Registrando…"
                 onClick={() => onOpenException(task)}
               />
+            ) : null}
+            {/* Aos 10 s, a demora com o relógio, embaixo dos botões, que não saem do lugar; na escrita, sem "Tentar de
+                novo" (repetir duplicaria). */}
+            {canAdvance && advancingTaskId === task.id && esperaDoAvanco.calmo ? (
+              <AvisoDeEspera fase="demorando" tipo="escrita" desdeMs={esperaDoAvanco.decorridoMs} className="sm:basis-full" />
             ) : null}
             {!hasVisibleAction ? (
               <div className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

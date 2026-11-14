@@ -34,6 +34,7 @@ import { semConexaoNaLeitura } from "@/lib/conexao";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinhaDaFila, QueueGroup, QueueRow, type CarregandoDoGrupo, type QueueTone } from "@/components/ui/queue-list";
 import { Segmented } from "@/components/ui/segmented";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Sheet,
   SheetContent,
@@ -1309,8 +1310,20 @@ function LinhaParaAprovar({
   ) : undefined;
 
   const resultado = aprovar === "sucesso" || recusar === "sucesso" ? "ok" : aprovar === "erro" || recusar === "erro" ? "erro" : undefined;
+  // Enquanto os saldos são lidos, a linha fica neutra (carregamento v2, parte 13i): o Aprovar e o Recusar no lugar,
+  // travados, e o apoio diz "Conferindo saldo…" em tinta, só aos 300 ms. O ícone de alerta e o âmbar são da falta de
+  // saldo, da demora e da falta de rede, nunca da espera.
+  const conferindoSaldo = validation.status === "checking" && !ocupada;
+  const esperaDoSaldo = useEspera(conferindoSaldo);
+  const apoioDoSaldo =
+    conferindoSaldo && esperaDoSaldo.visivel ? (
+      <span className="inline-flex items-center gap-1.5 align-middle font-bold text-foreground">
+        <Spinner calmo={esperaDoSaldo.calmo} />
+        Conferindo saldo…
+      </span>
+    ) : undefined;
   // A linha ocupada mantém os botões, mesmo que a releitura mude a validação do saldo.
-  const comAcoes = validation.canApprove || ocupada;
+  const comAcoes = validation.canApprove || ocupada || conferindoSaldo;
 
   return (
     <div className="relative">
@@ -1320,6 +1333,7 @@ function LinhaParaAprovar({
         title={titulo}
         badge={selo}
         meta={requestSummary(request)}
+        apoio={apoioDoSaldo}
         ocupada={andando !== null}
         apoioEmAndamento={apoioEmAndamento}
         aviso={aviso}
@@ -1336,19 +1350,21 @@ function LinhaParaAprovar({
         actions={
           comAcoes ? (
             <>
+              {/* No celular, 48 px, com os 8 px da fila entre os dois (carregamento v2, seção 7 e momento 3; parte 13i). */}
               <BotaoDeAcao
                 variant="outline"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive max-md:min-h-12"
                 estado={recusar}
                 rotulo="Recusar"
                 andamento="Recusando…"
                 sucesso="Recusado"
                 erro="Não recusado"
-                bloqueado={ocupada && recusar === "repouso"}
+                bloqueado={(ocupada && recusar === "repouso") || conferindoSaldo}
                 onClick={onRecusar}
               />
               <BotaoDeAcao
                 variant={variant}
+                className="max-md:min-h-12"
                 data-foco-da-linha=""
                 estado={aprovar}
                 icone={<Check className="size-4" />}
@@ -1356,7 +1372,7 @@ function LinhaParaAprovar({
                 andamento="Aprovando…"
                 sucesso="Aprovado"
                 erro="Não aprovado"
-                bloqueado={ocupada && aprovar === "repouso"}
+                bloqueado={(ocupada && aprovar === "repouso") || conferindoSaldo}
                 onClick={onAprovar}
               />
             </>

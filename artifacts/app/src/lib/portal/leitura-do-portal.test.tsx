@@ -20,7 +20,9 @@ vi.mock("firebase/firestore", async (original) => ({
   ...(await original<object>()),
   collection: (...partes: unknown[]) => partes,
   doc: (...partes: unknown[]) => partes,
-  onSnapshot: (_alvo: unknown, proximo: (instantaneo: unknown) => void, erro: (erro: unknown) => void) => {
+  // A escuta pede as mudanças de metadados (as opções antes do próximo, desde a parte 13i).
+  onSnapshot: (_alvo: unknown, ...resto: unknown[]) => {
+    const [proximo, erro] = (typeof resto[0] === "function" ? resto : resto.slice(1)) as [(instantaneo: unknown) => void, (erro: unknown) => void];
     const assinatura = { proximo, erro, ativa: true };
     assinaturas.push(assinatura);
     return () => {

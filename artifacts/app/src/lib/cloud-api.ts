@@ -265,6 +265,9 @@ async function getDoc<A, D extends DocumentData>(referencia: DocumentReference<A
  */
 export const lerDocsDoServidor = getDocs;
 
+/** O mesmo, para um documento (o Início do Comercial; parte 13i). */
+export const lerDocDoServidor = getDoc;
+
 /** A última leitura do Firestore por aqui só achou o cache: o SDK se deu por offline. */
 let firestoreSoNoCache = false;
 let acordandoOFirestore: Promise<void> | null = null;

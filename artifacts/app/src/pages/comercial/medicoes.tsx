@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { useLocation, useSearch } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +30,8 @@ import {
   type FormLinha,
   type Medicao,
 } from "@/lib/comercial/medicoes";
-import { itemDoCatalogoDoDocumento, type ItemDoCatalogoDoc } from "@/lib/comercial/montar";
+import { lerItensDoCatalogo } from "@/lib/comercial/inicio";
+import type { ItemDoCatalogoDoc } from "@/lib/comercial/montar";
 import { hrefDaMedicao, medicaoDaBusca } from "@/lib/comercial/navegacao";
 import { firestore } from "@/lib/firebase";
 
@@ -68,9 +69,9 @@ function useItensDoCatalogo(ativo: boolean): Map<string, ItemDoCatalogoDoc> | "c
       return undefined;
     }
     let vivo = true;
-    getDocs(collection(firestore, "lpu_items"))
-      .then((snapshot) => {
-        if (vivo) setEstado(new Map(snapshot.docs.map((row) => [row.id, itemDoCatalogoDoDocumento(row.data())])));
+    lerItensDoCatalogo()
+      .then((itens) => {
+        if (vivo) setEstado(itens);
       })
       .catch(() => {
         if (vivo) setEstado("erro");

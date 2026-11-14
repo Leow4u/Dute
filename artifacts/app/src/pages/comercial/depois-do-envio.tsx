@@ -16,6 +16,7 @@ import {
   type ValoresDaAcao,
 } from "@/lib/comercial/depois-do-envio";
 import type { TentativaDeChamada } from "@/lib/comercial/envio";
+import type { LeituraPendente } from "@/lib/carregando/leitura-pendente";
 import { contratosParaOrcamento } from "@/lib/comercial/montar";
 import { hrefDoOrcamento, type ItemDaFila } from "@/lib/comercial/orcamentos";
 
@@ -39,6 +40,8 @@ export type ResultadoDaGravacao = { edicao?: number; status?: string; fora_da_ta
 export function useDepoisDoEnvio(entrada: {
   /** Os contatos do cliente (de qualquer cliente: o hook filtra pelo do orçamento aberto). */
   contatos: readonly ContatoResumo[];
+  /** Os contatos ainda lendo, ou a leitura que falhou: o campo mostra a espera ou a falha, nunca "Nenhum contato". */
+  leituraDosContatos?: LeituraPendente;
   /** Os contratos (de qualquer cliente: o hook filtra pelo do orçamento aberto), para o Orçar execução da direta da Operação. */
   contratos?: readonly ContratoResumo[];
   /** Depois de gravar uma ação do orçamento (advanceQuote): a montagem espera a gravação chegar. */
@@ -107,6 +110,7 @@ export function useDepoisDoEnvio(entrada: {
       comprometida={aberta ? demandaComprometida(aberta.item) : false}
       contatoId={aberta?.item.contatoId ?? null}
       contatos={contatosDoCliente}
+      leituraDosContatos={entrada.leituraDosContatos}
       contratos={contratosDoCliente}
       contratoId={contratoSugerido}
       envioEm={aberta?.item.envio?.em ?? null}

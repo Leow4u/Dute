@@ -250,7 +250,9 @@ beforeEach(() => {
   assinaturas = [];
   fronteiras.pessoas.mockReset().mockReturnValue({ data: { items: PESSOAS }, isLoading: false });
   fronteiras.convites.mockReset().mockResolvedValue({ docs: CONVITES.map(({ id, ...data }) => ({ id, data: () => data })) });
-  fronteiras.escutar.mockReset().mockImplementation((consulta: { constraints: Array<{ value: string }> }, next: (typeof assinaturas)[number]["next"]) => {
+  // A escuta pede as mudanças de metadados (as opções antes do next, desde a parte 13i do carregamento v2).
+  fronteiras.escutar.mockReset().mockImplementation((consulta: { constraints: Array<{ value: string }> }, ...resto: unknown[]) => {
+    const next = (typeof resto[0] === "function" ? resto[0] : resto[1]) as (typeof assinaturas)[number]["next"];
     assinaturas.push({ value: consulta.constraints[0]!.value, next });
     return () => undefined;
   });

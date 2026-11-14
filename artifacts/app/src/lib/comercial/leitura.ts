@@ -3,7 +3,7 @@ import { doc, getDoc, onSnapshot, type DocumentData, type Firestore, type Query 
 
 import { useAppUser } from "../auth";
 import { firestore } from "../firebase";
-import { useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
+import { ESCUTA_COM_METADADOS, respostaSemLeitura, useNovaTentativa, type NovaTentativa } from "../operacao/leitura";
 
 export { SEM_NOVA_TENTATIVA, novaTentativaDe, type NovaTentativa } from "../operacao/leitura";
 import type { Carga } from "./clientes";
@@ -33,14 +33,20 @@ export function useLeitura<T>(
       setEstado({ chave: assinatura, itens: null, erro: true });
       return undefined;
     }
+    let doServidor = false;
     return onSnapshot(
       consulta(firestore),
-      (snapshot) =>
+      ESCUTA_COM_METADADOS,
+      (snapshot) => {
+        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca a lista vazia (parte 13i).
+        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ chave: assinatura, itens: null, erro: true });
+        if (snapshot.metadata?.fromCache !== true) doServidor = true;
         setEstado({
           chave: assinatura,
           itens: snapshot.docs.map((row) => mapear(row.id, row.data())).filter((item): item is T => item !== null),
           erro: false,
-        }),
+        });
+      },
       () => setEstado({ chave: assinatura, itens: null, erro: true }),
     );
     // A consulta e o mapeamento dependem só da chave (e da tentativa).
@@ -77,9 +83,16 @@ export function useDocumento(caminho: string | null): LeituraDoDocumento & NovaT
       setEstado({ caminho: assinatura, dados: undefined, erro: true });
       return undefined;
     }
+    let doServidor = false;
     return onSnapshot(
       doc(firestore, caminho),
-      (snapshot) => setEstado({ caminho: assinatura, dados: snapshot.exists() ? snapshot.data() : null, erro: false }),
+      ESCUTA_COM_METADADOS,
+      (snapshot) => {
+        // Só o cache, sem nada do servidor e sem rede: a falta de conexão, nunca "não existe" (parte 13i).
+        if (respostaSemLeitura(snapshot, doServidor)) return setEstado({ caminho: assinatura, dados: undefined, erro: true });
+        if (snapshot.metadata?.fromCache !== true) doServidor = true;
+        setEstado({ caminho: assinatura, dados: snapshot.exists() ? snapshot.data() : null, erro: false });
+      },
       () => setEstado({ caminho: assinatura, dados: undefined, erro: true }),
     );
     // O caminho está na assinatura (com a tentativa).
