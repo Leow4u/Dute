@@ -253,3 +253,50 @@ describe("Pedidos › Lista de separação, a folha que rola (parte 13m)", () =>
     expect(caixa.className).toContain("focus-visible:ring-foco");
   });
 });
+
+/**
+ * A folha impressa sem as caixas e sem a ordem das prateleiras (revisão da
+ * parte 13m): antes, a coluna Caixa saía em branco, igual à da linha que não
+ * tem caixa, e nada dizia que a ordem podia não ser a de caminhada. Agora a
+ * célula diz "caixa não carregada", e o cabeçalho, "Ordem das prateleiras: não
+ * carregada", no próprio papel.
+ */
+describe("Pedidos › Lista de separação, a folha sem as caixas e sem a ordem (revisão da parte 13m)", () => {
+  const SEM_CAIXAS = folhaDaLista({
+    numero: "PED-0001",
+    cliente: "BTG Pactual",
+    destino: "Agência Faria Lima",
+    paraQuando: "2026-11-16T14:36:00.000Z",
+    por: "Guilherme Dantas",
+    agora: AGORA,
+    caixasNaoCarregadas: true,
+    ordemNaoCarregada: true,
+    grupos: gruposDaSeparacao(ITENS),
+  });
+
+  it("a coluna Caixa diz que a caixa não chegou, em cada linha; o cabeçalho diz a ordem", () => {
+    const dom = new JSDOM(render("pronto", SEM_CAIXAS));
+    const papel = dom.window.document.querySelector(".print-area")!;
+    const caixas = [...papel.querySelectorAll("tbody tr:not(:first-child)")].map((linha) => linha.querySelectorAll("td")[3]?.textContent);
+    expect(caixas).toEqual(["caixa não carregada", "caixa não carregada", "caixa não carregada", "caixa não carregada"]);
+    const rotulo = [...papel.querySelectorAll("span")].find((elemento) => elemento.textContent === "Ordem das prateleiras");
+    expect(rotulo?.nextElementSibling?.textContent).toBe("não carregada");
+    dom.window.close();
+  });
+
+  it("com as caixas lidas, a linha sem caixa fica em branco e o cabeçalho não ganha o campo", () => {
+    const textos = textosDaTela(render("pronto", FOLHA));
+    expect(textos).not.toContain("caixa não carregada");
+    expect(textos).not.toContain("Ordem das prateleiras");
+  });
+
+  it("só rótulos e dados, e o axe sem violação", async () => {
+    const html = render("pronto", SEM_CAIXAS);
+    expect(textosDaTela(html).filter((texto) => !textosDaTela(render("pronto", { ...SEM_CAIXAS, caixaQueNaoChegou: undefined, ordemDasPrateleiras: undefined })).includes(texto))).toEqual([
+      "Ordem das prateleiras",
+      "não carregada",
+      "caixa não carregada",
+    ]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});

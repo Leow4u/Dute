@@ -218,7 +218,8 @@ export default function WarehouseLabelsPage() {
     ...(wantsBoxes && needsSession ? [[sessionQuery, sessaoLida] as const] : []),
     ...(wantsPositions ? [[positionsQuery, posicoesLidas] as const] : []),
   ]);
-  const falhouNaLeitura = falhaDaLeitura !== null;
+  // Os volumes que não chegaram também: a contagem não diz "0 etiquetas · 0 folhas" ao lado do aviso (revisão da parte 13m).
+  const falhouNaLeitura = falhaDaLeitura !== null || (wantsVolumes && orderVolumes.estado === "erro");
   const error = wantsVolumes && orderVolumes.estado === "nao_encontrado" ? new Error("Pedido não encontrado.") : null;
   const back = fromOrder
     ? // De volta ao pedido: a bancada, ou o pedido já separado.

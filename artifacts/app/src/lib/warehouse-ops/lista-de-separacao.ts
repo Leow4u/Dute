@@ -175,7 +175,18 @@ export type FolhaDaLista = {
   impressaEm: string;
   por: string;
   grupos: GrupoDaLista[];
+  /**
+   * As caixas que não chegaram: a célula Caixa da linha sem caixa diz isso no papel ("caixa não carregada"), e não o
+   * branco de quem não tem caixa (revisão da parte 13m). Sem a falta, não vem.
+   */
+  caixaQueNaoChegou?: string;
+  /** A ordem das prateleiras que não chegou: o cabeçalho diz ("não carregada"); a ordem é a do código. Sem a falta, não vem. */
+  ordemDasPrateleiras?: string;
 };
+
+/** O que o papel diz no lugar da caixa e da ordem que não chegaram (revisão da parte 13m). */
+export const CAIXA_NAO_CARREGADA = "caixa não carregada";
+export const ORDEM_NAO_CARREGADA = "não carregada";
 
 const DATA_E_HORA_EM_SAO_PAULO = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
@@ -201,6 +212,10 @@ export function folhaDaLista(dados: {
   paraQuando?: unknown;
   /** A leitura da solicitação não chegou: o destino e o prazo dizem, no papel, em vez do traço (parte 13m). */
   solicitacaoNaoCarregada?: boolean;
+  /** A leitura das caixas não chegou: a célula Caixa diz, no papel, em vez do branco (revisão da parte 13m). */
+  caixasNaoCarregadas?: boolean;
+  /** A leitura das posições não chegou: a ordem é a do código, e o cabeçalho diz (revisão da parte 13m). */
+  ordemNaoCarregada?: boolean;
   por?: string | null;
   agora: Date;
   grupos: GrupoDaLista[];
@@ -217,6 +232,8 @@ export function folhaDaLista(dados: {
     impressaEm: impressaEmTexto(dados.agora),
     por: texto(dados.por),
     grupos: dados.grupos,
+    ...(dados.caixasNaoCarregadas ? { caixaQueNaoChegou: CAIXA_NAO_CARREGADA } : {}),
+    ...(dados.ordemNaoCarregada ? { ordemDasPrateleiras: ORDEM_NAO_CARREGADA } : {}),
   };
 }
 

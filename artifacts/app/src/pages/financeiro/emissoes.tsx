@@ -9,7 +9,7 @@ import { CHAVE_DAS_BAIXAS, useBaixasDoFinanceiro } from "@/lib/financeiro/use-ba
 import { CHAVE_DAS_EMISSOES, useEmissoesDoFinanceiro } from "@/lib/financeiro/use-emissoes";
 import { juntarTentativas } from "@/lib/operacao/leitura";
 
-import { EmissoesView, type EstadoDasEmissoes } from "./emissoes-view";
+import { EmissoesView, type EstadoDasEmissoes, type ListaRecusada } from "./emissoes-view";
 
 /**
  * /financeiro/emissoes: as NFS-e pedidas à Omie (parte 7.4f), pela callable
@@ -21,6 +21,11 @@ import { EmissoesView, type EstadoDasEmissoes } from "./emissoes-view";
  * depois da falha leva a mesma chave, e se a primeira gravou, o servidor
  * repete o resultado. Depois de cada ação, as listas são lidas de novo.
  */
+/** Qual lista lida o servidor recusou na releitura; nenhuma, false. */
+function listaRecusada(emissoes: boolean, baixas: boolean): ListaRecusada | false {
+  return emissoes && baixas ? "as-duas" : emissoes ? "emissoes" : baixas ? "baixas" : false;
+}
+
 export default function FinanceiroEmissoes() {
   const { user } = useAppUser();
   const role = user?.publicMetadata.role;
@@ -97,8 +102,8 @@ export default function FinanceiroEmissoes() {
       emAndamento={emAndamento}
       leitura={juntarTentativas(leitura.releitura, leituraDasBaixas.releitura)}
       // A recusa do servidor numa das listas lidas, também com a outra sem conexão: as duas faltas ficam na tela, a
-      // frase e a faixa, sem uma tirar a outra (parte 13m).
-      falhaNaReleitura={lidas && [leitura.releitura, leituraDasBaixas.releitura].some((releitura) => releitura.falta === "servidor")}
+      // frase e a faixa, sem uma tirar a outra (parte 13m). A frase diz a lista recusada (revisão da parte 13m).
+      falhaNaReleitura={lidas && listaRecusada(leitura.releitura.falta === "servidor", leituraDasBaixas.releitura.falta === "servidor")}
       aviso={aviso}
       falha={falha}
       acoes={{

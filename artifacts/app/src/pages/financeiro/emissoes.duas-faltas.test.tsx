@@ -139,10 +139,12 @@ async function montarERelerCom(emissoes: typeof estado.emissoes, baixas: typeof 
 }
 
 describe("Emissões com uma lista sem conexão e a outra recusada pelo servidor (parte 13m)", () => {
-  it("as duas faltas aparecem: a faixa da conexão e a frase do servidor", async () => {
+  it("as duas faltas aparecem: a faixa da conexão e a frase do servidor, que diz a lista recusada (as baixas)", async () => {
     const textos = await montarERelerCom("sem-conexao", "servidor");
     expect(textos.some((texto) => /^Sem conexão · lista de \d\d:\d\d$/.test(texto))).toBe(true);
-    expect(textos).toContain("Não foi possível atualizar as emissões.");
+    // Quem o servidor recusou foram as baixas: a frase não culpa as emissões, que estão só sem conexão (revisão da 13m).
+    expect(textos).toContain("Não foi possível atualizar as baixas.");
+    expect(textos).not.toContain("Não foi possível atualizar as emissões.");
     // As emissões lidas ficam na tela.
     expect(textos).toContain("Itaú Unibanco · NFS-e 815");
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
@@ -164,5 +166,19 @@ describe("Emissões com uma lista sem conexão e a outra recusada pelo servidor 
     const textos = await montarERelerCom("servidor", "ok");
     expect(textos).toContain("Não foi possível atualizar as emissões.");
     expect(textos.join(" ")).not.toMatch(/Sem conexão|Reconectando/);
+  });
+});
+
+describe("Emissões: a frase do servidor diz a lista que ele recusou (revisão da parte 13m)", () => {
+  it("as baixas recusadas e as emissões em dia: as baixas", async () => {
+    const textos = await montarERelerCom("ok", "servidor");
+    expect(textos).toContain("Não foi possível atualizar as baixas.");
+    expect(textos).not.toContain("Não foi possível atualizar as emissões.");
+  });
+
+  it("as duas recusadas: as emissões e as baixas", async () => {
+    const textos = await montarERelerCom("servidor", "servidor");
+    expect(textos).toContain("Não foi possível atualizar as emissões e as baixas.");
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
 });

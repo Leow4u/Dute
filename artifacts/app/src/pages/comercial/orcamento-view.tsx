@@ -611,7 +611,7 @@ function Pedido(props: MontarViewProps) {
                   href={link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-primary underline-offset-4 hover:underline"
+                  className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-primary-texto underline-offset-4 hover:underline"
                 >
                   Abrir no Outlook
                   <ExternalLink className="size-3.5" aria-hidden="true" />

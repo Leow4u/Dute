@@ -13,7 +13,9 @@ import { Router } from "wouter";
  * ou com a recusa do servidor, nada dizia. Agora a frase diz o que não
  * chegou, na voz do romaneio e da lista ("Não foi possível carregar as caixas
  * e o prazo do pedido."), em qualquer falta, e o aviso da conexão (ou a
- * faixa) diz por quê. Dados sintéticos.
+ * faixa) diz por quê. Dados sintéticos. Desde a revisão da parte, a frase
+ * mora na coluna do lado, com o "Tentar de novo"
+ * (pedidos-separar.apoio-na-coluna.test.tsx).
  */
 
 const estado = vi.hoisted(() => ({
@@ -174,11 +176,12 @@ describe("a bancada de Separar com a leitura de apoio que não chegou (parte 13m
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
   });
 
-  it("o servidor que recusa a tarefa: a frase dos volumes, sem o aviso da conexão", async () => {
+  it("o servidor que recusa a tarefa: a frase dos volumes, com o Tentar de novo, sem o aviso da conexão", async () => {
     const antes = await emDia();
     estado.faltas[TAREFA] = { erro: true, falta: "servidor", lidaEm: null };
     const textos = await montar("conectado");
-    expect(textos.filter((texto) => !antes.has(texto))).toEqual(["Não foi possível carregar os volumes."]);
+    // A recusa do servidor não volta sozinha: a frase tem a saída (revisão da parte 13m).
+    expect(textos.filter((texto) => !antes.has(texto))).toEqual(["Não foi possível carregar os volumes.", "Tentar de novo"]);
     expect(container.textContent).not.toMatch(/Sem conexão|Reconectando/);
   });
 

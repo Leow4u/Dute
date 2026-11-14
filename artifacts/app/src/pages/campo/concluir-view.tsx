@@ -210,7 +210,7 @@ export function CampoConcluirView({
       <Cartao
         titulo="Itens executados"
         acao={
-          <Link href={hrefDaOsNoCampo(ficha.numero)} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+          <Link href={hrefDaOsNoCampo(ficha.numero)} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary-texto hover:underline">
             <Pencil aria-hidden="true" className="size-4" />
             Corrigir
           </Link>

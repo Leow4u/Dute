@@ -46,6 +46,7 @@ import {
 } from "@/lib/warehouse-ops/divisao-em-volumes";
 import { hrefDaListaDeSeparacao, pedidoDaBusca, resumoDoGrupo, type LinhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
+import { oQueNaoChegou, useAnunciarARecusa } from "@/lib/warehouse-ops/o-que-nao-chegou";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
 import { hrefDoRomaneio } from "@/lib/warehouse-ops/romaneio";
 import { estadoDaLinha, idDaTarefaDeSeparacao, itemDaLinhaDeSeparacao, progressoDoPedido, separacaoComecou } from "@/lib/warehouse-ops/separacao";
@@ -68,8 +69,6 @@ import { PedidoSeparadoView } from "./pedido-separado-view";
 import { PedidosSepararView, type EstadoDaBancada } from "./pedidos-separar-view";
 
 const SEM_ITENS: WarehouseTaskItem[] = [];
-
-const LISTA = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
 
 type Acao =
   | { tipo: "separar" | "desfazer"; linha: LinhaDaLista }
@@ -388,6 +387,27 @@ export default function PaginaPedidosSeparar() {
             ? "concluida"
             : "pronto";
 
+  // A leitura de apoio que não chegou (parte 13m e a revisão dela): a frase diz o que falta, em qualquer falta, numa frase
+  // só ("Não foi possível carregar as caixas e o prazo do pedido."), na coluna do lado, depois dos volumes e das
+  // etiquetas: nada entra acima da lista, e o "Separar" não sai do lugar. O "Tentar de novo" dela assina de novo o que
+  // falhou; o Anunciador diz só a recusa do servidor que entra (a falta de conexão ele já diz). Na bancada, os volumes
+  // (a tarefa), as caixas (e o conteúdo de entrada delas) e o prazo; no pedido separado, as caixas (as etiquetas para
+  // trocar e as vazias) e o prazo. As linhas que não chegaram seguem as da fila.
+  const apoio = oQueNaoChegou(
+    separado
+      ? [
+          { oQue: "as caixas", leituras: [caixasAoVivo] },
+          { oQue: "o prazo do pedido", leituras: [solicitacao] },
+        ]
+      : [
+          { oQue: "os volumes", leituras: [tarefaAoVivo] },
+          { oQue: "as caixas", leituras: [caixasAoVivo, entradaAoVivo] },
+          { oQue: "o prazo do pedido", leituras: [solicitacao] },
+        ],
+  );
+  useAnunciarARecusa(apoio);
+  const apoioNaTela = apoio.frase ? { mensagem: apoio.frase, tentando: apoio.tentando, tentar: apoio.tentar } : null;
+
   if (estado === "concluida" && pedido && pedidoId) {
     const volumesDoPedido = doPedidoSeparado.volumes;
     const lidos = doPedidoSeparado.estado === "pronto";
@@ -418,20 +438,13 @@ export default function PaginaPedidosSeparar() {
         vazias={caixasVazias}
         onTentar={doPedidoSeparado.tentar}
         leitura={doPedidoSeparado.aoVivo}
+        apoio={apoioNaTela}
       />
     );
   }
 
   // O que falta às leituras da bancada (parte 13l): a fila (a consulta) e as escutas (as linhas, a tarefa, as caixas, a
   // entrada e o prazo). O "Tentar de novo" lê do zero a fila que falhou e assina de novo as escutas sem resposta.
-  // A leitura de apoio que não chegou diz o que falta, em qualquer falta, como o romaneio e a lista; sem conexão, o
-  // aviso da conexão (ou a faixa) diz por quê (parte 13m). As linhas que não chegaram seguem as da fila.
-  const naoChegou = [
-    tarefaAoVivo.erro ? "os volumes" : null,
-    caixasAoVivo.erro || entradaAoVivo.erro ? "as caixas" : null,
-    solicitacao.erro ? "o prazo do pedido" : null,
-  ].filter((oQue): oQue is string => Boolean(oQue));
-  const avisos = naoChegou.length ? [`Não foi possível carregar ${LISTA.format(naoChegou)}.`] : [];
   const leituraDaBancada = juntarTentativas(novaTentativaDe([linhasAoVivo, tarefaAoVivo, caixasAoVivo, entradaAoVivo, solicitacao]), {
     tentando: false,
     tentar: () => {
@@ -452,7 +465,7 @@ export default function PaginaPedidosSeparar() {
         // A primeira leitura é a da fila: "Tentar de novo" a lê do zero (o react-query não recomeça a leitura presa).
         onTentar={() => relerDoZero(queryClient, [["warehouse-ops"]])}
         leitura={leituraDaBancada}
-        avisos={avisos}
+        apoio={apoioNaTela}
         numero={pedido?.orderNumber ?? ""}
         resumo={resumo}
         comecouEm={situacao?.separation_started_at}

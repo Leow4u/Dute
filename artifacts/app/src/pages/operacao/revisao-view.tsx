@@ -218,7 +218,7 @@ function OsDaVez({
             <span className={cn(selo, COR_DO_STATUS[ficha.status])}>{ROTULO_DO_STATUS[ficha.status]}</span>
           </div>
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-            <Link href={hrefDaDemanda(ficha.demanda)} className="rounded font-medium text-primary underline-offset-4 hover:underline">
+            <Link href={hrefDaDemanda(ficha.demanda)} className="rounded font-medium text-primary-texto underline-offset-4 hover:underline">
               Demanda {ficha.demanda}
             </Link>
             {subtitulo.map((parte) => (
@@ -252,7 +252,7 @@ function OsDaVez({
               </span>
             ))}
             {fotos.length > FOTOS_NO_RESUMO ? (
-              <Link href={hrefDaFichaDaOs(ficha.numero)} className="px-1 text-sm font-semibold text-primary hover:underline">
+              <Link href={hrefDaFichaDaOs(ficha.numero)} className="px-1 text-sm font-semibold text-primary-texto hover:underline">
                 +{fotos.length - FOTOS_NO_RESUMO}
               </Link>
             ) : null}
@@ -283,7 +283,7 @@ function OsDaVez({
       <Cartao
         titulo="Itens · executado e saldo"
         acao={
-          <Link href={hrefDaDemanda(ficha.demanda)} className="text-sm font-medium text-primary hover:underline">
+          <Link href={hrefDaDemanda(ficha.demanda)} className="text-sm font-medium text-primary-texto hover:underline">
             Escopo da demanda {ficha.demanda}
           </Link>
         }

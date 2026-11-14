@@ -146,7 +146,7 @@ function ErrorsPanel({ infra }: { infra: SystemInfra }) {
           </ul>
           {hidden > 0 ? (
             <div className="border-t border-border/40 px-5 py-2.5 text-right text-xs">
-              <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary hover:underline">
+              <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary-texto hover:underline">
                 {showAll ? "mostrar só os 5 mais recentes" : `ver todos (${errors.groups.length})`}
               </button>
             </div>
@@ -231,7 +231,7 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
         <span>
           {functions.ok} ok{functions.last_deploy_at ? ` · último deploy ${dayTime.format(new Date(functions.last_deploy_at))}` : ""}
         </span>
-        <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary hover:underline">
+        <button type="button" onClick={() => setShowAll(!showAll)} className="font-semibold text-primary-texto hover:underline">
           {showAll ? "só as com problema" : "ver todas"}
         </button>
       </div>
@@ -242,7 +242,7 @@ function FunctionsPanel({ infra }: { infra: SystemInfra }) {
 function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInfra; agentMonthCost: number | null; onConfigure: () => void }) {
   const billing = infra.billing;
   const configure = (
-    <button type="button" onClick={onConfigure} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+    <button type="button" onClick={onConfigure} className="flex items-center gap-1.5 text-sm font-medium text-primary-texto hover:underline">
       <Settings2 className="h-4 w-4" aria-hidden="true" /> Tabela
     </button>
   );
@@ -251,7 +251,7 @@ function BillingPanel({ infra, agentMonthCost, onConfigure }: { infra: SystemInf
       <Panel title="Custo real do Google Cloud">
         <div className="flex flex-col gap-2 px-5 py-4 text-sm">
           <p>Mostra o valor cobrado no mês, por serviço, a partir da exportação do faturamento para o BigQuery.</p>
-          <button type="button" onClick={onConfigure} className="self-start font-semibold text-primary hover:underline">
+          <button type="button" onClick={onConfigure} className="self-start font-semibold text-primary-texto hover:underline">
             Informar a tabela do faturamento
           </button>
         </div>
@@ -389,7 +389,7 @@ export function InfraSection({ agentMonthCost }: { agentMonthCost: number | null
           <BotaoDeAcao
             variant="ghost"
             size="sm"
-            className="font-semibold text-primary hover:bg-transparent hover:underline active:bg-transparent max-md:min-h-11"
+            className="font-semibold text-primary-texto hover:bg-transparent hover:underline active:bg-transparent max-md:min-h-11"
             icone={<RefreshCw aria-hidden="true" />}
             estado={verificando ? "andamento" : "repouso"}
             bloqueado={!verificando && infra.isLoading}

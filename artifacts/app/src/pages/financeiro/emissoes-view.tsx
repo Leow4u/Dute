@@ -41,6 +41,15 @@ import { cn } from "@/lib/utils";
 
 export type EstadoDasEmissoes = "carregando" | "erro" | "pronto";
 
+/** A lista lida cuja releitura o servidor recusou. */
+export type ListaRecusada = "emissoes" | "baixas" | "as-duas";
+
+const FRASE_DA_RECUSA: Record<ListaRecusada, string> = {
+  emissoes: "Não foi possível atualizar as emissões.",
+  baixas: "Não foi possível atualizar as baixas.",
+  "as-duas": "Não foi possível atualizar as emissões e as baixas.",
+};
+
 export type AcoesDasEmissoes = {
   pedir: (id: string, acao: AcaoDaEmissao) => void;
   confirmarDesistencia: () => void;
@@ -54,9 +63,10 @@ export type EmissoesViewProps = {
   estado: EstadoDasEmissoes;
   /**
    * O servidor recusou a releitura de uma das listas já lidas: elas ficam, e a frase fica escrita em cima, sem falar,
-   * com "Tentar de novo". A falta de conexão da outra é a faixa, e as duas ficam (parte 13m).
+   * com "Tentar de novo". A falta de conexão da outra é a faixa, e as duas ficam (parte 13m). A frase diz qual lista o
+   * servidor recusou (`true` vale as emissões; revisão da parte 13m).
    */
-  falhaNaReleitura?: boolean;
+  falhaNaReleitura?: boolean | ListaRecusada;
   emissoes: readonly EmissaoDoFinanceiro[];
   baixas: readonly BaixaDoFinanceiro[];
   /** A emissão com a desistência aberta para confirmar. */
@@ -311,7 +321,7 @@ export function EmissoesView(props: EmissoesViewProps) {
       {estado === "pronto" ? <FaixaAoVivo leitura={leitura} /> : null}
       {estado === "pronto" && props.falhaNaReleitura ? (
         <FalhaNaSecao
-          mensagem="Não foi possível atualizar as emissões."
+          mensagem={FRASE_DA_RECUSA[props.falhaNaReleitura === true ? "emissoes" : props.falhaNaReleitura]}
           alerta={false}
           tentando={leitura.tentando}
           onTentar={leitura.tentar}

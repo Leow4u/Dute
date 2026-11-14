@@ -208,7 +208,7 @@ export function ShipmentDraftCard({ draft, messageId, sent: sentValue }: { draft
             saveDraft(next);
             navigate(draftHref(next));
           }}
-          className="text-sm font-medium text-primary hover:underline"
+          className="text-sm font-medium text-primary-texto hover:underline"
         >
           Abrir na tela Envios
         </button>

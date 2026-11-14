@@ -112,7 +112,7 @@ function Local({ ficha }: { ficha: FichaDaOs }) {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Abrir no Maps: ${local.rotulo}`}
-                  className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                  className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-semibold text-primary-texto underline-offset-4 hover:underline"
                 >
                   Abrir no Maps
                 </a>
@@ -278,7 +278,7 @@ function Itens({
                 </span>
               </div>
               {emExecucao && cheio && item.previsto > 0 ? (
-                <button type="button" onClick={() => onIncluir(item.id)} className="self-end rounded text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                <button type="button" onClick={() => onIncluir(item.id)} className="self-end rounded text-sm font-semibold text-primary-texto underline-offset-4 hover:underline">
                   Além do planejado · Incluir
                 </button>
               ) : null}

@@ -416,6 +416,17 @@ describe("o primário como texto (parte 13m)", () => {
     expect(lista(TRECHOS.filter((trecho) => arquivoDo(trecho).startsWith("pages/client/") && TEXTO_DO_PRIMARIO.test(trecho.texto)))).toEqual([]);
   });
 
+  /**
+   * Revisão da parte 13m: o link em `text-primary` seguia abaixo de 4,5:1 fora do portal e dos selos (o "Ver
+   * histórico completo de pedidos" de Pedidos, 4,21:1 no fundo da v3 clara; os links dos rascunhos do Agent Dute no
+   * portal escuro, 4,27:1, e na v3 clara, 4,40:1; os links da Operação e do campo). Todo link do primário (o texto com
+   * o sublinhado), também o `variant="link"` do botão, escreve com o `text-primary-texto`.
+   */
+  it("o link do primário (o texto com o sublinhado) escreve com o text-primary-texto, em todo o app", () => {
+    const LINK = /(?:^|\s)(?:hover:)?underline(?:-offset-\d+)?(?:\s|$)/;
+    expect(lista(TRECHOS.filter((trecho) => TEXTO_DO_PRIMARIO.test(trecho.texto) && LINK.test(trecho.texto)))).toEqual([]);
+  });
+
   it("o link de volta das folhas do WMS (o romaneio, a lista e as etiquetas) usa o text-primary-texto", () => {
     const folhas = new Set(["pages/pedidos-romaneio-view.tsx", "pages/pedidos-lista-view.tsx", "pages/warehouse-labels.tsx"]);
     expect(lista(TRECHOS.filter((trecho) => folhas.has(arquivoDo(trecho)) && TEXTO_DO_PRIMARIO.test(trecho.texto)))).toEqual([]);

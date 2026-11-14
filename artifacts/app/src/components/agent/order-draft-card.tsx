@@ -90,7 +90,7 @@ export function SentNotice({
         {at && !Number.isNaN(at.getTime()) ? <span className="text-xs text-muted-foreground">em {sentFormat.format(at)}</span> : null}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-      <Link href={href} className="mt-1.5 inline-block text-sm font-medium text-primary hover:underline">
+      <Link href={href} className="mt-1.5 inline-block text-sm font-medium text-primary-texto hover:underline">
         {linkLabel} ›
       </Link>
     </section>
@@ -285,7 +285,7 @@ export function OrderDraftCard({ draft, messageId, sent: sentValue }: { draft: O
             saveDraft(next);
             navigate(draftHref(next));
           }}
-          className="text-sm font-medium text-primary hover:underline"
+          className="text-sm font-medium text-primary-texto hover:underline"
         >
           Abrir no Estoque para adicionar itens
         </button>

@@ -869,7 +869,7 @@ export default function Pedidos() {
               <OrderRow key={order.key} order={order} icon={Check} tone="done" />
             ))}
           </QueueGroup>
-          <Link href="/orders" className="px-1 text-sm text-primary hover:underline">
+          <Link href="/orders" className="px-1 text-sm text-primary-texto hover:underline">
             Ver histórico completo de pedidos
           </Link>
         </div>

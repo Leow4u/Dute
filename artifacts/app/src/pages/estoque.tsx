@@ -993,7 +993,7 @@ export function ItemCard({
               <span>
                 {numberFormatter.format(item.reserved)} un. em pedidos abertos
               </span>
-              <Link href="/pedidos" className="font-medium text-primary hover:underline">
+              <Link href="/pedidos" className="font-medium text-primary-texto hover:underline">
                 Ver pedidos
               </Link>
             </div>

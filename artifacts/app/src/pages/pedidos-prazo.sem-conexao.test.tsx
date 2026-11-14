@@ -187,7 +187,7 @@ describe("o destino da lista de separação que não chegou (revisão da parte 1
     estado.faltas[DESTINO] = { erro: true, falta: "conexao", lidaEm: null };
     await montar("sem-conexao", "lista");
     const textos = textosDaTela(container.innerHTML);
-    expect(textos).toEqual(expect.arrayContaining(["Sem conexão.", "Tentar de novo", "Não foi possível carregar o destino do pedido."]));
+    expect(textos).toEqual(expect.arrayContaining(["Sem conexão.", "Tentar de novo", "Não foi possível carregar o destino e o prazo do pedido."]));
     expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
     expect(await tentarDeNovo()).toContain(DESTINO);
   });
@@ -195,7 +195,7 @@ describe("o destino da lista de separação que não chegou (revisão da parte 1
   it("o servidor que recusa o destino: a frase, como antes", async () => {
     estado.faltas[DESTINO] = { erro: true, falta: "servidor", lidaEm: null };
     await montar("conectado", "lista");
-    expect(textosDaTela(container.innerHTML)).toContain("Não foi possível carregar o destino do pedido.");
+    expect(textosDaTela(container.innerHTML)).toContain("Não foi possível carregar o destino e o prazo do pedido.");
     expect(container.textContent).not.toMatch(/Sem conexão|Reconectando/);
   });
 });
@@ -235,5 +235,98 @@ describe("a folha impressa com o prazo ou o destino que não chegou (parte 13m)"
   it("com o prazo lido, a folha diz o prazo", async () => {
     await montar("conectado", "romaneio");
     expect(campo("Para quando")).toBe("Seg 16/11/2026 11:36");
+  });
+});
+
+/**
+ * A revisão da parte 13m. A frase da lista dizia só o destino, e o papel, o
+ * destino e o prazo: agora as duas dizem as mesmas faltas. A recusa do
+ * servidor, que não volta sozinha, ficava sem saída no romaneio e na lista:
+ * agora a frase tem o "Tentar de novo", que assina de novo o que não chegou
+ * (sem conexão, o "Tentar de novo" é o do aviso da conexão, logo acima). A
+ * frase sai no âmbar da faixa (o --carregando-aviso). E a folha da lista sem
+ * as caixas e sem a ordem das prateleiras diz isso no papel.
+ */
+describe("a frase da leitura de apoio do romaneio e da lista (revisão da parte 13m)", () => {
+  const frase = (texto: string) => [...container.querySelectorAll("p")].find((paragrafo) => paragrafo.textContent === texto) ?? null;
+  const tentarDaFrase = (texto: string) => frase(texto)?.closest("[data-falha-na-secao]")?.querySelector("button") ?? null;
+
+  it("a lista: a tela diz o destino e o prazo, como o papel", async () => {
+    estado.faltas[DESTINO] = { erro: true, falta: "servidor", lidaEm: null };
+    await montar("conectado", "lista");
+    expect(frase("Não foi possível carregar o destino e o prazo do pedido.")).not.toBeNull();
+    expect(textosDaTela(container.innerHTML)).not.toContain("Não foi possível carregar o destino do pedido.");
+  });
+
+  it("o romaneio com o prazo recusado: o Tentar de novo da frase assina o prazo de novo", async () => {
+    estado.faltas[PRAZO] = { erro: true, falta: "servidor", lidaEm: null };
+    await montar("conectado", "romaneio");
+    const botao = tentarDaFrase("Não foi possível carregar o prazo do pedido.");
+    expect(botao?.textContent).toBe("Tentar de novo");
+    estado.tentativas = [];
+    await act(async () => botao!.click());
+    await vi.waitFor(() => expect(estado.tentativas).toContain(PRAZO), { timeout: 3_000 });
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+  });
+
+  it("a lista com o destino recusado: o Tentar de novo da frase assina o destino de novo", async () => {
+    estado.faltas[DESTINO] = { erro: true, falta: "servidor", lidaEm: null };
+    await montar("conectado", "lista");
+    const botao = tentarDaFrase("Não foi possível carregar o destino e o prazo do pedido.");
+    expect(botao?.textContent).toBe("Tentar de novo");
+    estado.tentativas = [];
+    await act(async () => botao!.click());
+    await vi.waitFor(() => expect(estado.tentativas).toContain(DESTINO), { timeout: 3_000 });
+    expect(await violacoesDeAcessibilidade(container.innerHTML)).toEqual([]);
+  });
+
+  it("sem conexão, a frase não repete o Tentar de novo: é o do aviso da conexão", async () => {
+    estado.faltas[PRAZO] = { erro: true, falta: "conexao", lidaEm: null };
+    await montar("sem-conexao", "romaneio");
+    expect(frase("Não foi possível carregar o prazo do pedido.")).not.toBeNull();
+    expect(tentarDaFrase("Não foi possível carregar o prazo do pedido.")).toBeNull();
+    expect([...container.querySelectorAll("button")].filter((botao) => botao.textContent === "Tentar de novo")).toHaveLength(1);
+  });
+
+  for (const [falta, conexao] of [
+    ["servidor", "conectado"],
+    ["conexao", "sem-conexao"],
+  ] as const) {
+    it(`a frase sai no âmbar da faixa, e não em outro âmbar mais fraco (${falta})`, async () => {
+      estado.faltas[PRAZO] = { erro: true, falta, lidaEm: null };
+      await montar(conexao, "romaneio");
+      const paragrafo = frase("Não foi possível carregar o prazo do pedido.")!;
+      expect(paragrafo.className).toContain("text-carregando-aviso");
+      expect(paragrafo.className).not.toContain("text-warning-soft-foreground");
+    });
+  }
+
+  it("a lista sem as caixas e sem a ordem das prateleiras: o papel diz, na coluna e no cabeçalho", async () => {
+    const comItens = {
+      ...FILA,
+      queues: {
+        picking: {
+          ...FILA.queues.picking,
+          tasks: [{ ...FILA.queues.picking.tasks[0], items: [{ id: "pli_1", line_number: 1, sku_code: "BTG-000206", product_name: "Copo Beercup em Inox", quantity: 4, expected_quantity: 4, location: "B-03" }] }],
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (entrada: RequestInfo | URL) => {
+        const caminho = new URL(String(entrada), "http://localhost").pathname;
+        if (caminho === "/api/warehouse/ops") return new Response(JSON.stringify(comItens), { status: 200, headers: { "content-type": "application/json" } });
+        if (caminho === "/api/warehouse/boxes" || caminho === "/api/warehouse/positions") return new Response(JSON.stringify({ error: "Falha" }), { status: 500, headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    await montar("conectado", "lista");
+    await vi.waitFor(() => expect(container.querySelector(".print-area")).not.toBeNull(), { timeout: 3_000 });
+    const papel = container.querySelector(".print-area")!;
+    await vi.waitFor(() => expect(papel.textContent).toContain("caixa não carregada"), { timeout: 3_000 });
+    const rotulo = [...papel.querySelectorAll("span")].find((elemento) => elemento.textContent === "Ordem das prateleiras");
+    expect(rotulo?.nextElementSibling?.textContent).toBe("não carregada");
+    // A tela diz as duas, cada uma com a saída.
+    for (const texto of ["Não foi possível carregar a ordem das prateleiras.", "Não foi possível carregar as caixas."]) expect(tentarDaFrase(texto)?.textContent).toBe("Tentar de novo");
   });
 });

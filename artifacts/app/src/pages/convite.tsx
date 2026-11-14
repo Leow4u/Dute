@@ -205,7 +205,7 @@ export function ConviteView({
             bloqueado={travado && !enviando}
             onClick={acoes.reenviar}
           />
-          <button type="button" className="w-full text-sm font-medium text-primary hover:underline" onClick={acoes.sair}>
+          <button type="button" className="w-full text-sm font-medium text-primary-texto hover:underline" onClick={acoes.sair}>
             Sair
           </button>
         </div>
@@ -281,7 +281,7 @@ export function ConviteView({
           bloqueado={Boolean(firebaseConfigError)}
         />
       </form>
-      <button type="button" className="mt-4 w-full text-sm font-medium text-primary hover:underline" onClick={acoes.jaTenhoConta}>
+      <button type="button" className="mt-4 w-full text-sm font-medium text-primary-texto hover:underline" onClick={acoes.jaTenhoConta}>
         Já tenho conta
       </button>
       </TrocaDeTela>

@@ -16,6 +16,8 @@ import {
   type VolumeDoPedido,
 } from "@/lib/warehouse-ops/volumes-do-pedido";
 
+import { FraseDoApoio, type ApoioQueNaoChegou } from "./pedidos-separar-view";
+
 /**
  * O pedido separado (separação com caixas, parte 4d;
  * docs/mockups/WmsSepararConcluido.dc.html): depois de "Confirmar separação",
@@ -46,6 +48,7 @@ export function PedidoSeparadoView({
   vazias = [],
   onTentar,
   leitura,
+  apoio,
 }: {
   /** "PED-0001" */
   numero: string;
@@ -68,11 +71,16 @@ export function PedidoSeparadoView({
   onTentar?: () => Promise<unknown>;
   /** O que falta às leituras dos volumes (parte 13l): a conexão, com a hora do que ficou na tela, ou o servidor. */
   leitura?: LeituraAoVivoNaTela;
+  /**
+   * A leitura de apoio que não chegou (as caixas, que dão as etiquetas para trocar e as vazias, e o prazo): a frase,
+   * com o "Tentar de novo", na coluna do lado, como na bancada (revisão da parte 13m).
+   */
+  apoio?: ApoioQueNaoChegou | null;
 }) {
   const [todos, setTodos] = useState(false);
   const visiveis = todos ? volumes : volumes.slice(0, VOLUMES_A_VISTA);
   const comVolumes = estado === "pronto" && volumes.length > 0;
-  const comLateral = etiquetas.length > 0 || vazias.length > 0;
+  const comLateral = etiquetas.length > 0 || vazias.length > 0 || Boolean(apoio);
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-24">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -222,6 +230,7 @@ export function PedidoSeparadoView({
                 </ul>
               </section>
             ) : null}
+            {apoio ? <FraseDoApoio apoio={apoio} /> : null}
           </div>
         ) : null}
       </div>

@@ -10,6 +10,7 @@ import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { faltaDaConsulta, useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { juntarTentativas, novaTentativaDe, useDocumento } from "@/lib/operacao/leitura";
 import { folhaDaLista, pedidoDaBusca } from "@/lib/warehouse-ops/lista-de-separacao";
+import { fraseDoQueNaoChegou } from "@/lib/warehouse-ops/o-que-nao-chegou";
 import { fetchJson, type WarehouseOpsResponse, type WarehouseTaskItem } from "@/lib/warehouse-ops/model";
 import { groupWarehouseOrders } from "@/lib/warehouse-ops/orders";
 import { useLeituraDaLista } from "@/lib/warehouse-ops/use-lista-de-separacao";
@@ -75,6 +76,9 @@ export default function PaginaPedidosLista() {
           paraQuando: solicitacao.item?.paraQuando,
           // O destino e o prazo que não chegaram: o papel diz, nos campos, em vez do traço (parte 13m).
           solicitacaoNaoCarregada: Boolean(solicitacaoId) && solicitacao.erro,
+          // A caixa e a ordem das prateleiras que não chegaram também (revisão da parte 13m).
+          caixasNaoCarregadas: lista.semCaixas,
+          ordemNaoCarregada: lista.semPosicoes,
           por: user?.fullName,
           agora,
           grupos: lista.grupos,
@@ -83,8 +87,9 @@ export default function PaginaPedidosLista() {
   const avisos = [
     lista.semPosicoes ? "Não foi possível carregar a ordem das prateleiras." : null,
     lista.semCaixas ? "Não foi possível carregar as caixas." : null,
-    // A frase diz o que falta, em qualquer falta; sem conexão, o aviso da conexão diz por quê (revisão da parte 13l).
-    solicitacao.erro ? "Não foi possível carregar o destino do pedido." : null,
+    // A frase diz o que falta, em qualquer falta; sem conexão, o aviso da conexão diz por quê (revisão da parte 13l). O
+    // destino e o prazo, como o papel (revisão da parte 13m).
+    solicitacao.erro ? fraseDoQueNaoChegou(["o destino", "o prazo do pedido"]) : null,
   ].filter((aviso): aviso is string => Boolean(aviso));
   // "Tentar de novo" (na demora, na desistência e na falha, e no aviso da conexão): lê do zero a fila, as prateleiras e
   // as caixas que ainda leem (o react-query não recomeça a leitura presa sem dado), e assina de novo a solicitação que

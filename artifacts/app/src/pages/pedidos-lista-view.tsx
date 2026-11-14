@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { BlocoSemConexao, FaixaAoVivo, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
+import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListaDeSeparacaoDocumento } from "@/features/warehouse-ops/lista-de-separacao-documento";
 import type { FolhaDaLista } from "@/lib/warehouse-ops/lista-de-separacao";
@@ -82,11 +83,25 @@ export function PedidosListaView({
           {leitura?.falta === "conexao" && leitura.lidaEm == null ? (
             <BlocoSemConexao tentando={leitura.tentando} onTentar={() => leitura.tentar()} className="no-print" />
           ) : null}
-          {avisos.map((aviso) => (
-            <p key={aviso} role="alert" className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-warning-soft-foreground">
-              {aviso}
-            </p>
-          ))}
+          {/* A frase do que não chegou, no âmbar da faixa. A recusa do servidor não volta sozinha: a frase tem o "Tentar de
+              novo", que assina de novo o que não chegou; sem conexão, o "Tentar de novo" é o do aviso da conexão, logo
+              acima (revisão da parte 13m). */}
+          {avisos.map((aviso) =>
+            onTentar && leitura?.falta !== "conexao" ? (
+              <FalhaNaSecao
+                key={aviso}
+                mensagem={aviso}
+                tom="aviso"
+                tentando={leitura?.tentando ?? false}
+                onTentar={onTentar}
+                className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3"
+              />
+            ) : (
+              <p key={aviso} role="alert" className="no-print rounded-lg border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm font-semibold text-carregando-aviso">
+                {aviso}
+              </p>
+            ),
+          )}
           {/* A folha tem a largura do A4; no celular, a caixa rola para o lado em vez de espremer a tabela, e recebe o foco
               do teclado para rolar (scrollable-region-focusable; parte 13m, como no romaneio). */}
           <div

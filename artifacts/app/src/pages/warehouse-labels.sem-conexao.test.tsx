@@ -144,9 +144,11 @@ describe("Estoque › Etiquetas dos volumes, nos estados da falta", () => {
       act(() => raiz.render(<></>));
       estado.faltas = { "packages:ord_1": { ...falta } };
       const html = await abrirNa(conexao);
-      // Sem os volumes, a página mostra o que já mostrava antes da parte: o caminho de volta e a contagem vazia.
-      const daPaginaSemVolumes = (texto: string) => texto === "Pedidos" || texto === "0 etiquetas · 0 folhas";
+      // Sem o pedido lido, o caminho de volta diz "Pedidos". A contagem só com os volumes lidos: os que não chegaram não
+      // viram "0 etiquetas · 0 folhas" ao lado do aviso (revisão da parte 13m).
+      const daPaginaSemVolumes = (texto: string) => texto === "Pedidos";
       expect(textosDaTela(html).filter((texto) => !emDia.has(texto) && !daPaginaSemVolumes(texto))).toEqual(novos);
+      if (falta.erro) expect(container.querySelector("#etiquetas-resumo")?.textContent).toBe("");
       // Só o erro do servidor é alerta: a falta de conexão não fala (momento 8).
       expect(container.querySelectorAll('[role="alert"]').length).toBe(falta.falta === "servidor" ? 1 : 0);
       expect(await violacoesDeAcessibilidade(html)).toEqual([]);

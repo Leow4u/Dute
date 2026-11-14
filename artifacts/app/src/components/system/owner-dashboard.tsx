@@ -182,7 +182,7 @@ export function OwnerDashboard() {
       {!usage.priced ? (
         <p className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm">
           <span>Para ver o custo em reais, informe o preço do modelo (R$ por milhão de tokens).</span>
-          <button type="button" onClick={() => setEditingCosts(true)} className="font-semibold text-primary hover:underline">
+          <button type="button" onClick={() => setEditingCosts(true)} className="font-semibold text-primary-texto hover:underline">
             Informar preços
           </button>
         </p>
@@ -209,7 +209,7 @@ export function OwnerDashboard() {
           title="Custo do Agent Dute no mês"
           note="estimado pelo consumo"
           action={
-            <button type="button" onClick={() => setEditingCosts(true)} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+            <button type="button" onClick={() => setEditingCosts(true)} className="flex items-center gap-1.5 text-sm font-medium text-primary-texto hover:underline">
               <Settings2 className="h-4 w-4" aria-hidden="true" /> Preços e orçamento
             </button>
           }

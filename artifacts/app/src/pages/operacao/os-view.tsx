@@ -116,7 +116,7 @@ function Locais({ ficha }: { ficha: FichaDaOs }) {
       titulo="Locais"
       acao={
         maps ? (
-          <a href={maps} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded text-sm font-medium text-primary underline-offset-4 hover:underline">
+          <a href={maps} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded text-sm font-medium text-primary-texto underline-offset-4 hover:underline">
             Abrir no Maps
             <ExternalLink aria-hidden="true" className="size-3.5" />
           </a>
@@ -186,7 +186,7 @@ function Itens({ ficha }: { ficha: FichaDaOs }) {
     <Cartao
       titulo="Itens"
       acao={
-        <Link href={hrefDaDemanda(ficha.demanda)} className="rounded text-sm font-medium text-primary underline-offset-4 hover:underline">
+        <Link href={hrefDaDemanda(ficha.demanda)} className="rounded text-sm font-medium text-primary-texto underline-offset-4 hover:underline">
           Escopo e saldo da demanda {ficha.demanda}
         </Link>
       }
@@ -507,7 +507,7 @@ export function OsView({
             {cabecalho.tipo ? <SeloDoTipo tipo={cabecalho.tipo} /> : null}
           </div>
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-            <Link href={hrefDaDemanda(ficha.demanda)} className="rounded font-medium text-primary underline-offset-4 hover:underline">
+            <Link href={hrefDaDemanda(ficha.demanda)} className="rounded font-medium text-primary-texto underline-offset-4 hover:underline">
               Demanda {ficha.demanda}
             </Link>
             <span aria-hidden="true">·</span>

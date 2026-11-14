@@ -55,7 +55,10 @@ export function FalhaNaSecao({
   /** Relê. A promessa devolvida (o `refetch`) diz quando a tentativa pedida acabou. */
   onTentar: () => unknown;
   className?: string;
-  /** "aviso": a frase no tom do aviso âmbar onde ela mora (a fonte do Início que não carregou). */
+  /**
+   * "aviso": a frase no âmbar do aviso onde ela mora (a fonte do Início que não carregou, a leitura de apoio da bancada),
+   * a tinta da faixa da conexão (o --carregando-aviso, 6,2:1 no âmbar suave; revisão da parte 13m).
+   */
   tom?: "erro" | "aviso";
   /** A frase é falada ao entrar; `false` com o que já estava lido na tela. */
   alerta?: boolean;
@@ -88,7 +91,7 @@ export function FalhaNaSecao({
   }, []);
   return (
     <div ref={raiz} data-falha-na-secao="" className={cn("flex flex-wrap items-center gap-3", className)}>
-      <p role={alerta ? "alert" : undefined} className={cn("text-sm font-semibold", tom === "aviso" ? "text-warning-soft-foreground" : "text-destructive")}>
+      <p role={alerta ? "alert" : undefined} className={cn("text-sm font-semibold", tom === "aviso" ? "text-carregando-aviso" : "text-destructive")}>
         {mensagem}
       </p>
       <Button
