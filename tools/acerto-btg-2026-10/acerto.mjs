@@ -290,6 +290,66 @@ async function linhasAbertura({ caixa: box, sku }) {
     .map((d) => ({ id: d.id, ref: d.ref, data: d.data() }))
     .filter((r) => doCliente(r.data) && linhaViva(r.data) && (!sku || text(r.data.sku_code) === sku));
 }
+// A caixa na separação (separação com caixas, parte 3): o conteúdo do Receber mora na caixa (`lines`), o da abertura
+// nas linhas da sessão, e o que as separações tiraram fica na caixa (`taken_lines`, `taken_units`).
+const linhasDaCaixa = (data) => (Array.isArray(data?.lines) ? data.lines : []);
+function retiradoDe(data, skuCode) {
+  return (Array.isArray(data?.taken_lines) ? data.taken_lines : []).filter((t) => text(t?.sku_code) === skuCode).reduce((s, t) => s + num(t.qty), 0);
+}
+/** O retirado depois de somar (ou, com delta negativo, devolver) um SKU, sem as linhas zeradas (retiradoCom do WMS). */
+function retiradoCom(linhas, skuCode, delta) {
+  const soma = new Map();
+  for (const t of Array.isArray(linhas) ? linhas : []) {
+    const sku = text(t?.sku_code);
+    if (sku && num(t.qty) > 0) soma.set(sku, (soma.get(sku) ?? 0) + num(t.qty));
+  }
+  const novo = (soma.get(skuCode) ?? 0) + delta;
+  if (novo > 0) soma.set(skuCode, novo);
+  else soma.delete(skuCode);
+  return [...soma].map(([sku_code, qty]) => ({ sku_code, qty }));
+}
+function retiradoGravado(linhas, agora) {
+  return linhas.length
+    ? { taken_lines: linhas, taken_units: linhas.reduce((s, l) => s + l.qty, 0), balance_at: agora }
+    : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete() };
+}
+async function entradaNaCaixa(box, skuCode) {
+  const proprias = linhasDaCaixa(box.data);
+  if (proprias.length) return proprias.filter((l) => text(l?.sku_code) === skuCode).reduce((s, l) => s + num(l.counted_qty), 0);
+  return (await linhasAbertura({ caixa: box.id })).filter((l) => text(l.data.sku_code) === skuCode).reduce((s, l) => s + num(l.data.counted_qty), 0);
+}
+/**
+ * A caixa de que a separação já tirou tudo o que ela tem sai da prateleira, como a separação faz (pick-progress.ts):
+ * status emptied, com quando, quem e o pedido (`op.pedido`). O Mapa, "Posições ocupadas" e o encaixe só olham a guardada.
+ */
+function camposDaVazia(op, agora) {
+  return compact({
+    status: "emptied",
+    emptied_at: agora,
+    emptied_by: { uid: ATOR.uid, role: ATOR.role, name: ATOR.name },
+    emptied_whole: false,
+    emptied_order_number: text(op.pedido) || undefined,
+    emptied_by_acerto: op.id,
+  });
+}
+/**
+ * O retirado que as operações mover_retirado do plano, ainda não gravadas, vão tirar (negativo) ou pôr (positivo)
+ * numa caixa: a leitura de uma baixa conta com ele, porque a aplicação grava na ordem do plano.
+ */
+async function retiradoQueOPlanoMove(caixaCode, skuCode) {
+  let delta = 0;
+  for (const bloco of BLOCOS) {
+    for (const outra of bloco.ops) {
+      if (outra.tipo !== "mover_retirado" || outra.pendente) continue;
+      if (await reciboExiste(idReciboDireto(outra))) continue;
+      const sku = await skuPorCodigo(outra.codigo, { incluirArquivados: true });
+      if (!sku || sku.id !== skuCode) continue;
+      if (text(outra.de).toUpperCase() === caixaCode) delta -= num(outra.qtde);
+      if (text(outra.para).toUpperCase() === caixaCode) delta += num(outra.qtde);
+    }
+  }
+  return delta;
+}
 const cinvRef = (skuCode) => db.collection("client_inventory").doc(safeDocId(`cinv_${CLIENTE}__${skuCode}`));
 async function cinv(skuCode) {
   const snap = await cinvRef(skuCode).get();
@@ -950,17 +1010,23 @@ const OPS = {
       const itens = [];
       const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · status ${text(box.data.status) || "?"} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}${parcial ? ` · baixa parcial de ${alvos.length} item(ns)` : ""}`];
       const previsto = [];
-      // O que as separações já tiraram da caixa, por SKU (separação com caixas, parte 3): a linha não fica com menos que isso.
+      // O que as separações já tiraram da caixa, por SKU (separação com caixas, parte 3), com o que um mover_retirado do
+      // plano ainda vai tirar ou pôr: a linha não fica com menos que isso.
       const retirado = new Map();
       for (const t of Array.isArray(box?.data.taken_lines) ? box.data.taken_lines : []) {
         const sku = text(t?.sku_code);
         if (sku) retirado.set(sku, (retirado.get(sku) ?? 0) + num(t.qty));
       }
+      let tiradoDaCaixa = num(box?.data.taken_units);
+      let baixado = 0;
       for (const { linha, qtde } of alvos) {
         const skuCode = text(linha.data.sku_code);
         const posicao = text(linha.data.location_id || box?.data.location_id).toUpperCase();
         const naLinha = num(linha.data.counted_qty);
-        const tirado = retirado.get(skuCode) ?? 0;
+        const movido = box ? await retiradoQueOPlanoMove(box.id, skuCode) : 0;
+        const tirado = (retirado.get(skuCode) ?? 0) + movido;
+        tiradoDaCaixa += movido;
+        baixado += qtde;
         if (naLinha - qtde < tirado) {
           throw new Erro(`a separação já tirou ${fmt(tirado)} de ${skuCode} da caixa ${op.caixa}; a linha não pode ficar com ${fmt(naLinha - qtde)}. Confira de qual caixa a separação tirou de verdade antes de baixar`);
         }
@@ -969,10 +1035,15 @@ const OPS = {
         const disponivel = alvo ? num(alvo.data.qty_on_hand) - num(alvo.data.qty_reserved) : 0;
         const saida = await reciboExiste(idReciboMovimento(chave(op, linha.id)));
         if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a baixa pede ${fmt(qtde)}${alvo && num(alvo.data.qty_reserved) ? ` (reservado ${fmt(num(alvo.data.qty_reserved))}: a reserva do pedido sai antes, na conclusão da separação)` : ""}`);
-        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(naLinha)} em ${posicao}${tirado ? ` · a separação já tirou ${fmt(tirado)} desta caixa` : ""} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
+        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(naLinha)} em ${posicao}${tirado ? ` · a separação já tirou ${fmt(tirado)} desta caixa${movido ? ` (contando o mover_retirado do plano, ${movido > 0 ? "+" : ""}${fmt(movido)})` : ""}` : ""} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
         if (!saida) previsto.push(`SAIDA ${fmt(qtde)} de ${skuCode} em ${posicao}`);
         previsto.push(qtde >= naLinha ? `linha de ${skuCode} (${fmt(naLinha)}) sai do registro da abertura da caixa ${op.caixa}` : `linha de ${skuCode} na caixa ${op.caixa}: ${fmt(naLinha)} → ${fmt(naLinha - qtde)}`);
         itens.push({ linha, skuCode, posicao, qtde, saida, box });
+      }
+      // A caixa de que a separação já tirou tudo o que fica nela sai da prateleira (vazia), como na separação.
+      const sobraNoRegistro = Math.max(0, num(box?.data.unit_count) - baixado);
+      if (box && text(box.data.status) === "stored" && tiradoDaCaixa > 0 && tiradoDaCaixa >= sobraNoRegistro) {
+        previsto.push(`a caixa ${op.caixa} fica com ${fmt(sobraNoRegistro)} no registro, e a separação já tirou ${fmt(tiradoDaCaixa)}: sai da prateleira (vazia${text(op.pedido) ? `, no ${text(op.pedido)}` : ""})`);
       }
       return { estado, previsto, dados: { itens } };
     },
@@ -1027,6 +1098,17 @@ const OPS = {
               mudanca.line_count = Math.max(0, num(dados.line_count) - 1);
               const outraComSku = irmas.docs.some((d) => d.id !== item.linha.id && linhaViva(d.data()) && text(d.data().sku_code) === item.skuCode);
               if (!outraComSku) mudanca.sku_codes = lista(dados.sku_codes, 100).filter((c) => c !== item.skuCode);
+            }
+            // A separação já tirou tudo o que fica no registro: a caixa sai da prateleira (vazia), como na separação.
+            const tirou = num(dados.taken_units);
+            if (text(dados.status) === "stored" && tirou > 0 && tirou >= mudanca.unit_count) {
+              Object.assign(mudanca, camposDaVazia(op, new Date().toISOString()));
+              evento(tx, op, "warehouse.box_emptied", `Caixa ${op.caixa} vazia`, `A separação já tinha tirado tudo o que a caixa tem (${fmt(tirou)} un.)`, "warehouse_box", op.caixa, {
+                caixa: op.caixa,
+                retirado: tirou,
+                no_registro: mudanca.unit_count,
+                pedido: text(op.pedido) || null,
+              });
             }
             tx.update(boxRef, mudanca);
           }
@@ -1436,6 +1518,212 @@ const OPS = {
       });
     },
   },
+
+  mover_retirado: {
+    // O que a separação tirou de uma caixa, no registro, passa para outra da mesma prateleira: a linha do pedido baixou
+    // da caixa mais antiga que tinha o item no registro, e na prateleira as peças saíram de outra (o M 1 que a quarta
+    // rodada pôs na CX-000138 e que nunca existiu). Muda o retirado das duas caixas e, com `pedido`, as caixas da linha
+    // do pedido. Saldo e reserva não mudam.
+    async ler(op) {
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: ["retirado já movido"], previsto: [] };
+      if (!op.de || !op.para || !op.codigo || !(num(op.qtde) > 0)) throw new Erro("informe de, para, codigo e qtde");
+      const sku = await skuPorCodigo(op.codigo, { incluirArquivados: true });
+      if (!sku) throw new Erro(await naoEncontrado("SKU", op.codigo));
+      const [de, para] = [await caixa(op.de), await caixa(op.para)];
+      if (!de || !para) throw new Erro(`caixa ${!de ? op.de : op.para} não encontrada`);
+      if (de.posicao !== para.posicao) throw new Erro(`as caixas estão em prateleiras diferentes (${op.de} em ${de.posicao}, ${op.para} em ${para.posicao})`);
+      const qtde = num(op.qtde);
+      const tiradoDe = retiradoDe(de.data, sku.id);
+      if (tiradoDe < qtde) throw new Erro(`a separação tirou ${fmt(tiradoDe)} de ${sku.id} da caixa ${op.de}; não dá para mover ${fmt(qtde)}`);
+      const entrouPara = await entradaNaCaixa(para, sku.id);
+      const tiradoPara = retiradoDe(para.data, sku.id);
+      if (entrouPara - tiradoPara < qtde) throw new Erro(`a caixa ${op.para} tem ${fmt(entrouPara - tiradoPara)} de ${sku.id} por tirar no registro; não cabem ${fmt(qtde)}`);
+      let linha = null;
+      if (op.pedido) {
+        const linhas = (await db.collection("pick_lines").where("sku_code", "==", sku.id).get()).docs
+          .map((d) => ({ id: d.id, ref: d.ref, data: d.data() }))
+          .filter((l) => doCliente(l.data) && text(l.data.order_number) === text(op.pedido) && (Array.isArray(l.data.separated_boxes) ? l.data.separated_boxes : []).some((c) => text(c?.box_code).toUpperCase() === de.id && num(c.qty) >= qtde));
+        if (linhas.length !== 1) throw new Erro(`${linhas.length} linha(s) do ${op.pedido} com ${sku.id} tirando ${fmt(qtde)} da caixa ${op.de}; precisa ser exatamente 1`);
+        linha = linhas[0];
+      }
+      return {
+        estado: [`${sku.id} · ${sku.codCliente} em ${de.posicao}: a separação tirou ${fmt(tiradoDe)} da ${op.de} · a ${op.para} tem ${fmt(entrouPara)} de entrada e ${fmt(tiradoPara)} tirados${linha ? ` · linha ${num(linha.data.line_number)} do ${op.pedido}: ${(linha.data.separated_boxes ?? []).map((c) => `${fmt(num(c.qty))} de ${text(c.box_code)}`).join(", ")}` : ""}`],
+        previsto: [
+          `retirado de ${sku.id}: ${op.de} ${fmt(tiradoDe)} → ${fmt(tiradoDe - qtde)} · ${op.para} ${fmt(tiradoPara)} → ${fmt(tiradoPara + qtde)}`,
+          ...(linha ? [`linha ${num(linha.data.line_number)} do ${op.pedido}: ${fmt(qtde)} passam da ${op.de} para a ${op.para}`] : []),
+        ],
+        dados: { sku, de, para, qtde, linha },
+      };
+    },
+    async gravar(op, L) {
+      const { sku, de, para, qtde, linha } = L.dados;
+      return transacaoDireta(op, "mover_retirado", `${de.id}>${para.id}`, async (tx) => {
+        const [snapDe, snapPara, snapLinha] = await Promise.all([tx.get(de.ref), tx.get(para.ref), linha ? tx.get(linha.ref) : Promise.resolve(null)]);
+        if (retiradoDe(snapDe.data(), sku.id) < qtde) throw new Erro(`o retirado da ${de.id} mudou entre a leitura e a gravação`);
+        const agora = new Date().toISOString();
+        tx.update(de.ref, { ...retiradoGravado(retiradoCom(snapDe.data().taken_lines, sku.id, -qtde), agora), updated_at: ts() });
+        tx.update(para.ref, { ...retiradoGravado(retiradoCom(snapPara.data().taken_lines, sku.id, qtde), agora), updated_at: ts() });
+        if (snapLinha?.exists) {
+          const caixas = new Map();
+          for (const c of Array.isArray(snapLinha.data().separated_boxes) ? snapLinha.data().separated_boxes : []) {
+            const codigo = text(c?.box_code).toUpperCase();
+            if (codigo) caixas.set(codigo, { ...c, box_code: codigo, qty: num(c.qty) });
+          }
+          const daDe = caixas.get(de.id);
+          if (daDe) {
+            if (daDe.qty - qtde > 0) caixas.set(de.id, { ...daDe, qty: daDe.qty - qtde });
+            else caixas.delete(de.id);
+          }
+          const daPara = caixas.get(para.id);
+          caixas.set(para.id, { ...(daPara ?? { box_code: para.id }), qty: (daPara?.qty ?? 0) + qtde });
+          tx.update(linha.ref, {
+            separated_boxes: [...caixas.values()],
+            acerto: { op: op.id, antes: { separated_boxes: snapLinha.data().separated_boxes ?? [] }, at: agora },
+            updated_at: ts(),
+          });
+        }
+        evento(tx, op, "warehouse.box_taken_moved_by_acerto", `Retirado de ${sku.id} da caixa ${de.id} para a ${para.id}`, `${fmt(qtde)} un.${linha ? ` · linha ${num(linha.data.line_number)} do ${op.pedido}` : ""}`, "warehouse_box", de.id, {
+          de: de.id,
+          para: para.id,
+          sku_code: sku.id,
+          qtde,
+          pedido: text(op.pedido) || null,
+        });
+        return { sku: sku.id, de: de.id, para: para.id, qtde };
+      });
+    },
+  },
+
+  corrigir_caixa_recebimento: {
+    // A caixa do Receber com o código errado numa linha, quando as peças certas já estão no saldo: a mesma mercadoria
+    // lançada duas vezes (a AVL-B1FE59A8 repetiu a AVL-0D0E620B, 16/11/2026). A linha da caixa, a da tarefa de guarda
+    // e a da NF passam para o SKU certo SEM movimento: o saldo que sobrou sai por um ajuste do plano. Com `retirado`
+    // ({ qtde, pedido }), a linha do pedido separou essas peças sem caixa, e elas saíram desta: o retirado da caixa e
+    // as caixas da linha dizem isso, e a caixa de que a separação tirou tudo sai da prateleira (vazia).
+    async ler(op) {
+      if (await reciboExiste(idReciboDireto(op))) return { jaAplicado: true, estado: ["caixa já corrigida"], previsto: [] };
+      const box = await caixa(op.caixa);
+      if (!box) throw new Erro(`caixa ${op.caixa} não encontrada`);
+      if (text(box.data.origin?.kind) !== "receipt") throw new Erro(`a caixa ${op.caixa} não veio do Receber`);
+      const de = await skuPorCodigo(op.de, { incluirArquivados: true, estrito: true });
+      const para = await skuPorCodigo(op.para, { estrito: true });
+      if (!de) throw new Erro(await naoEncontrado("SKU", op.de));
+      if (!para) throw new Erro(await naoEncontrado("SKU", op.para));
+      const linhas = linhasDaCaixa(box.data);
+      const comDe = linhas.filter((l) => text(l?.sku_code) === de.id);
+      if (comDe.length !== 1) throw new Erro(`a caixa ${op.caixa} tem ${comDe.length} linha(s) de ${de.id}; precisa ser exatamente 1`);
+      if (linhas.some((l) => text(l?.sku_code) === para.id)) throw new Erro(`a caixa ${op.caixa} já tem linha de ${para.id}; juntar as duas não é desta operação`);
+      if (retiradoDe(box.data, de.id) > 0) throw new Erro(`a separação já tirou ${de.id} da caixa ${op.caixa}`);
+      const naLinha = num(comDe[0].counted_qty);
+      const tamanho = text(para.data.tamanho || para.data.size);
+      let linhaDoPedido = null;
+      const qtdeRetirada = op.retirado ? num(op.retirado.qtde) : 0;
+      if (op.retirado) {
+        if (!(qtdeRetirada > 0) || qtdeRetirada > naLinha) throw new Erro(`retirado de ${fmt(qtdeRetirada)} não cabe na linha de ${fmt(naLinha)}`);
+        const candidatas = (await db.collection("pick_lines").where("sku_code", "==", para.id).get()).docs
+          .map((d) => ({ id: d.id, ref: d.ref, data: d.data() }))
+          .filter((l) => doCliente(l.data) && text(l.data.order_number) === text(op.retirado.pedido) && text(l.data.location_id).toUpperCase() === box.posicao);
+        if (candidatas.length !== 1) throw new Erro(`${candidatas.length} linha(s) do ${op.retirado.pedido} com ${para.id} em ${box.posicao}; precisa ser exatamente 1`);
+        const l = candidatas[0];
+        const separado = num(l.data.qty_picked || l.data.separated_qty);
+        const comCaixa = (Array.isArray(l.data.separated_boxes) ? l.data.separated_boxes : []).reduce((s, c) => s + num(c?.qty), 0);
+        if (separado - comCaixa < qtdeRetirada) throw new Erro(`a linha ${num(l.data.line_number)} do ${op.retirado.pedido} separou ${fmt(separado)}, ${fmt(comCaixa)} já com caixa; não sobram ${fmt(qtdeRetirada)} sem caixa`);
+        linhaDoPedido = l;
+      }
+      const itemId = text(comDe[0].inbound_item_id);
+      const item = itemId ? await db.collection("inbound_items").doc(itemId).get() : null;
+      const tarefas = (await db.collection("putaway_tasks").where("box_code", "==", box.id).get()).docs;
+      const tirou = num(box.data.taken_units) + qtdeRetirada;
+      const vazia = text(box.data.status) === "stored" && tirou > 0 && tirou >= num(box.data.unit_count);
+      return {
+        estado: [
+          `caixa ${box.id} em ${box.posicao} · ${text(box.data.status)} · ${linhas.map((l) => `${text(l.client_item_code) || text(l.sku_code)} ${fmt(num(l.counted_qty))}`).join(", ")} · a separação tirou ${(Array.isArray(box.data.taken_lines) ? box.data.taken_lines : []).map((t) => `${text(t.sku_code)} ${fmt(num(t.qty))}`).join(", ") || "nada"}`,
+          ...(linhaDoPedido ? [`linha ${num(linhaDoPedido.data.line_number)} do ${op.retirado.pedido} · ${para.id} em ${box.posicao} · separou ${fmt(num(linhaDoPedido.data.qty_picked || linhaDoPedido.data.separated_qty))} sem caixa`] : []),
+        ],
+        previsto: [
+          `linha de ${fmt(naLinha)} un. da caixa: ${de.id} (${de.codCliente}) → ${para.id} (${para.codCliente} · "${para.nome}"${tamanho ? ` · tamanho ${tamanho}` : ""}), sem movimento`,
+          ...(item?.exists ? [`linha ${num(item.data().line_number)} da NF da chegada ${text(item.data().receipt_number) || text(item.data().receipt_id)}: ${text(item.data().client_item_code)} → ${para.codCliente}`] : []),
+          ...(tarefas.length ? [`tarefa de guarda da caixa: a mesma linha`] : []),
+          ...(linhaDoPedido ? [`retirado da caixa: + ${fmt(qtdeRetirada)} de ${para.id} · linha ${num(linhaDoPedido.data.line_number)} do ${op.retirado.pedido}: ${fmt(qtdeRetirada)} da ${box.id}`] : []),
+          ...(vazia ? [`a caixa ${box.id} fica sem nada por tirar: sai da prateleira (vazia${op.retirado ? `, no ${text(op.retirado.pedido)}` : ""})`] : []),
+        ],
+        dados: { box, de, para, tamanho, naLinha, qtdeRetirada, linhaDoPedido, itemId: item?.exists ? itemId : null, tarefas: tarefas.map((d) => d.ref) },
+      };
+    },
+    async gravar(op, L) {
+      const { box, de, para, tamanho, qtdeRetirada, linhaDoPedido, itemId, tarefas } = L.dados;
+      const trocar = (linhas) =>
+        (Array.isArray(linhas) ? linhas : []).map((l) =>
+          text(l?.sku_code) === de.id ? compact({ ...l, sku_code: para.id, client_item_code: para.codCliente, product_name: para.nome, size: tamanho || undefined }) : l,
+        );
+      const trocarCodigos = (codigos) => (Array.isArray(codigos) ? [...new Set(codigos.map((c) => (c === de.id ? para.id : c)))] : undefined);
+      return transacaoDireta(op, "corrigir_caixa_recebimento", box.id, async (tx) => {
+        const itemRef = itemId ? db.collection("inbound_items").doc(itemId) : null;
+        const [boxSnap, itemSnap, linhaSnap, ...tarefasSnap] = await Promise.all([
+          tx.get(box.ref),
+          itemRef ? tx.get(itemRef) : Promise.resolve(null),
+          linhaDoPedido ? tx.get(linhaDoPedido.ref) : Promise.resolve(null),
+          ...tarefas.map((ref) => tx.get(ref)),
+        ]);
+        const dados = boxSnap.data();
+        if (!linhasDaCaixa(dados).some((l) => text(l?.sku_code) === de.id)) throw new Erro(`a caixa ${box.id} não tem mais a linha de ${de.id}`);
+        const agora = new Date().toISOString();
+        const antes = linhasDaCaixa(dados).find((l) => text(l?.sku_code) === de.id);
+        const mudanca = {
+          lines: trocar(dados.lines),
+          conference_revision: num(dados.conference_revision) + 1,
+          acerto_codigo: { op: op.id, antes: { sku_code: de.id, client_item_code: text(antes.client_item_code), product_name: text(antes.product_name), size: text(antes.size) || null }, at: agora },
+          updated_at: ts(),
+        };
+        const codigos = trocarCodigos(dados.sku_codes);
+        if (codigos) mudanca.sku_codes = codigos;
+        if (qtdeRetirada > 0) {
+          const retirado = retiradoCom(dados.taken_lines, para.id, qtdeRetirada);
+          Object.assign(mudanca, retiradoGravado(retirado, agora));
+          const tirou = retirado.reduce((s, t) => s + t.qty, 0);
+          if (text(dados.status) === "stored" && tirou >= num(dados.unit_count)) {
+            Object.assign(mudanca, camposDaVazia({ ...op, pedido: op.retirado.pedido }, agora));
+            evento(tx, op, "warehouse.box_emptied", `Caixa ${box.id} vazia`, `A separação tirou tudo o que a caixa tem (${fmt(tirou)} un.)`, "warehouse_box", box.id, { caixa: box.id, retirado: tirou, pedido: text(op.retirado.pedido) });
+          }
+        }
+        tx.update(box.ref, mudanca);
+        if (itemSnap?.exists) {
+          const d = itemSnap.data();
+          tx.update(itemRef, {
+            sku_code: para.id,
+            client_item_code: para.codCliente,
+            product_name: para.nome,
+            ...(tamanho ? { size: tamanho } : {}),
+            acerto_codigo: { op: op.id, antes: { sku_code: text(d.sku_code), client_item_code: text(d.client_item_code), product_name: text(d.product_name), size: text(d.size) || null }, at: agora },
+            updated_at: ts(),
+          });
+        }
+        for (const snap of tarefasSnap) {
+          if (!snap?.exists) continue;
+          const d = snap.data();
+          const mudancaTarefa = { lines: trocar(d.lines), updated_at: ts() };
+          const codigosTarefa = trocarCodigos(d.sku_codes);
+          if (codigosTarefa) mudancaTarefa.sku_codes = codigosTarefa;
+          tx.update(snap.ref, mudancaTarefa);
+        }
+        if (linhaSnap?.exists) {
+          const caixas = Array.isArray(linhaSnap.data().separated_boxes) ? linhaSnap.data().separated_boxes : [];
+          tx.update(linhaDoPedido.ref, {
+            separated_boxes: [...caixas, { box_code: box.id, qty: qtdeRetirada }],
+            acerto: { op: op.id, antes: { separated_boxes: caixas }, at: agora },
+            updated_at: ts(),
+          });
+        }
+        evento(tx, op, "warehouse.box_content_corrected", `Conteúdo da caixa ${box.id} corrigido`, `${de.codCliente} (${de.id}) → ${para.codCliente} (${para.id}) · ${fmt(num(antes.counted_qty))} un., sem movimento`, "warehouse_box", box.id, {
+          caixa: box.id,
+          antes: { sku_code: de.id, client_item_code: de.codCliente },
+          depois: { sku_code: para.id, client_item_code: para.codCliente },
+          retirado: qtdeRetirada || null,
+        });
+        return { caixa: box.id, de: de.id, para: para.id, retirado: qtdeRetirada };
+      });
+    },
+  },
 };
 
 // --- Execução ------------------------------------------------------------------------------
@@ -1458,6 +1746,8 @@ function descrever(op) {
     case "corrigir_linha": return `corrigir linha ${op.caixa ? `da caixa ${op.caixa} ` : ""}${op.de} → ${op.para}`;
     case "adicionar_linha": return `adicionar linha na caixa ${op.caixa} ${op.codigo} · ${fmt(num(op.qtde))}`;
     case "ajustar_linha": return `ajustar linha ${op.caixa ? `da caixa ${op.caixa} ` : ""}${op.codigo ?? "?"}`;
+    case "mover_retirado": return `mover o retirado de ${op.codigo} da caixa ${op.de} para a ${op.para} · ${fmt(num(op.qtde))}`;
+    case "corrigir_caixa_recebimento": return `corrigir a caixa ${op.caixa}: ${op.de} → ${op.para}, sem movimento`;
     case "nota": return "nota";
     default: return op.tipo;
   }

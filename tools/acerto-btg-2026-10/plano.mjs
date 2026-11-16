@@ -38,6 +38,8 @@ export const PLANO = {
 
 const ITEM = (n, detalhe) => `E-mail Cristiane 29/10, item ${n}: ${detalhe}`;
 const RECONTAGEM = (detalhe) => `Recontagem de 16/11/2026, separação do PED-0001: ${detalhe}`;
+const DUPLICADA = (detalhe) =>
+  `Leitura de 16/11/2026, separação do PED-0001: a chegada AVL-B1FE59A8 (06/11, CX-000227) lançou de novo a mercadoria da AVL-0D0E620B (30/10), mesma NF 046143: ${detalhe}`;
 
 export const BLOCOS = [
   {
@@ -407,8 +409,21 @@ export const BLOCOS = [
         tipo: "baixar_caixa",
         caixa: "CX-000136",
         itens: [{ codigo: "A.01.0805.002.G", qtde: 16 }],
+        pedido: "PED-0001",
         texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou G 72, e não 88",
         motivo: RECONTAGEM("a CX-000136 tem G 72; a quarta rodada (03/11) somou 16 pela etiqueta do fornecedor"),
+      },
+      // A linha do M do PED-0001 baixou 1 da CX-000138 (o M 1 que a quarta rodada pôs lá e que não existe) e 71 da
+      // CX-000140; na prateleira, as 72 saíram da CX-000140 (dry-run de 16/11 na produção). Antes de a linha da 138 sair.
+      {
+        id: "recontagem-retirado-m",
+        tipo: "mover_retirado",
+        codigo: "A.01.0805.002.M",
+        de: "CX-000138",
+        para: "CX-000140",
+        qtde: 1,
+        pedido: "PED-0001",
+        motivo: RECONTAGEM("as 72 M da linha do PED-0001 saíram da CX-000140; o registro baixou 1 da CX-000138, do M que não existe"),
       },
       {
         id: "recontagem-cx138",
@@ -420,6 +435,7 @@ export const BLOCOS = [
           { codigo: "A.01.0805.002.G", qtde: 4 },
           { codigo: "A.01.0805.002.XGG", qtde: 1 },
         ],
+        pedido: "PED-0001",
         texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou só GG 41",
         motivo: RECONTAGEM("a CX-000138 tem só GG 41; a quarta rodada (03/11) somou GG 20, M 1, G 4 e XGG 1 pela etiqueta do fornecedor"),
       },
@@ -428,8 +444,64 @@ export const BLOCOS = [
         tipo: "baixar_caixa",
         caixa: "CX-000140",
         itens: [{ codigo: "A.01.0805.002.M", qtde: 18 }],
+        pedido: "PED-0001",
         texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou M 72, e não 90",
         motivo: RECONTAGEM("a CX-000140 tem M 72; a quarta rodada (03/11) somou 18 pela etiqueta do fornecedor"),
+      },
+    ],
+  },
+  {
+    // A leitura de 16/11/2026 na produção (ler-estoque.mjs): a chegada AVL-0D0E620B (30/10, por linha, antes do
+    // recebimento por caixa) lançou GG 30 e XG 41 em B-02, sem caixa; a AVL-B1FE59A8 (06/11, pela caixa CX-000227),
+    // da mesma NF 046143, lançou de novo GG 30 e, como XGG, as mesmas 41. Na prateleira só havia a CX-000227: as 30 GG
+    // dela saíram na linha da GG do PED-0001, e as 41 XG na linha da XG, sem caixa no registro. Sai o que a segunda
+    // chegada lançou a mais (Ajuste −, fora da cobrança), e a linha da CX-000227 passa a XG sem movimento.
+    id: "duplicada-0611",
+    titulo: "A chegada AVL-B1FE59A8 (06/11) repetiu a AVL-0D0E620B (30/10)",
+    ops: [
+      {
+        id: "duplicada-gg",
+        tipo: "ajuste",
+        codigo: "A.01.0806.005.GG",
+        delta: -30,
+        posicao: "B-02",
+        motivo: DUPLICADA("as 30 GG que a AVL-B1FE59A8 lançou de novo em B-02"),
+      },
+      {
+        id: "duplicada-xgg",
+        tipo: "ajuste",
+        codigo: "A.01.0806.005.XGG",
+        delta: -41,
+        posicao: "B-02",
+        motivo: DUPLICADA("as 41 que a AVL-B1FE59A8 lançou como XGG em B-02 são as XG da AVL-0D0E620B"),
+      },
+      {
+        id: "duplicada-cx227",
+        tipo: "corrigir_caixa_recebimento",
+        caixa: "CX-000227",
+        de: "A.01.0806.005.XGG",
+        para: "A.01.0806.005.XG",
+        retirado: { qtde: 41, pedido: "PED-0001" },
+        motivo: DUPLICADA("a CX-000227 tem as GG 30 e as XG 41 da AVL-0D0E620B; as 41 XG saíram dela na linha da XG do PED-0001"),
+      },
+    ],
+  },
+  {
+    // A CX-000221 (AVL-38450703, 05/11) tem 12 polos femininas piquet pretas XG lançadas como XGG (BTG-000186, que
+    // nasceu nessa chegada), e o A.02.0806.005.XG não existe no cadastro (leitura de 16/11/2026). Aqui nasce o XG,
+    // copiado do próprio BTG-000186 (o mesmo produto, com o nome dele); as 12 passam para ele pela correção de código
+    // (tools/corrigir-codigo-do-produto, cx-000221-a02-0806-005-xg), que depois da entrega do PED-0001 apaga o XGG.
+    id: "feminina-xg",
+    titulo: "A polo feminina piquet preta XG",
+    ops: [
+      {
+        id: "criar-0806-fem-XG",
+        tipo: "criar_sku",
+        codigo: "A.02.0806.005.XG",
+        copiar_de: "A.02.0806.005.XGG",
+        tamanho: "XG",
+        manter_nome: true,
+        motivo: "Separação do PED-0001, 16/11/2026: a CX-000221 tem 12 XG lançadas como XGG, e o XG não está no cadastro",
       },
     ],
   },
