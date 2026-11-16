@@ -477,6 +477,15 @@ gravadas, sem falha:
 Logo depois, a correção de código passou as 12 da CX-000221 para ele
 (`tools/corrigir-codigo-do-produto`, "Registro").
 
+O romaneio do PED-0001 carregado no caminhão (16/11/2026, 20:25: 88 volumes,
+3.188 unidades, lacre 050412) bate com o saldo depois do acerto:
+
+- **Azul-marinho masculina:** PP 12, P 78, M 248, G 229, GG 100, XG 64 e
+  XGG 14. A XGG 1 de B-10 está no volume 88.
+- **Preta masculina:** GG 94 (as 30 da CX-000227 no volume 86), XG 60 (as 41
+  da CX-000227 no volume 87) e XGG 10.
+- **Preta feminina:** a XG não está no pedido; as 12 ficam na CX-000221.
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o
