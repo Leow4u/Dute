@@ -173,6 +173,21 @@ novo. A correção com `pendente` (o motivo) aparece no dry-run, com o estado de
 hoje e a recusa, se houver, mas não grava, nem com `--aplicar`; para ligar,
 apague o campo.
 
+## Ler antes de corrigir
+
+`ler-estoque.mjs` só lê, e não mostra quem fez cada coisa. Para cada código:
+o SKU, o saldo por prateleira, as datas de entrada (a conta do pedido), os
+movimentos com a chegada e a NF de cada um (a guarda por linha acha a chegada
+pela tarefa de guarda), as caixas com o item (o que entrou, o que a separação
+tirou e o que fica) e, com `--pedido`, as linhas do pedido. No fim, as chegadas
+citadas, com as linhas da NF: duas chegadas com a mesma NF e as mesmas peças
+são a mesma mercadoria lançada duas vezes. `--caixa` mostra uma caixa inteira.
+
+```powershell
+cd C:\DEV\Dute
+node tools/corrigir-codigo-do-produto/ler-estoque.mjs --projeto dute-prod --pedido PED-0001 --codigo A.01.0806.005.GG --codigo A.01.0806.005.XG
+```
+
 ## Testes
 
 ```powershell
