@@ -364,15 +364,17 @@ do fornecedor (folha do PED-0001, 16/11/2026):
 | Caixa | Abertura | Quarta rodada (03/11) | Recontagem (16/11) |
 |---|---|---|---|
 | CX-000136 | G 72 | G 88 | G 72 |
-| CX-000138 | GG 41 | GG 61, M 1, G 4, XGG 1 | GG 41 |
+| CX-000138 | GG 41 | GG 61, M 1, G 4, XGG 1 | GG 41 (a XGG 1 já tinha saído no PED-0001) |
 | CX-000140 | M 72 | M 90 | M 72 |
 
-A contagem da abertura estava certa, e as etiquetas do fornecedor, erradas: as
-60 peças que a quarta rodada somou (G 20, GG 20, M 19, XGG 1) não existem. O
-bloco `recontagem-1611` tira essas peças pelo `baixar_caixa` com `itens`: a
-SAIDA do saldo em B-10 (Ajuste −, fora da cobrança) e a linha da abertura que
-diminui (GG da 138, G da 136, M da 140) ou sai (M, G e XGG da 138), com os
-contadores da caixa. O evento diz o motivo (`texto_da_baixa`), e não "saldão".
+A contagem da abertura estava certa, e as etiquetas do fornecedor, erradas: G
+20, GG 20 e M 19 que a quarta rodada somou não existem. O bloco
+`recontagem-1611` tira essas peças pelo `baixar_caixa` com `itens`: a SAIDA do
+saldo em B-10 (Ajuste −, fora da cobrança) e a linha da abertura que diminui
+(GG da 138, G da 136, M da 140) ou sai (M e G da 138), com os contadores da
+caixa. O evento diz o motivo (`texto_da_baixa`), e não "saldão". A XGG 1 da
+CX-000138 fica: a separação do PED-0001 tirou 1 dela, antes da recontagem
+(segundo dry-run, abaixo).
 
 Duas travas novas no `baixar_caixa`, para a caixa que a separação já abriu
 (separação com caixas, parte 3):
@@ -398,18 +400,25 @@ tudo: 72 G da CX-000136, 41 GG da CX-000138 e as M. Por isso o bloco ganhou:
   separação faz, com o evento `warehouse.box_emptied`. As três caixas saem
   vazias: não há etiqueta para reimprimir.
 
+**O segundo dry-run e a primeira tentativa de gravação (16/11/2026)**, com
+os três blocos do PED-0001: 7 a gravar e 1 erro, e a gravação abortou sem
+gravar nada. A separação do PED-0001 tinha tirado 1 XGG (BTG-000119) da
+CX-000138, e a baixa levava a linha da XGG a 0. A XGG saiu da baixa da 138: a
+linha fica com o que a separação tirou, e o pedido a entrega. A caixa sai da
+prateleira com GG 41 e XGG 1, as duas tiradas.
+
 A ordem: a coordenação conclui o PED-0001 com a diferença (feito em
 16/11/2026); dry-run dos blocos; gravação com o dry-run limpo. O comando dos
 três blocos do PED-0001 está em "O PED-0001", abaixo.
 
 No emulador (16/11/2026), com o cenário semeado, o plano aplicado até o
 `saldao-novembro` e o estado da produção depois da conclusão do PED-0001 por
-cima (o retirado das três caixas, a linha do M com 1 da CX-000138, as
-reservas do separado), o dry-run deu 8 a gravar e 0 erro, a gravação deixou
-a CX-000136 com G 72, a CX-000138 só com GG 41 e a CX-000140 com M 72, as
-três vazias no PED-0001, a linha do M com 72 da CX-000140, e B-10 só com o
-que o pedido separou (G 72, GG 41, M 72) e XGG 0; o dry-run seguinte deu 8 já
-aplicadas. Antes, com a caixa aberta além da recontagem e com a reserva de 92
+cima (o retirado das três caixas, a linha do M com 1 da CX-000138, a linha
+da XGG com 1 da CX-000138, as reservas do separado), o dry-run deu 8 a gravar
+e 0 erro, a gravação deixou a CX-000136 com G 72, a CX-000138 com GG 41 e
+XGG 1 e a CX-000140 com M 72, as três vazias no PED-0001, a linha do M com 72
+da CX-000140, e B-10 só com o que o pedido separou (G 72, GG 41, M 72, XGG 1);
+o dry-run seguinte deu 8 já aplicadas. Antes, com a caixa aberta além da recontagem e com a reserva de 92
 G em B-10, o dry-run recusou.
 
 ## O PED-0001: a chegada repetida e a feminina XG (16/11/2026)

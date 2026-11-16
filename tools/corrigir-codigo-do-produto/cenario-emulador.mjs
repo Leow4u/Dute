@@ -25,6 +25,8 @@
  *    as peças para o XG, e o cadastro errado só sai depois da entrega.
  * 8. A correção pendente: o dry-run mostra o que gravaria, e --aplicar não
  *    grava nada; sem o campo, grava.
+ * 9. O SKU certo criado pelo acerto (o criar_sku do bloco feminina-xg), como
+ *    a feminina XG do PED-0001: a transferência passa as peças para ele.
  *
  *   npm --prefix functions/wms ci && npm --prefix functions/wms run build
  *   cd functions/wms
@@ -627,5 +629,34 @@ assert.deepEqual([pendente.estado, pendente.pendente, pendente.grava?.[0]], ["pe
 assert.deepEqual(await contarTudo(), antesDaPendente, "a correção pendente não grava, nem com --aplicar");
 assert.equal((await comLista([umaCorrecao({})], "--aplicar")).correcoes[0].estado, "corrigido", "sem o campo, grava");
 
-console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio) e a correção pendente.");
+// --- 9. O SKU certo criado pelo acerto (a feminina XG do PED-0001) ----------------------
+// Na produção, o A.02.0806.005.XG não existia: o acerto (bloco feminina-xg) cria o SKU, copiando o XGG, e a correção
+// passa as peças para ele. Aqui, com outra família, pelo acerto de verdade e por um plano só do emulador (ACERTO_PLANO).
+const r17 = await chegada([{ codigo: "A.02.0807.005.XGG", nome: PRETA_F, qtd: 12 }], { prateleira: "B-04" });
+const XGG_F9 = r17.skus[0];
+const planoDoAcerto = path.join(os.tmpdir(), `plano-acerto-cenario-${process.pid}.mjs`);
+writeFileSync(
+  planoDoAcerto,
+  `export const PLANO = ${JSON.stringify({ id: "cenario-corrigir-codigo", cliente: BTG, referencia: "cenário", ator: { uid: "script:acerto-cenario", role: "admin", name: "Acerto do cenário", email: "ops@dutelog.com.br" } })};\n` +
+    `export const BLOCOS = ${JSON.stringify([{ id: "feminina-xg", titulo: "cenário", ops: [{ id: "criar-xg-cenario", tipo: "criar_sku", codigo: "A.02.0807.005.XG", copiar_de: "A.02.0807.005.XGG", tamanho: "XG", manter_nome: true, motivo: "cenário" }] }])};\n`,
+);
+execFileSync(process.execPath, [path.join(raiz, "tools", "acerto-btg-2026-10", "acerto.mjs"), "--projeto", PROJETO, "--aplicar"], { encoding: "utf8", env: { ...process.env, ACERTO_PLANO: planoDoAcerto } });
+const doAcerto = (await db.collection("skus").where("cod_cliente", "==", "A.02.0807.005.XG").get()).docs;
+assert.equal(doAcerto.length, 1, "o acerto criou o XG");
+const XG_F9 = doAcerto[0].id;
+assert.deepEqual([doAcerto[0].get("tamanho"), doAcerto[0].get("produto")], ["XG", (await dado("skus", XGG_F9)).produto]);
+const c9 = { id: "cenario-feminina-xg", cliente: BTG, de: "A.02.0807.005.XGG", para: "A.02.0807.005.XG", caixas: r17.caixas, genero: "Feminino", referencia: "cenário", motivo: "cenário", decisao: "cenário" };
+const dry9 = (await comLista([c9])).correcoes[0];
+assert.deepEqual([dry9.modo, dry9.estado, dry9.alvo?.sku, dry9.alvo?.tamanho], ["transferencia", "a_gravar", XG_F9, "XG"]);
+assert.ok(dry9.grava.some((g) => g.includes(`tamanho XGG → XG`)), dry9.grava.join("\n"));
+const feito9 = (await comLista([c9], "--aplicar")).correcoes[0];
+assert.deepEqual([feito9.estado, feito9.resultado?.apagado], ["corrigido", true], JSON.stringify(feito9));
+assert.deepEqual(await saldos(XG_F9), [["B-04", 12]]);
+const caixa9 = await dado("warehouse_boxes", r17.caixas[0]);
+assert.deepEqual(caixa9.lines.map((l) => [l.sku_code, l.client_item_code, l.size, l.counted_qty]), [[XG_F9, "A.02.0807.005.XG", "XG", 12]]);
+assert.equal(await existe("skus", XGG_F9), false, "sem pedido, o cadastro errado sai");
+const portal9 = (await db.collection("client_inventory").where("sku_code", "==", XG_F9).get()).docs;
+assert.deepEqual(portal9.map((d) => [d.get("qty_on_hand"), d.get("qty_available"), d.get("size")]), [[12, 12, "XG"]], "um item do portal, com as 12 no XG");
+
+console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio), a correção pendente e o SKU certo criado pelo acerto.");
 process.exit(0);

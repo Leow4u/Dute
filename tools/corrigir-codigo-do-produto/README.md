@@ -225,6 +225,9 @@ O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
 8. **A correção pendente**, numa lista só do emulador (`CORRECOES_ARQUIVO`):
    o dry-run mostra o que gravaria, `--aplicar` não grava nada, e sem o campo
    grava.
+9. **O SKU certo criado pelo acerto**, como a feminina XG do PED-0001: o
+   `criar_sku` do acerto de verdade (por um plano só do emulador,
+   `ACERTO_PLANO`) cria o XG, e a transferência passa as peças para ele.
 
 ```powershell
 cd C:\DEV\Dute

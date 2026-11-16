@@ -399,8 +399,9 @@ export const BLOCOS = [
     // (folha do PED-0001, peça por peça, sem a etiqueta do fornecedor) achou nas três caixas de B-10 o que a abertura
     // tinha contado: CX-000136 com G 72, CX-000138 só com GG 41 e CX-000140 com M 72. O que a quarta rodada (03/11)
     // somou pelas etiquetas do fornecedor não existe: sai do saldo (SAIDA, Ajuste −, fora da cobrança) e das linhas
-    // da abertura das caixas: as 60 peças da quarta rodada (G 20, GG 20, M 19, XGG 1). A reserva do PED-0001 nessas
-    // peças sai antes, na conclusão da separação com a diferença; até lá, o dry-run diz quanto está reservado.
+    // da abertura das caixas: G 20, GG 20 e M 19 da quarta rodada. A reserva do PED-0001 nessas peças sai antes, na
+    // conclusão da separação com a diferença; até lá, o dry-run diz quanto está reservado. A XGG 1 que a quarta rodada
+    // pôs na CX-000138 fica: a separação do PED-0001 tirou 1 dela (dry-run de 16/11 na produção), e o pedido a entrega.
     id: "recontagem-1611",
     titulo: "Recontagem de 16/11: a azul-marinho volta ao que a abertura contou",
     ops: [
@@ -429,15 +430,15 @@ export const BLOCOS = [
         id: "recontagem-cx138",
         tipo: "baixar_caixa",
         caixa: "CX-000138",
+        // Sem a XGG: a separação do PED-0001 tirou 1 desta caixa, e a linha não fica com menos do que saiu.
         itens: [
           { codigo: "A.01.0805.002.GG", qtde: 20 },
           { codigo: "A.01.0805.002.M", qtde: 1 },
           { codigo: "A.01.0805.002.G", qtde: 4 },
-          { codigo: "A.01.0805.002.XGG", qtde: 1 },
         ],
         pedido: "PED-0001",
-        texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou só GG 41",
-        motivo: RECONTAGEM("a CX-000138 tem só GG 41; a quarta rodada (03/11) somou GG 20, M 1, G 4 e XGG 1 pela etiqueta do fornecedor"),
+        texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou só GG 41, depois de a XGG 1 sair no PED-0001",
+        motivo: RECONTAGEM("a CX-000138 tem só GG 41; a quarta rodada (03/11) somou GG 20, M 1 e G 4 pela etiqueta do fornecedor, e a XGG 1 saiu no PED-0001"),
       },
       {
         id: "recontagem-cx140",
