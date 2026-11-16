@@ -43,21 +43,8 @@ export const CORRECOES = [
     decisao:
       "Leonardo, 11/11/2026: só as 92 peças da CX-000229, com a linha da NF corrigida. O A.01.0810.002.M já existe (BTG-000219): as peças passam para ele. O A.02.0810.002.M (BTG-000213) fica: é a feminina de verdade, com as 79 da CX-000228, da outra chegada da mesma NF 046315.",
   },
-  {
-    id: "cx-000227-a01-0806-005-xg",
-    cliente: "BTG Pactual",
-    de: "A.01.0806.005.XGG",
-    para: "A.01.0806.005.XG",
-    caixas: ["CX-000227"],
-    genero: "Masculino",
-    referencia: "Leonardo, 16/11/2026: correções da separação do PED-0001",
-    motivo:
-      "Na separação do PED-0001, a linha da polo masculina piquet preta XGG apontou 41 peças na CX-000227; na caixa, essas 41 são XG (A.01.0806.005.XG). As 10 XGG da CX-000215 estão certas.",
-    decisao:
-      "Leonardo, 16/11/2026: corrigir no sistema. As 41 da CX-000227 passam para o A.01.0806.005.XG; o A.01.0806.005.XGG continua, com as 10 da CX-000215.",
-    pendente:
-      "a recontagem de 16/11 não achou em B-02 as 30 GG que entraram em 30/10, e a linha da XG só achou XG na CX-000227: a entrada de 30/10 pode ser esta mesma mercadoria, lançada duas vezes. Se for, as 41 XG já estão no saldo, e esta transferência as dobraria. Confira a NF da chegada de 30/10 contra a da CX-000227 antes de ligar.",
-  },
+  // A CX-000227 não entra aqui: a leitura de 16/11 mostrou que a chegada dela (AVL-B1FE59A8) repetiu a AVL-0D0E620B,
+  // e as 41 XG já estavam no saldo. A correção dela é a do acerto (tools/acerto-btg-2026-10, bloco duplicada-0611).
   {
     id: "cx-000221-a02-0806-005-xg",
     cliente: "BTG Pactual",
@@ -68,8 +55,7 @@ export const CORRECOES = [
     referencia: "Leonardo, 16/11/2026: correções da separação do PED-0001",
     motivo:
       "Na separação do PED-0001, a linha da polo feminina piquet preta XGG (BTG-000186) apontou 12 peças na CX-000221; o tamanho dentro da caixa é XG (A.02.0806.005.XG).",
-    decisao: "Leonardo, 16/11/2026: corrigir no sistema. As 12 da CX-000221 passam para o A.02.0806.005.XG.",
-    pendente:
-      "a mesma conferência da CX-000227: se o A.02.0806.005.XG já tem 12 sem caixa na prateleira da CX-000221, entradas de antes, pode ser esta mesma mercadoria, e a transferência a dobraria. Confira o \"Onde está\" do A.02.0806.005.XG antes de ligar.",
+    decisao:
+      "Leonardo, 16/11/2026: corrigir no sistema. A leitura de 16/11 mostrou o BTG-000186 só com as 12 da CX-000221 e o A.02.0806.005.XG fora do cadastro: o acerto cria o XG (bloco feminina-xg), e as 12 passam para ele. O BTG-000186 sai depois da entrega do PED-0001.",
   },
 ];

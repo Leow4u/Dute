@@ -515,9 +515,14 @@ async function principal() {
   if (args.aplicar && naNuvem && args.confirmo !== confirmacaoDe(args.projeto)) {
     abortar(`Para gravar, passe --confirmo "${confirmacaoDe(args.projeto)}". Sem isso o script só mostra o que muda.`);
   }
-  const desconhecidas = args.correcoes.filter((id) => !CORRECOES.some((c) => c.id === id));
-  if (desconhecidas.length) abortar(`Correção desconhecida: ${desconhecidas.join(", ")}. As de correcoes.mjs: ${CORRECOES.map((c) => c.id).join(", ")}.`);
-  const escolhidas = CORRECOES.filter((c) => !args.correcoes.length || args.correcoes.includes(c.id));
+  // Só no emulador: outra lista de correções (o teste da pendente), como o ACERTO_PLANO do acerto.
+  const lista =
+    process.env.CORRECOES_ARQUIVO && process.env.FIRESTORE_EMULATOR_HOST
+      ? (await import(pathToFileURL(path.resolve(process.env.CORRECOES_ARQUIVO)).href)).CORRECOES
+      : CORRECOES;
+  const desconhecidas = args.correcoes.filter((id) => !lista.some((c) => c.id === id));
+  if (desconhecidas.length) abortar(`Correção desconhecida: ${desconhecidas.join(", ")}. As de correcoes.mjs: ${lista.map((c) => c.id).join(", ")}.`);
+  const escolhidas = lista.filter((c) => !args.correcoes.length || args.correcoes.includes(c.id));
 
   const { app, db, FieldPath, FieldValue } = abrirFirestore(args.projeto, abortar);
   const saida = { projeto: args.projeto, aplicar: args.aplicar, correcoes: [] };
@@ -578,7 +583,7 @@ async function principal() {
   } else {
     console.log(`\nCorreção de código do produto · projeto ${args.projeto}${naNuvem ? "" : ` · EMULADOR ${process.env.FIRESTORE_EMULATOR_HOST}`} · ${args.aplicar ? "APLICAR" : "DRY-RUN, nada será gravado"}\n`);
     for (const c of saida.correcoes) {
-      const correcao = CORRECOES.find((x) => x.id === c.id);
+      const correcao = lista.find((x) => x.id === c.id);
       console.log(`[${c.id}] ${c.de} → ${c.para} · ${correcao.cliente} · caixa ${c.caixas.join(", ")}`);
       if (c.modo === "transferencia" && c.alvo) {
         console.log(`   caminho : transferência. O ${c.para} já existe (${c.alvo.sku} · "${c.alvo.nome}"): as peças passam para ele, e o código de nenhum SKU muda`);

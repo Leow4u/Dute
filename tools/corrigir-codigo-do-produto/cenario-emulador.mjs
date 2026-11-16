@@ -23,6 +23,8 @@
  *    recusa enquanto o pedido reserva as peças e diz qual pedido; "Separar
  *    menos" e a conclusão pela coordenação soltam a reserva; a correção passa
  *    as peças para o XG, e o cadastro errado só sai depois da entrega.
+ * 8. A correção pendente: o dry-run mostra o que gravaria, e --aplicar não
+ *    grava nada; sem o campo, grava.
  *
  *   npm --prefix functions/wms ci && npm --prefix functions/wms run build
  *   cd functions/wms
@@ -31,7 +33,9 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -606,15 +610,22 @@ await separacao.setPickLineSeparated(db, { pick_task_id: String(aprovadoXg.pick_
 const caixaDepois = await dado("warehouse_boxes", r14.caixas[0]);
 assert.deepEqual([caixaDepois.taken_lines, caixaDepois.status], [[{ sku_code: "BTG-000090", qty: 30 }, { sku_code: "BTG-000074", qty: 41 }], "emptied"], "a linha de XG saiu da caixa do erro, que esvaziou");
 
-// As correções pendentes da lista (as do PED-0001 na produção): o dry-run as mostra, e --aplicar não grava nada.
-const pendentes = CORRECOES.filter((c) => c.pendente);
-assert.ok(pendentes.length >= 2, "as duas do PED-0001 estão pendentes");
-const antesDasPendentes = await contarTudo();
-const rodadaPendente = JSON.parse(
-  execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", "--aplicar", ...pendentes.flatMap((c) => ["--correcao", c.id])], { encoding: "utf8", env: process.env }),
-);
-assert.deepEqual(rodadaPendente.correcoes.map((c) => [c.id, c.estado, Boolean(c.pendente)]), pendentes.map((c) => [c.id, "pendente", true]));
-assert.deepEqual(await contarTudo(), antesDasPendentes, "a correção pendente não grava");
+// A correção pendente: o dry-run mostra o que gravaria, e --aplicar não grava nada; sem o campo, grava. A lista vem de
+// um arquivo só do emulador (CORRECOES_ARQUIVO), com uma correção que passaria.
+const r16 = await chegada([{ codigo: "A.02.0810.002.P", nome: FEMININA, qtd: 5 }], { prateleira: "B-11" });
+const umaCorrecao = (extra) => ({ id: "cenario-pendente", cliente: BTG, de: "A.02.0810.002.P", para: "A.01.0810.002.P", caixas: r16.caixas, genero: "Masculino", referencia: "cenário", motivo: "cenário", decisao: "cenário", ...extra });
+const listaDoEmulador = async (correcoes) => {
+  const arquivo = path.join(os.tmpdir(), `correcoes-cenario-${process.pid}-${++contador}.mjs`);
+  writeFileSync(arquivo, `export const CORRECOES = ${JSON.stringify(correcoes)};\n`);
+  return arquivo;
+};
+const comLista = async (correcoes, ...extra) =>
+  JSON.parse(execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", ...extra], { encoding: "utf8", env: { ...process.env, CORRECOES_ARQUIVO: await listaDoEmulador(correcoes) } }));
+const antesDaPendente = await contarTudo();
+const pendente = (await comLista([umaCorrecao({ pendente: "teste" })], "--aplicar")).correcoes[0];
+assert.deepEqual([pendente.estado, pendente.pendente, pendente.grava?.[0]], ["pendente", "teste", `SAIDA 5 de ${r16.skus[0]} (A.02.0810.002.P) em B-11 · Ajuste −, não cobra`]);
+assert.deepEqual(await contarTudo(), antesDaPendente, "a correção pendente não grava, nem com --aplicar");
+assert.equal((await comLista([umaCorrecao({})], "--aplicar")).correcoes[0].estado, "corrigido", "sem o campo, grava");
 
-console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas e o PED-0001 (o XG lançado como XGG, com a separação no meio).");
+console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio) e a correção pendente.");
 process.exit(0);
