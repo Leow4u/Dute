@@ -462,6 +462,21 @@ cd C:\DEV\Dute
 node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --bloco recontagem-1611 --bloco duplicada-0611 --bloco feminina-xg --aplicar --confirmo "ACERTO BTG dute-prod"
 ```
 
+**Aplicado na produção em 16/11/2026**, pelo Leonardo, da máquina dele, com
+o código do `cabf6da`. O dry-run deu 8 a gravar e 0 erro, e a gravação, 8
+gravadas, sem falha:
+
+- **CX-000136, CX-000138 e CX-000140:** baixadas e fora da prateleira, vazias
+  no PED-0001. A CX-000138 ficou com GG 41 e XGG 1, as duas tiradas.
+- **Linha 63 do PED-0001 (o M):** 72 da CX-000140.
+- **B-02:** SAIDA de 30 GG (BTG-000090) e de 41 XGG (BTG-000181).
+- **CX-000227:** passou a XG (BTG-000074), com a NF e a guarda, e saiu da
+  prateleira vazia no PED-0001.
+- **O XG feminino:** o `A.02.0806.005.XG` é o BTG-000226.
+
+Logo depois, a correção de código passou as 12 da CX-000221 para ele
+(`tools/corrigir-codigo-do-produto`, "Registro").
+
 ## Validação no emulador (30/10/2026)
 
 Feita no ambiente de desenvolvimento, sem credencial da nuvem, com o

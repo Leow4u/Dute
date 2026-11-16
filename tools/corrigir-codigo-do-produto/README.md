@@ -285,6 +285,23 @@ não pedem índice composto.
   - **Etiqueta:** o Leonardo reimprimiu a etiqueta da CX-000229 e a colocou
     na caixa, em 11/11/2026. Com isso, a correção está concluída.
 
+- **16/11/2026, aplicação na produção da `cx-000221-a02-0806-005-xg`**, pelo
+  Leonardo, da máquina dele, com o código do `cabf6da`, logo depois do acerto
+  que criou o BTG-000226 (`A.02.0806.005.XG`). O dry-run e a gravação deram 1
+  correção, sem erro:
+  - **Movimentos:** SAIDA de 12 do BTG-000186 em B-01 e ENTRADA de 12 no
+    BTG-000226 em B-01, os dois Ajuste, fora da cobrança.
+  - **Caixa e NF:** a linha da CX-000221 (2 produtos), a tarefa de guarda e a
+    linha 2 da NF da AVL-38450703 passaram para o BTG-000226, com o de antes em
+    `acerto_codigo`.
+  - **O BTG-000186** continua no cadastro: está no PED-0001, ainda não
+    entregue.
+  - **O aviso de chegada de 05/11** saiu com `A.02.0806.005.XGG`, e a correção
+    não reenvia.
+  - **Falta:** reimprimir a etiqueta da CX-000221 (a de 16/11, 12:22, ficou
+    velha) e, depois da entrega do PED-0001, rodar a mesma correção de novo,
+    para o BTG-000186 sair.
+
 ## As correções da separação do PED-0001 (16/11/2026)
 
 Na separação do PED-0001, o Leonardo achou duas caixas com o tamanho lançado
