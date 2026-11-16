@@ -169,7 +169,9 @@ Depois:
 
 `--correcao <id>` limita a uma correção de `correcoes.mjs`; `--json` dá o
 resultado para outro script. Correção nova entra em `correcoes.mjs`, com `id`
-novo.
+novo. A correção com `pendente` (o motivo) aparece no dry-run, com o estado de
+hoje e a recusa, se houver, mas não grava, nem com `--aplicar`; para ligar,
+apague o campo.
 
 ## Testes
 
@@ -280,6 +282,23 @@ errado no sistema:
 As duas estão em `correcoes.mjs` (`cx-000227-a01-0806-005-xg` e
 `cx-000221-a02-0806-005-xg`), pelo caminho da transferência, que precisa do
 código certo no cadastro.
+
+**As duas estão pendentes (16/11/2026, depois da folha da operação).** Em B-02,
+a operação não achou as 30 GG que o sistema tem desde 30/10, e a linha da XG só
+achou XG na CX-000227. A entrada de 30/10 em B-02 pode ser a mesma mercadoria
+da CX-000227, lançada duas vezes: uma por linha, em 30/10, antes do
+recebimento por caixa na produção, e outra pela caixa, em 06/11, com o XG
+lançado como XGG. Se for, as 41 XG já estão no saldo, sem caixa, e a
+transferência as dobraria. O certo, nesse caso, é outro: tirar as 41 XGG e as
+30 GG que sobram, e a linha da CX-000227 passar a XG sem movimento. Antes de
+ligar qualquer uma das duas, conferir no app:
+
+1. Estoque › Itens › `A.01.0806.005.XG` › "Onde está": tem saldo em B-02 desde
+   30/10/2026? Com quantas peças?
+2. Na bancada do PED-0001, a prateleira e a quantidade da linha da XG.
+3. Receber › Recebidos: a NF da chegada de 30/10 que pôs a GG em B-02 e a da
+   chegada da CX-000227 (06/11).
+4. O "Onde está" do `A.02.0806.005.XG`, para a CX-000221.
 
 A ordem, porque o pedido reserva essas peças e a correção recusa enquanto
 houver reserva (a recusa diz o pedido):

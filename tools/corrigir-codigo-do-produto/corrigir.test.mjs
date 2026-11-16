@@ -24,6 +24,8 @@ test("as correções da separação do PED-0001: o XGG que era XG nas CX-000227 
   for (const c of [masculina, feminina]) {
     assert.ok(c.referencia && c.motivo && c.decisao, `${c.id}: referência, motivo e decisão`);
     assert.equal(c.nome, undefined, `${c.id}: o tamanho muda, então só pela transferência, e o nome é o do SKU certo`);
+    // Até conferir a entrada de 30/10 em B-02 (a mesma mercadoria lançada duas vezes?), as duas não gravam.
+    assert.match(c.pendente ?? "", /lançada duas vezes|mesma mercadoria/, `${c.id}: pendente, com o motivo`);
   }
 });
 

@@ -16,6 +16,9 @@
  * O tamanho errado (o XGG lançado no lugar do XG, 16/11/2026) só se corrige
  * pela transferência: as peças vão para o SKU que já tem o código certo, com
  * o tamanho dele. No mesmo SKU, o tamanho não muda, e a correção recusa.
+ *
+ * `pendente` (o motivo) deixa a correção no dry-run, com o estado de hoje,
+ * e fora da gravação, mesmo com --aplicar. Para ligar, apague o campo.
  */
 
 export const ATOR = {
@@ -52,6 +55,8 @@ export const CORRECOES = [
       "Na separação do PED-0001, a linha da polo masculina piquet preta XGG apontou 41 peças na CX-000227; na caixa, essas 41 são XG (A.01.0806.005.XG). As 10 XGG da CX-000215 estão certas.",
     decisao:
       "Leonardo, 16/11/2026: corrigir no sistema. As 41 da CX-000227 passam para o A.01.0806.005.XG; o A.01.0806.005.XGG continua, com as 10 da CX-000215.",
+    pendente:
+      "a recontagem de 16/11 não achou em B-02 as 30 GG que entraram em 30/10, e a linha da XG só achou XG na CX-000227: a entrada de 30/10 pode ser esta mesma mercadoria, lançada duas vezes. Se for, as 41 XG já estão no saldo, e esta transferência as dobraria. Confira a NF da chegada de 30/10 contra a da CX-000227 antes de ligar.",
   },
   {
     id: "cx-000221-a02-0806-005-xg",
@@ -64,5 +69,7 @@ export const CORRECOES = [
     motivo:
       "Na separação do PED-0001, a linha da polo feminina piquet preta XGG (BTG-000186) apontou 12 peças na CX-000221; o tamanho dentro da caixa é XG (A.02.0806.005.XG).",
     decisao: "Leonardo, 16/11/2026: corrigir no sistema. As 12 da CX-000221 passam para o A.02.0806.005.XG.",
+    pendente:
+      "a mesma conferência da CX-000227: se o A.02.0806.005.XG já tem 12 sem caixa na prateleira da CX-000221, entradas de antes, pode ser esta mesma mercadoria, e a transferência a dobraria. Confira o \"Onde está\" do A.02.0806.005.XG antes de ligar.",
   },
 ];

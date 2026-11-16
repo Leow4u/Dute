@@ -606,5 +606,15 @@ await separacao.setPickLineSeparated(db, { pick_task_id: String(aprovadoXg.pick_
 const caixaDepois = await dado("warehouse_boxes", r14.caixas[0]);
 assert.deepEqual([caixaDepois.taken_lines, caixaDepois.status], [[{ sku_code: "BTG-000090", qty: 30 }, { sku_code: "BTG-000074", qty: 41 }], "emptied"], "a linha de XG saiu da caixa do erro, que esvaziou");
 
+// As correções pendentes da lista (as do PED-0001 na produção): o dry-run as mostra, e --aplicar não grava nada.
+const pendentes = CORRECOES.filter((c) => c.pendente);
+assert.ok(pendentes.length >= 2, "as duas do PED-0001 estão pendentes");
+const antesDasPendentes = await contarTudo();
+const rodadaPendente = JSON.parse(
+  execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", "--aplicar", ...pendentes.flatMap((c) => ["--correcao", c.id])], { encoding: "utf8", env: process.env }),
+);
+assert.deepEqual(rodadaPendente.correcoes.map((c) => [c.id, c.estado, Boolean(c.pendente)]), pendentes.map((c) => [c.id, "pendente", true]));
+assert.deepEqual(await contarTudo(), antesDasPendentes, "a correção pendente não grava");
+
 console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas e o PED-0001 (o XG lançado como XGG, com a separação no meio).");
 process.exit(0);
