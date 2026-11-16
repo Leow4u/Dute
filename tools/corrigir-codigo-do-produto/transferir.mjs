@@ -20,7 +20,8 @@
  *    portal, o preço guardado e os saldos zerados, com o conteúdo inteiro no
  *    recibo. Só quando o SKU nasceu no Receber, ficou sem saldo e sem reserva,
  *    todos os movimentos dele são desta chegada ou desta correção e nada
- *    aberto o usa (chegada a conferir, linha da abertura, pedido do portal).
+ *    aberto o usa (chegada a conferir, linha da abertura, pedido do portal,
+ *    pedido ainda não entregue).
  *    A linha da NF de chegada cancelada que aponta para ele passa para o
  *    certo, com o de antes em acerto_codigo: o Receber reusa o número que
  *    ela guarda quando o código volta como produto novo (pendingNewSkuFor).
@@ -92,6 +93,29 @@ export function skuCodesTrocados(codigos, skuDe, skuPara) {
 const temOSku = (dados, sku) => linhasDe(dados).some((l) => texto(l?.sku_code) === sku) || (Array.isArray(dados?.sku_codes) && dados.sku_codes.includes(sku));
 
 // --- Leitura -------------------------------------------------------------------------
+
+/**
+ * Quem segura a reserva do SKU na prateleira, para a recusa dizer: o pedido
+ * (ou a solicitação do portal ainda sem pedido) e quanto. A reserva separada
+ * e ainda não entregue (`picked`) também segura o saldo.
+ */
+async function quemReserva(leitor, db, cliente, sku, posicao) {
+  const reservas = doCliente((await leitor.get(db.collection("stock_reservations").where("sku_code", "==", sku))).docs, cliente).filter(
+    (d) => texto(d.data().location_id).toUpperCase() === posicao && ["reserved", "picked"].includes(texto(d.data().status)) && num(d.data().reserved_qty) > 0,
+  );
+  const porQuem = new Map();
+  for (const d of reservas) {
+    const reserva = d.data();
+    let nome = texto(reserva.order_number);
+    if (!nome && texto(reserva.customer_request_id)) {
+      const solicitacao = await leitor.get(db.collection("customer_requests").doc(texto(reserva.customer_request_id)));
+      nome = (solicitacao.exists && texto(solicitacao.data().request_number)) || texto(reserva.customer_request_id);
+    }
+    nome ||= d.id;
+    porQuem.set(nome, (porQuem.get(nome) ?? 0) + num(reserva.reserved_qty));
+  }
+  return [...porQuem].sort(([a], [b]) => a.localeCompare(b)).map(([nome, qtde]) => `${nome} ${fmt(qtde)}`);
+}
 
 /** O plano, a partir do banco de hoje, com cada condição conferida. Só leitura. */
 async function montarPlano(leitor, db, correcao) {
@@ -174,7 +198,14 @@ async function montarPlano(leitor, db, correcao) {
   for (const t of transferencias) {
     const aqui = saldos.filter((d) => texto(d.data().location_id).toUpperCase() === t.posicao);
     const livre = aqui.reduce((s, d) => s + num(d.data().qty_on_hand) - num(d.data().qty_reserved), 0);
-    if (livre < t.qtde) recusar(`o SKU ${skuDe} tem ${fmt(livre)} livre em ${t.posicao}, e as caixas pedem ${fmt(t.qtde)} (reservado: ${fmt(aqui.reduce((s, d) => s + num(d.data().qty_reserved), 0))})`);
+    if (livre < t.qtde) {
+      const reservado = aqui.reduce((s, d) => s + num(d.data().qty_reserved), 0);
+      const quem = await quemReserva(leitor, db, cliente, skuDe, t.posicao);
+      recusar(
+        `o SKU ${skuDe} tem ${fmt(livre)} livre em ${t.posicao}, e as caixas pedem ${fmt(t.qtde)} (reservado: ${fmt(reservado)}${quem.length ? `, ${quem.join(", ")}` : ""}). ` +
+          'A reserva sai antes: na linha do pedido, "Separar menos" com o que existe de fato, e a coordenação conclui a separação com a diferença',
+      );
+    }
   }
   const item = itemNf.data();
   return {
@@ -215,7 +246,7 @@ async function situacaoDosPassos(leitor, db, correcao, plano) {
  * o que ainda vai sair) e sem reserva; todo movimento dele é a entrada ou a
  * guarda desta chegada, ou a saída desta correção; e nada aberto o usa:
  * chegada a conferir, caixa de outra chegada, linha da abertura viva,
- * solicitação do portal em aberto.
+ * solicitação do portal em aberto, pedido ainda não entregue.
  */
 async function conferirRemocao(leitor, db, correcao, plano, passos) {
   const { cliente, sku_de: skuDe } = plano;
@@ -262,6 +293,15 @@ async function conferirRemocao(leitor, db, correcao, plano, passos) {
     (Array.isArray(d.data().items) ? d.data().items : []).some((i) => texto(i?.sku_code) === skuDe),
   );
   if (pedidos.length) motivos.push(`está na solicitação do portal ${pedidos.map((d) => texto(d.data().request_number) || d.id).join(", ")}, em aberto`);
+  // O pedido ainda não entregue com o SKU: a linha separada a menos, até zero, fica nele até a entrega
+  // (o PED-0001, 16/11/2026). O cadastro fica até lá; rodar de novo depois da entrega termina.
+  const itensDePedido = doCliente((await leitor.get(db.collection("order_items").where("sku_code", "==", skuDe))).docs, cliente);
+  const naoEntregues = [];
+  for (const orderId of new Set(itensDePedido.map((d) => texto(d.data().order_id)).filter(Boolean))) {
+    const pedido = await leitor.get(db.collection("orders").doc(orderId));
+    if (pedido.exists && !["ENTREGUE", "CANCELADO"].includes(texto(pedido.data().status).toUpperCase())) naoEntregues.push(texto(pedido.data().order_number) || orderId);
+  }
+  if (naoEntregues.length) motivos.push(`está no pedido ${naoEntregues.sort().join(", ")}, ainda não entregue`);
   return { apaga: motivos.length === 0, motivos, itensCancelados };
 }
 
@@ -271,7 +311,8 @@ async function conferirRemocao(leitor, db, correcao, plano, passos) {
  * `info`, o diagnóstico para o dry-run.
  */
 export async function lerTransferencia(leitor, db, correcao, { info = false } = {}) {
-  conferirCorrecao(correcao, tamanhoDoCodigo);
+  // O tamanho pode mudar: as peças vão para o SKU certo, com o tamanho dele (o XGG que era XG).
+  conferirCorrecao(correcao, tamanhoDoCodigo, { tamanhoPodeMudar: true });
   const final = await leitor.get(db.collection("operational_operations").doc(idDoRecibo(correcao)));
   const congelado = await leitor.get(db.collection("operational_operations").doc(idDoRecibo(correcao, "plano")));
   if (final.exists) {
@@ -344,7 +385,9 @@ export function descreverPassos(leitura) {
     linhas.push({ feito: m.entrada, texto: `ENTRADA ${fmt(m.qtde)} em ${plano.alvo.sku} (${plano.alvo.codigo}) em ${m.posicao} · Ajuste +, não cobra` });
   }
   if (!passos.movimentos.length) linhas.push({ feito: false, texto: "nenhum movimento: a chegada ainda não teve entrada, e a entrada já sai no SKU certo" });
-  for (const c of plano.caixas) linhas.push({ feito: passos.caixa, texto: `${c.codigo}: a linha de ${fmt(c.qtde)} un. passa para ${plano.alvo.sku} · ${plano.alvo.codigo} · "${plano.alvo.nome}" (a etiqueta impressa fica velha)` });
+  const tamanhoDe = tamanhoDoCodigo(plano.de) ?? "";
+  const tamanho = plano.alvo.tamanho && tamanhoDe && tamanhoDe !== plano.alvo.tamanho ? ` · tamanho ${tamanhoDe} → ${plano.alvo.tamanho}` : "";
+  for (const c of plano.caixas) linhas.push({ feito: passos.caixa, texto: `${c.codigo}: a linha de ${fmt(c.qtde)} un. passa para ${plano.alvo.sku} · ${plano.alvo.codigo} · "${plano.alvo.nome}"${tamanho} (a etiqueta impressa fica velha)` });
   linhas.push({ feito: passos.caixa, texto: `tarefas de guarda das caixas e linha ${plano.item_nf.line_number} da NF: SKU, código e nome do certo, com o de antes em acerto_codigo` });
   linhas.push(
     remocao.apaga

@@ -1,9 +1,44 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { chaveDoMovimento, linhasTransferidas, skuCodesTrocados, transferenciasPorPosicao } from "./transferir.mjs";
+import { tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
+import { ErroDaCorrecao, conferirCorrecao } from "./comum.mjs";
+import { chaveDoMovimento, descreverPassos, linhasTransferidas, skuCodesTrocados, transferenciasPorPosicao } from "./transferir.mjs";
 
 const alvo = { sku: "BTG-000142", codigo: "A.01.0810.002.M", nome: "Polo Masculino Piquet Azul-Gralha", tamanho: "M" };
+
+test("o tamanho só muda na transferência: o XGG que era XG vai para o SKU do XG", () => {
+  const xgg = { cliente: "BTG Pactual", de: "A.01.0806.005.XGG", para: "A.01.0806.005.XG", caixas: ["CX-000227"], genero: "Masculino" };
+  assert.doesNotThrow(() => conferirCorrecao(xgg, tamanhoDoCodigo, { tamanhoPodeMudar: true }));
+  assert.throws(
+    () => conferirCorrecao(xgg, tamanhoDoCodigo),
+    (erro) => erro instanceof ErroDaCorrecao && /o tamanho muda \(A\.01\.0806\.005\.XGG → A\.01\.0806\.005\.XG\)/.test(erro.message),
+    "no mesmo SKU, o tamanho do cadastro não muda",
+  );
+  const mesmoTamanho = { ...xgg, de: "A.02.0810.002.M", para: "A.01.0810.002.M" };
+  assert.doesNotThrow(() => conferirCorrecao(mesmoTamanho, tamanhoDoCodigo));
+});
+
+test("o dry-run diz o tamanho que muda na linha da caixa", () => {
+  const leitura = {
+    plano: {
+      de: "A.01.0806.005.XGG",
+      sku_de: "BTG-000092",
+      alvo: { sku: "BTG-000074", codigo: "A.01.0806.005.XG", nome: "Polo Masculino Piquet Preto", tamanho: "XG" },
+      caixas: [{ codigo: "CX-000227", qtde: 41, posicao: "B-02" }],
+      item_nf: { line_number: 2 },
+    },
+    passos: { movimentos: [{ posicao: "B-02", qtde: 41, saida: false, entrada: false }], caixa: false },
+    remocao: { apaga: false, motivos: ["fica com 10 (B-02 51 hoje)"] },
+  };
+  const textos = descreverPassos(leitura).map((p) => p.texto);
+  assert.deepEqual(textos.slice(0, 3), [
+    "SAIDA 41 de BTG-000092 (A.01.0806.005.XGG) em B-02 · Ajuste −, não cobra",
+    "ENTRADA 41 em BTG-000074 (A.01.0806.005.XG) em B-02 · Ajuste +, não cobra",
+    'CX-000227: a linha de 41 un. passa para BTG-000074 · A.01.0806.005.XG · "Polo Masculino Piquet Preto" · tamanho XGG → XG (a etiqueta impressa fica velha)',
+  ]);
+  assert.equal(textos.at(-1), "não apaga BTG-000092: fica com 10 (B-02 51 hoje)");
+});
 
 test("o que sai e entra por prateleira: as caixas somadas onde estão, e a caixa sem saldo fica de fora", () => {
   assert.deepEqual(

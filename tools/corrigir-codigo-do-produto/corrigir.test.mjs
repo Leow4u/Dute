@@ -15,6 +15,18 @@ test("a correção da CX-000229 é a do e-mail do Guilherme", () => {
   assert.equal(new Set(CORRECOES.map((c) => c.id)).size, CORRECOES.length, "o id de cada correção é único");
 });
 
+test("as correções da separação do PED-0001: o XGG que era XG nas CX-000227 e CX-000221", () => {
+  const porId = new Map(CORRECOES.map((c) => [c.id, c]));
+  const masculina = porId.get("cx-000227-a01-0806-005-xg");
+  assert.deepEqual([masculina.cliente, masculina.de, masculina.para, masculina.caixas, masculina.genero], [BTG, "A.01.0806.005.XGG", "A.01.0806.005.XG", ["CX-000227"], "Masculino"]);
+  const feminina = porId.get("cx-000221-a02-0806-005-xg");
+  assert.deepEqual([feminina.cliente, feminina.de, feminina.para, feminina.caixas, feminina.genero], [BTG, "A.02.0806.005.XGG", "A.02.0806.005.XG", ["CX-000221"], "Feminino"]);
+  for (const c of [masculina, feminina]) {
+    assert.ok(c.referencia && c.motivo && c.decisao, `${c.id}: referência, motivo e decisão`);
+    assert.equal(c.nome, undefined, `${c.id}: o tamanho muda, então só pela transferência, e o nome é o do SKU certo`);
+  }
+});
+
 test("o nome vem da família do código novo, no padrão", () => {
   const skus = [
     errado,

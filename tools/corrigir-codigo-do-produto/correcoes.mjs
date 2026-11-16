@@ -12,6 +12,10 @@
  * ativos dela, como a padronização de 06/11); sem família, o nome de hoje com
  * o gênero de `genero` no lugar do outro. Um texto é o nome exato. Na
  * transferência, o produto certo fica com o nome que tem.
+ *
+ * O tamanho errado (o XGG lançado no lugar do XG, 16/11/2026) só se corrige
+ * pela transferência: as peças vão para o SKU que já tem o código certo, com
+ * o tamanho dele. No mesmo SKU, o tamanho não muda, e a correção recusa.
  */
 
 export const ATOR = {
@@ -35,5 +39,30 @@ export const CORRECOES = [
       "Na segunda conferência da CX-000229, o código anotado A.02.0810.002.M é o da polo feminina; a peça e a NF são a polo masculina A.01.0810.002.M.",
     decisao:
       "Leonardo, 11/11/2026: só as 92 peças da CX-000229, com a linha da NF corrigida. O A.01.0810.002.M já existe (BTG-000219): as peças passam para ele. O A.02.0810.002.M (BTG-000213) fica: é a feminina de verdade, com as 79 da CX-000228, da outra chegada da mesma NF 046315.",
+  },
+  {
+    id: "cx-000227-a01-0806-005-xg",
+    cliente: "BTG Pactual",
+    de: "A.01.0806.005.XGG",
+    para: "A.01.0806.005.XG",
+    caixas: ["CX-000227"],
+    genero: "Masculino",
+    referencia: "Leonardo, 16/11/2026: correções da separação do PED-0001",
+    motivo:
+      "Na separação do PED-0001, a linha da polo masculina piquet preta XGG apontou 41 peças na CX-000227; na caixa, essas 41 são XG (A.01.0806.005.XG). As 10 XGG da CX-000215 estão certas.",
+    decisao:
+      "Leonardo, 16/11/2026: corrigir no sistema. As 41 da CX-000227 passam para o A.01.0806.005.XG; o A.01.0806.005.XGG continua, com as 10 da CX-000215.",
+  },
+  {
+    id: "cx-000221-a02-0806-005-xg",
+    cliente: "BTG Pactual",
+    de: "A.02.0806.005.XGG",
+    para: "A.02.0806.005.XG",
+    caixas: ["CX-000221"],
+    genero: "Feminino",
+    referencia: "Leonardo, 16/11/2026: correções da separação do PED-0001",
+    motivo:
+      "Na separação do PED-0001, a linha da polo feminina piquet preta XGG (BTG-000186) apontou 12 peças na CX-000221; o tamanho dentro da caixa é XG (A.02.0806.005.XG).",
+    decisao: "Leonardo, 16/11/2026: corrigir no sistema. As 12 da CX-000221 passam para o A.02.0806.005.XG.",
   },
 ];
