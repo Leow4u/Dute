@@ -41,6 +41,8 @@ BTG-000088. O plano usa essas formas.
 | `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4; a linha da abertura dessas caixas sai do registro (o Mapa e as Etiquetas montam o conteúdo pelas linhas), com o que ela tinha guardado no evento. Com `itens` ([{ codigo, qtde }]), a baixa é parcial: a linha diminui, ou sai se zerar, e a caixa continua | 8, 10 |
 | `caixas` | Remove as caixas 5, 19, 32 e 130 e corrige SKU e quantidade das linhas da abertura das outras, para o Mapa e as Etiquetas | 4 a 13 |
 | `arquivar` | Arquiva os SKUs errados já em zero, inclusive no portal | 2, 6, 7, 11, 12 |
+| `saldao-novembro` | O saldão de 03/11: zera os 8 itens da planilha e remove as caixas 131 e 132 | (telefone, 03/11) |
+| `recontagem-1611` | Desfaz a quarta rodada pela recontagem de 16/11: baixa parcial das CX-000136, CX-000138 e CX-000140, o saldo e as linhas | 14 |
 
 Movimentos saem com origem `functions_inventory_movement` e não entram na
 cobrança (`billingMovementDirection` só conta `wms_receiving` e
@@ -350,6 +352,55 @@ O tipo `zerar_sku` tirou todo o saldo e as linhas deles: 47 peças em B-09
 P 3 e M 1 na CX-000132; jaqueta copa azul G 1 na CX-000190). A CX-000131 e a
 CX-000132 ficaram vazias e saem do registro (`saldao2-cx-131` e `-132`).
 Aplicado em 03/11/2026: as 8 zeragens e as 2 remoções de caixa, sem falha.
+
+## Quinta rodada: a recontagem de 16/11 desfaz a quarta
+
+Na separação do PED-0001 faltaram cerca de 20 G, 20 GG e 20 M da azul-marinho.
+A operação recontou peça por peça as três caixas de B-10, sem usar a etiqueta
+do fornecedor (folha do PED-0001, 16/11/2026):
+
+| Caixa | Abertura | Quarta rodada (03/11) | Recontagem (16/11) |
+|---|---|---|---|
+| CX-000136 | G 72 | G 88 | G 72 |
+| CX-000138 | GG 41 | GG 61, M 1, G 4, XGG 1 | GG 41 |
+| CX-000140 | M 72 | M 90 | M 72 |
+
+A contagem da abertura estava certa, e as etiquetas do fornecedor, erradas: as
+60 peças que a quarta rodada somou (G 20, GG 20, M 19, XGG 1) não existem. O
+bloco `recontagem-1611` tira essas peças pelo `baixar_caixa` com `itens`: a
+SAIDA do saldo em B-10 (Ajuste −, fora da cobrança) e a linha da abertura que
+diminui (GG da 138, G da 136, M da 140) ou sai (M, G e XGG da 138), com os
+contadores da caixa. O evento diz o motivo (`texto_da_baixa`), e não "saldão".
+
+Duas travas novas no `baixar_caixa`, para a caixa que a separação já abriu
+(separação com caixas, parte 3):
+
+- a linha não fica com menos do que a separação já tirou da caixa
+  (`taken_lines`); se ficaria, o dry-run recusa e pede para conferir de qual
+  caixa a peça saiu;
+- a recusa por falta de saldo livre diz o reservado: a reserva do PED-0001 sai
+  na conclusão da separação com a diferença.
+
+A ordem: a coordenação conclui o PED-0001 com a diferença; dry-run só do bloco;
+gravação com o dry-run limpo; etiquetas novas das três caixas (Estoque ›
+Etiquetas).
+
+```powershell
+cd C:\DEV\Dute
+node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --bloco recontagem-1611
+```
+
+```powershell
+cd C:\DEV\Dute
+node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --bloco recontagem-1611 --aplicar --confirmo "ACERTO BTG dute-prod"
+```
+
+No emulador (16/11/2026), com o cenário semeado e o plano aplicado até o
+`saldao-novembro`, o dry-run do bloco recusou com a caixa aberta além da
+recontagem (a separação tirando 80 G da CX-000136) e com a reserva de 92 G em
+B-10; com a reserva de 72 (a falta solta na conclusão), ficou limpo, e a
+gravação deixou a CX-000136 com G 72, a CX-000138 só com GG 41 e a CX-000140
+com M 72, e B-10 com G 72, GG 41, M 72 e XGG 0.
 
 ## Validação no emulador (30/10/2026)
 

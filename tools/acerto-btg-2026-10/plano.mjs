@@ -37,6 +37,7 @@ export const PLANO = {
 };
 
 const ITEM = (n, detalhe) => `E-mail Cristiane 29/10, item ${n}: ${detalhe}`;
+const RECONTAGEM = (detalhe) => `Recontagem de 16/11/2026, separação do PED-0001: ${detalhe}`;
 
 export const BLOCOS = [
   {
@@ -389,6 +390,47 @@ export const BLOCOS = [
       // A CX-000131 (PAN cinza P e PP) e a CX-000132 (azul, índigo, branca e cinza P/M) ficaram vazias depois do saldão.
       { id: "saldao2-cx-131", tipo: "remover_caixa", caixa: "CX-000131", motivo: "Saldão de 03/11/2026: caixa vazia, conteúdo na planilha do saldão" },
       { id: "saldao2-cx-132", tipo: "remover_caixa", caixa: "CX-000132", motivo: "Saldão de 03/11/2026: caixa vazia, conteúdo na planilha do saldão" },
+    ],
+  },
+  {
+    // Na separação do PED-0001 faltaram 20 G, 20 GG e cerca de 20 M da azul-marinho. A recontagem de 16/11/2026
+    // (folha do PED-0001, peça por peça, sem a etiqueta do fornecedor) achou nas três caixas de B-10 o que a abertura
+    // tinha contado: CX-000136 com G 72, CX-000138 só com GG 41 e CX-000140 com M 72. O que a quarta rodada (03/11)
+    // somou pelas etiquetas do fornecedor não existe: sai do saldo (SAIDA, Ajuste −, fora da cobrança) e das linhas
+    // da abertura das caixas: as 60 peças da quarta rodada (G 20, GG 20, M 19, XGG 1). A reserva do PED-0001 nessas
+    // peças sai antes, na conclusão da separação com a diferença; até lá, o dry-run diz quanto está reservado.
+    id: "recontagem-1611",
+    titulo: "Recontagem de 16/11: a azul-marinho volta ao que a abertura contou",
+    ops: [
+      {
+        id: "recontagem-cx136",
+        tipo: "baixar_caixa",
+        caixa: "CX-000136",
+        itens: [{ codigo: "A.01.0805.002.G", qtde: 16 }],
+        texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou G 72, e não 88",
+        motivo: RECONTAGEM("a CX-000136 tem G 72; a quarta rodada (03/11) somou 16 pela etiqueta do fornecedor"),
+      },
+      {
+        id: "recontagem-cx138",
+        tipo: "baixar_caixa",
+        caixa: "CX-000138",
+        itens: [
+          { codigo: "A.01.0805.002.GG", qtde: 20 },
+          { codigo: "A.01.0805.002.M", qtde: 1 },
+          { codigo: "A.01.0805.002.G", qtde: 4 },
+          { codigo: "A.01.0805.002.XGG", qtde: 1 },
+        ],
+        texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou só GG 41",
+        motivo: RECONTAGEM("a CX-000138 tem só GG 41; a quarta rodada (03/11) somou GG 20, M 1, G 4 e XGG 1 pela etiqueta do fornecedor"),
+      },
+      {
+        id: "recontagem-cx140",
+        tipo: "baixar_caixa",
+        caixa: "CX-000140",
+        itens: [{ codigo: "A.01.0805.002.M", qtde: 18 }],
+        texto_da_baixa: "saíram do registro: a recontagem de 16/11 achou M 72, e não 90",
+        motivo: RECONTAGEM("a CX-000140 tem M 72; a quarta rodada (03/11) somou 18 pela etiqueta do fornecedor"),
+      },
     ],
   },
 ];

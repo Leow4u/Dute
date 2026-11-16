@@ -948,18 +948,28 @@ const OPS = {
         }
       }
       const itens = [];
-      const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}${parcial ? ` · baixa parcial de ${alvos.length} item(ns)` : ""}`];
+      const estado = [`caixa ${op.caixa}${box ? ` em ${box.posicao} · status ${text(box.data.status) || "?"} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} unidade(s) no registro` : " (registro já removido)"}${parcial ? ` · baixa parcial de ${alvos.length} item(ns)` : ""}`];
       const previsto = [];
+      // O que as separações já tiraram da caixa, por SKU (separação com caixas, parte 3): a linha não fica com menos que isso.
+      const retirado = new Map();
+      for (const t of Array.isArray(box?.data.taken_lines) ? box.data.taken_lines : []) {
+        const sku = text(t?.sku_code);
+        if (sku) retirado.set(sku, (retirado.get(sku) ?? 0) + num(t.qty));
+      }
       for (const { linha, qtde } of alvos) {
         const skuCode = text(linha.data.sku_code);
         const posicao = text(linha.data.location_id || box?.data.location_id).toUpperCase();
         const naLinha = num(linha.data.counted_qty);
+        const tirado = retirado.get(skuCode) ?? 0;
+        if (naLinha - qtde < tirado) {
+          throw new Erro(`a separação já tirou ${fmt(tirado)} de ${skuCode} da caixa ${op.caixa}; a linha não pode ficar com ${fmt(naLinha - qtde)}. Confira de qual caixa a separação tirou de verdade antes de baixar`);
+        }
         const saldos = await saldosDoSku(skuCode);
         const alvo = saldos.find((r) => r.posicao === posicao);
         const disponivel = alvo ? num(alvo.data.qty_on_hand) - num(alvo.data.qty_reserved) : 0;
         const saida = await reciboExiste(idReciboMovimento(chave(op, linha.id)));
-        if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a baixa pede ${fmt(qtde)}`);
-        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(naLinha)} em ${posicao} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
+        if (!saida && disponivel < qtde) throw new Erro(`${skuCode} em ${posicao} tem ${fmt(disponivel)} disponível, a baixa pede ${fmt(qtde)}${alvo && num(alvo.data.qty_reserved) ? ` (reservado ${fmt(num(alvo.data.qty_reserved))}: a reserva do pedido sai antes, na conclusão da separação)` : ""}`);
+        estado.push(`  ${skuCode} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(naLinha)} em ${posicao}${tirado ? ` · a separação já tirou ${fmt(tirado)} desta caixa` : ""} · saldo ${descreverSaldos(saldos)}${saida ? " · baixa já gravada" : ""}`);
         if (!saida) previsto.push(`SAIDA ${fmt(qtde)} de ${skuCode} em ${posicao}`);
         previsto.push(qtde >= naLinha ? `linha de ${skuCode} (${fmt(naLinha)}) sai do registro da abertura da caixa ${op.caixa}` : `linha de ${skuCode} na caixa ${op.caixa}: ${fmt(naLinha)} → ${fmt(naLinha - qtde)}`);
         itens.push({ linha, skuCode, posicao, qtde, saida, box });
@@ -1020,7 +1030,8 @@ const OPS = {
             }
             tx.update(boxRef, mudanca);
           }
-          evento(tx, op, restante > 0 ? "opening_line.reduced_by_acerto" : "opening_line.removed_by_acerto", restante > 0 ? `Linha da caixa ${op.caixa} reduzida` : `Linha da caixa ${op.caixa} retirada da abertura`, `${item.skuCode} · ${registro.client_item_code} · ${fmt(item.qtde)} un. saíram para o saldão${restante > 0 ? `; ficam ${fmt(restante)}` : ""}`, "opening_inventory_line", item.linha.id, {
+          // `texto_da_baixa`: por que as peças saíram (o saldão de 03/11 é o padrão; a recontagem de 16/11 diz o dela).
+          evento(tx, op, restante > 0 ? "opening_line.reduced_by_acerto" : "opening_line.removed_by_acerto", restante > 0 ? `Linha da caixa ${op.caixa} reduzida` : `Linha da caixa ${op.caixa} retirada da abertura`, `${item.skuCode} · ${registro.client_item_code} · ${fmt(item.qtde)} un. ${text(op.texto_da_baixa) || "saíram para o saldão"}${restante > 0 ? `; ficam ${fmt(restante)}` : ""}`, "opening_inventory_line", item.linha.id, {
             caixa: op.caixa,
             antes: registro,
             depois: { counted_qty: restante },
