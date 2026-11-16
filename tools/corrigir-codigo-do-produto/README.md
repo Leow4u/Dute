@@ -28,6 +28,11 @@ A ferramenta escolhe pelo banco, e o dry-run diz qual:
   própria chegada, sem outro movimento: o SKU passa a ter o código e o nome
   certos, sem movimento nenhum (`corrigir.mjs`).
 
+O tamanho errado (o XGG lançado no lugar do XG, 16/11/2026) só vai pela
+transferência: as peças passam para o SKU que já tem o código certo, e a linha
+da caixa, da tarefa de guarda e da NF ficam com o tamanho dele. No mesmo SKU,
+o tamanho do cadastro não muda, e a correção recusa.
+
 ## Transferência: o que grava
 
 Passo a passo, cada um com recibo próprio. Se parar no meio, rodar de novo
@@ -67,7 +72,9 @@ BTG já recebeu.
 - todo movimento dele é a entrada ou a guarda desta chegada, ou a saída desta
   correção;
 - nada aberto usa o SKU: chegada a conferir, chegada com entrada, caixa de
-  outra chegada, linha da abertura ou solicitação do portal em aberto.
+  outra chegada, linha da abertura, solicitação do portal em aberto ou pedido
+  ainda não entregue (a linha separada a menos, até zero, fica no pedido até
+  a entrega).
 
 Senão, as peças vão para o certo do mesmo jeito, e o dry-run diz por que o
 cadastro fica. Se o motivo some depois (por exemplo, a chegada aberta é
@@ -100,13 +107,16 @@ de hoje com o gênero da correção.
 O dry-run recusa, sem gravar nada, quando:
 
 - **a caixa não serve**: não veio do Receber, não tem exatamente uma linha com
-  o código errado, ou a separação já tirou dela;
+  o código errado, ou a separação já tirou dela o código errado (o que a
+  separação tirou de outro produto da mesma caixa não atrapalha);
 - **o SKU errado está em outra caixa** da chegada que não está na correção
   (`caixas`);
 - **na transferência**, falta saldo livre na prateleira para o que a caixa
-  tem, ou a caixa já tem uma linha do SKU certo;
+  tem, ou a caixa já tem uma linha do SKU certo. A recusa diz qual pedido
+  segura a reserva: antes, na linha dele, "Separar menos" com o que existe de
+  fato, e a coordenação conclui a separação com a diferença;
 - **no mesmo SKU**, o SKU não nasceu na chegada, ou teve movimento de fora,
-  pedido, reserva ou solicitação aberta;
+  pedido, reserva ou solicitação aberta, ou o tamanho muda;
 - **o estoque está congelado** (`system_controls/inventory`).
 
 ## Como rodar, na máquina do Leonardo
@@ -188,6 +198,13 @@ O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
    aberta, que sai depois de ela ser cancelada.
 5. **O caminho no mesmo SKU**, inclusive antes da guarda e antes da entrada.
 6. **As recusas.**
+7. **O PED-0001**: o XG lançado como XGG numa caixa com GG, a XGG certa em
+   outra caixa da mesma prateleira e a feminina nascida na chegada. A
+   separação tira as GG da caixa do erro e "Separar menos" registra a falta;
+   a correção recusa enquanto o pedido reserva as peças e diz qual pedido;
+   depois da conclusão pela coordenação, as peças passam para o XG com o
+   tamanho dele, o retirado das GG fica, o cadastro errado só sai depois da
+   entrega, e um pedido novo de XG acha as peças na caixa.
 
 ```powershell
 cd C:\DEV\Dute
@@ -244,3 +261,57 @@ não pedem índice composto.
     com a correção do aviso de chegada de 10/11.
   - **Etiqueta:** o Leonardo reimprimiu a etiqueta da CX-000229 e a colocou
     na caixa, em 11/11/2026. Com isso, a correção está concluída.
+
+## As correções da separação do PED-0001 (16/11/2026)
+
+Na separação do PED-0001, o Leonardo achou duas caixas com o tamanho lançado
+errado no sistema:
+
+- **CX-000227**: a linha da polo masculina piquet preta XGG
+  (`A.01.0806.005.XGG`) apontou 41 peças nela, e as 41 são XG
+  (`A.01.0806.005.XG`). Por isso a linha da XG não achava a caixa. As 10 XGG
+  da CX-000215 estão certas. A mesma caixa tem as 30 GG da linha da GG.
+- **CX-000221**: a linha da polo feminina piquet preta XGG
+  (`A.02.0806.005.XGG`, BTG-000186) apontou 12 peças nela, e o tamanho dentro
+  é XG (`A.02.0806.005.XG`). O BTG-000186 é posterior ao acerto de 03/11 (o
+  último SKU que o acerto criou foi o BTG-000180): o dry-run confirma se a
+  caixa veio do Receber, a única origem que esta ferramenta corrige.
+
+As duas estão em `correcoes.mjs` (`cx-000227-a01-0806-005-xg` e
+`cx-000221-a02-0806-005-xg`), pelo caminho da transferência, que precisa do
+código certo no cadastro.
+
+A ordem, porque o pedido reserva essas peças e a correção recusa enquanto
+houver reserva (a recusa diz o pedido):
+
+1. **Na bancada do PED-0001.** Na linha da XGG masculina, "Separar menos" com
+   10 (as da CX-000215, a caixa mais antiga da prateleira, de onde o sistema
+   baixa primeiro), motivo falta. Na linha da XGG feminina, "Separar menos"
+   com 0, motivo falta. Se uma das duas linhas já foi separada inteira,
+   "Desfazer" antes: a linha que tirou a XGG da CX-000227 ou da CX-000221 faz
+   a correção recusar a caixa.
+2. **A coordenação conclui a separação** com a diferença: a reserva das 41 e
+   das 12 sai.
+3. **Dry-run**, conferindo em cada uma: o caminho (transferência para o XG,
+   com o SKU e o nome dele), a caixa (prateleira, 41 e 12 peças), o SKU errado
+   (onde nasceu e o saldo) e a lista "grava". Na masculina, o
+   `A.01.0806.005.XGG` fica (as 10 da CX-000215); na feminina, o BTG-000186
+   fica até a entrega do pedido.
+
+   ```powershell
+   cd C:\DEV\Dute
+   node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto dute-prod --correcao cx-000227-a01-0806-005-xg --correcao cx-000221-a02-0806-005-xg
+   ```
+
+4. **Gravar**, só com o dry-run limpo:
+
+   ```powershell
+   cd C:\DEV\Dute
+   node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto dute-prod --correcao cx-000227-a01-0806-005-xg --correcao cx-000221-a02-0806-005-xg --aplicar --confirmo "CORRIGIR CODIGO dute-prod"
+   ```
+
+5. **Reimprimir** as etiquetas da CX-000227 e da CX-000221 (Estoque ›
+   Etiquetas) e trocar nas caixas.
+6. **Depois da entrega do PED-0001**, rodar o dry-run e a gravação da
+   feminina de novo: o BTG-000186 sai do cadastro.
+7. **Avisar a BTG**: o portal mostrava XGG que eram XG.

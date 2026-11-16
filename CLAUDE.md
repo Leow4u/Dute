@@ -521,8 +521,11 @@ documentação de produto e operação está em `docs/`.
   cliente. O código do cliente é identidade imutável no Catálogo; o digitado
   errado no Receber se corrige por `tools/corrigir-codigo-do-produto`: com o
   código certo no cadastro, as peças passam para ele e o cadastro errado sai
-  (apagado, como no "Remover para corrigir", nunca arquivado); com ele livre,
-  o mesmo SKU muda de código (roteiro e recusas no README da pasta). Ver
+  (apagado, como no "Remover para corrigir", nunca arquivado, e só sem pedido
+  por entregar); com ele livre, o mesmo SKU muda de código. O tamanho errado
+  (o XGG que era XG, 16/11/2026) só vai pela transferência, e a peça reservada
+  por um pedido só depois de a linha dele separar a menos e a coordenação
+  concluir (roteiro e recusas no README da pasta). Ver
   `docs/multicliente-modelos-de-operacao.md` (inclui a ordem dos
   próximos PRs: mobiliário, com patrimônio, e insumos).
 - **O nome do produto tem padrão (decidido em 06/11/2026):** o mesmo nome em
