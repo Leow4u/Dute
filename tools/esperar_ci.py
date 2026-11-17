@@ -12,6 +12,11 @@ coisas:
   workflow_run desse commit pode ter sido tirado da fila por este, que chegou
   depois (o GitHub só guarda um pendente no grupo). Se o CI do HEAD ainda
   corre ou falhou, não publica: o workflow_run dele publica, ou nada sobe.
+  Se o HEAD não tem CI e só mudou, desde o commit que disparou, o que o CI
+  ignora no push (`docs/**` e `**/*.md`, IGNORADOS_PELO_CI), publica o HEAD:
+  esse push nunca ganha CI, e sem isto o código do commit de antes só subia
+  no próximo push com código (incidente de 17/11/2026: o #621, só de docs,
+  virou o HEAD antes de o CI do #620 acabar, e o #620 não subiu).
 
 Até 22/10/2026 a fila era do job de publicação do ci.yml, que só entrava nela
 quando os testes do commit acabavam. Os testes de pushes seguidos terminam fora
@@ -36,6 +41,16 @@ from typing import Any, Callable
 
 class ErroTransitorio(Exception):
     """Falha de rede ou 5xx/429 da API: tenta de novo na próxima rodada."""
+
+
+# O que o CI ignora no push na main (on.push.paths-ignore do ci.yml): o push
+# que só muda isso não ganha CI. A lista é a mesma do ci.yml, travada em
+# test_esperar_ci.py.
+IGNORADOS_PELO_CI = ("**/*.md", "docs/**")
+
+# A comparação do GitHub devolve no máximo 300 arquivos: com 300, a lista
+# pode estar cortada, e o resto pode ter código.
+ARQUIVOS_NA_COMPARACAO = 300
 
 
 class GitHub:
@@ -71,17 +86,40 @@ class GitHub:
         consulta = urllib.parse.urlencode({"head_sha": sha, "event": "push", "branch": "main", "per_page": 10})
         return self._get(f"/repos/{self.repo}/actions/workflows/{self.workflow}/runs?{consulta}")["workflow_runs"]
 
+    def arquivos_entre(self, base: str, head: str) -> list[str] | None:
+        """Os arquivos que mudaram de base até head, ou None quando head não é só um avanço de base ou a lista pode estar cortada."""
+        comparacao = self._get(f"/repos/{self.repo}/compare/{base}...{head}")
+        arquivos = comparacao.get("files")
+        if comparacao.get("status") != "ahead" or not isinstance(arquivos, list) or len(arquivos) >= ARQUIVOS_NA_COMPARACAO:
+            return None
+        return [str(arquivo.get("filename", "")) for arquivo in arquivos]
 
-def sha_para_homologacao(head: str, ci_sha: str, execucoes_do_head: list[dict[str, Any]]) -> str | None:
+
+def so_o_que_o_ci_ignora(arquivos: list[str] | None) -> bool:
+    """Todos os arquivos estão no que o CI ignora no push: `**/*.md` (em qualquer pasta) e `docs/**`. O filtro do GitHub diferencia maiúscula."""
+    if not arquivos:
+        return False
+    return all(caminho.endswith(".md") or caminho.startswith("docs/") for caminho in arquivos)
+
+
+def sha_para_homologacao(
+    head: str,
+    ci_sha: str,
+    execucoes_do_head: list[dict[str, Any]],
+    arquivos_ate_o_head: list[str] | None = None,
+) -> str | None:
     """Commit a publicar, ou None.
 
     ci_sha é o commit do CI que disparou o workflow_run (já verde). execucoes_do_head
     são as execuções de push do CI do HEAD, ignoradas quando os dois SHAs coincidem.
+    arquivos_ate_o_head são os arquivos que mudaram de ci_sha até o HEAD (None
+    quando não se sabe): o HEAD sem CI que só mudou o que o CI ignora sobe.
     """
     if head == ci_sha:
         return ci_sha
     if not execucoes_do_head:
-        return None
+        # O push que só mudou docs/** e **/*.md nunca ganha CI: o CI verde de antes vale para ele.
+        return head if so_o_que_o_ci_ignora(arquivos_ate_o_head) else None
     execucao = max(execucoes_do_head, key=lambda item: item["id"])
     if execucao.get("status") == "completed" and execucao.get("conclusion") == "success":
         return head
@@ -152,6 +190,8 @@ def main_sha(env: dict[str, str] | None = None, api: Any = None) -> int:
     try:
         head = api.head_main()
         execucoes = [] if head == ci_sha else api.execucoes_ci(head)
+        # Sem CI no HEAD, o que mudou até ele diz se ele nunca vai ter CI (só docs e .md).
+        arquivos = api.arquivos_entre(ci_sha, head) if head != ci_sha and not execucoes else None
     except ErroTransitorio as erro:
         print(f"::error::API do GitHub falhou ({erro}); nada sobe. Rode de novo a Homologação quando a API responder.")
         _gravar_sha(env.get("GITHUB_OUTPUT"), None)
@@ -160,10 +200,12 @@ def main_sha(env: dict[str, str] | None = None, api: Any = None) -> int:
         print(f"::error::GitHub respondeu {erro.code} em {erro.filename}. Confira as permissões do job (actions: read, contents: read).")
         _gravar_sha(env.get("GITHUB_OUTPUT"), None)
         return 1
-    sha = sha_para_homologacao(head, ci_sha, execucoes)
+    sha = sha_para_homologacao(head, ci_sha, execucoes, arquivos)
     _gravar_sha(env.get("GITHUB_OUTPUT"), sha)
     if sha == ci_sha:
         print(f"CI de {sha[:7]} verde e ainda é o HEAD; publicando.")
+    elif sha and not execucoes:
+        print(f"::notice::{ci_sha[:7]} não é mais o HEAD; o HEAD {sha[:7]} só mudou o que o CI ignora (docs e .md) e não terá CI: publicando o HEAD, com o CI verde de {ci_sha[:7]}.")
     elif sha:
         print(f"::notice::{ci_sha[:7]} não é mais o HEAD; o CI de {sha[:7]} está verde, publicando esse.")
     else:
