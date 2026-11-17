@@ -16,7 +16,9 @@
  * origens dos parados não vale aqui). O dia é o de São Paulo do created_at do
  * movimento, a hora do servidor; o campo data, que a movimentação manual e a
  * API deixam digitar, não conta. A ENTRADA da contagem de abertura vale um dia
- * só por cliente, o do started_at da sessão dele. O local é o location_id como
+ * só por cliente, o do started_at da sessão dele. A ENTRADA da recontagem da
+ * caixa vale o dia da caixa, que o servidor grava no movimento (fifo_day): a
+ * peça achada a mais sempre esteve na caixa. O local é o location_id como
  * o alocador o compara, só sem o espaço das pontas (chaveDoLocal).
  *
  * A ordem do pedido: primeiro o local com data livre, do dia livre mais antigo
@@ -213,8 +215,10 @@ export function skusQuePrecisamDasDatas(itens: readonly ItemDoPedido[], saldosPo
  * As ENTRADAs do razão de um SKU por local (chaveDoLocal). O dia é o
  * do created_at em São Paulo; a ENTRADA da abertura do cliente (com o
  * opening_inventory_session_id da sessão) vale o dia do started_at dela, e,
- * sem started_at válido, o do created_at. O que não é ENTRADA, ou não tem
- * local ou quantidade, fica de fora.
+ * sem started_at válido, o do created_at. A ENTRADA da recontagem da caixa
+ * (contagem por caixa) leva o dia da caixa em fifo_day ("AAAA-MM-DD"), que o
+ * servidor grava; o fifo_day que não é dia de calendário cai no created_at.
+ * O que não é ENTRADA, ou não tem local ou quantidade, fica de fora.
  */
 export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertura = {}): Map<string, Entrada[]> {
   const sessao = texto(abertura?.id);
@@ -228,8 +232,9 @@ export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertu
     const pecas = quantidade(movimento.quantity ?? movimento.qtde);
     if (!local || pecas <= 0) continue;
     const daAbertura = diaDaAbertura !== null && texto(movimento.opening_inventory_session_id) === sessao;
+    const diaDaCaixa = typeof movimento.fifo_day === "string" ? diaValido(movimento.fifo_day.trim()) : null;
     const doLocal = porLocal.get(local) ?? [];
-    doLocal.push({ dia: daAbertura ? diaDaAbertura : diaDeSaoPaulo(movimento.created_at), quantidade: pecas });
+    doLocal.push({ dia: daAbertura ? diaDaAbertura : diaDaCaixa ?? diaDeSaoPaulo(movimento.created_at), quantidade: pecas });
     porLocal.set(local, doLocal);
   }
   return porLocal;

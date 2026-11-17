@@ -628,7 +628,7 @@ export function createEvent(
  * A linha da separação de uma reserva do pedido: a aprovação cria o item, a
  * reserva e a linha com o mesmo número (decideCustomerRequestTransaction).
  */
-function pickLineIdOf(reservation: DocumentData): string | undefined {
+export function pickLineIdOf(reservation: DocumentData): string | undefined {
   const orderId = text(reservation.order_id);
   const lineNumber = number(reservation.line_number);
   if (!orderId || !lineNumber) return undefined;
@@ -1005,7 +1005,7 @@ function clientTimelineEntry(
   };
 }
 
-function updateClientInventory(
+export function updateClientInventory(
   transaction: Transaction,
   db: Firestore,
   input: {
@@ -1194,7 +1194,7 @@ export async function refreshClientInventorySplitTransaction(
   });
 }
 
-type CatalogAggregateTarget = {
+export type CatalogAggregateTarget = {
   productRef?: DocumentReference<DocumentData>;
   skuRef?: DocumentReference<DocumentData>;
 };
@@ -1206,7 +1206,7 @@ type CatalogAggregateTarget = {
  * transação (antes de qualquer write). Docs inexistentes são ignorados — os
  * agregados só são mantidos para itens já cadastrados.
  */
-async function resolveCatalogAggregateTargets(
+export async function resolveCatalogAggregateTargets(
   transaction: Transaction,
   db: Firestore,
   skuCode: string,
@@ -1265,7 +1265,7 @@ async function resolveCatalogAggregateTargets(
  * estoque_disponivel/custo_total e products.estoque_btg/custo_total coerentes
  * com stock_balances.
  */
-function applyCatalogStockAggregates(
+export function applyCatalogStockAggregates(
   transaction: Transaction,
   target: CatalogAggregateTarget,
   delta: { onHand?: number; reserved?: number; cost?: number },

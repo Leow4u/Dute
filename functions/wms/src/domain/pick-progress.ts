@@ -889,6 +889,8 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
             emptied_order_number: FieldValue.delete(),
             emptied_volume_id: FieldValue.delete(),
             emptied_volume_number: FieldValue.delete(),
+            // A caixa que a recontagem deu por vazia e a separação devolveu (contagem por caixa).
+            emptied_recount_id: FieldValue.delete(),
           });
         }
         transaction.update(box.ref, update);

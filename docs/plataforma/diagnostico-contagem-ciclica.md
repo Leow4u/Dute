@@ -841,6 +841,39 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
    acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
    ainda não leem `count_adjustments`.
+
+   *O servidor no código desde 17/11/2026 (PR 618, sem tela):* a callable
+   `recountWarehouseBox` (`functions/wms/src/domain/box-recount.ts`), de
+   owner, admin, interno e wms, reconta uma caixa guardada numa transação só.
+   Entrada: o cliente, a caixa, a prateleira, todos os itens da caixa com o
+   contado (`lines`, inteiro até 100.000, a regra da cíclica), os itens fora
+   da lista (`extra_lines`, 1 ou mais), o motivo (sem ele, "Recontagem por
+   caixa"), a referência, a chave e o `round_id` opcional. O esperado é o
+   saldo da caixa; a diferença de cada item acerta a caixa (um ajuste com o
+   id da contagem) e o saldo da prateleira, com o movimento
+   `functions_cycle_count`, a projeção do portal, os agregados do catálogo,
+   um `cycle_counts` por item (`mode: "box"`, com o esperado e o contado na
+   caixa e o saldo da prateleira antes e depois), o recibo e um evento por
+   caixa (`inventory.box_recounted`, `attention` só com diferença, a caixa e
+   a prateleira só no payload, rascunho de aviso interno). O item fora da
+   lista sai antes das outras caixas guardadas da prateleira que o têm, da
+   mais antiga para a mais nova (o saldo da prateleira não muda; a caixa já
+   recontada na mesma rodada não cede peça); o resto entra na prateleira,
+   com a origem no evento; o SKU arquivado do cliente volta a ativo e o que
+   não está no cadastro é recusado (produto novo nasce no Receber). Contado
+   zero em tudo deixa a caixa `emptied`, com `warehouse.box_emptied`. A
+   ENTRADA da contagem vale o dia da caixa (`fifo_day`, o do `stored_at`),
+   que `entradasDoRazao` usa. As recusas da cíclica continuam (estoque
+   congelado, prateleira fora do cadastro, abaixo da reserva, separado
+   esperando a entrega, linha já separada) e entram as da prateleira com
+   guarda aberta chegando ou saindo ou com caixa a caminho (G01 a G03), da
+   caixa que não está guardada nela, da lista que mudou desde a tela e da
+   prateleira com menos saldo do que as caixas dizem. A régua
+   `billing-callables` roda uma recontagem de verdade: não cobra. Ficam: a
+   tela (a rodada, a bancada e o celular), a coleção da rodada, a fila de
+   revisão do admin, "Cadastrar caixa" (a caixa física sem registro), o
+   status `review` e `blocked` da posição (pergunta 9) e as ferramentas do
+   acerto.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
