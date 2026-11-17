@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Contagem · rodada por prateleira</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav.sub{height:40px;padding-left:46px;font-size:14px}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px;gap:18px;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ph h1{font-size:30px;font-weight:800;letter-spacing:-.01em}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}
+.btn-s,.btn-s:hover{background:#fff;color:#161616;border-color:#D4D4CF}
+.seg{display:inline-flex;background:#E8E8E4;border-radius:8px;padding:3px;gap:2px}
+.seg a,.seg a:hover{height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;font-weight:700;font-size:13.5px;color:#5F6368;text-decoration:none}
+.seg a.on,.seg a.on:hover{background:#161616;color:#fff}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.two{display:flex;gap:18px;flex:1;min-height:0}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.side{flex:0 0 380px;display:flex;flex-direction:column;gap:14px}
+.top{display:flex;align-items:center;gap:26px;padding:18px 22px}
+.top .t b{display:block;font-size:16px;font-weight:800}
+.top .t span{display:block;font-size:13.5px;color:#5F6368}
+.kp{display:flex;gap:26px;margin-left:auto}
+.kp div{text-align:right}
+.kp b{display:block;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.kp span{font-size:12.5px;color:#5F6368;font-weight:600}
+.pg{height:6px;background:#E8E8E4}
+.pg i{display:block;height:100%;background:#161616;width:28%}
+.sec{display:flex;align-items:baseline;gap:10px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#5F6368;padding:0 2px}
+.sec span{font-weight:600;letter-spacing:0;text-transform:none;font-size:13px}
+.row{display:flex;align-items:center;gap:16px;padding:12px 18px;border-top:1px solid #E5E5E1}
+.row:first-child{border-top:0}
+.cd{font:800 16px ui-monospace,Menlo,Consolas,monospace;min-width:58px}
+.row .t{flex:1;min-width:0;font-size:13.5px;color:#5F6368}
+.row .t b{color:#161616;font-weight:700;font-size:14px;margin-right:8px}
+.bd{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.bd.g{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.bd.a{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.bd.b{background:#ECE6FA;border-color:#D9CFF5;color:#5B21B6}
+.bd.n{background:#E7E7E3;border-color:#D4D4CF;color:#3F403F}
+.bd .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.row .btn{height:36px;padding:0 14px;font-size:13.5px}
+.kv{padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+.kv h2{font-size:15px;font-weight:800}
+.kv .li{display:flex;align-items:center;gap:10px;font-size:13.5px}
+.kv .li b{font:800 14px ui-monospace,Menlo,Consolas,monospace;min-width:50px}
+.kv .li span{color:#5F6368}
+.kv .li i{margin-left:auto;font-style:normal;font-weight:800;font-variant-numeric:tabular-nums}
+.kv .li i.m{color:#8E1016}.kv .li i.p{color:#14602F}
+.kv .ok{display:flex;align-items:center;gap:8px;font-weight:700}
+.kv .ok .dot{width:10px;height:10px;border-radius:50%;background:#14602F}
+.kv .lk{align-self:flex-start;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.kv dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px}
+.kv dt{color:#5F6368;font-weight:600}.kv dd{margin:0;font-weight:700}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">1</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m6 9 6 6 6-6"/></svg></a>
+  <a class="nav sub" href="#">Itens</a>
+  <a class="nav sub" href="#">Receber</a>
+  <a class="nav sub on" href="#" aria-current="page">Contagem</a>
+  <a class="nav sub" href="#">Mapa</a>
+  <a class="nav sub" href="#">Posições</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="ph">
+    <h1>Contagem</h1>
+    <div class="acts">
+      <span class="seg"><a class="on" href="#" aria-current="true">Rodada · 17/11</a><a href="#">Caixas × saldo</a><a href="#">Anteriores</a></span>
+      <a class="btn btn-s" href="WmsContagemFolha.dc.html"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Imprimir folha</a>
+      <a class="btn btn-p" href="WmsContagemPrateleira.dc.html"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>Continuar A-03</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <div class="t"><b>Recontagem geral · 17/11/2026</b><span>começou 08:10 · Guilherme Dantas</span></div>
+      <div class="kp">
+        <div><b>12 <span style="font-size:14px;color:#5F6368">de 43</span></b><span>prateleiras</span></div>
+        <div><b>58 <span style="font-size:14px;color:#5F6368">de 203</span></b><span>caixas</span></div>
+        <div><b>9</b><span>caixas com diferença</span></div>
+        <div><b>−61 un.</b><span>diferença líquida</span></div>
+      </div>
+    </div>
+    <div class="pg" aria-hidden="true"><i></i></div>
+  </div>
+
+  <div class="two">
+    <div class="col">
+      <h2 class="sec">Rua A <span>15 prateleiras · 2 contadas · 1 em contagem</span></h2>
+      <div class="card">
+        <div class="row"><span class="cd">A-01</span><span class="t"><b>3 caixas</b>2 itens · 11 un.</span><span class="bd g"><span class="dot"></span>contada 08:22 · sem diferença</span><a class="btn btn-s" href="#">Ver</a></div>
+        <div class="row"><span class="cd">A-02</span><span class="t"><b>5 caixas</b>4 itens · 142 un.</span><span class="bd a"><span class="dot"></span>contada 08:41 · 1 diferença · −3 un.</span><a class="btn btn-s" href="#">Ver</a></div>
+        <div class="row"><span class="cd">A-03</span><span class="t"><b>7 caixas</b>5 itens · 450 un.</span><span class="bd b"><span class="dot"></span>em contagem · Guilherme · 2 de 7 caixas</span><a class="btn btn-s" href="WmsContagemPrateleira.dc.html">Abrir</a></div>
+        <div class="row"><span class="cd">A-04</span><span class="t"><b>3 caixas</b>3 itens · 160 un.</span><a class="btn btn-s" href="#" style="margin-left:auto">Contar</a></div>
+        <div class="row"><span class="cd">A-05</span><span class="t"><b>6 caixas</b>4 itens · 130 un.</span><a class="btn btn-s" href="#" style="margin-left:auto">Contar</a></div>
+      </div>
+      <h2 class="sec">Rua B <span>14 prateleiras · 10 contadas</span></h2>
+      <div class="card">
+        <div class="row"><span class="cd">B-05</span><span class="t"><b>6 caixas</b>6 itens · 236 un.</span><span class="bd a"><span class="dot"></span>contada 09:20 · 2 diferenças · −5 un.</span><a class="btn btn-s" href="#">Ver</a></div>
+        <div class="row"><span class="cd">B-09</span><span class="t"><b>5 caixas</b>10 itens · 16 un. · 4 separadas</span><span class="bd n"><span class="dot"></span>em separação · PED-0002</span><a class="btn btn-s" href="#">Ver pedido</a></div>
+        <div class="row"><span class="cd">B-10</span><span class="t"><b>3 caixas</b>vazias · 0 un.</span><span class="bd g"><span class="dot"></span>contada 08:58 · 3 caixas vazias saíram</span><a class="btn btn-s" href="#">Ver</a></div>
+        <div class="row"><span class="cd">B-11</span><span class="t"><b>4 caixas</b>3 itens · 96 un.</span><span class="bd n"><span class="dot"></span>guarda aberta · AVL-7C21A9F0</span><a class="btn btn-s" href="#">Ver guarda</a></div>
+      </div>
+      <h2 class="sec">Rua C <span>14 prateleiras · por contar</span></h2>
+      <div class="card">
+        <div class="row"><span class="cd">C-01</span><span class="t"><b>5 caixas</b>3 itens · 96 un.</span><a class="btn btn-s" href="#" style="margin-left:auto">Contar</a></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card kv">
+        <h2>Caixas × saldo</h2>
+        <div class="ok"><span class="dot"></span>37 prateleiras iguais · 6 diferentes</div>
+        <div class="li"><b>C-04</b><span>caixas 112 · saldo 100</span><i class="p">+12</i></div>
+        <div class="li"><b>B-07</b><span>caixas 236 · saldo 241</span><i class="m">−5</i></div>
+        <div class="li"><b>C-02</b><span>caixas 142 · saldo 139</span><i class="m">−3</i></div>
+        <div class="li"><b>A-04</b><span>caixas 160 · saldo 158</span><i class="p">+2</i></div>
+        <div class="li"><b>A-11</b><span>caixas 59 · saldo 58</span><i class="p">+1</i></div>
+        <div class="li"><b>C-09</b><span>caixas 40 · saldo 41</span><i class="p">+1</i></div>
+        <a class="lk" href="#">Relatório completo</a>
+      </div>
+      <div class="card kv">
+        <h2>Rodada</h2>
+        <dl>
+          <dt>Motivo</dt><dd>Recontagem geral 17/11</dd>
+          <dt>Alcance</dt><dd>todas as prateleiras</dd>
+          <dt>Grava</dt><dd>Guilherme Dantas</dd>
+          <dt>Aprova a diferença</dt><dd>qualquer admin</dd>
+          <dt>Pedidos em separação</dt><dd>PED-0002 · B-09, C-02</dd>
+          <dt>Guardas abertas</dt><dd>1 · B-11</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

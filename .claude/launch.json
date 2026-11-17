@@ -4,9 +4,26 @@
     {
       "name": "app",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--config", "vite.config.ts"],
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "vite.config.ts"
+      ],
       "cwd": "artifacts/app",
       "port": 5173
+    },
+    {
+      "name": "mockups",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4180",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "cwd": "docs/mockups",
+      "port": 4180
     }
   ]
 }
