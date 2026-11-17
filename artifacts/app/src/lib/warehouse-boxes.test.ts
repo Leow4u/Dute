@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  boxBalanceUnits,
+  boxIsOpen,
+  boxNeedsRelabel,
   boxDraftToPayload,
   boxOriginLabel,
   emptyBoxDraft,
@@ -168,5 +171,45 @@ describe("apoio da caixa na sugestão e na leitura", () => {
     expect(stored.support_box_code).toBe("CX-000001");
     expect(stored.base_height_m).toBe(0.3);
     expect(stored.allow_stacking).toBe(true);
+  });
+});
+
+/** A caixa recontada (contagem por caixa, diagnóstico da Contagem cíclica, seção 6, item 4). */
+describe("a caixa com os ajustes da recontagem", () => {
+  const guardada = { code: "CX-000012", customer_code: "BTG", status: "stored", location_id: "A-03", unit_count: 60, origin: { kind: "opening_inventory", session_id: "s1" } };
+
+  it("lê os ajustes com o sinal, e o que não é ajuste fica de fora", () => {
+    const caixa = warehouseBoxFromRecord({
+      ...guardada,
+      count_adjustments: [
+        { recount_id: "brc_1", sku_code: "BTG-000123", qty: -12 },
+        { recount_id: "brc_1", sku_code: "BTG-000125", qty: 2, client_item_code: "A.01.0806.005.GG", product_name: "Polo Masculino Piquet Preto", size: "GG" },
+        { recount_id: "brc_1", sku_code: "", qty: 4 },
+        { recount_id: "brc_1", sku_code: "BTG-000124", qty: 0 },
+        "lixo",
+      ],
+    });
+    expect(caixa.count_adjustments).toEqual([
+      { sku_code: "BTG-000123", qty: -12, recount_id: "brc_1", client_item_code: null, product_name: null, size: null },
+      { sku_code: "BTG-000125", qty: 2, recount_id: "brc_1", client_item_code: "A.01.0806.005.GG", product_name: "Polo Masculino Piquet Preto", size: "GG" },
+    ]);
+    expect(warehouseBoxFromRecord(guardada).count_adjustments).toEqual([]);
+  });
+
+  it("as unidades são a entrada menos o retirado mais os ajustes", () => {
+    // Antes, a caixa recontada continuava dizendo as 60 un. de entrada.
+    const caixa = warehouseBoxFromRecord({ ...guardada, taken_units: 5, count_adjustments: [{ sku_code: "BTG-000123", qty: -12 }, { sku_code: "BTG-000125", qty: 2 }] });
+    expect(boxBalanceUnits(caixa)).toBe(45);
+    expect(boxBalanceUnits(warehouseBoxFromRecord({ ...guardada, count_adjustments: [{ sku_code: "BTG-000123", qty: -80 }] }))).toBe(0);
+  });
+
+  it("a caixa recontada fica aberta e pede a etiqueta do saldo até a impressão ser registrada", () => {
+    const recontada = warehouseBoxFromRecord({ ...guardada, count_adjustments: [{ sku_code: "BTG-000123", qty: -12 }], balance_at: "2026-11-17T12:00:00.000Z" });
+    expect(boxIsOpen(recontada)).toBe(true);
+    expect(boxNeedsRelabel(recontada)).toBe(true);
+    expect(boxNeedsRelabel({ ...recontada, balance_label_printed_for: "2026-11-17T12:00:00.000Z" })).toBe(false);
+    // A recontagem sem diferença não grava ajuste: a caixa segue intacta.
+    expect(boxIsOpen(warehouseBoxFromRecord(guardada))).toBe(false);
+    expect(boxIsOpen({ ...recontada, status: "emptied" })).toBe(false);
   });
 });

@@ -13,7 +13,8 @@ import { impressaEmTexto } from "./lista-de-separacao";
  * espera em cada caixa de cada prateleira do cliente ativo, e a regra de ouro
  * do mapa, por prateleira: a soma do esperado das caixas contra o saldo do
  * razão. A conta do esperado é a do domínio (saldo-da-caixa.ts): a entrada
- * menos o que as separações tiraram. Funções puras, sem Firestore.
+ * menos o que as separações tiraram mais o que as recontagens acertaram.
+ * Funções puras, sem Firestore.
  */
 
 const numero = new Intl.NumberFormat("pt-BR");
@@ -75,11 +76,17 @@ export type LinhaDaFolha = {
   codigo: string;
   /** "Polo Masculino Piquet Preto · G"; sem nome, o SKU. */
   nome: string;
-  /** O que entrou na caixa; null na linha do saldo sem caixa. */
+  /**
+   * O que entrou na caixa: a entrada e o que as recontagens acharam a mais;
+   * null na linha do saldo sem caixa.
+   */
   entrou: number | null;
-  /** O que as separações tiraram da caixa; null na linha do saldo sem caixa. */
+  /**
+   * O que saiu da caixa: o que as separações tiraram e o que as recontagens
+   * acharam a menos; null na linha do saldo sem caixa.
+   */
   saiu: number | null;
-  /** A entrada menos o retirado (saldo-da-caixa.ts); na linha sem caixa, o saldo do razão. */
+  /** A entrada menos o retirado mais os ajustes (saldo-da-caixa.ts); na linha sem caixa, o saldo do razão. */
   esperado: number;
   /** A reserva do saldo da prateleira para o SKU. */
   reserva: number;
@@ -198,6 +205,14 @@ export function prateleirasDaContagem(dados: DadosDaContagem): PrateleiraDaConta
     const nomes = nomesDasCaixas.get(linha.box_code);
     if (nomes && !nomes.has(linha.sku_code) && (linha.product_name || linha.client_item_code)) nomes.set(linha.sku_code, linha);
   }
+  // O item que só a recontagem pôs na caixa: o nome que o ajuste gravou.
+  for (const caixa of caixasDoCliente) {
+    const nomes = nomesDasCaixas.get(caixa.code);
+    for (const ajuste of caixa.count_adjustments ?? []) {
+      const sku = chave(ajuste.sku_code);
+      if (nomes && sku && !nomes.has(sku) && (ajuste.product_name || ajuste.client_item_code)) nomes.set(sku, ajuste);
+    }
+  }
 
   const saldosPorLocal = new Map<string, Map<string, SaldoDoSku & Nomeado>>();
   for (const saldo of dados.saldos) {
@@ -243,12 +258,21 @@ export function prateleirasDaContagem(dados: DadosDaContagem): PrateleiraDaConta
     const nasCaixas = new Map<string, number>();
 
     const caixaDaFolha = (caixa: WarehouseBox): CaixaDaFolha => {
-      const entrou = entrada.get(caixa.code) ?? new Map<string, number>();
+      const daEntrada = entrada.get(caixa.code) ?? new Map<string, number>();
       const retirado = (caixa.taken_lines ?? []).map((linha) => ({ sku_code: chave(linha.sku_code), qty: linha.qty }));
+      const ajustes = (caixa.count_adjustments ?? []).map((linha) => ({ sku_code: chave(linha.sku_code), qty: linha.qty }));
+      // O que entrou soma o que a recontagem achou a mais; o que saiu, o que ela achou a menos: entrou − saiu = esperado.
+      const entrou = new Map(daEntrada);
       const saiu = new Map<string, number>();
       for (const linha of retirado) saiu.set(linha.sku_code, (saiu.get(linha.sku_code) ?? 0) + linha.qty);
-      // A conta do domínio: a entrada menos o retirado, nunca negativo (saldo-da-caixa.ts).
-      const esperado = new Map(saldoDaCaixa([...entrou].map(([sku_code, qty]) => ({ sku_code, qty })), retirado).map((linha) => [linha.sku_code, linha.qty]));
+      for (const linha of ajustes) {
+        if (linha.qty > 0) entrou.set(linha.sku_code, (entrou.get(linha.sku_code) ?? 0) + linha.qty);
+        else if (linha.qty < 0) saiu.set(linha.sku_code, (saiu.get(linha.sku_code) ?? 0) - linha.qty);
+      }
+      // A conta do domínio: a entrada menos o retirado mais os ajustes, nunca negativo (saldo-da-caixa.ts).
+      const esperado = new Map(
+        saldoDaCaixa([...daEntrada].map(([sku_code, qty]) => ({ sku_code, qty })), retirado, ajustes).map((linha) => [linha.sku_code, linha.qty]),
+      );
       const nomes = nomesDasCaixas.get(caixa.code);
       const linhas = ordenarLinhas(
         [...entrou].map(([sku, quantos]) => {

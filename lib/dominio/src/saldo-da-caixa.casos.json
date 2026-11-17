@@ -1,5 +1,5 @@
 {
-  "_leia": "Casos de referência do saldo da caixa (lib/dominio/src/saldo-da-caixa.ts, separação com caixas, parte 3). Rodam no vitest do app e no node --test de functions/wms, contra a cópia de lá.",
+  "_leia": "Casos de referência do saldo da caixa (lib/dominio/src/saldo-da-caixa.ts, separação com caixas, parte 3, e a contagem por caixa). Rodam no vitest do app e no node --test de functions/wms, contra a cópia de lá. Nos saldos, `ajustes` (opcional) são os ajustes da recontagem gravados na caixa, com sinal.",
   "saldos": [
     {
       "caso": "a caixa intacta: o saldo é a entrada",
@@ -163,6 +163,370 @@
         }
       ],
       "unidades": 7
+    },
+    {
+      "caso": "a recontagem achou menos: o ajuste negativo baixa o saldo",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -12
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 48
+        }
+      ],
+      "unidades": 48
+    },
+    {
+      "caso": "o item fora da lista entra depois dos da entrada, na ordem dos ajustes",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000125",
+          "qty": 2
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": 1
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        },
+        {
+          "sku_code": "BTG-000125",
+          "qty": 2
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": 1
+        }
+      ],
+      "unidades": 63
+    },
+    {
+      "caso": "duas recontagens do mesmo item somam",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 5
+        }
+      ],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -12
+        },
+        {
+          "sku_code": "BTG-000123",
+          "qty": 2
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 45
+        }
+      ],
+      "unidades": 45
+    },
+    {
+      "caso": "a separação tira do que a recontagem pôs",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000125",
+          "qty": 2
+        }
+      ],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000125",
+          "qty": 2
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "unidades": 10
+    },
+    {
+      "caso": "a recontagem que zera a caixa deixa o saldo sem linhas",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": 12
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -50
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": -12
+        }
+      ],
+      "saldo": [],
+      "unidades": 0
+    },
+    {
+      "caso": "o ajuste que leva um item abaixo de zero não fica negativo",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "retirado": [],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -15
+        }
+      ],
+      "saldo": [],
+      "unidades": 0
+    },
+    {
+      "caso": "ajuste sem código, sem número ou zerado não conta",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "retirado": [],
+      "ajustes": [
+        {
+          "sku_code": "",
+          "qty": 5
+        },
+        {
+          "sku_code": "BTG-000123",
+          "qty": "muitas"
+        },
+        {
+          "qty": 3
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": 0
+        }
+      ],
+      "saldo": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "unidades": 10
+    }
+  ],
+  "ajustadas": [
+    {
+      "caso": "sem ajuste, nada",
+      "ajustes": [],
+      "unidades": 0
+    },
+    {
+      "caso": "os ajustes somam com o sinal, de todos os itens",
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -12
+        },
+        {
+          "sku_code": "BTG-000125",
+          "qty": 2
+        },
+        {
+          "sku_code": "BTG-000123",
+          "qty": 3
+        }
+      ],
+      "unidades": -7
+    },
+    {
+      "caso": "ajuste sem código ou sem número não conta",
+      "ajustes": [
+        {
+          "sku_code": "",
+          "qty": 5
+        },
+        {
+          "sku_code": "BTG-000123",
+          "qty": null
+        },
+        {
+          "sku_code": "BTG-000124",
+          "qty": 4
+        }
+      ],
+      "unidades": 4
+    }
+  ],
+  "paraOContado": [
+    {
+      "caso": "contou o esperado: ajuste zero",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [],
+      "ajustes": [],
+      "sku_code": "BTG-000123",
+      "contado": 60,
+      "ajuste": 0
+    },
+    {
+      "caso": "contou menos: o ajuste é a falta",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [],
+      "ajustes": [],
+      "sku_code": "BTG-000123",
+      "contado": 48,
+      "ajuste": -12
+    },
+    {
+      "caso": "contou mais, com retirado e ajuste de antes",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "ajustes": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": -5
+        }
+      ],
+      "sku_code": "BTG-000123",
+      "contado": 47,
+      "ajuste": 2
+    },
+    {
+      "caso": "o item que a entrada não tem: o ajuste é o contado",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [],
+      "ajustes": [],
+      "sku_code": "BTG-000125",
+      "contado": 3,
+      "ajuste": 3
+    },
+    {
+      "caso": "contado zero zera o que a caixa tem",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 60
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "ajustes": [],
+      "sku_code": "BTG-000123",
+      "contado": 0,
+      "ajuste": -50
+    },
+    {
+      "caso": "o retirado passou da entrada: o ajuste fecha no contado",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "retirado": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 12
+        }
+      ],
+      "ajustes": [],
+      "sku_code": "BTG-000123",
+      "contado": 3,
+      "ajuste": 5
+    },
+    {
+      "caso": "sem código, nenhum ajuste",
+      "entrada": [
+        {
+          "sku_code": "BTG-000123",
+          "qty": 10
+        }
+      ],
+      "retirado": [],
+      "ajustes": [],
+      "sku_code": "",
+      "contado": 3,
+      "ajuste": 0
     }
   ],
   "retirados": [

@@ -1,7 +1,7 @@
 import { type Firestore, type Transaction } from "firebase-admin/firestore";
 
 import { readRows, type Row } from "./operations.js";
-import { saldoDaCaixa, unidadesDaCaixa, type CaixaComOItem, type LinhaDaCaixa } from "./saldo-da-caixa.js";
+import { saldoDaCaixa, unidadesAjustadas, unidadesDaCaixa, type AjusteDaCaixa, type CaixaComOItem, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 
 /**
@@ -9,11 +9,13 @@ import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
  * 4.3, parte 3). O conteúdo de entrada continua onde sempre esteve: nas
  * linhas da abertura (`opening_inventory_lines`, pelo `box_code`) ou na
  * própria caixa do recebimento (`lines[]`). O que as separações tiram fica na
- * caixa (`taken_lines`, `taken_units`, `balance_at`), e o saldo é a entrada
- * menos o retirado (a regra sem banco em saldo-da-caixa.ts).
+ * caixa (`taken_lines`, `taken_units`, `balance_at`), o que as recontagens
+ * acertam também (`count_adjustments`, com o id da contagem), e o saldo é a
+ * entrada menos o retirado mais os ajustes (a regra sem banco em
+ * saldo-da-caixa.ts).
  *
  * Aqui fica só a leitura das caixas de uma prateleira, dentro da transação de
- * quem separa (pick-progress.ts).
+ * quem separa (pick-progress.ts) ou de quem reconta.
  */
 
 const OPENING_LINES_COLLECTION = "opening_inventory_lines";
@@ -45,10 +47,34 @@ export function retiradoDaCaixa(box: Row): LinhaDaCaixa[] {
   );
 }
 
+/**
+ * Os ajustes das recontagens gravados na caixa (`count_adjustments`), com o
+ * sinal, na ordem em que foram gravados. Cada um traz o id da contagem; aqui
+ * fica só o SKU e a quantidade, que a conta do saldo usa.
+ */
+export function ajustesDaCaixa(data: Record<string, unknown>): AjusteDaCaixa[] {
+  const lines = Array.isArray(data.count_adjustments) ? (data.count_adjustments as unknown[]) : [];
+  return lines.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const line = item as Record<string, unknown>;
+    const sku_code = text(line.sku_code);
+    const qty = quantity(line.qty);
+    return sku_code && qty ? [{ sku_code, qty }] : [];
+  });
+}
+
+/**
+ * As unidades da caixa agora: a entrada (`unit_count`) menos o retirado mais
+ * os ajustes das recontagens, nunca negativo.
+ */
+export function unidadesDaCaixaAgora(data: Record<string, unknown>): number {
+  return Math.max(0, quantity(data.unit_count) - quantity(data.taken_units) + unidadesAjustadas(ajustesDaCaixa(data)));
+}
+
 export type CaixasDaPrateleira = {
   /** As caixas do cliente na prateleira, pelo código. */
   porCodigo: Map<string, Row>;
-  /** O que entrou do item em cada caixa. */
+  /** O que entrou do item em cada caixa (zero na caixa em que ele não entrou). */
   entradaDoItem: Map<string, number>;
 };
 
@@ -91,7 +117,8 @@ export async function lerCaixasDaPrateleira(
     const entrada = proprias.length
       ? proprias.filter((line) => text(line.sku_code) === alvo.skuCode).reduce((soma, line) => soma + Math.max(0, quantity(line.counted_qty)), 0)
       : (daAbertura.get(code) ?? 0);
-    if (entrada > 0) entradaDoItem.set(code, entrada);
+    // A caixa sem o item na entrada pode tê-lo pela recontagem (o item fora da lista).
+    entradaDoItem.set(code, Math.max(0, entrada));
   }
   return { porCodigo, entradaDoItem };
 }
@@ -100,7 +127,9 @@ export async function lerCaixasDaPrateleira(
  * As caixas guardadas que têm o item agora. `retirados` é o retirado de cada
  * caixa como a transação o deixou até aqui (a linha que muda devolve antes o
  * que tinha tirado); sem entrada nele, vale o gravado na caixa. A caixa vazia
- * a que a transação devolveu algo volta a contar.
+ * a que a transação devolveu algo volta a contar. O que cada caixa tem do
+ * item é a conta do saldo (saldo-da-caixa.ts): a entrada menos o retirado
+ * mais os ajustes das recontagens.
  */
 export function caixasComOItem(prateleira: CaixasDaPrateleira, retirados: ReadonlyMap<string, LinhaDaCaixa[]>, skuCode: string): CaixaComOItem[] {
   const caixas: CaixaComOItem[] = [];
@@ -108,17 +137,16 @@ export function caixasComOItem(prateleira: CaixasDaPrateleira, retirados: Readon
     const status = text(box.data.status);
     if (status !== BOX_STATUS_STORED && !(status === BOX_STATUS_EMPTIED && retirados.has(code))) continue;
     const entrada = prateleira.entradaDoItem.get(code) ?? 0;
-    if (!entrada) continue;
     const retirado = retirados.get(code) ?? retiradoDaCaixa(box);
-    const tirouDoItem = retirado.find((line) => line.sku_code === skuCode)?.qty ?? 0;
-    const disponivel = Math.max(0, entrada - tirouDoItem);
+    const ajustes = ajustesDaCaixa(box.data);
+    const disponivel = saldoDaCaixa([{ sku_code: skuCode, qty: entrada }], retirado, ajustes).find((line) => line.sku_code === skuCode)?.qty ?? 0;
     if (!disponivel) continue;
     const tirou = unidadesDaCaixa(retirado);
     caixas.push({
       code,
       stored_at: text(box.data.stored_at) || null,
       disponivel,
-      saldo: Math.max(0, quantity(box.data.unit_count) - tirou),
+      saldo: Math.max(0, quantity(box.data.unit_count) - tirou + unidadesAjustadas(ajustes)),
       intacta: tirou === 0,
     });
   }

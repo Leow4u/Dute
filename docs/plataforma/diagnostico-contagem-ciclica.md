@@ -826,6 +826,21 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    `callables-papeis`, nos índices e na zeragem (`test_full_reset_btg.py`); a
    régua `billing-callables` verde. *Pronto quando* recontar B-10 no emulador
    deixa caixas e razão iguais e o relatório do PR 1 em zero.
+
+   *A regra e os leitores no código desde 17/11/2026 (PR 617, sem escrita
+   nova):* o saldo da caixa passa a ser a entrada menos o retirado mais os
+   ajustes da recontagem, gravados na própria caixa (`count_adjustments`,
+   com sinal e o id da contagem), sem apagar a entrada nem o `taken_lines`
+   (achado G07). A regra mora em `lib/dominio/src/saldo-da-caixa.ts`
+   (`saldoDaCaixa` com os ajustes, `unidadesAjustadas`,
+   `ajusteParaOContado`), com a cópia literal no WMS e os casos comuns; a
+   separação (`box-balance.ts`, `pick-progress.ts`), a etiqueta para trocar
+   (`box-relabel.ts`) e, no app, a caixa, a etiqueta, o Mapa, a bancada e a
+   folha com o Caixas × saldo leem os ajustes pela mesma regra. Na folha, o
+   achado a mais soma em "entrou" e o a menos em "saiu", sem coluna nova; a
+   caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
+   acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
+   ainda não leem `count_adjustments`.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais

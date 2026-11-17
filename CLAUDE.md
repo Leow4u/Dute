@@ -468,7 +468,8 @@ documentação de produto e operação está em `docs/`.
   separação manda o que as linhas já separaram à `EXPEDICAO`, com a guarda de
   volta, como o separado do pedido concluído. **A parte 3 (a caixa na
   separação) também:** o saldo da caixa é o conteúdo de entrada menos o que
-  as separações tiraram (`taken_lines` na caixa; a regra em
+  as separações tiraram mais o que as recontagens acertaram (`taken_lines` e,
+  desde a contagem por caixa, `count_adjustments` na caixa; a regra em
   `lib/dominio/src/saldo-da-caixa.ts`, com cópia literal no WMS travada em
   `domain/saldo-da-caixa.test.ts`); separar a linha baixa a caixa mais antiga
   da prateleira na mesma transação, "Outra caixa" informa de qual saiu, a

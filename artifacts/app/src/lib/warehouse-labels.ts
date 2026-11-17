@@ -13,10 +13,10 @@
  * - "Rolo Zebra": uma etiqueta de 101,6 × 50,8 mm por página, como sempre.
  */
 
-import { nomeComTamanho, tamanhoDoProduto } from "@workspace/dominio";
+import { nomeComTamanho, saldoDaCaixa, tamanhoDoProduto } from "@workspace/dominio";
 
-import type { WarehouseBox } from "@/lib/warehouse-boxes";
-import { boxBalanceUnits, boxIsOpen, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
+import type { BoxCountAdjustment, WarehouseBox } from "@/lib/warehouse-boxes";
+import { boxBalanceChanged, boxBalanceUnits, boxIsOpen, boxOriginLabel, formatBoxDimensions } from "@/lib/warehouse-boxes";
 import { type WarehousePosition, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 import { pesoDoVolume, textoDeVolumes, type VolumeDoPedido } from "@/lib/warehouse-ops/volumes-do-pedido";
 
@@ -250,18 +250,42 @@ export function ownBoxContent(box: Pick<WarehouseBox, "lines">): LabelContentLin
   return sortedContent(grouped);
 }
 
+/** O ajuste da recontagem como a etiqueta o lê: o SKU, a quantidade com sinal e, se houver, o nome gravado. */
+export type LabelAdjustment = Pick<BoxCountAdjustment, "sku_code" | "qty"> & Partial<Pick<BoxCountAdjustment, "client_item_code" | "product_name" | "size">>;
+
 /**
- * O saldo da caixa (separação com caixas, parte 3): o conteúdo de entrada
- * menos o que as separações tiraram de cada SKU, sem as linhas zeradas.
+ * O saldo da caixa (separação com caixas, parte 3, e a contagem por caixa):
+ * o conteúdo de entrada menos o que as separações tiraram de cada SKU mais
+ * o que as recontagens acertaram, sem as linhas zeradas, pela conta do
+ * domínio (saldo-da-caixa.ts). O item que só a recontagem pôs na caixa leva
+ * o nome que o ajuste gravou.
  */
-export function balanceContent(content: LabelContentLine[], taken: ReadonlyArray<{ sku_code: string; qty: number }>): LabelContentLine[] {
-  if (!taken.length) return content;
-  const saiu = new Map<string, number>();
-  for (const line of taken) saiu.set(line.sku_code.toUpperCase(), (saiu.get(line.sku_code.toUpperCase()) ?? 0) + line.qty);
-  return content
-    .map((line) => ({ ...line, qty: line.qty - (saiu.get(line.sku.toUpperCase()) ?? 0) }))
-    .filter((line) => line.qty > 0)
-    .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
+export function balanceContent(
+  content: LabelContentLine[],
+  taken: ReadonlyArray<{ sku_code: string; qty: number }>,
+  adjustments: ReadonlyArray<LabelAdjustment> = [],
+): LabelContentLine[] {
+  if (!taken.length && !adjustments.length) return content;
+  const key = (sku: string) => sku.trim().toUpperCase();
+  const byKey = new Map<string, LabelContentLine>();
+  for (const line of content) if (line.sku && !byKey.has(key(line.sku))) byKey.set(key(line.sku), line);
+  const saldo = saldoDaCaixa(
+    content.filter((line) => line.sku).map((line) => ({ sku_code: key(line.sku), qty: line.qty })),
+    taken.map((line) => ({ sku_code: key(line.sku_code), qty: line.qty })),
+    adjustments.map((line) => ({ sku_code: key(line.sku_code), qty: line.qty })),
+  );
+  const lines = saldo.map(({ sku_code, qty }) => {
+    const line = byKey.get(sku_code);
+    if (line) return { ...line, qty };
+    const added = adjustments.find((adjustment) => key(adjustment.sku_code) === sku_code);
+    const name = labelName({ product_name: added?.product_name, client_item_code: added?.client_item_code, size: added?.size }, added?.sku_code ?? sku_code);
+    return contentLine(
+      { code: added?.client_item_code || added?.sku_code || sku_code, sku: added?.sku_code ?? sku_code, name, qty },
+      sizeInName(name, { codigo: added?.client_item_code, tamanho: added?.size }),
+    );
+  });
+  // A linha da abertura sem SKU não entra na conta: fica como está, se tiver quantidade.
+  return [...lines, ...content.filter((line) => !line.sku && line.qty > 0)].sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name, "pt-BR"));
 }
 
 function labelDate(value: string | null | undefined): string | null {
@@ -292,7 +316,7 @@ export function impressoesParaRegistrar(
  * saldo (separação com caixas, parte 3d): a caixa sai de "Etiquetas para
  * trocar". Vale para a caixa de qualquer origem.
  */
-export function saldosParaRegistrar(boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units">>): string[] {
+export function saldosParaRegistrar(boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units" | "count_adjustments">>): string[] {
   return boxes.filter((box) => boxIsOpen(box) && boxLabelAvailability(box).ready).map((box) => box.code);
 }
 
@@ -332,8 +356,8 @@ export function boxLabels(
 ): BoxLabelData[] {
   // A caixa do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão.
   const entrada = box.lines.length ? ownBoxContent(box) : boxContent(lines, box.code);
-  const aberta = (box.taken_units ?? 0) > 0;
-  const content = balanceContent(entrada, box.taken_lines ?? []);
+  const aberta = boxBalanceChanged(box);
+  const content = balanceContent(entrada, box.taken_lines ?? [], box.count_adjustments ?? []);
   const pages = labelChunks(content, options.mode ?? "a4");
   const units = content.reduce((sum, line) => sum + line.qty, 0);
   const base = {

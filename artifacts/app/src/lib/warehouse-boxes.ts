@@ -8,6 +8,8 @@
  * conversão do que a tela digita para o que a callable espera.
  */
 
+import { unidadesAjustadas } from "@workspace/dominio";
+
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
 import { parseDecimal } from "@/lib/warehouse-positions";
 
@@ -26,6 +28,20 @@ export type BoxLine = {
 
 /** O que saiu de um SKU da caixa nas separações. */
 export type BoxTakenLine = { sku_code: string; qty: number };
+
+/**
+ * Um ajuste da recontagem gravado na caixa (`count_adjustments`): quanto um
+ * SKU ganhou (positivo) ou perdeu (negativo), com o id da contagem e, para o
+ * item que a entrada da caixa não tem, o nome que a etiqueta e o Mapa mostram.
+ */
+export type BoxCountAdjustment = {
+  sku_code: string;
+  qty: number;
+  recount_id: string | null;
+  client_item_code: string | null;
+  product_name: string | null;
+  size: string | null;
+};
 
 /** De onde a caixa veio: a abertura (a sessão), a chegada (o recebimento) ou o cadastro manual. */
 export type BoxOrigin = {
@@ -71,6 +87,8 @@ export type WarehouseBox = {
   /** O que as separações já tiraram da caixa, por SKU (separação com caixas, parte 3): o saldo é a entrada menos isto. */
   taken_lines?: BoxTakenLine[];
   taken_units?: number;
+  /** O que as recontagens acertaram, por SKU e com sinal: o saldo é a entrada menos o retirado mais isto. */
+  count_adjustments?: BoxCountAdjustment[];
   /** Quando o saldo mudou pela última vez; null na caixa intacta. */
   balance_at?: string | null;
   /** O `balance_at` do saldo que saiu na última etiqueta impressa (parte 3d); null sem etiqueta de saldo. */
@@ -232,22 +250,47 @@ function boxTakenFromRecord(value: unknown): BoxTakenLine[] {
   });
 }
 
-/** A caixa aberta: guardada, com saída registrada e ainda com saldo. */
-export function boxIsOpen(box: Pick<WarehouseBox, "status" | "taken_units">) {
-  return box.status === "stored" && (box.taken_units ?? 0) > 0;
+function boxAdjustmentsFromRecord(value: unknown): BoxCountAdjustment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const line = item && typeof item === "object" ? (item as AnyRecord) : null;
+    const sku_code = line ? text(line.sku_code) : "";
+    const qty = line ? number(line.qty) : 0;
+    if (!line || !sku_code || !qty) return [];
+    return [
+      {
+        sku_code,
+        qty,
+        recount_id: text(line.recount_id) || null,
+        client_item_code: text(line.client_item_code) || null,
+        product_name: text(line.product_name) || null,
+        size: text(line.size) || null,
+      },
+    ];
+  });
+}
+
+/** O conteúdo não é mais o de entrada: a separação tirou peça ou a recontagem acertou. */
+export function boxBalanceChanged(box: Pick<WarehouseBox, "taken_units" | "count_adjustments">) {
+  return (box.taken_units ?? 0) > 0 || (box.count_adjustments?.length ?? 0) > 0;
+}
+
+/** A caixa aberta: guardada, com saída registrada ou ajustada pela recontagem. */
+export function boxIsOpen(box: Pick<WarehouseBox, "status" | "taken_units" | "count_adjustments">) {
+  return box.status === "stored" && boxBalanceChanged(box);
 }
 
 /**
  * A caixa aberta cuja etiqueta não é a do saldo de agora: entra em "Etiquetas
  * para trocar" até a impressão ser registrada (separação com caixas, parte 3d).
  */
-export function boxNeedsRelabel(box: Pick<WarehouseBox, "status" | "taken_units" | "balance_at" | "balance_label_printed_for">) {
+export function boxNeedsRelabel(box: Pick<WarehouseBox, "status" | "taken_units" | "count_adjustments" | "balance_at" | "balance_label_printed_for">) {
   return boxIsOpen(box) && (box.balance_label_printed_for ?? "") !== (box.balance_at ?? "");
 }
 
-/** As unidades que a caixa tem agora: a entrada menos o que as separações tiraram. */
-export function boxBalanceUnits(box: Pick<WarehouseBox, "unit_count" | "taken_units">) {
-  return Math.max(0, box.unit_count - (box.taken_units ?? 0));
+/** As unidades que a caixa tem agora: a entrada menos o que as separações tiraram mais o que as recontagens acertaram. */
+export function boxBalanceUnits(box: Pick<WarehouseBox, "unit_count" | "taken_units" | "count_adjustments">) {
+  return Math.max(0, box.unit_count - (box.taken_units ?? 0) + unidadesAjustadas(box.count_adjustments ?? []));
 }
 
 /**
@@ -301,6 +344,7 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     lines: boxLinesFromRecord(record.lines),
     taken_lines: boxTakenFromRecord(record.taken_lines),
     taken_units: number(record.taken_units),
+    count_adjustments: boxAdjustmentsFromRecord(record.count_adjustments),
     balance_at: text(record.balance_at) || null,
     balance_label_printed_for: text(record.balance_label_printed_for) || null,
     emptied_at: text(record.emptied_at) || null,

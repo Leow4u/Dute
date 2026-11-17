@@ -4,11 +4,13 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  ajusteParaOContado,
   conferirCaixasInformadas,
   ordemDeSaida,
   retiradoCom,
   saldoDaCaixa,
   sugerirCaixas,
+  unidadesAjustadas,
   unidadesDaCaixa,
   type CaixaComOItem,
   type CaixasDaLinha,
@@ -41,7 +43,9 @@ function semLinhaDeOrigem(source: string): string {
 }
 
 type Casos = {
-  saldos: { caso: string; entrada: unknown[]; retirado: unknown[]; saldo: LinhaDaCaixa[]; unidades: number }[];
+  saldos: { caso: string; entrada: unknown[]; retirado: unknown[]; ajustes?: unknown[]; saldo: LinhaDaCaixa[]; unidades: number }[];
+  ajustadas: { caso: string; ajustes: unknown[]; unidades: number }[];
+  paraOContado: { caso: string; entrada: unknown[]; retirado: unknown[]; ajustes: unknown[]; sku_code: string; contado: number; ajuste: number }[];
   retirados: { caso: string; retirado: LinhaDaCaixa[]; sku_code: string; qty: number; resultado: LinhaDaCaixa[] }[];
   sugestoes: { caso: string; pedido: number; caixas: CaixaComOItem[]; resultado: CaixasDaLinha }[];
   informadas: { caso: string; pedido: number; informadas: { box_code: string; qty: number }[]; caixas: CaixaComOItem[]; resultado: CaixasDaLinha | { problema: string } }[];
@@ -67,16 +71,32 @@ describe("saldo da caixa no WMS: a cópia é a de lib/dominio", () => {
 
 describe("saldo da caixa no WMS: casos de referência", () => {
   it("o JSON de casos foi lido", () => {
-    assert.ok(casos.saldos.length >= 5);
+    assert.ok(casos.saldos.length >= 12);
+    assert.ok(casos.ajustadas.length >= 3);
+    assert.ok(casos.paraOContado.length >= 6);
     assert.ok(casos.sugestoes.length >= 8);
     assert.ok(casos.informadas.length >= 8);
   });
 
   for (const caso of casos.saldos) {
     it(`saldo: ${caso.caso}`, () => {
-      const saldo = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[]);
+      const saldo = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], (caso.ajustes ?? []) as LinhaDaCaixa[]);
       assert.deepEqual(saldo, caso.saldo);
       assert.equal(unidadesDaCaixa(saldo), caso.unidades);
+    });
+  }
+  for (const caso of casos.ajustadas) {
+    it(`ajustadas: ${caso.caso}`, () => assert.equal(unidadesAjustadas(caso.ajustes as LinhaDaCaixa[]), caso.unidades));
+  }
+  for (const caso of casos.paraOContado) {
+    it(`para o contado: ${caso.caso}`, () => {
+      const ajuste = ajusteParaOContado(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], caso.ajustes as LinhaDaCaixa[], caso.sku_code, caso.contado);
+      assert.equal(ajuste, caso.ajuste);
+      // Com o ajuste gravado, a conta fecha no contado.
+      if (caso.sku_code) {
+        const depois = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], [...(caso.ajustes as LinhaDaCaixa[]), { sku_code: caso.sku_code, qty: ajuste }]);
+        assert.equal(depois.find((linha) => linha.sku_code === caso.sku_code)?.qty ?? 0, caso.contado);
+      }
     });
   }
   for (const caso of casos.retirados) {
