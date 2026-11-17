@@ -705,6 +705,56 @@ Decididas em 16/11/2026, com a aprovação: a cor por módulo é a da
 recomendada, o fundo é a foto, e a entrada continua só para quem tem dois ou
 mais módulos.
 
+A página "Contagem por caixa" tem canvas próprio (privado,
+https://claude.ai/artifact/Jxvp5C3SyMCsWhcQTdzFzb), feito em 17/11/2026 a
+partir do diagnóstico da Contagem cíclica
+(`docs/plataforma/diagnostico-contagem-ciclica.md`), no dia em que a
+recontagem geral das caixas da BTG começou. **A direção foi aprovada pelo
+Leonardo em 17/11/2026**, com uma decisão: a segunda contagem é da operação,
+fora do sistema, e a tela grava só o número já conferido. Nada está no
+código; cada parte entra por PR, a folha e o relatório só de leitura primeiro
+(`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6). As pranchas seguem o shell v3 da
+Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme, Operação
+WMS). As fontes são estáticas. A-03 e as caixas CX-000010 a CX-000016 vêm das
+pranchas da separação; a rodada, as prateleiras e os números são ilustrativos
+e fecham entre as telas no que aparece (43 prateleiras, 203 caixas; A-03 com
+7 caixas e 450 un.; a folha, impressa antes da rodada, mostra A-02 com caixas
+142 e saldo 139, que a contagem das 08:41 acertou; o relatório da rodada
+lista as seis prateleiras que ainda divergem).
+O que muda em relação à aba de hoje: a contagem é por caixa, dentro de uma
+rodada por prateleira; a tela mostra o esperado de cada caixa (o que entrou
+menos o que a separação tirou) e a reserva antes de a pessoa digitar; a
+diferença aparece antes de gravar; a segunda contagem é da operação, fora do
+sistema, e a tela grava só o número já conferido (decisão do Leonardo em
+17/11/2026, ao avaliar as pranchas: a primeira versão tinha o estado "aguarda
+2ª contagem", a coluna e a ação, que saíram);
+"Caixa vazia", "Item fora da lista" e "Cadastrar caixa" (a caixa sem registro)
+têm botão; a prateleira com pedido em separação aparece como "em separação ·
+PED-0002" e a com guarda aberta como "guarda aberta", para ficarem para o
+fim; a folha impressa sai por rua, na ordem de caminhada, com entrou, saiu,
+esperado e reserva por caixa, uma linha "Fora da lista" por prateleira e
+caixas × saldo; sem "Custo unitário", sem motivo por contagem e sem legenda.
+Os selos usam os pares de status da v3 ("em contagem" com o par de
+agendada). O cartão "Rodada" diz quem aprova a diferença (qualquer admin,
+decidido em 17/11/2026); o aviso ao cliente (pergunta 4 do diagnóstico) ainda
+espera o Leonardo. As pranchas passaram por três revisões
+independentes (identidade v3, fluxo da recontagem, acessibilidade) antes de
+irem ao canvas. As perguntas e as respostas do Leonardo (17/11/2026) estão
+na página do canvas: a rodada pode ser geral, por rua ou por item; qualquer
+admin aprova a diferença; a data FIFO da peça achada a mais é a da caixa; a
+folha e o relatório entram antes da bancada; o ajuste acima do limite grava
+na hora e vai para a revisão do admin, sem ficar pendente; e a peça fora da
+lista entra sempre (movida de outra caixa da prateleira quando o SKU tem
+saldo nela, ou como entrada na prateleira, com a origem dita, quando não
+tem).
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Armazenagem · Contagem, a rodada por prateleira | `WmsContagemRodada.dc.html` | A rodada com começo, motivo e quem grava; as prateleiras por rua com o estado (contada, em contagem, por contar, "conte depois da entrega"); o relatório "Caixas × saldo" ao lado. |
+| Armazenagem · Contagem, a prateleira caixa a caixa | `WmsContagemPrateleira.dc.html` | A-03 com sete caixas: as duas confirmadas em uma linha, com "Contar de novo"; a em contagem, com a diferença antes de gravar e o item fora da lista; as por contar; "Caixa sem registro"; o rodapé com o saldo gravado da prateleira. |
+| Armazenagem · Contagem no celular | `WmsContagemCelular.dc.html` | Uma caixa por vez, campo de 48 px, "Confirmar caixa" como ação principal e as confirmadas em uma linha. |
+| Folha de contagem (A4) | `WmsContagemFolha.dc.html` | A Rua A com as caixas por prateleira: entrou, saiu, esperado e reserva, "Contado" em branco, a linha "Fora da lista" e caixas × saldo por prateleira. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador

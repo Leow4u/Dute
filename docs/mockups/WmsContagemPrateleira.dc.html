@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Contagem · prateleira A-03, caixa a caixa</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;height:900px;overflow:hidden}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav.sub{height:40px;padding-left:46px;font-size:14px}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px 0;gap:16px;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.crumb{display:flex;align-items:center;gap:10px}
+.crumb a{font-weight:700;font-size:14px;text-decoration:none}
+.crumb h1{font-size:30px;font-weight:800;letter-spacing:-.01em;font-family:ui-monospace,Menlo,Consolas,monospace}
+.crumb .rua{font-size:14px;color:#5F6368;font-weight:700;margin-left:4px}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}
+.btn-s,.btn-s:hover{background:#fff;color:#161616;border-color:#D4D4CF}
+.lk{background:none;border:0;padding:0 4px;height:40px;font-weight:700;font-size:14px;color:#161616;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.pr{display:flex;align-items:center;gap:14px;font-size:13.5px;color:#5F6368}
+.pr b{color:#161616}
+.pr .pg{flex:1;height:6px;border-radius:999px;background:#E8E8E4;overflow:hidden}
+.pr .pg i{display:block;height:100%;width:29%;background:#161616;border-radius:999px}
+.list{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.card.cur{border-color:#161616;box-shadow:0 0 0 1px #161616 inset}
+.bh{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #E5E5E1;background:#FAFAF8}
+.cx{font:800 15px ui-monospace,Menlo,Consolas,monospace;background:#E3ECFB;color:#1E4E9C;border-radius:6px;padding:4px 9px;white-space:nowrap}
+.bh span.m{font-size:13px;color:#5F6368;font-weight:600}
+.bd{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.bd.g{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.bd.a{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.bd.b{background:#ECE6FA;border-color:#D9CFF5;color:#5B21B6}
+.bh .bd{margin-left:auto}
+.bh .btn{height:34px;padding:0 12px;font-size:13.5px}
+.hd,.ln{display:grid;grid-template-columns:minmax(0,1fr) 150px 120px 110px;gap:16px;align-items:center;padding:0 18px}
+.hd{height:30px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:800;color:#5F6368;border-bottom:1px solid #EFEFEC}
+.hd span:not(:first-child),.ln .n,.ln .in,.ln .df{text-align:right}
+.ln{padding-top:9px;padding-bottom:9px;border-top:1px solid #EFEFEC}
+.hd + .ln{border-top:0}
+.nm b{display:block;font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm span{display:block;font-size:13px;color:#5F6368}
+.nm span i{font-style:normal;font-weight:700;color:#8A4B00}
+.n b{display:block;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums}
+.n span{display:block;font-size:13px;color:#5F6368;white-space:nowrap}
+.n span.r{color:#8A4B00;font-weight:700}
+.in input{width:100px;height:40px;border:1px solid #D4D4CF;border-radius:8px;padding:0 12px;text-align:right;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;background:#fff}
+.in input:focus{outline:2px solid #161616;outline-offset:1px;border-color:#161616}
+.df b{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums}
+.df b.z{color:#5F6368;font-weight:600}
+.df b.m{color:#8E1016}.df b.p{color:#14602F}
+.df span{display:block;font-size:13px;font-weight:700;color:#5F6368}
+.ba{display:flex;align-items:center;gap:8px;padding:10px 18px 14px}
+.ba .btn-p{margin-left:auto}
+.cp{display:flex;align-items:center;gap:14px;padding:12px 18px}
+.cp .t{flex:1;min-width:0;font-size:13.5px;color:#5F6368}
+.cp .t b{color:#161616;font-weight:700;margin-right:6px}
+.cp .btn{height:34px;padding:0 12px;font-size:13.5px}
+.foot{margin:0 -44px;padding:14px 44px;background:#fff;border-top:1px solid #E5E5E1;display:flex;align-items:center;gap:18px}
+.foot .t{flex:1;font-size:13.5px;color:#5F6368}
+.foot .t b{color:#161616;font-weight:800;font-size:15px;margin-right:8px}
+.foot .d{font-weight:800;font-variant-numeric:tabular-nums}
+.foot .d.m{color:#8E1016}.foot .d.p{color:#14602F}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">1</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m6 9 6 6 6-6"/></svg></a>
+  <a class="nav sub" href="#">Itens</a>
+  <a class="nav sub" href="#">Receber</a>
+  <a class="nav sub on" href="#" aria-current="page">Contagem</a>
+  <a class="nav sub" href="#">Mapa</a>
+  <a class="nav sub" href="#">Posições</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="ph">
+    <div class="crumb"><a href="WmsContagemRodada.dc.html">Contagem</a><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="color:#5F6368"><path d="m9 18 6-6-6-6"/></svg><h1>A-03</h1><span class="rua">Rua A · 7 caixas · 5 itens</span></div>
+    <div class="acts">
+      <a class="btn btn-s" href="WmsContagemFolha.dc.html"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Imprimir folha</a>
+      <a class="btn btn-s" href="WmsContagemRodada.dc.html">Voltar à rodada</a>
+    </div>
+  </div>
+  <div class="pr"><span><b>2 de 7 caixas</b> confirmadas</span><div class="pg" aria-hidden="true"><i></i></div><span>esperadas <b>120</b></span><span>contadas <b>115</b></span><span>diferença <b style="color:#8E1016">−5 un.</b></span></div>
+
+  <div class="list">
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000010</span><span class="t"><b>Polo Masculino Piquet Preto · P</b>60 esperadas · 20 reservadas · PED-0002</span><span class="bd g">confirmada 09:02 · 60 · sem diferença</span><button type="button" class="btn btn-s">Contar de novo</button></div>
+    </div>
+
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000011</span><span class="t"><b>Polo Masculino Piquet Preto · M</b>60 esperadas · entrou 60 · saiu 0</span><span class="bd a">confirmada 09:11 · 55 · −5</span><button type="button" class="btn btn-s">Contar de novo</button></div>
+    </div>
+
+    <div class="card cur">
+      <div class="bh"><span class="cx">CX-000012</span><span class="m">guardada 20/10 · etiqueta 10/11</span><span class="bd b">em contagem</span></div>
+      <div class="hd"><span>Produto</span><span>Esperado</span><span>Contado</span><span>Diferença</span></div>
+      <div class="ln"><div class="nm"><b>Polo Masculino Piquet Preto · M</b><span>A.01.0806.005.M · BTG-000123</span></div><div class="n"><b>60</b><span>entrou 60 · saiu 0</span></div><div class="in"><input type="text" inputmode="numeric" value="48" aria-label="Contado, Polo Masculino Piquet Preto M, CX-000012" autofocus></div><div class="df"><b class="m">−12</b></div></div>
+      <div class="ln"><div class="nm"><b>Polo Masculino Piquet Preto · GG</b><span>A.01.0806.005.GG · BTG-000125 · <i>fora da lista · entrada em A-03</i></span></div><div class="n"><b>0</b></div><div class="in"><input type="text" inputmode="numeric" value="2" aria-label="Contado, Polo Masculino Piquet Preto GG, fora da lista, CX-000012"></div><div class="df"><b class="p">+2</b></div></div>
+      <div class="ba"><button type="button" class="btn btn-s">Caixa vazia</button><button type="button" class="lk">Item fora da lista</button><button type="button" class="btn btn-p">Confirmar caixa</button></div>
+    </div>
+
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000013</span><span class="t"><b>Polo Masculino Piquet Preto · G</b>80 esperadas</span><button type="button" class="btn btn-s">Contar</button></div>
+    </div>
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000014</span><span class="t"><b>Polo Masculino Piquet Preto · GG</b>50 esperadas</span><button type="button" class="btn btn-s">Contar</button></div>
+    </div>
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000015</span><span class="t"><b>Polo Masculino Piquet Preto · GG</b>50 esperadas</span><button type="button" class="btn btn-s">Contar</button></div>
+    </div>
+    <div class="card">
+      <div class="cp"><span class="cx">CX-000016</span><span class="t"><b>Polo Masculino Piquet Preto · XG</b>90 esperadas</span><button type="button" class="btn btn-s">Contar</button></div>
+    </div>
+    <div class="card">
+      <div class="cp"><span class="t"><b>Caixa sem registro</b></span><button type="button" class="btn btn-s">Cadastrar caixa</button></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="t"><b>A-03</b>saldo da prateleira 445 · caixas 445 · reservadas 20</span>
+    <span class="d m">−5 M</span><span class="d">CX-000012 · em contagem ·</span><span class="d m">−12 M</span><span class="d p">+2 GG</span>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
