@@ -79,6 +79,8 @@ import {
   type SkuAllocator,
 } from "./catalog-codes.js";
 import {
+  CATALOG_PRICES,
+  catalogPriceId,
   publishedMoneyDeletes,
   rememberCatalogPrice,
   unitPriceOf,
@@ -336,11 +338,13 @@ export type RecordCycleCountInput = {
   photo_storage_paths?: string[];
   location_id: string;
   counted_qty: number;
+  /** Só na abertura: a cíclica ignora e usa o custo do saldo ou do catálogo. */
   unit_cost?: number;
   reason: string;
   reference?: string;
   /** Caixa (unidade de manuseio) onde o produto foi lançado; só na abertura. */
   box_code?: string;
+  /** Só na abertura: a cíclica grava a hora do servidor. */
   occurred_at?: string;
   idempotency_key: string;
 };
@@ -2011,7 +2015,11 @@ export async function recordCycleCountTransaction(
     );
   }
 
-  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  // A hora da contagem cíclica é a do servidor, como em recordOperationalEvent
+  // (diagnóstico da Contagem cíclica, F12): o relógio do aparelho não entra no
+  // movimento, no registro nem no saldo. A abertura segue com a hora digitada.
+  const occurredAt =
+    mode === "cycle" ? new Date().toISOString() : input.occurred_at ?? new Date().toISOString();
   const operationId = `op_${mode === "opening" ? "opening_inventory" : "cycle_count"}_${digest({
     customer: customerCode,
     // Produto novo ainda não tem SKU: o código do cliente distingue a operação.
@@ -2212,6 +2220,15 @@ export async function recordCycleCountTransaction(
       transaction,
       exactBalanceQuery(db, customerCode, skuCode, locationId),
     );
+    // O custo da contagem cíclica vem do saldo ou do preço de catálogo
+    // (catalog_prices), nunca do digitado (F07): quem conta não vê preço, e o
+    // digitado reescrevia a base do ad valorem.
+    const catalogPriceSnapshot =
+      mode === "cycle"
+        ? await transaction.get(
+            db.collection(CATALOG_PRICES).doc(catalogPriceId(customerCode, skuCode)),
+          )
+        : undefined;
     if (balanceRows.length > 1) {
       throw new HttpsError(
         "failed-precondition",
@@ -2526,14 +2543,21 @@ export async function recordCycleCountTransaction(
     const catalogProduct =
       productRows[0]?.data ?? productCodeSnapshot?.data() ?? {};
     const catalogSku = skuRows[0]?.data ?? skuCodeSnapshot?.data() ?? {};
-    const unitCost = number(
-      input.unit_cost ||
-        balanceRow.data.unit_cost ||
-        catalogSku.preco_unit ||
-        catalogSku.unit_cost ||
-        catalogProduct.preco_unit ||
-        catalogProduct.unit_cost,
-    );
+    const unitCost =
+      mode === "cycle"
+        ? number(balanceRow.data.unit_cost) || unitPriceOf(catalogPriceSnapshot?.data()) || 0
+        : number(
+            input.unit_cost ||
+              balanceRow.data.unit_cost ||
+              catalogSku.preco_unit ||
+              catalogSku.unit_cost ||
+              catalogProduct.preco_unit ||
+              catalogProduct.unit_cost,
+          );
+    // A contagem cíclica não grava preço: a projeção do cliente vai sem o
+    // custo, e rememberCatalogPrice não toca em catalog_prices, com ou sem
+    // diferença. Só a abertura publica o custo do produto.
+    const projectedUnitCost = mode === "cycle" ? undefined : unitCost;
     if (mode === "opening" && unitCost <= 0) {
       throw new HttpsError(
         "failed-precondition",
@@ -2916,7 +2940,7 @@ export async function recordCycleCountTransaction(
         size,
         color,
         photoUrls,
-        unitCost,
+        unitCost: projectedUnitCost,
         onHandDelta: delta,
         split: clientSplit(
           balancesAfter(aggregateBalanceRows, [
@@ -2953,7 +2977,7 @@ export async function recordCycleCountTransaction(
         size,
         color,
         photoUrls,
-        unitCost,
+        unitCost: projectedUnitCost,
         qtyOnHand: aggregateOnHand,
         qtyReserved: aggregateReserved,
         split: clientSplit(

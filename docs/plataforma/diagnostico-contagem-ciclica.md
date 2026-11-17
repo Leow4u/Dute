@@ -775,6 +775,21 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    `rascunhos-de-aviso.integration.test.ts`). *Pronto quando* `billing-callables`
    e `callables-papeis` seguem verdes e nenhum valor digitado na Contagem muda
    `catalog_prices`.
+
+   *No código desde 17/11/2026 (PR 616, três commits, só no modo `cycle`; a
+   abertura não muda):* a quantidade inteira, com teto de 100.000, no esquema
+   e na transação (a callable recusa a entrada fora do formato com a frase
+   para quem opera, não mais com o `INTERNAL` do ZodError cru); o endereço em
+   maiúsculas, a prateleira conferida em `warehouse_positions` (a recusa diz o
+   que foi digitado) e RECEBIMENTO e EXPEDICAO, em qualquer grafia, só para
+   owner e admin; o `unit_cost` digitado ignorado (o custo sai do saldo ou de
+   `catalog_prices`, e a contagem não grava nada em `catalog_prices`, com ou
+   sem diferença) e `occurred_at` do servidor, no movimento, no registro e no
+   saldo. A tela ainda manda os três campos; o servidor trata. Ficam: a recusa
+   "Saldo não encontrado" com o caminho certo, o `inventory.adjusted` como
+   aviso interno, a guarda aberta e a caixa em `committing`, o status `review`
+   e `blocked` da posição (pergunta 9) e os testes das duas pessoas, da
+   repetição e da chave com outro corpo.
 3. **A aba cíclica para a sequência, com mockup v3 (F02, F10, F16, F17, F24,
    F25, F26).** Limpar o produto no sucesso e levar o foco ao código; a
    prateleira escolhida numa lista; saldo, reserva e "em separação" antes de

@@ -54,10 +54,12 @@ export const CycleCountFieldsSchema = z
     photo_storage_paths: z.array(z.string().trim().min(1).max(900)).max(8).optional(),
     location_id: z.string().trim().min(1),
     counted_qty: z.number().nonnegative(),
+    // Só na abertura: a cíclica ignora e usa o custo do saldo ou do catálogo.
     unit_cost: z.number().nonnegative().optional(),
     reason: z.string().trim().min(3),
     reference: z.string().trim().optional(),
     box_code: z.string().trim().max(20).optional(),
+    // Só na abertura: a cíclica grava a hora do servidor.
     occurred_at: z.string().trim().optional(),
     idempotency_key: z.string().trim().min(1),
   });
