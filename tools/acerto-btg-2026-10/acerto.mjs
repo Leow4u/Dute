@@ -19,12 +19,22 @@
  * (o script importa `functions/wms/lib`), e credencial: `gcloud auth
  * application-default login` com uma conta do projeto, ou
  * FIRESTORE_EMULATOR_HOST apontando para o emulador local.
+ *
+ * A caixa recontada (17/11/2026): o saldo da caixa é a entrada menos o
+ * retirado mais os ajustes da recontagem (`count_adjustments`). A operação
+ * que mexeria no conteúdo de um SKU que a recontagem ajustou numa caixa
+ * recusa, e a que mexe na caixa inteira recusa a caixa com ajuste; nenhuma
+ * apaga ou reescreve um ajuste (caixa.mjs).
  */
 
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { ajustesDaCaixa, ajustesDoSku, resumoDosAjustes, saldoDoSku, textoDosAjustes } from "../corrigir-codigo-do-produto/ajustes-da-caixa.mjs";
+import { unidadesAjustadas } from "../corrigir-codigo-do-produto/saldo-da-caixa.mjs";
+import { ficaVazia, recusaNaCaixa, recusaNoSku, resumoDaCaixa, retiradoCom, retiradoDe, retiradoGravado } from "./caixa.mjs";
 
 // ACERTO_PLANO aponta outro arquivo de plano, só com o emulador (teste de operações que o plano real não liga).
 const { BLOCOS, PLANO } = await import(
@@ -280,6 +290,22 @@ async function caixa(code) {
   const snap = await db.collection("warehouse_boxes").doc(text(code).toUpperCase()).get();
   return snap.exists ? { id: snap.id, ref: snap.ref, data: snap.data(), posicao: text(snap.data().location_id).toUpperCase() } : null;
 }
+/**
+ * As caixas do cliente com um SKU: as que o listam em `sku_codes` (a recontagem põe ali o item fora da lista) e as
+ * de `codigos` (as das linhas da abertura dele).
+ */
+async function caixasComOSku(skuCode, codigos = []) {
+  const achadas = new Map();
+  for (const d of (await db.collection("warehouse_boxes").where("sku_codes", "array-contains", skuCode).get()).docs) {
+    if (doCliente(d.data())) achadas.set(d.id, { id: d.id, ref: d.ref, data: d.data(), posicao: text(d.data().location_id).toUpperCase() });
+  }
+  for (const codigo of new Set(codigos.map((c) => text(c).toUpperCase()).filter(Boolean))) {
+    if (achadas.has(codigo)) continue;
+    const box = await caixa(codigo);
+    if (box && doCliente(box.data)) achadas.set(box.id, box);
+  }
+  return [...achadas.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
 async function linhasAbertura({ caixa: box, sku }) {
   let query = db.collection("opening_inventory_lines");
   if (box) query = query.where("box_code", "==", text(box).toUpperCase());
@@ -291,27 +317,14 @@ async function linhasAbertura({ caixa: box, sku }) {
     .filter((r) => doCliente(r.data) && linhaViva(r.data) && (!sku || text(r.data.sku_code) === sku));
 }
 // A caixa na separação (separação com caixas, parte 3): o conteúdo do Receber mora na caixa (`lines`), o da abertura
-// nas linhas da sessão, e o que as separações tiraram fica na caixa (`taken_lines`, `taken_units`).
+// nas linhas da sessão, o que as separações tiraram fica na caixa (`taken_lines`, `taken_units`) e o que as
+// recontagens acertaram também (`count_adjustments`). O retirado, a caixa vazia e as recusas da caixa recontada estão
+// em caixa.mjs, com teste.
 const linhasDaCaixa = (data) => (Array.isArray(data?.lines) ? data.lines : []);
-function retiradoDe(data, skuCode) {
-  return (Array.isArray(data?.taken_lines) ? data.taken_lines : []).filter((t) => text(t?.sku_code) === skuCode).reduce((s, t) => s + num(t.qty), 0);
-}
-/** O retirado depois de somar (ou, com delta negativo, devolver) um SKU, sem as linhas zeradas (retiradoCom do WMS). */
-function retiradoCom(linhas, skuCode, delta) {
-  const soma = new Map();
-  for (const t of Array.isArray(linhas) ? linhas : []) {
-    const sku = text(t?.sku_code);
-    if (sku && num(t.qty) > 0) soma.set(sku, (soma.get(sku) ?? 0) + num(t.qty));
-  }
-  const novo = (soma.get(skuCode) ?? 0) + delta;
-  if (novo > 0) soma.set(skuCode, novo);
-  else soma.delete(skuCode);
-  return [...soma].map(([sku_code, qty]) => ({ sku_code, qty }));
-}
-function retiradoGravado(linhas, agora) {
-  return linhas.length
-    ? { taken_lines: linhas, taken_units: linhas.reduce((s, l) => s + l.qty, 0), balance_at: agora }
-    : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete() };
+const apagar = () => FieldValue.delete();
+/** A operação recusa: a frase de caixa.mjs vira o erro dela (no dry-run, ERRO; dentro da transação, nada grava). */
+function seRecusa(frase) {
+  if (frase) throw new Erro(frase);
 }
 async function entradaNaCaixa(box, skuCode) {
   const proprias = linhasDaCaixa(box.data);
@@ -993,6 +1006,8 @@ const OPS = {
       if (!box && !linhas.length) return { jaAplicado: true, estado: [`caixa ${op.caixa} não existe mais e não tem linhas`], previsto: [] };
       if (!linhas.length) return { semMudanca: true, estado: [`caixa ${op.caixa} sem linhas da abertura; nada a baixar`], previsto: [] };
       const parcial = Array.isArray(op.itens) && op.itens.length > 0;
+      // A caixa inteira sai pelas linhas da abertura: com ajuste da recontagem, o saldo dela não é mais o das linhas.
+      if (box && !parcial) seRecusa(recusaNaCaixa(box.data, op.caixa, "a baixa da caixa inteira tira o que as linhas da abertura têm, e o saldo dela não é mais esse"));
       let alvos = linhas.map((linha) => ({ linha, qtde: num(linha.data.counted_qty) }));
       if (parcial) {
         alvos = [];
@@ -1021,6 +1036,7 @@ const OPS = {
       let baixado = 0;
       for (const { linha, qtde } of alvos) {
         const skuCode = text(linha.data.sku_code);
+        if (box) seRecusa(recusaNoSku(box.data, op.caixa, skuCode, `${skuCode} (${text(linha.data.client_item_code)})`, "a baixa pela linha da abertura contaria de novo o que ela acertou"));
         const posicao = text(linha.data.location_id || box?.data.location_id).toUpperCase();
         const naLinha = num(linha.data.counted_qty);
         const movido = box ? await retiradoQueOPlanoMove(box.id, skuCode) : 0;
@@ -1040,11 +1056,14 @@ const OPS = {
         previsto.push(qtde >= naLinha ? `linha de ${skuCode} (${fmt(naLinha)}) sai do registro da abertura da caixa ${op.caixa}` : `linha de ${skuCode} na caixa ${op.caixa}: ${fmt(naLinha)} → ${fmt(naLinha - qtde)}`);
         itens.push({ linha, skuCode, posicao, qtde, saida, box });
       }
-      // A caixa de que a separação já tirou tudo o que fica nela sai da prateleira (vazia), como na separação.
+      // A caixa de que a separação já tirou tudo o que fica nela sai da prateleira (vazia), como na separação: o que fica
+      // é a entrada menos o retirado mais os ajustes da recontagem dos outros itens.
       const sobraNoRegistro = Math.max(0, num(box?.data.unit_count) - baixado);
-      if (box && text(box.data.status) === "stored" && tiradoDaCaixa > 0 && tiradoDaCaixa >= sobraNoRegistro) {
-        previsto.push(`a caixa ${op.caixa} fica com ${fmt(sobraNoRegistro)} no registro, e a separação já tirou ${fmt(tiradoDaCaixa)}: sai da prateleira (vazia${text(op.pedido) ? `, no ${text(op.pedido)}` : ""})`);
+      if (box && ficaVazia(box.data, { entrada: sobraNoRegistro, retirado: tiradoDaCaixa })) {
+        const ajustado = unidadesAjustadas(ajustesDaCaixa(box.data));
+        previsto.push(`a caixa ${op.caixa} fica com ${fmt(sobraNoRegistro)} no registro${ajustado ? ` e ${ajustado > 0 ? "+" : "−"}${fmt(Math.abs(ajustado))} da recontagem` : ""}, e a separação já tirou ${fmt(tiradoDaCaixa)}: sai da prateleira (vazia${text(op.pedido) ? `, no ${text(op.pedido)}` : ""})`);
       }
+      if (box && resumoDosAjustes(box.data)) estado.push(`  recontagem em outro item da caixa, que fica: ${resumoDosAjustes(box.data)}`);
       return { estado, previsto, dados: { itens } };
     },
     async gravar(op, L) {
@@ -1075,6 +1094,8 @@ const OPS = {
             boxRef ? tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(item.linha.data.box_code))) : Promise.resolve(null),
           ]);
           if (!snap.exists) return { jaRetirada: true };
+          // A recontagem que chegou entre a leitura e a gravação também recusa: nada desta transação grava.
+          if (boxSnap?.exists) seRecusa(recusaNoSku(boxSnap.data(), op.caixa, item.skuCode, `${item.skuCode} (${text(item.linha.data.client_item_code)})`, "a baixa pela linha da abertura contaria de novo o que ela acertou"));
           const antes = snap.data();
           const restante = Math.max(0, num(antes.counted_qty) - item.qtde);
           const registro = {
@@ -1099,9 +1120,10 @@ const OPS = {
               const outraComSku = irmas.docs.some((d) => d.id !== item.linha.id && linhaViva(d.data()) && text(d.data().sku_code) === item.skuCode);
               if (!outraComSku) mudanca.sku_codes = lista(dados.sku_codes, 100).filter((c) => c !== item.skuCode);
             }
-            // A separação já tirou tudo o que fica no registro: a caixa sai da prateleira (vazia), como na separação.
+            // A separação já tirou tudo o que fica (o registro mais os ajustes da recontagem): a caixa sai da prateleira
+            // (vazia), como na separação. Os ajustes ficam como estão.
             const tirou = num(dados.taken_units);
-            if (text(dados.status) === "stored" && tirou > 0 && tirou >= mudanca.unit_count) {
+            if (ficaVazia(dados, { entrada: mudanca.unit_count, retirado: tirou })) {
               Object.assign(mudanca, camposDaVazia(op, new Date().toISOString()));
               evento(tx, op, "warehouse.box_emptied", `Caixa ${op.caixa} vazia`, `A separação já tinha tirado tudo o que a caixa tem (${fmt(tirou)} un.)`, "warehouse_box", op.caixa, {
                 caixa: op.caixa,
@@ -1137,6 +1159,10 @@ const OPS = {
       const reservado = saldos.reduce((t, r) => t + num(r.data.qty_reserved), 0);
       if (reservado > 0) throw new Erro(`${op.codigo} tem ${fmt(reservado)} reservado (pedido em aberto); resolva antes de zerar`);
       const linhas = await linhasAbertura({ sku: sku.id });
+      // Zerar tira o saldo inteiro e as linhas: a caixa em que a recontagem ajustou o SKU ficaria com o ajuste sozinho.
+      for (const box of await caixasComOSku(sku.id, linhas.map((l) => text(l.data.box_code)))) {
+        seRecusa(recusaNoSku(box.data, box.id, sku.id, rotulo(op.codigo, sku), "zerar o SKU tira o saldo e as linhas da abertura, e o ajuste dela ficaria sozinho na caixa"));
+      }
       const estado = [`${rotulo(op.codigo, sku)} · "${sku.nome}" · saldo ${descreverSaldos(saldos)}`];
       for (const l of linhas) estado.push(`  linha da caixa ${text(l.data.box_code)} · ${fmt(num(l.data.counted_qty))} un.`);
       const totalLinhas = linhas.reduce((t, l) => t + num(l.data.counted_qty), 0);
@@ -1168,6 +1194,7 @@ const OPS = {
             tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(l.data.box_code))),
           ]);
           if (!snap.exists) return { jaRetirada: true };
+          if (boxSnap.exists) seRecusa(recusaNoSku(boxSnap.data(), boxSnap.id, sku.id, rotulo(op.codigo, sku), "zerar o SKU tira o saldo e as linhas da abertura, e o ajuste dela ficaria sozinho na caixa"));
           const antes = snap.data();
           tx.delete(l.ref);
           if (boxSnap.exists) {
@@ -1258,6 +1285,9 @@ const OPS = {
       const box = await caixa(op.caixa);
       if (!box) return { jaAplicado: true, estado: [`caixa ${op.caixa} não existe mais`], previsto: [] };
       if (op.se_apoia === "esvaziar" && (await reciboExiste(idReciboDireto(op)))) return { jaAplicado: true, estado: [`caixa ${op.caixa} já esvaziada`], previsto: [] };
+      // Remover ou esvaziar zera o registro da caixa (e remover apaga o documento, com os ajustes): com ajuste da
+      // recontagem, o saldo dela não é o do registro.
+      seRecusa(recusaNaCaixa(box.data, op.caixa, "remover ou esvaziar zera o registro da caixa por cima do que a recontagem acertou, e remover apaga o ajuste"));
       const linhas = await linhasAbertura({ caixa: op.caixa });
       if (text(box.data.status) === "committing") throw new Erro(`caixa ${op.caixa} está em guarda`);
       const apoiadas = (await db.collection("warehouse_boxes").where("support_box_code", "==", box.id).get()).docs
@@ -1329,6 +1359,7 @@ const OPS = {
       await transacaoDireta(op, modo === "esvaziar" ? "esvaziar_caixa" : "remover_caixa", box.id, async (tx) => {
         const atual = await tx.get(box.ref);
         if (!atual.exists) return { jaRemovida: true };
+        seRecusa(recusaNaCaixa(atual.data(), box.id, "remover ou esvaziar zera o registro da caixa por cima do que a recontagem acertou, e remover apaga o ajuste"));
         tx.update(box.ref, { line_count: 0, unit_count: 0, draft_line_count: 0, draft_unit_count: 0, total_cost: 0, sku_codes: [], updated_at: ts() });
         evento(tx, op, "warehouse.box_emptied_by_acerto", `Caixa ${box.id} esvaziada no registro`, `Estava em ${box.posicao} com ${num(atual.data().line_count)} produto(s) e ${fmt(num(atual.data().unit_count))} unidade(s)`, "warehouse_box", box.id, {
           antes: { line_count: num(atual.data().line_count), unit_count: num(atual.data().unit_count), sku_codes: lista(atual.data().sku_codes, 50) },
@@ -1363,6 +1394,12 @@ const OPS = {
       for (const item of itens) {
         const { linha } = item;
         item.box = await caixa(text(linha.data.box_code));
+        // A linha passa de um SKU para o outro: com ajuste da recontagem em qualquer dos dois, a caixa já foi contada
+        // como ela está, e a correção contaria de novo (o feito fica como está).
+        if (item.box && !item.feito) {
+          seRecusa(recusaNoSku(item.box.data, item.box.id, deSku, `${deSku} (${text(linha.data.client_item_code)})`, "corrigir a linha da abertura mudaria a entrada por cima do que ela acertou"));
+          if (para.sku) seRecusa(recusaNoSku(item.box.data, item.box.id, para.sku.id, `${para.sku.id} (${para.sku.codCliente || op.para})`, "a correção da linha somaria a entrada ao que ela já pôs na caixa"));
+        }
         item.antes = num(linha.data.counted_qty);
         item.depois = op.qtde == null ? item.antes : num(op.qtde);
         estado.push(`linha ${linha.id} · caixa ${text(linha.data.box_code)}${item.box ? ` em ${item.box.posicao}` : ""} · ${deSku} · ${text(linha.data.client_item_code)} · "${text(linha.data.product_name)}" · ${fmt(item.antes)} un.${item.feito ? " · já corrigida" : ""}`);
@@ -1385,6 +1422,10 @@ const OPS = {
             tx.get(db.collection("opening_inventory_lines").where("box_code", "==", text(linha.data.box_code))),
           ]);
           const dados = linhaSnap.data();
+          if (boxSnap?.exists) {
+            seRecusa(recusaNoSku(boxSnap.data(), boxSnap.id, deSku, `${deSku} (${text(dados.client_item_code)})`, "corrigir a linha da abertura mudaria a entrada por cima do que ela acertou"));
+            seRecusa(recusaNoSku(boxSnap.data(), boxSnap.id, para.id, `${para.id} (${para.codCliente || op.para})`, "a correção da linha somaria a entrada ao que ela já pôs na caixa"));
+          }
           tx.update(linha.ref, {
             sku_code: para.id,
             client_item_code: para.codCliente || para.id,
@@ -1433,6 +1474,8 @@ const OPS = {
       const antes = num(linha.data.counted_qty);
       const depois = op.qtde != null ? num(op.qtde) : antes + num(op.delta);
       if (depois === antes) return { semMudanca: true, estado: [`linha ${linha.id} · caixa ${text(linha.data.box_code)} · ${fmt(antes)} un.`], previsto: [] };
+      const box = await caixa(text(linha.data.box_code));
+      if (box) seRecusa(recusaNoSku(box.data, box.id, sku.id, `${sku.id} (${text(linha.data.client_item_code)})`, "ajustar a linha da abertura contaria de novo o que ela acertou"));
       return {
         estado: [`linha ${linha.id} · caixa ${text(linha.data.box_code)} · ${sku.id} · ${fmt(antes)} un.`],
         previsto: [`linha e caixa ${fmt(antes)} → ${fmt(depois)}`],
@@ -1444,6 +1487,7 @@ const OPS = {
       return transacaoDireta(op, "ajustar_linha", linha.id, async (tx) => {
         const boxRef = db.collection("warehouse_boxes").doc(text(linha.data.box_code).toUpperCase());
         const [, boxSnap] = await Promise.all([tx.get(linha.ref), tx.get(boxRef)]);
+        if (boxSnap.exists) seRecusa(recusaNoSku(boxSnap.data(), boxSnap.id, sku.id, `${sku.id} (${text(linha.data.client_item_code)})`, "ajustar a linha da abertura contaria de novo o que ela acertou"));
         tx.update(linha.ref, { counted_qty: depois, acerto: { op: op.id, antes: { counted_qty: antes }, at: new Date().toISOString() }, updated_at: ts() });
         if (boxSnap.exists) tx.update(boxRef, { unit_count: FieldValue.increment(depois - antes), updated_at: ts() });
         evento(tx, op, "opening_line.adjusted_by_acerto", `Linha da caixa ${text(linha.data.box_code)} ajustada`, `${sku.id}: ${fmt(antes)} → ${fmt(depois)}`, "opening_inventory_line", linha.id, {
@@ -1469,6 +1513,7 @@ const OPS = {
       if (!linhas.length) throw new Erro(`caixa ${op.caixa} sem linha da abertura para copiar a sessão`);
       const para = await destino(op.codigo);
       if (para.sku && linhas.some((l) => text(l.data.sku_code) === para.sku.id)) throw new Erro(`a caixa ${op.caixa} já tem linha de ${op.codigo}; use ajustar_linha`);
+      if (para.sku) seRecusa(recusaNoSku(box.data, box.id, para.sku.id, `${para.sku.id} (${para.sku.codCliente || op.codigo})`, "a linha nova contaria de novo o que ela pôs na caixa"));
       return {
         estado: [`caixa ${op.caixa} em ${box.posicao} · ${num(box.data.line_count)} produto(s), ${fmt(num(box.data.unit_count))} un.`],
         previsto: [`nova linha na caixa ${op.caixa}: ${para.texto} · ${fmt(num(op.qtde))} un.`],
@@ -1484,6 +1529,7 @@ const OPS = {
       return transacaoDireta(op, "adicionar_linha", ref.id, async (tx) => {
         const [boxSnap, existente] = await Promise.all([tx.get(box.ref), tx.get(ref)]);
         if (existente.exists) return { linha: ref.id, jaExistia: true };
+        if (boxSnap.exists) seRecusa(recusaNoSku(boxSnap.data(), box.id, sku.id, `${sku.id} (${sku.codCliente || op.codigo})`, "a linha nova contaria de novo o que ela pôs na caixa"));
         const m = modelo.data;
         tx.create(ref, compact({
           id: ref.id,
@@ -1532,12 +1578,16 @@ const OPS = {
       const [de, para] = [await caixa(op.de), await caixa(op.para)];
       if (!de || !para) throw new Erro(`caixa ${!de ? op.de : op.para} não encontrada`);
       if (de.posicao !== para.posicao) throw new Erro(`as caixas estão em prateleiras diferentes (${op.de} em ${de.posicao}, ${op.para} em ${para.posicao})`);
+      // A recontagem contou a caixa como ela está: com ajuste no SKU numa das duas, mover o retirado contaria de novo.
+      for (const box of [de, para]) seRecusa(recusaNoSku(box.data, box.id, sku.id, `${sku.id} (${sku.codCliente})`, "mover o retirado contaria de novo o que ela acertou"));
       const qtde = num(op.qtde);
       const tiradoDe = retiradoDe(de.data, sku.id);
       if (tiradoDe < qtde) throw new Erro(`a separação tirou ${fmt(tiradoDe)} de ${sku.id} da caixa ${op.de}; não dá para mover ${fmt(qtde)}`);
       const entrouPara = await entradaNaCaixa(para, sku.id);
       const tiradoPara = retiradoDe(para.data, sku.id);
-      if (entrouPara - tiradoPara < qtde) throw new Erro(`a caixa ${op.para} tem ${fmt(entrouPara - tiradoPara)} de ${sku.id} por tirar no registro; não cabem ${fmt(qtde)}`);
+      // O que a caixa de destino tem do SKU por tirar: o saldo dela pela regra.
+      const porTirar = saldoDoSku(sku.id, { entrada: entrouPara, retirado: tiradoPara, ajustes: ajustesDoSku(para.data, sku.id) });
+      if (porTirar < qtde) throw new Erro(`a caixa ${op.para} tem ${fmt(porTirar)} de ${sku.id} por tirar no registro; não cabem ${fmt(qtde)}`);
       let linha = null;
       if (op.pedido) {
         const linhas = (await db.collection("pick_lines").where("sku_code", "==", sku.id).get()).docs
@@ -1560,9 +1610,11 @@ const OPS = {
       return transacaoDireta(op, "mover_retirado", `${de.id}>${para.id}`, async (tx) => {
         const [snapDe, snapPara, snapLinha] = await Promise.all([tx.get(de.ref), tx.get(para.ref), linha ? tx.get(linha.ref) : Promise.resolve(null)]);
         if (retiradoDe(snapDe.data(), sku.id) < qtde) throw new Erro(`o retirado da ${de.id} mudou entre a leitura e a gravação`);
+        for (const snap of [snapDe, snapPara]) seRecusa(recusaNoSku(snap.data(), snap.id, sku.id, `${sku.id} (${sku.codCliente})`, "mover o retirado contaria de novo o que ela acertou"));
         const agora = new Date().toISOString();
-        tx.update(de.ref, { ...retiradoGravado(retiradoCom(snapDe.data().taken_lines, sku.id, -qtde), agora), updated_at: ts() });
-        tx.update(para.ref, { ...retiradoGravado(retiradoCom(snapPara.data().taken_lines, sku.id, qtde), agora), updated_at: ts() });
+        // Só o retirado muda; os ajustes da recontagem de outros itens ficam, e a hora do saldo da caixa ajustada também.
+        tx.update(de.ref, { ...retiradoGravado(retiradoCom(snapDe.data().taken_lines, sku.id, -qtde), agora, snapDe.data(), apagar), updated_at: ts() });
+        tx.update(para.ref, { ...retiradoGravado(retiradoCom(snapPara.data().taken_lines, sku.id, qtde), agora, snapPara.data(), apagar), updated_at: ts() });
         if (snapLinha?.exists) {
           const caixas = new Map();
           for (const c of Array.isArray(snapLinha.data().separated_boxes) ? snapLinha.data().separated_boxes : []) {
@@ -1614,6 +1666,8 @@ const OPS = {
       if (comDe.length !== 1) throw new Erro(`a caixa ${op.caixa} tem ${comDe.length} linha(s) de ${de.id}; precisa ser exatamente 1`);
       if (linhas.some((l) => text(l?.sku_code) === para.id)) throw new Erro(`a caixa ${op.caixa} já tem linha de ${para.id}; juntar as duas não é desta operação`);
       if (retiradoDe(box.data, de.id) > 0) throw new Erro(`a separação já tirou ${de.id} da caixa ${op.caixa}`);
+      seRecusa(recusaNoSku(box.data, box.id, de.id, `${de.id} (${de.codCliente})`, "a correção passa a linha da caixa para o certo sem levar o que ela acertou"));
+      seRecusa(recusaNoSku(box.data, box.id, para.id, `${para.id} (${para.codCliente})`, "a correção somaria a linha ao que ela já pôs na caixa"));
       const naLinha = num(comDe[0].counted_qty);
       const tamanho = text(para.data.tamanho || para.data.size);
       let linhaDoPedido = null;
@@ -1634,7 +1688,7 @@ const OPS = {
       const item = itemId ? await db.collection("inbound_items").doc(itemId).get() : null;
       const tarefas = (await db.collection("putaway_tasks").where("box_code", "==", box.id).get()).docs;
       const tirou = num(box.data.taken_units) + qtdeRetirada;
-      const vazia = text(box.data.status) === "stored" && tirou > 0 && tirou >= num(box.data.unit_count);
+      const vazia = ficaVazia(box.data, { entrada: num(box.data.unit_count), retirado: tirou });
       return {
         estado: [
           `caixa ${box.id} em ${box.posicao} · ${text(box.data.status)} · ${linhas.map((l) => `${text(l.client_item_code) || text(l.sku_code)} ${fmt(num(l.counted_qty))}`).join(", ")} · a separação tirou ${(Array.isArray(box.data.taken_lines) ? box.data.taken_lines : []).map((t) => `${text(t.sku_code)} ${fmt(num(t.qty))}`).join(", ") || "nada"}`,
@@ -1667,6 +1721,8 @@ const OPS = {
         ]);
         const dados = boxSnap.data();
         if (!linhasDaCaixa(dados).some((l) => text(l?.sku_code) === de.id)) throw new Erro(`a caixa ${box.id} não tem mais a linha de ${de.id}`);
+        seRecusa(recusaNoSku(dados, box.id, de.id, `${de.id} (${de.codCliente})`, "a correção passa a linha da caixa para o certo sem levar o que ela acertou"));
+        seRecusa(recusaNoSku(dados, box.id, para.id, `${para.id} (${para.codCliente})`, "a correção somaria a linha ao que ela já pôs na caixa"));
         const agora = new Date().toISOString();
         const antes = linhasDaCaixa(dados).find((l) => text(l?.sku_code) === de.id);
         const mudanca = {
@@ -1679,9 +1735,9 @@ const OPS = {
         if (codigos) mudanca.sku_codes = codigos;
         if (qtdeRetirada > 0) {
           const retirado = retiradoCom(dados.taken_lines, para.id, qtdeRetirada);
-          Object.assign(mudanca, retiradoGravado(retirado, agora));
+          Object.assign(mudanca, retiradoGravado(retirado, agora, dados, apagar));
           const tirou = retirado.reduce((s, t) => s + t.qty, 0);
-          if (text(dados.status) === "stored" && tirou >= num(dados.unit_count)) {
+          if (ficaVazia(dados, { entrada: num(dados.unit_count), retirado: tirou })) {
             Object.assign(mudanca, camposDaVazia({ ...op, pedido: op.retirado.pedido }, agora));
             evento(tx, op, "warehouse.box_emptied", `Caixa ${box.id} vazia`, `A separação tirou tudo o que a caixa tem (${fmt(tirou)} un.)`, "warehouse_box", box.id, { caixa: box.id, retirado: tirou, pedido: text(op.retirado.pedido) });
           }
@@ -1780,6 +1836,11 @@ async function imprimirSku(d) {
   console.log(`  skus/${d.id} · cod_cliente "${text(x.cod_cliente)}" · key "${text(x.cod_cliente_key)}" · "${text(x.produto)}" · cliente ${text(x.customer_code) || "(vazio)"}${arquivado(x) ? " · ARQUIVADO" : ""} · estoque_atual ${num(x.estoque_atual)}`);
   for (const r of await saldosDoSku(d.id)) console.log(`     saldo ${r.posicao} ${fmt(num(r.data.qty_on_hand))} · client_item_code "${text(r.data.client_item_code)}"`);
   for (const l of await linhasAbertura({ sku: d.id })) console.log(`     linha ${text(l.data.box_code)} ${fmt(num(l.data.counted_qty))} · client_item_code "${text(l.data.client_item_code)}"`);
+  // A recontagem por caixa: a linha da abertura é a entrada, e o ajuste dela muda o que a caixa tem (--caixa mostra a conta).
+  for (const box of await caixasComOSku(d.id)) {
+    const ajustes = ajustesDoSku(box.data, d.id);
+    if (ajustes.length) console.log(`     recontagem na ${box.id}${box.posicao ? ` (${box.posicao})` : ""}: ${textoDosAjustes(ajustes)}`);
+  }
 }
 if (args.buscar.length) {
   for (const codigo of args.buscar) {
@@ -1815,6 +1876,8 @@ if (args.caixas.length) {
       const saldo = (await saldosDoSku(skuCode)).find((r) => r.posicao === posicao);
       console.log(`  linha ${l.id} · ${skuCode} · "${text(d.client_item_code)}" · "${text(d.product_name)}" · ${fmt(num(d.counted_qty))} un. · ${text(d.status) || "sem status"} · saldo do SKU em ${posicao}: ${saldo ? fmt(num(saldo.data.qty_on_hand)) : "0"}`);
     }
+    // O que a caixa tem pela regra do saldo: a entrada menos o que a separação tirou mais o que a recontagem acertou.
+    if (box) for (const linha of resumoDaCaixa(box.data, linhas.map((l) => l.data()).filter((d) => doCliente(d) && linhaViva(d)))) console.log(`  ${linha}`);
   }
 }
 if (args.nomes.length) {

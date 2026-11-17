@@ -9,9 +9,11 @@
  * do pedido sai da caixa mais antiga da prateleira que tem o item; se ela
  * não basta, a seguinte completa; o que as caixas não cobrem sai sem caixa.
  *
- * Funções puras, sem Firestore. functions/wms guarda uma cópia literal
- * (domain/saldo-da-caixa.ts), e os dois rodam os mesmos casos de
- * saldo-da-caixa.casos.json.
+ * Funções puras, sem Firestore. Cópias: functions/wms/src/domain/
+ * saldo-da-caixa.ts (literal, travada em saldo-da-caixa.test.ts de lá) e
+ * tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs (gerada deste arquivo
+ * por gerar-saldo-da-caixa.mjs, travada no vitest do app), a das ferramentas
+ * do acerto. As três rodam os mesmos casos de saldo-da-caixa.casos.json.
  */
 
 /** Uma linha do conteúdo da caixa: o que entrou, o que saiu ou o que resta de um SKU. */
