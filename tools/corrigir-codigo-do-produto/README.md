@@ -298,9 +298,17 @@ não pedem índice composto.
     entregue.
   - **O aviso de chegada de 05/11** saiu com `A.02.0806.005.XGG`, e a correção
     não reenvia.
-  - **Falta:** reimprimir a etiqueta da CX-000221 (a de 16/11, 12:22, ficou
-    velha) e, depois da entrega do PED-0001, rodar a mesma correção de novo,
-    para o BTG-000186 sair.
+  - **Etiqueta:** o Leonardo reimprimiu a da CX-000221 em 16/11/2026, às
+    17:10, com o BTG-000226 XG, e a mandou para a operação trocar na caixa.
+- **17/11/2026, depois da entrega do PED-0001**, a mesma correção de novo, da
+  máquina do Leonardo. O dry-run mostrou os quatro passos de 16/11 como feitos
+  e só a remoção a gravar; a gravação deu 1 correção, sem erro:
+  - **O BTG-000186 saiu do cadastro:** o SKU, o cartão de products, o item do
+    portal, o preço guardado e os saldos zerados, com tudo no recibo.
+  - **O histórico fica:** os movimentos e os eventos guardam
+    `A.02.0806.005.XGG`. A SAIDA de 12 de 16/11, às 16:57, é a da própria
+    transferência e não segurou a remoção.
+  - Com isso, a correção da CX-000221 está concluída.
 
 ## As correções da separação do PED-0001 (16/11/2026)
 
