@@ -840,8 +840,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    achado a mais soma em "entrou" e o a menos em "saiu", sem coluna nova; a
    caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
    acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
-   leem os ajustes pela mesma regra desde o PR 619, de 17/11/2026 (tabela da
-   seção 5.4).
+   leem os ajustes pela mesma regra desde o PR 619, de 17/11/2026 (abaixo e
+   na tabela da seção 5.4).
 
    *O servidor no código desde 17/11/2026 (PR 618, sem tela):* a callable
    `recountWarehouseBox` (`functions/wms/src/domain/box-recount.ts`), de
@@ -881,9 +881,23 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    (a sobra) foram decididas pelo Leonardo em 17/11/2026 (seção 7). A régua
    `billing-callables` roda uma recontagem de verdade: não cobra. Ficam: a
    tela (a rodada, a bancada e o celular), a coleção da rodada, a fila de
-   revisão do admin, "Cadastrar caixa" (a caixa física sem registro), o
-   status `review` e `blocked` da posição (pergunta 9) e as ferramentas do
-   acerto.
+   revisão do admin, "Cadastrar caixa" (a caixa física sem registro) e o
+   status `review` e `blocked` da posição (pergunta 9).
+
+   *As ferramentas do acerto no código desde 17/11/2026 (PR 619):*
+   `tools/corrigir-codigo-do-produto` e `tools/acerto-btg-2026-10` leem a
+   caixa pela mesma regra, numa cópia gerada de `lib/dominio`
+   (`tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs`, travada no vitest
+   do app). O `ler-estoque.mjs` e o `--caixa` do acerto mostram o ajuste e o
+   que fica. Pelas decisões do Leonardo de 17/11/2026, a correção de código
+   leva o ajuste do código errado para o certo junto com as peças, com o de
+   antes em `acerto_codigo`, e no mesmo SKU aceita a recontagem por caixa
+   sem diferença. O acerto recusa mexer no item que a recontagem ajustou e
+   na caixa inteira com ajuste, e a caixa que a recontagem esvaziou fica
+   `emptied` no registro. Nenhuma ferramenta apaga um ajuste. Achado na
+   revisão: desfazer a separação numa caixa recontada apagava o `balance_at`
+   dela no WMS, e a caixa voltava para "Etiquetas para trocar"; corrigido no
+   PR 620.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
