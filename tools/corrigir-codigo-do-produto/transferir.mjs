@@ -13,15 +13,19 @@
  *    funções de domínio do WMS (functions/wms/lib, as mesmas das callables),
  *    com a origem functions_manual_inventory, que não entra na cobrança;
  * 3. as linhas das caixas, das tarefas de guarda e a linha da NF passam para
- *    o SKU certo, numa transação, com o de antes em acerto_codigo e os eventos;
+ *    o SKU certo, numa transação, com o de antes em acerto_codigo e os eventos.
+ *    O ajuste da recontagem do errado na caixa (count_adjustments) vai junto
+ *    com as peças (decisão de 17/11/2026), também com o de antes em
+ *    acerto_codigo: o que passa, no saldo e na caixa, é o que ela tem do
+ *    errado pela regra do saldo (a linha mais os ajustes dele);
  * 4. o cadastro errado sai, como no "Remover para corrigir" da Contagem
  *    (removeOpeningInventoryLineTransaction, que apaga o cadastro criado por
  *    engano quando o saldo zera): o SKU, o cartão de products, o item do
  *    portal, o preço guardado e os saldos zerados, com o conteúdo inteiro no
  *    recibo. Só quando o SKU nasceu no Receber, ficou sem saldo e sem reserva,
- *    todos os movimentos dele são desta chegada ou desta correção e nada
- *    aberto o usa (chegada a conferir, linha da abertura, pedido do portal,
- *    pedido ainda não entregue).
+ *    todos os movimentos dele são desta chegada, da recontagem das caixas da
+ *    correção ou desta correção e nada aberto o usa (chegada a conferir,
+ *    linha da abertura, pedido do portal, pedido ainda não entregue).
  *    A linha da NF de chegada cancelada que aponta para ele passa para o
  *    certo, com o de antes em acerto_codigo: o Receber reusa o número que
  *    ela guarda quando o código volta como produto novo (pendingNewSkuFor).
@@ -30,7 +34,8 @@
  */
 
 import { tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
-import { recontagemNoSku, resumoDosAjustes } from "./ajustes-da-caixa.mjs";
+import { ajustesDoSku, resumoDosAjustes, saldoDoSku, textoDosAjustes } from "./ajustes-da-caixa.mjs";
+import { unidadesAjustadas } from "./saldo-da-caixa.mjs";
 import {
   ATOR,
   FONTE,
@@ -69,11 +74,18 @@ export const chaveDoMovimento = (correcao, passo, posicao) => `corrigir-codigo:$
 
 // --- Puro ----------------------------------------------------------------------------
 
-/** O que sai e entra por prateleira: a quantidade de cada caixa, somada onde ela está. */
+/**
+ * O que sai e entra por prateleira: a quantidade de cada caixa, somada onde
+ * ela está. A prateleira em que as caixas não têm peça do errado (a
+ * recontagem achou zero) não tem movimento.
+ */
 export function transferenciasPorPosicao(caixas) {
   const porPosicao = new Map();
   for (const c of caixas) if (c.posicao) porPosicao.set(c.posicao, (porPosicao.get(c.posicao) ?? 0) + num(c.qtde));
-  return [...porPosicao.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([posicao, qtde]) => ({ posicao, qtde }));
+  return [...porPosicao.entries()]
+    .filter(([, qtde]) => qtde > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([posicao, qtde]) => ({ posicao, qtde }));
 }
 
 /** As linhas (da caixa ou da tarefa de guarda) com o SKU certo no lugar do errado. */
@@ -94,20 +106,53 @@ export function skuCodesTrocados(codigos, skuDe, skuPara) {
 const temOSku = (dados, sku) => linhasDe(dados).some((l) => texto(l?.sku_code) === sku) || (Array.isArray(dados?.sku_codes) && dados.sku_codes.includes(sku));
 
 /**
- * A caixa que a recontagem acertou no SKU errado ou no certo
- * (`count_adjustments`; diagnóstico da contagem cíclica, seção 6, item 4)
- * recusa: a transferência passa a linha da caixa de um SKU para o outro e não
- * reescreve o ajuste, que fica como a recontagem gravou. Com ajuste no
- * errado, as peças da caixa nesse item não são mais as da linha; com ajuste
- * no certo, a recontagem pode já ter posto o código certo na caixa. O ajuste
- * de outro item da caixa não atrapalha. Devolve a frase da recusa, ou null.
+ * O que a caixa tem do SKU errado, pela regra do saldo da caixa (diagnóstico
+ * da contagem cíclica, seção 6, item 4): a linha (a entrada) mais os ajustes
+ * da recontagem dele (`count_adjustments`). É o que passa para o certo, no
+ * saldo da prateleira e na caixa (decisão de 17/11/2026). A caixa de que a
+ * separação já tirou o errado recusa antes.
  */
-export function recusaDaRecontagem(dados, codigo, { de, skuDe, para, skuPara }) {
-  const noErrado = recontagemNoSku(dados, codigo, skuDe, `${de} (${skuDe})`);
-  if (noErrado) return `${noErrado}: as peças da caixa nesse item não são mais as da linha, e a correção não mexe no que a recontagem acertou`;
-  const noCerto = recontagemNoSku(dados, codigo, skuPara, `${para} (${skuPara})`);
-  if (noCerto) return `${noCerto}: confira se ela já não pôs o código certo na caixa antes de corrigir`;
-  return null;
+export function oErradoNaCaixa(dados, linha, skuDe) {
+  const ajustes = ajustesDoSku(dados, skuDe);
+  const entrada = num(linha?.counted_qty);
+  return { entrada, ajustes, ajustado: unidadesAjustadas(ajustes), qtde: saldoDoSku(skuDe, { entrada, ajustes }) };
+}
+
+/**
+ * Os ajustes da recontagem da caixa com o SKU certo no lugar do errado, como
+ * a linha: o ajuste vai junto com as peças (decisão de 17/11/2026), e o de
+ * antes fica em acerto_codigo. O id da contagem, a hora e de onde a peça
+ * veio ou para onde foi ficam; o código, o nome e o tamanho que o item fora
+ * da lista gravou passam a ser os do certo. Os ajustes dos outros itens
+ * ficam como estão.
+ */
+export function ajustesTransferidos(ajustes, skuDe, alvo) {
+  return (Array.isArray(ajustes) ? ajustes : []).map((ajuste) => {
+    if (!ajuste || typeof ajuste !== "object" || texto(ajuste.sku_code) !== skuDe) return ajuste;
+    return {
+      ...ajuste,
+      sku_code: alvo.sku,
+      ...("client_item_code" in ajuste ? { client_item_code: alvo.codigo } : {}),
+      ...("product_name" in ajuste ? { product_name: alvo.nome } : {}),
+      ...("size" in ajuste && alvo.tamanho ? { size: alvo.tamanho } : {}),
+    };
+  });
+}
+
+/**
+ * A caixa mudou depois do plano: o que ela tem do errado pela regra (outra
+ * recontagem, uma separação) não é mais o que os movimentos do plano levam.
+ * Devolve a frase da recusa, ou null; a caixa sem a linha do errado fica para
+ * a conferência de sempre.
+ */
+export function caixaMudou(dados, caixaDoPlano, skuDe, de) {
+  const linha = linhasDe(dados).find((l) => texto(l?.sku_code) === skuDe);
+  if (!linha) return null;
+  const retirado = (Array.isArray(dados?.taken_lines) ? dados.taken_lines : []).filter((t) => texto(t?.sku_code) === skuDe).reduce((s, t) => s + num(t.qty), 0);
+  const ajustes = ajustesDoSku(dados, skuDe);
+  const agora = saldoDoSku(skuDe, { entrada: num(linha.counted_qty), retirado, ajustes });
+  if (agora === num(caixaDoPlano.qtde)) return null;
+  return `a caixa ${caixaDoPlano.codigo} mudou depois do plano: ele leva ${fmt(num(caixaDoPlano.qtde))} de ${de} (${skuDe}), e ela tem ${fmt(agora)} pela regra${ajustes.length ? ` (recontagem: ${textoDosAjustes(ajustes)})` : ""}${retirado ? ` (a separação tirou ${fmt(retirado)})` : ""}`;
 }
 
 // --- Leitura -------------------------------------------------------------------------
@@ -175,8 +220,6 @@ async function montarPlano(leitor, db, correcao) {
   if (skuDe === alvo.sku) recusar(`a linha de ${de} já aponta para ${alvo.sku}`);
   for (const c of caixas) {
     if ((Array.isArray(c.dados.taken_lines) ? c.dados.taken_lines : []).some((t) => texto(t?.sku_code) === skuDe)) recusar(`a separação já tirou ${de} da caixa ${c.codigo}`);
-    const recontada = recusaDaRecontagem(c.dados, c.codigo, { de, skuDe, para: alvo.codigo, skuPara: alvo.sku });
-    if (recontada) recusar(recontada);
   }
 
   const chegadaSnap = await leitor.get(db.collection("inbound_receipts").doc(receiptId));
@@ -211,7 +254,16 @@ async function montarPlano(leitor, db, correcao) {
     const guardada = texto(c.dados.status) === "stored";
     const posicao = guardada ? texto(c.dados.location_id).toUpperCase() : recebida ? RECEBIMENTO : null;
     if (guardada && !posicao) recusar(`a caixa ${c.codigo} está guardada sem prateleira`);
-    return { codigo: c.codigo, qtde: num(c.linha.counted_qty), posicao };
+    // O que passa é o que a caixa tem do errado pela regra: a linha mais o ajuste da recontagem, que vai junto.
+    const errado = oErradoNaCaixa(c.dados, c.linha, skuDe);
+    return {
+      codigo: c.codigo,
+      qtde: errado.qtde,
+      entrada: errado.entrada,
+      ajustado: errado.ajustado,
+      recontagens: [...new Set(errado.ajustes.map((a) => texto(a.recount_id)).filter(Boolean))],
+      posicao,
+    };
   });
   const transferencias = transferenciasPorPosicao(comPosicao);
   const saldos = doCliente((await leitor.get(db.collection("stock_balances").where("sku_code", "==", skuDe))).docs, cliente);
@@ -247,12 +299,15 @@ async function montarPlano(leitor, db, correcao) {
   };
 }
 
-/** A caixa do plano congelado que a recontagem acertou depois, no SKU errado ou no certo, recusa. */
-async function conferirRecontagemDasCaixas(leitor, db, plano) {
+/**
+ * O plano congelado leva, de cada caixa, o que ela tinha do errado pela regra. A caixa que mudou depois (outra
+ * recontagem, uma separação) recusa antes de a linha mudar: os movimentos já levaram a quantidade do plano.
+ */
+async function conferirCaixasDoPlano(leitor, db, plano) {
   for (const c of plano.caixas) {
     const snap = await leitor.get(db.collection("warehouse_boxes").doc(c.codigo));
-    const recusa = snap.exists ? recusaDaRecontagem(snap.data(), c.codigo, { de: plano.de, skuDe: plano.sku_de, para: plano.alvo.codigo, skuPara: plano.alvo.sku }) : null;
-    if (recusa) recusar(`${recusa} (a recontagem veio depois de a correção começar: os passos já feitos ficam)`);
+    const mudou = snap.exists ? caixaMudou(snap.data(), c, plano.sku_de, plano.de) : null;
+    if (mudou) recusar(`${mudou}. A correção começou antes: os passos já feitos ficam; confira a caixa antes de seguir`);
   }
 }
 
@@ -291,9 +346,12 @@ async function conferirRemocao(leitor, db, correcao, plano, passos) {
   if (reservado > 0) motivos.push(`tem ${fmt(reservado)} reservado`);
   const saidasDaCorrecao = new Set(plano.transferencias.map((t) => idDoReciboDeMovimento(cliente, chaveDoMovimento(correcao, "saida", t.posicao))));
   const movimentos = doCliente((await leitor.get(db.collection("movements").where("sku_code", "==", skuDe))).docs, cliente);
+  const caixasDaCorrecao = new Set(plano.caixas.map((c) => c.codigo));
   const deFora = movimentos.filter((d) => {
     const m = d.data();
     if (["wms_receiving", "wms_putaway"].includes(texto(m.source)) && texto(m.receipt_id) === plano.receipt_id) return false;
+    // A recontagem de uma caixa da correção é das mesmas peças: o ajuste dela foi junto para o certo (17/11/2026).
+    if (texto(m.source) === "functions_cycle_count" && texto(m.box_recount_id) && caixasDaCorrecao.has(texto(m.box_code).toUpperCase())) return false;
     return !(texto(m.source) === "functions_manual_inventory" && saidasDaCorrecao.has(texto(m.operational_operation_id)));
   });
   if (deFora.length) motivos.push(`teve ${deFora.length} movimento(s) fora desta chegada (${deFora.slice(0, 3).map((d) => descreverMovimento(d.data())).join("; ")}): pode ter sido produto de verdade`);
@@ -356,8 +414,8 @@ export async function lerTransferencia(leitor, db, correcao, { info = false } = 
   }
   const plano = congelado.exists ? congelado.data().result : await montarPlano(leitor, db, correcao);
   const passos = await situacaoDosPassos(leitor, db, correcao, plano);
-  // O plano congelado não relê as caixas: a recontagem feita depois dele recusa antes de a linha mudar.
-  if (congelado.exists && !passos.caixa) await conferirRecontagemDasCaixas(leitor, db, plano);
+  // O plano congelado não relê as caixas: a que mudou depois dele recusa antes de a linha mudar.
+  if (congelado.exists && !passos.caixa) await conferirCaixasDoPlano(leitor, db, plano);
   const remocao = passos.apagar ? { apaga: true, motivos: [], feito: true } : await conferirRemocao(leitor, db, correcao, plano, passos);
   return { jaAplicado: false, congelado: congelado.exists, plano, passos, remocao, estado: info ? await diagnostico(leitor, db, plano, passos) : [] };
 }
@@ -392,7 +450,13 @@ async function diagnostico(leitor, db, plano, passos) {
   for (const c of plano.caixas) {
     const snap = await leitor.get(db.collection("warehouse_boxes").doc(c.codigo));
     const d = snap.exists ? snap.data() : {};
-    caixasHoje.push(`${c.codigo} · ${status(STATUS_DA_CAIXA, d.status)}${texto(d.location_id) ? ` em ${texto(d.location_id)}` : ""} · ${fmt(linhasDe(d).length)} produto(s) · ${plano.de}: ${fmt(c.qtde)} un.${texto(d.label_printed_at) ? ` · etiqueta impressa ${quando(d.label_printed_at)}` : ""}${resumoDosAjustes(d) ? ` · recontagem em outro item, que fica: ${resumoDosAjustes(d)}` : ""}`);
+    const doErrado = ajustesDoSku(d, plano.sku_de);
+    const outros = resumoDosAjustes(d, (sku) => sku !== plano.sku_de);
+    caixasHoje.push(
+      `${c.codigo} · ${status(STATUS_DA_CAIXA, d.status)}${texto(d.location_id) ? ` em ${texto(d.location_id)}` : ""} · ${fmt(linhasDe(d).length)} produto(s) · ${plano.de}: ${fmt(c.entrada ?? c.qtde)} un.` +
+        `${doErrado.length ? ` e a recontagem ${textoDosAjustes(doErrado)}, ${fmt(c.qtde)} na caixa` : ""}` +
+        `${texto(d.label_printed_at) ? ` · etiqueta impressa ${quando(d.label_printed_at)}` : ""}${outros ? ` · recontagem em outro item, que fica: ${outros}` : ""}`,
+    );
   }
   const avisos = (await leitor.get(db.collection("events").where("entity_id", "==", plano.receipt_id))).docs.filter((d) => texto(d.data().type) === "inventory.arrival_stored");
   const nasceu = plano.sku_de_nasceu_em === plano.receipt_id ? `nesta chegada (${plano.receipt_number})` : plano.sku_de_nasceu_em ? `na chegada ${await nomeDaChegada(plano.sku_de_nasceu_em)}` : "fora do Receber";
@@ -415,10 +479,17 @@ export function descreverPassos(leitura) {
     linhas.push({ feito: m.saida, texto: `SAIDA ${fmt(m.qtde)} de ${plano.sku_de} (${plano.de}) em ${m.posicao} · Ajuste −, não cobra` });
     linhas.push({ feito: m.entrada, texto: `ENTRADA ${fmt(m.qtde)} em ${plano.alvo.sku} (${plano.alvo.codigo}) em ${m.posicao} · Ajuste +, não cobra` });
   }
-  if (!passos.movimentos.length) linhas.push({ feito: false, texto: "nenhum movimento: a chegada ainda não teve entrada, e a entrada já sai no SKU certo" });
+  if (!passos.movimentos.length) {
+    const guardadas = plano.caixas.some((c) => c.posicao && c.posicao !== RECEBIMENTO);
+    linhas.push({ feito: false, texto: guardadas ? "nenhum movimento: pela recontagem, as caixas não têm peça do errado; só a linha e o ajuste mudam de SKU" : "nenhum movimento: a chegada ainda não teve entrada, e a entrada já sai no SKU certo" });
+  }
   const tamanhoDe = tamanhoDoCodigo(plano.de) ?? "";
   const tamanho = plano.alvo.tamanho && tamanhoDe && tamanhoDe !== plano.alvo.tamanho ? ` · tamanho ${tamanhoDe} → ${plano.alvo.tamanho}` : "";
-  for (const c of plano.caixas) linhas.push({ feito: passos.caixa, texto: `${c.codigo}: a linha de ${fmt(c.qtde)} un. passa para ${plano.alvo.sku} · ${plano.alvo.codigo} · "${plano.alvo.nome}"${tamanho} (a etiqueta impressa fica velha)` });
+  for (const c of plano.caixas) {
+    const ajustado = num(c.ajustado);
+    const ajuste = ajustado ? ` · o ajuste da recontagem (${ajustado > 0 ? "+" : "−"}${fmt(Math.abs(ajustado))}) vai junto, e a caixa fica com ${fmt(c.qtde)} do certo` : "";
+    linhas.push({ feito: passos.caixa, texto: `${c.codigo}: a linha de ${fmt(c.entrada ?? c.qtde)} un. passa para ${plano.alvo.sku} · ${plano.alvo.codigo} · "${plano.alvo.nome}"${tamanho}${ajuste} (a etiqueta impressa fica velha)` });
+  }
   linhas.push({ feito: passos.caixa, texto: `tarefas de guarda das caixas e linha ${plano.item_nf.line_number} da NF: SKU, código e nome do certo, com o de antes em acerto_codigo` });
   linhas.push(
     remocao.apaga
@@ -491,20 +562,35 @@ async function corrigirCaixas(db, FieldValue, correcao, plano) {
     for (const snap of caixas) {
       if (!snap.exists) recusar(`a caixa ${snap.id} sumiu no meio da correção`);
       if (!temOSku(snap.data(), plano.sku_de)) recusar(`a caixa ${snap.id} não tem mais o ${plano.sku_de}: confira antes de seguir`);
-      const recontada = recusaDaRecontagem(snap.data(), snap.id, { de: plano.de, skuDe: plano.sku_de, para: plano.alvo.codigo, skuPara: plano.alvo.sku });
-      if (recontada) recusar(`${recontada} (a recontagem veio no meio da correção: confira antes de seguir)`);
+      // A caixa que mudou no meio (outra recontagem, uma separação) não bate mais com o que os movimentos levaram.
+      const mudou = caixaMudou(snap.data(), plano.caixas.find((c) => c.codigo === snap.id), plano.sku_de, plano.de);
+      if (mudou) recusar(`${mudou}: confira antes de seguir`);
     }
     if (!item.exists || texto(item.data().sku_code) !== plano.sku_de) recusar(`a linha da NF ${plano.item_nf.id} não aponta mais para ${plano.sku_de}: confira antes de seguir`);
     for (const snap of caixas) {
       const d = snap.data();
       const linha = linhasDe(d).find((l) => texto(l?.sku_code) === plano.sku_de) ?? {};
       const codigos = skuCodesTrocados(d.sku_codes, plano.sku_de, plano.alvo.sku);
-      // Só os campos da linha: o retirado e os ajustes da recontagem de outros itens da caixa ficam como estão.
+      // O ajuste da recontagem do errado vai junto com as peças, com o de antes em acerto_codigo; o retirado e os
+      // ajustes dos outros itens da caixa ficam como estão.
+      const ajustesDoErrado = (Array.isArray(d.count_adjustments) ? d.count_adjustments : []).filter((a) => texto(a?.sku_code) === plano.sku_de);
+      const ajustado = unidadesAjustadas(ajustesDoErrado);
       tx.update(snap.ref, {
         lines: linhasTransferidas(linhasDe(d), plano.sku_de, plano.alvo),
         ...(codigos ? { sku_codes: codigos } : {}),
+        ...(ajustesDoErrado.length ? { count_adjustments: ajustesTransferidos(d.count_adjustments, plano.sku_de, plano.alvo) } : {}),
         conference_revision: num(d.conference_revision) + 1,
-        acerto_codigo: { op: correcao.id, antes: { inbound_item_id: texto(linha.inbound_item_id), sku_code: plano.sku_de, client_item_code: texto(linha.client_item_code), product_name: texto(linha.product_name) }, at: agora },
+        acerto_codigo: {
+          op: correcao.id,
+          antes: {
+            inbound_item_id: texto(linha.inbound_item_id),
+            sku_code: plano.sku_de,
+            client_item_code: texto(linha.client_item_code),
+            product_name: texto(linha.product_name),
+            ...(ajustesDoErrado.length ? { count_adjustments: ajustesDoErrado } : {}),
+          },
+          at: agora,
+        },
         updated_at: ts(),
       });
       const ref = db.collection("events").doc(idDoEvento(correcao, "warehouse.box_content_corrected", snap.id));
@@ -512,12 +598,22 @@ async function corrigirCaixas(db, FieldValue, correcao, plano) {
         id: ref.id,
         type: "warehouse.box_content_corrected",
         title: `Conteúdo da caixa ${snap.id} corrigido`,
-        description: `${plano.de} (${plano.sku_de}) → ${plano.alvo.codigo} (${plano.alvo.sku}) · ${fmt(num(linha.counted_qty))} un. · reimprimir a etiqueta`,
+        description: `${plano.de} (${plano.sku_de}) → ${plano.alvo.codigo} (${plano.alvo.sku}) · ${fmt(num(linha.counted_qty))} un.${ajustesDoErrado.length ? ` e o ajuste da recontagem (${ajustado > 0 ? "+" : "−"}${fmt(Math.abs(ajustado))})` : ""} · reimprimir a etiqueta`,
         severity: "info",
         entity_type: "warehouse_box",
         entity_id: snap.id,
         customer_code: plano.cliente,
-        payload: { box_code: snap.id, receipt_id: plano.receipt_id, antes: { sku_code: plano.sku_de, client_item_code: texto(linha.client_item_code), product_name: texto(linha.product_name) }, depois: { sku_code: plano.alvo.sku, client_item_code: plano.alvo.codigo, product_name: plano.alvo.nome }, correcao: correcao.id, referencia: correcao.referencia, motivo: correcao.motivo, decisao: correcao.decisao },
+        payload: {
+          box_code: snap.id,
+          receipt_id: plano.receipt_id,
+          antes: { sku_code: plano.sku_de, client_item_code: texto(linha.client_item_code), product_name: texto(linha.product_name) },
+          depois: { sku_code: plano.alvo.sku, client_item_code: plano.alvo.codigo, product_name: plano.alvo.nome },
+          ...(ajustesDoErrado.length ? { ajustes_da_recontagem: { qty: ajustado, recount_ids: [...new Set(ajustesDoErrado.map((a) => texto(a.recount_id)).filter(Boolean))] } } : {}),
+          correcao: correcao.id,
+          referencia: correcao.referencia,
+          motivo: correcao.motivo,
+          decisao: correcao.decisao,
+        },
         occurred_at: agora,
         source: FONTE,
         actor: ATOR,

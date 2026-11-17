@@ -47,10 +47,11 @@ continua de onde parou, sem repetir:
    custo unitário da linha da NF, o valor da mercadoria vai junto. Os avisos
    desses movimentos na caixa antiga do agente já ficam resolvidos.
 3. **As linhas das caixas, das tarefas de guarda e da linha da NF** passam
-   para o SKU certo, numa transação, com o de antes em `acerto_codigo`. A
-   `conference_revision` da caixa sobe, para uma tela aberta com a caixa velha
-   não gravar por cima. Grava os eventos `warehouse.box_content_corrected` e
-   `inbound.item_corrected`.
+   para o SKU certo, numa transação, com o de antes em `acerto_codigo`. O
+   ajuste da recontagem do errado na caixa vai junto (abaixo, "A caixa
+   recontada"). A `conference_revision` da caixa sobe, para uma tela aberta
+   com a caixa velha não gravar por cima. Grava os eventos
+   `warehouse.box_content_corrected` e `inbound.item_corrected`.
 4. **O cadastro errado sai**, como no "Remover para corrigir" da Contagem
    (`removeOpeningInventoryLineTransaction`, que apaga o cadastro criado por
    engano quando o saldo zera). Saem o SKU, o cartão de `products`, o item do
@@ -69,8 +70,8 @@ BTG já recebeu.
 
 - nasceu no Receber;
 - ficou sem saldo e sem reserva;
-- todo movimento dele é a entrada ou a guarda desta chegada, ou a saída desta
-  correção;
+- todo movimento dele é a entrada ou a guarda desta chegada, a recontagem das
+  caixas da correção (as mesmas peças) ou a saída desta correção;
 - nada aberto usa o SKU: chegada a conferir, chegada com entrada, caixa de
   outra chegada, linha da abertura, solicitação do portal em aberto ou pedido
   ainda não entregue (a linha separada a menos, até zero, fica no pedido até
@@ -116,10 +117,12 @@ O dry-run recusa, sem gravar nada, quando:
   segura a reserva: antes, na linha dele, "Separar menos" com o que existe de
   fato, e a coordenação conclui a separação com a diferença;
 - **no mesmo SKU**, o SKU não nasceu na chegada, ou teve movimento de fora,
-  pedido, reserva ou solicitação aberta, ou o tamanho muda;
-- **o estoque está congelado** (`system_controls/inventory`);
-- **a recontagem ajustou o item na caixa** (abaixo, "A caixa recontada"):
-  o código errado ou, na transferência, também o certo.
+  contagem, pedido, reserva ou solicitação aberta, ou o tamanho muda. A
+  recontagem por caixa sem diferença não conta; a com diferença recusa (abaixo,
+  "A caixa recontada");
+- **na retomada de uma transferência**, a caixa mudou depois do plano
+  congelado (outra recontagem, uma separação);
+- **o estoque está congelado** (`system_controls/inventory`).
 
 ## A caixa recontada (17/11/2026)
 
@@ -148,15 +151,28 @@ As ferramentas desta pasta, e o acerto de outubro
   item, o saldo pela regra e o texto do ajuste ("−2 em 17/11/2026, 14:05,
   contagem brc_…").
 - `ler-estoque.mjs` mostra o ajuste em cada caixa e o que fica pela regra.
-- A correção recusa a caixa em que a recontagem ajustou o código errado,
-  porque o conteúdo dela nesse item não é mais o da chegada. Na
-  transferência, recusa também a caixa em que ela ajustou o código certo,
-  porque a recontagem pode já ter corrigido o código (o item "fora da
-  lista"). A frase diz o ajuste, a hora e a contagem. Na retomada de uma
-  transferência já começada, a caixa recontada depois do plano congelado
-  recusa antes de a linha mudar.
-- O ajuste de outro item da mesma caixa não atrapalha. As escritas na caixa
-  só tocam a linha corrigida, e nenhuma apaga ou reescreve um ajuste.
+
+Decisões do Leonardo de 17/11/2026 para a correção:
+
+1. **Na transferência, o ajuste vai junto com as peças.** O que passa do
+   errado para o certo, no saldo da prateleira e na caixa, é o que a caixa
+   tem do errado pela regra: a linha mais os ajustes dele. O
+   `count_adjustments` da caixa passa a apontar o certo, com o id da
+   contagem, a hora e de onde a peça veio, e o de antes fica em
+   `acerto_codigo`. O ajuste do certo e o de outro item ficam como estão. O
+   evento `warehouse.box_content_corrected` diz o ajuste que foi junto. O
+   movimento da recontagem dessas caixas (`functions_cycle_count`, com a
+   caixa) é das mesmas peças e não segura a saída do cadastro errado. Na
+   retomada de uma transferência já começada, a caixa que mudou depois do
+   plano congelado recusa antes de a linha mudar, porque os movimentos já
+   levaram a quantidade do plano.
+2. **No mesmo SKU, a recontagem por caixa sem diferença não trava.** O
+   `cycle_counts` dela (`mode: "box"`, `SEM_DIVERGENCIA`) fica como
+   histórico, com o código de antes, e o dry-run o mostra. A recontagem com
+   diferença recusa, com o ajuste na frase, porque já mexeu no saldo do SKU.
+
+Nenhuma escrita apaga um ajuste. As escritas na caixa só tocam a linha
+corrigida e, na transferência, os ajustes do errado.
 
 ## Como rodar, na máquina do Leonardo
 
@@ -274,10 +290,13 @@ O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
    `criar_sku` do acerto de verdade (por um plano só do emulador,
    `ACERTO_PLANO`) cria o XG, e a transferência passa as peças para ele.
 10. **A caixa recontada**, com as escritas da `recountWarehouseBox` simuladas
-    (o ajuste na caixa e a diferença na prateleira). O ajuste de outro item
-    fica, e a caixa e a prateleira batem pela regra. A correção recusa o
-    item ajustado: o errado, o certo posto "fora da lista", no mesmo SKU e
-    na retomada do plano congelado. O acerto de verdade, numa caixa da
+    (o ajuste na caixa, o `cycle_counts` por item e a diferença na
+    prateleira). A transferência leva o ajuste do errado para o certo, passa
+    o saldo da caixa pela regra e apaga o cadastro errado; o ajuste do certo
+    e o de outro item ficam, e a caixa e a prateleira batem pela regra. No
+    mesmo SKU, a contagem sem diferença não trava e a com diferença recusa.
+    A retomada segue com a recontagem do certo e recusa a caixa que mudou no
+    errado depois do plano congelado. O acerto de verdade, numa caixa da
     abertura recontada, recusa no dry-run a baixa, o ajuste e a linha nova
     do item ajustado, o zerar, a baixa da caixa inteira e a remoção, e
     grava o ajuste da linha de outro item sem tocar a recontagem.

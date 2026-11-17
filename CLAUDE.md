@@ -473,8 +473,9 @@ documentação de produto e operação está em `docs/`.
   `lib/dominio/src/saldo-da-caixa.ts`, com cópia literal no WMS travada em
   `domain/saldo-da-caixa.test.ts` e cópia gerada para as ferramentas do
   acerto em `tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs`, travada
-  no vitest do app; as ferramentas recusam mexer no item que a recontagem
-  ajustou e nunca apagam um ajuste); separar a linha baixa a caixa mais antiga
+  no vitest do app; nenhuma ferramenta apaga um ajuste: a correção de código
+  o leva para o SKU certo junto com as peças, e o acerto recusa mexer no item
+  ajustado); separar a linha baixa a caixa mais antiga
   da prateleira na mesma transação, "Outra caixa" informa de qual saiu, a
   caixa de que sai tudo fica `emptied` (fora do Mapa, de "Posições ocupadas"
   e do encaixe), e a caixa aberta fica em "Etiquetas para trocar" até

@@ -136,10 +136,16 @@ export function textoDoAjuste(ajuste) {
 
 export const textoDosAjustes = (ajustes) => ajustes.map(textoDoAjuste).join("; ");
 
-/** Os ajustes da caixa por SKU, para o dry-run: "BTG-000143 −1 em 17/11/2026, 14:05, contagem brc_…"; vazio na caixa sem ajuste. */
-export function resumoDosAjustes(dados) {
+/**
+ * Os ajustes da caixa por SKU, para o dry-run: "BTG-000143 −1 em 17/11/2026,
+ * 14:05, contagem brc_…"; vazio na caixa sem ajuste. `incluir(sku)` escolhe
+ * os SKUs (todos, sem ele).
+ */
+export function resumoDosAjustes(dados, incluir = () => true) {
   const porSku = new Map();
-  for (const ajuste of ajustesDaCaixa(dados)) porSku.set(ajuste.sku_code, [...(porSku.get(ajuste.sku_code) ?? []), ajuste]);
+  for (const ajuste of ajustesDaCaixa(dados)) {
+    if (incluir(ajuste.sku_code)) porSku.set(ajuste.sku_code, [...(porSku.get(ajuste.sku_code) ?? []), ajuste]);
+  }
   return [...porSku].map(([sku, ajustes]) => `${sku} ${textoDosAjustes(ajustes)}`).join("; ");
 }
 

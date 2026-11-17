@@ -514,6 +514,12 @@ ajuste, a hora e a contagem, e manda conferir com `--caixa`:
 | `mover_retirado` | o SKU, em qualquer das duas caixas |
 | `corrigir_caixa_recebimento` | o SKU de origem ou o de destino |
 
+A caixa que a recontagem esvaziou (`emptied`) fica no registro: o
+`remover_caixa` continua recusando, e ela já sai do Mapa, das posições
+ocupadas e do encaixe (decisão do Leonardo de 17/11/2026). A correção de
+código (`tools/corrigir-codigo-do-produto`) leva o ajuste do código errado
+para o certo junto com as peças; o acerto não troca o SKU de um ajuste.
+
 A operação em outro item da mesma caixa grava e deixa o ajuste como está.
 Duas contas acompanham a regra: a caixa vazia (a separação tirou tudo o que
 fica) soma os ajustes dos outros itens, e a caixa com ajuste que fica sem

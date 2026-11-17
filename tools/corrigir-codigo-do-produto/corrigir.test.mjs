@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { camposDoCadastro, linhasCorrigidas, nomeProposto } from "./corrigir.mjs";
+import { camposDoCadastro, contagemQueTrava, linhasCorrigidas, nomeProposto } from "./corrigir.mjs";
 import { CORRECOES } from "./correcoes.mjs";
 
 const BTG = "BTG Pactual";
@@ -109,4 +109,14 @@ test("o cadastro muda nos campos que o documento tem", () => {
     name: "Polo Masculino Piquet Preto",
     client_item_code: "A.01.0810.002.M",
   });
+});
+
+test("no mesmo SKU, a recontagem por caixa sem diferença não trava; a com diferença e a cíclica travam (17/11/2026)", () => {
+  // Como a recountWarehouseBox grava: um cycle_counts por item da caixa, com o tipo da diferença.
+  const daCaixa = (adjustment_type) => ({ id: "cc_1", customer_code: BTG, sku_code: "BTG-000181", mode: "box", box_code: "CX-000229", adjustment_type, adjustment_delta: adjustment_type === "SEM_DIVERGENCIA" ? 0 : -1 });
+  assert.equal(contagemQueTrava(daCaixa("SEM_DIVERGENCIA")), false);
+  assert.equal(contagemQueTrava(daCaixa("SAIDA")), true, "a recontagem com diferença mexeu no saldo");
+  assert.equal(contagemQueTrava(daCaixa("ENTRADA")), true);
+  assert.equal(contagemQueTrava({ sku_code: "BTG-000181", mode: "cycle", adjustment_type: "SEM_DIVERGENCIA" }), true, "a contagem cíclica por prateleira continua travando");
+  assert.equal(contagemQueTrava({ sku_code: "BTG-000181" }), true);
 });

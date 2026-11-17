@@ -135,6 +135,16 @@ export function linhasCorrigidas(linhas, skuCode, para, nome) {
   return { linhas: novas, mudaram };
 }
 
+/**
+ * A contagem que trava a correção no mesmo SKU. A da recontagem por caixa sem
+ * diferença (`mode: "box"`, `SEM_DIVERGENCIA`) não trava: ela não mexeu no
+ * saldo nem na caixa (decisão de 17/11/2026). A com diferença e a contagem
+ * cíclica por prateleira continuam travando.
+ */
+export function contagemQueTrava(contagem) {
+  return !(texto(contagem?.mode) === "box" && texto(contagem?.adjustment_type) === "SEM_DIVERGENCIA");
+}
+
 /** Os campos do cadastro (skus e products) que mudam, nos campos que o documento tem. */
 export function camposDoCadastro(dados, { para, nome, genero }) {
   const campos = { cod_cliente: para, cod_cliente_key: chaveDoCodigo(para), produto: nome, genero };
@@ -191,10 +201,11 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   if (skusDasLinhas.length !== 1 || !skusDasLinhas[0]) recusar(`as linhas de ${de} apontam para SKUs diferentes (${skusDasLinhas.join(", ") || "nenhum"})`);
   const skuCode = skusDasLinhas[0];
   // A caixa que a recontagem acertou neste item (count_adjustments; diagnóstico da contagem cíclica, seção 6, item 4):
-  // o conteúdo dela não é mais o da chegada. A correção não reescreve o ajuste, e recusa antes das outras conferências.
+  // a recontagem com diferença mexeu no saldo, e no mesmo SKU só a contagem por caixa sem diferença segue (decisão de
+  // 17/11/2026). Recusa antes das outras conferências, com o que a recontagem gravou.
   for (const c of caixas) {
     const recontada = recontagemNoSku(c.dados, c.codigo, skuCode, `${de} (${skuCode})`);
-    if (recontada) recusar(`${recontada}: o conteúdo da caixa nesse item não é mais o da chegada, e a correção não mexe no que a recontagem acertou`);
+    if (recontada) recusar(`${recontada}: no mesmo SKU, a correção só segue com a contagem por caixa sem diferença, porque a com diferença já mexeu no saldo do SKU`);
   }
 
   const receiptSnap = await leitor.get(db.collection("inbound_receipts").doc(receiptId));
@@ -241,6 +252,7 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   const pedidosAbertos = (await leitor.get(db.collection("customer_requests").where("customer_code", "==", cliente).where("status", "==", "open"))).docs;
   const comOItem = pedidosAbertos.filter((d) => (Array.isArray(d.data().items) ? d.data().items : []).some((i) => texto(i?.sku_code) === skuCode || chaveDoCodigo(i?.client_item_code) === kDe));
   if (comOItem.length) recusar(`há solicitação do portal em aberto com o produto (${comOItem.map((d) => texto(d.data().request_number) || d.id).join(", ")}); decida antes da correção`);
+  let semDiferenca = [];
   for (const [colecao, rotulo] of [
     ["stock_reservations", "reserva"],
     ["pick_lines", "linha de separação"],
@@ -249,7 +261,12 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
     ["return_items", "item de devolução"],
     ["opening_inventory_lines", "linha da abertura"],
   ]) {
-    const docs = doCliente((await leitor.get(db.collection(colecao).where("sku_code", "==", skuCode))).docs, cliente);
+    let docs = doCliente((await leitor.get(db.collection(colecao).where("sku_code", "==", skuCode))).docs, cliente);
+    if (colecao === "cycle_counts") {
+      // A recontagem por caixa grava uma contagem por item, também sem diferença: essa não trava (17/11/2026).
+      semDiferenca = docs.filter((d) => !contagemQueTrava(d.data()));
+      docs = docs.filter((d) => contagemQueTrava(d.data()));
+    }
     if (docs.length) recusar(`o SKU ${skuCode} já tem ${docs.length} ${rotulo}(s) em ${colecao} (${docs.slice(0, 3).map((d) => d.id).join(", ")})`);
   }
   const itensDoSku = doCliente((await leitor.get(db.collection("inbound_items").where("sku_code", "==", skuCode))).docs, cliente);
@@ -438,6 +455,9 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
     `movimentos: ${movimentos.length}, todos da chegada ${numeroDaChegada} (${[...new Set(movimentos.map((d) => texto(d.data().source)))].join(", ") || "nenhum"})`,
     `${cartao ? `${productDe.ref.path} · "${nomeDe(cartao)}"` : ""}${projecao.exists ? ` · portal "${texto(projecao.data().client_item_code)}"` : " · ainda fora do portal"}`,
   ];
+  if (semDiferenca.length) {
+    estado.push(`recontagem por caixa sem diferença: ${semDiferenca.map((d) => `${texto(d.data().box_code) || "?"} (${d.id})`).join(", ")}; fica como histórico, com ${de}`);
+  }
   if (texto(chegada.customer_request_id)) estado.push(`aviso de envio do portal vinculado (${texto(chegada.customer_request_id)}): fica como o cliente mandou`);
   if (info) {
     const avisos = (await leitor.get(db.collection("events").where("entity_id", "==", receiptId))).docs.filter((d) => texto(d.data().type) === "inventory.arrival_stored");
