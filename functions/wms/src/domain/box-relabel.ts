@@ -4,15 +4,16 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
-import { BOX_STATUS_STORED } from "./box-balance.js";
+import { BOX_STATUS_STORED, ajustesDaCaixa, unidadesDaCaixaAgora } from "./box-balance.js";
 import { createEvent, type OperationalActor } from "./operations.js";
 import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 
 /**
  * Etiquetas para trocar (docs/plataforma/separacao-com-caixas.md, seção 4.3,
  * parte 3d; decisão 3 de 10/11/2026). A caixa de onde a separação tirou
- * peça fica com a etiqueta velha: ela entra em "Etiquetas para trocar" até a
- * impressão da etiqueta com o saldo ser registrada.
+ * peça, ou que a recontagem acertou, fica com a etiqueta velha: ela entra em
+ * "Etiquetas para trocar" até a impressão da etiqueta com o saldo ser
+ * registrada.
  *
  * `recordBoxBalanceLabelPrint` é o registro do clique em "Imprimir", como o
  * da caixa do recebimento (inbound-boxes.ts, recordInboundBoxLabelPrint): a
@@ -55,9 +56,12 @@ function clean<T extends Row>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
-/** A caixa aberta: guardada, com saída registrada e ainda com saldo. */
+/**
+ * A caixa aberta: guardada, com saída registrada ou com ajuste da recontagem
+ * (o conteúdo dela não é mais o de entrada).
+ */
 export function caixaAberta(box: Row): boolean {
-  return text(box.status) === BOX_STATUS_STORED && quantity(box.taken_units) > 0;
+  return text(box.status) === BOX_STATUS_STORED && (quantity(box.taken_units) > 0 || ajustesDaCaixa(box).length > 0);
 }
 
 /** A etiqueta que está na caixa não é a do saldo de agora. */
@@ -104,7 +108,7 @@ export async function recordBoxBalanceLabelPrint(db: Firestore, raw: unknown, ac
       }
       const count = quantity(box.balance_label_print_count) + 1;
       const balanceAt = text(box.balance_at);
-      const balance = Math.max(0, quantity(box.unit_count) - quantity(box.taken_units));
+      const balance = unidadesDaCaixaAgora(box);
       const location = text(box.location_id);
       transaction.update(snapshot.ref, {
         balance_label_printed_at: occurredAt,

@@ -819,6 +819,40 @@ describe("A caixa na separação (separação com caixas, parte 3b)", () => {
     assert.deepEqual([guardadas["CX-000001"]!.taken_units, guardadas["CX-000002"]!.taken_units], [3, 2]);
     assert.equal((await eventos("picking.line_separated")).length, 2);
   });
+
+  // A contagem por caixa (diagnóstico da Contagem cíclica, seção 6, item 4): a recontagem grava o ajuste na caixa.
+  it("a caixa recontada: a separação tira o que a recontagem deixou, e a caixa esvazia com o que sobrou", async () => {
+    await prateleiras();
+    // A recontagem achou 2 polos na CX-000001 (entraram 3) e 5 na CX-000002 (entraram 4).
+    await db.collection("warehouse_boxes").doc("CX-000001").update({ count_adjustments: [{ recount_id: "brc_1", sku_code: POLO, qty: -1 }] });
+    await db.collection("warehouse_boxes").doc("CX-000002").update({ count_adjustments: [{ recount_id: "brc_1", sku_code: POLO, qty: 1 }] });
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    // Antes, a CX-000001 saía com as 3 de entrada.
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000001", qty: 2, whole: true },
+      { box_code: "CX-000002", qty: 3 },
+    ]);
+    const guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000001"]!.status, guardadas["CX-000001"]!.taken_units], ["emptied", 2]);
+    // O ajuste fica na caixa: a entrada e o retirado continuam ao lado dele.
+    assert.deepEqual(guardadas["CX-000001"]!.count_adjustments, [{ recount_id: "brc_1", sku_code: POLO, qty: -1 }]);
+    assert.deepEqual([guardadas["CX-000002"]!.status, guardadas["CX-000002"]!.taken_units], ["stored", 3]);
+  });
+
+  it("a caixa que só tem o item pela recontagem (o item fora da lista) também sai, e esvazia", async () => {
+    await prateleiras();
+    // A CX-000004, a mais antiga da A-01, não tinha polo na entrada: a recontagem achou 4 nela.
+    await caixa("CX-000004", "A-01", "2026-10-21T13:00:00.000Z", 0, { sku_codes: [POLO], count_adjustments: [{ recount_id: "brc_2", sku_code: POLO, qty: 4 }] });
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000004", qty: 4, whole: true },
+      { box_code: "CX-000001", qty: 1 },
+    ]);
+    const guardadas = await caixas();
+    assert.deepEqual([guardadas["CX-000004"]!.status, guardadas["CX-000004"]!.taken_units, guardadas["CX-000004"]!.emptied_whole], ["emptied", 4, true]);
+  });
 });
 
 function fecharVolume(pickTaskId: string, volumeId: string, pesoKg?: number, ator: OperationalActor = guilherme, idempotencyKey = chave("fechar-volume")) {

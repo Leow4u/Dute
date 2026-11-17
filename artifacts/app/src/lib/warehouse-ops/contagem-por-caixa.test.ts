@@ -305,3 +305,40 @@ describe("as contagens do dia", () => {
     expect(inicioDoDiaEmSaoPaulo(new Date("2026-11-17T01:30:00.000Z"))).toBe("2026-11-16T03:00:00.000Z");
   });
 });
+
+/** A caixa recontada (contagem por caixa, diagnóstico da Contagem cíclica, seção 6, item 4). */
+describe("a folha depois da recontagem", () => {
+  // A CX-000005 entrou com 30 polos P; a recontagem achou 28 e uma polo M fora da lista, e o razão acompanhou.
+  const recontada = caixa("CX-000005", "A-02", {
+    unit_count: 30,
+    count_adjustments: [
+      { recount_id: "brc_1", sku_code: "BTG-000140", qty: -2 },
+      { recount_id: "brc_1", sku_code: "BTG-000142", qty: 1, client_item_code: "A.01.0809.002.G", product_name: "Polo Masculino Piquet Cinza", size: "G" },
+    ],
+    balance_at: "2026-11-17T12:00:00.000Z",
+  });
+  const dados = {
+    cliente: BTG,
+    posicoes: POSICOES,
+    caixas: [recontada],
+    abertura: ABERTURA,
+    saldos: [
+      { location_id: "A-02", sku_code: "BTG-000140", qty_on_hand: 28, customer_code: BTG },
+      { location_id: "A-02", sku_code: "BTG-000142", qty_on_hand: 1, customer_code: BTG },
+    ],
+    catalogo: CATALOGO,
+  };
+
+  it("o esperado é o contado, e entrou menos saiu fecha com ele", () => {
+    // Antes, a folha seguia esperando as 30 polos P e não listava a polo G achada.
+    const a02 = prateleirasDaContagem(dados).find((prateleira) => prateleira.posicao === "A-02")!;
+    expect(a02.caixas[0]!.linhas.map((linha) => [linha.sku, linha.nome, linha.entrou, linha.saiu, linha.esperado])).toEqual([
+      ["BTG-000140", "Polo Masculino Piquet Cinza · P", 30, 2, 28],
+      ["BTG-000142", "Polo Masculino Piquet Cinza · G", 1, 0, 1],
+    ]);
+    expect(a02.caixas[0]!.esperado).toBe(29);
+    // Caixas × saldo: a recontagem gravou a caixa e o razão juntos.
+    expect([a02.unidades, a02.saldo, a02.diferenca, a02.itensDiferentes]).toEqual([29, 29, 0, 0]);
+    expect(prateleiraDifere(a02)).toBe(false);
+  });
+});

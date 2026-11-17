@@ -1,4 +1,4 @@
-import { ordemDeSaida, sugerirCaixas, type CaixaComOItem, type CaixaDaLinha, type CaixasDaLinha } from "@workspace/dominio";
+import { ordemDeSaida, saldoDaCaixa, sugerirCaixas, type CaixaComOItem, type CaixaDaLinha, type CaixasDaLinha } from "@workspace/dominio";
 
 import { boxBalanceUnits, boxNeedsRelabel, boxOriginLabel, type WarehouseBox } from "@/lib/warehouse-boxes";
 
@@ -81,7 +81,9 @@ export type CaixaDaPrateleira = CaixaComOItem & {
 
 /**
  * As caixas guardadas na prateleira da linha, do cliente do pedido, que têm
- * o item agora, a mais antiga primeiro.
+ * o item agora, a mais antiga primeiro. O que cada uma tem do item é a conta
+ * do domínio (saldo-da-caixa.ts): a entrada menos o retirado mais os ajustes
+ * das recontagens, como no servidor (box-balance.ts).
  */
 export function caixasComOItem(
   item: WarehouseTaskItem,
@@ -97,8 +99,12 @@ export function caixasComOItem(
   for (const caixa of caixas) {
     if (caixa.status !== "stored" || chave(caixa.location_id) !== posicao || (dono && chave(caixa.customer_code) !== dono)) continue;
     const entrou = entrada.get(caixa.code)?.get(sku) ?? 0;
-    const saiu = (caixa.taken_lines ?? []).filter((linha) => chave(linha.sku_code) === sku).reduce((soma, linha) => soma + linha.qty, 0);
-    const disponivel = Math.max(0, entrou - saiu);
+    const disponivel =
+      saldoDaCaixa(
+        [{ sku_code: sku, qty: entrou }],
+        (caixa.taken_lines ?? []).map((linha) => ({ sku_code: chave(linha.sku_code), qty: linha.qty })),
+        (caixa.count_adjustments ?? []).map((linha) => ({ sku_code: chave(linha.sku_code), qty: linha.qty })),
+      ).find((linha) => linha.sku_code === sku)?.qty ?? 0;
     if (!disponivel) continue;
     const guardada = caixa.stored_at ? new Date(caixa.stored_at) : null;
     candidatas.push({

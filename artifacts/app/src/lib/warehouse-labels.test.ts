@@ -603,3 +603,58 @@ describe("etiqueta da caixa aberta (separação com caixas, parte 3)", () => {
     ]);
   });
 });
+
+/** A caixa recontada (contagem por caixa, diagnóstico da Contagem cíclica, seção 6, item 4). */
+describe("etiqueta da caixa recontada", () => {
+  const entrada = [
+    { box_code: "CX-000028", product_name: "Calça Social Masculino Preta", client_item_code: "A.01.0712.001.42", sku_code: "BTG-000084", counted_qty: 28 },
+    { box_code: "CX-000028", product_name: "Calça Social Masculino Preta", client_item_code: "A.01.0712.001.44", sku_code: "BTG-000085", counted_qty: 40 },
+  ];
+  const recontada = warehouseBoxFromRecord({
+    code: "CX-000028",
+    customer_code: "BTG Pactual",
+    status: "stored",
+    location_id: "A-05",
+    length_m: 0.4,
+    width_m: 0.6,
+    height_m: 0.35,
+    gross_weight_kg: 21.4,
+    unit_count: 68,
+    stored_at: "2026-10-22T14:10:00.000Z",
+    origin: { kind: "opening_inventory", session_id: "sessao-1" },
+    count_adjustments: [
+      { recount_id: "brc_1", sku_code: "BTG-000085", qty: -12 },
+      { recount_id: "brc_1", sku_code: "BTG-000125", qty: 2, client_item_code: "A.01.0806.005.GG", product_name: "Polo Masculino Piquet Preto", size: "GG" },
+    ],
+    balance_at: "2026-11-17T12:00:00.000Z",
+  });
+
+  it("mostra o contado: o ajuste baixa o item que faltou, e o item fora da lista entra com o nome gravado", () => {
+    // Antes, a etiqueta da caixa recontada saía com as 68 un. de entrada e sem o item achado.
+    const [label] = boxLabels(recontada, entrada, { printedAt: new Date("2026-11-17T15:00:00Z") });
+    expect(label.lines).toEqual([
+      { code: "A.01.0712.001.42", sku: "BTG-000084", name: "Calça Social Masculino Preta · 42", qty: 28, size: "42" },
+      { code: "A.01.0712.001.44", sku: "BTG-000085", name: "Calça Social Masculino Preta · 44", qty: 28, size: "44" },
+      { code: "A.01.0806.005.GG", sku: "BTG-000125", name: "Polo Masculino Piquet Preto · GG", qty: 2, size: "GG" },
+    ]);
+    expect(label.units).toBe(58);
+    // O saldo é o da recontagem; o peso de entrada não vale mais, a data de entrada continua.
+    expect(label.balanceAt).toBe("17/11/2026");
+    expect(label.date).toBe("22/10/2026");
+    expect(label.dimensions).toBe("40 × 60 × 35 cm");
+  });
+
+  it("a impressão registra o saldo da caixa recontada", () => {
+    expect(saldosParaRegistrar([recontada])).toEqual(["CX-000028"]);
+  });
+
+  it("a separação tira do item que a recontagem pôs na caixa", () => {
+    const conteudo = boxContent(entrada, "CX-000028");
+    expect(
+      balanceContent(conteudo, [{ sku_code: "BTG-000125", qty: 2 }], recontada.count_adjustments).map((line) => [line.sku, line.qty]),
+    ).toEqual([
+      ["BTG-000084", 28],
+      ["BTG-000085", 28],
+    ]);
+  });
+});

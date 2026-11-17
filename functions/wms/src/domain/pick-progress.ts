@@ -10,7 +10,7 @@ import {
   createEvent,
   type OperationalActor,
 } from "./operations.js";
-import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
+import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, ajustesDaCaixa, caixasComOItem, lerCaixasDaPrateleira, retiradoDaCaixa } from "./box-balance.js";
 import {
   caixaViraVolume,
   dividirNoVolumeAberto,
@@ -26,7 +26,7 @@ import {
   type NoVolume,
   type VolumeDoPedido,
 } from "./order-volumes.js";
-import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
+import { conferirCaixasInformadas, retiradoCom, sugerirCaixas, unidadesAjustadas, unidadesDaCaixa, type CaixaDaLinha, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import { DETALHE_DA_DIFERENCA_MAXIMO, MOTIVOS_DA_DIFERENCA, concluiComDiferenca, type MotivoDaDiferenca } from "./short-pick.js";
 import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 
@@ -855,9 +855,10 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       for (const [codigo, box] of tocadas) {
         const retirado = retirados.get(codigo) ?? [];
         const tirou = unidadesDaCaixa(retirado);
-        const entrou = quantity(box.data.unit_count);
+        // A entrada mais o que as recontagens acertaram (saldo-da-caixa.ts): a caixa esvazia quando a separação tira o que sobra.
+        const saldoDaCaixaAgora = quantity(box.data.unit_count) + unidadesAjustadas(ajustesDaCaixa(box.data)) - tirou;
         const estavaVazia = text(box.data.status) === BOX_STATUS_EMPTIED;
-        const vazia = entrou > 0 && tirou >= entrou;
+        const vazia = tirou > 0 && saldoDaCaixaAgora <= 0;
         const inteira = caixas.some((caixa) => caixa.box_code === codigo && caixa.inteira);
         const update: Row = retirado.length
           ? { taken_lines: retirado, taken_units: tirou, balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }

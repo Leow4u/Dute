@@ -210,3 +210,22 @@ describe("Etiquetas para trocar e as caixas do pedido", () => {
     expect([textoDeEtiquetasParaTrocar(5), textoDeEtiquetasParaTrocar(1)]).toEqual(["5 etiquetas de caixa para trocar", "1 etiqueta de caixa para trocar"]);
   });
 });
+
+/** A caixa recontada (contagem por caixa, diagnóstico da Contagem cíclica, seção 6, item 4). */
+describe("a separação lê o que a recontagem acertou", () => {
+  it("a caixa tem do item o que a recontagem deixou, e a que só tem o item pela recontagem também entra", () => {
+    // A CX-000027 tinha 12 calças 42 e a recontagem achou 7; a CX-000029 não tinha calça 42 e a recontagem achou 2 nela.
+    const recontada = caixa("CX-000027", { count_adjustments: [{ sku_code: CALCA_42, qty: -5 }] });
+    const achou = caixa("CX-000029", { stored_at: "2026-10-23T13:00:00.000Z", unit_count: 0, count_adjustments: [{ sku_code: CALCA_42, qty: 2 }] });
+    const caixas = [recontada, achou, caixa("CX-000028", { stored_at: "2026-10-22T14:00:00.000Z", unit_count: 63 })];
+    const candidatas = caixasComOItem(linha(), caixas, entradaDasCaixas(caixas, ABERTURA));
+    expect(candidatas.map((item) => [item.code, item.disponivel, item.saldo])).toEqual([
+      ["CX-000027", 7, 37],
+      ["CX-000028", 28, 63],
+      ["CX-000029", 2, 2],
+    ]);
+    // A recontagem que zerou o item tira a caixa da lista.
+    const zerada = caixa("CX-000027", { count_adjustments: [{ sku_code: CALCA_42, qty: -12 }] });
+    expect(caixasComOItem(linha(), [zerada], entradaDasCaixas([zerada], ABERTURA))).toEqual([]);
+  });
+});

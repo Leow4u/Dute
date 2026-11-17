@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  ajusteParaOContado,
   conferirCaixasInformadas,
   ordemDeSaida,
   retiradoCom,
   saldoDaCaixa,
   sugerirCaixas,
+  unidadesAjustadas,
   unidadesDaCaixa,
   type CaixaComOItem,
   type CaixasDaLinha,
@@ -17,13 +19,16 @@ import {
 
 /**
  * O saldo da caixa (lib/dominio/src/saldo-da-caixa.ts, separação com caixas,
- * parte 3): a entrada menos o retirado, a sugestão da caixa mais antiga e a
- * conferência de "Outra caixa". Os casos ficam num JSON que functions/wms
+ * parte 3, e a contagem por caixa): a entrada menos o retirado mais os
+ * ajustes da recontagem, o ajuste que leva ao contado, a sugestão da caixa
+ * mais antiga e a conferência de "Outra caixa". Os casos ficam num JSON que functions/wms
  * também roda, contra a cópia de lá.
  */
 
 type Casos = {
-  saldos: { caso: string; entrada: unknown[]; retirado: unknown[]; saldo: LinhaDaCaixa[]; unidades: number }[];
+  saldos: { caso: string; entrada: unknown[]; retirado: unknown[]; ajustes?: unknown[]; saldo: LinhaDaCaixa[]; unidades: number }[];
+  ajustadas: { caso: string; ajustes: unknown[]; unidades: number }[];
+  paraOContado: { caso: string; entrada: unknown[]; retirado: unknown[]; ajustes: unknown[]; sku_code: string; contado: number; ajuste: number }[];
   retirados: { caso: string; retirado: LinhaDaCaixa[]; sku_code: string; qty: number; resultado: LinhaDaCaixa[] }[];
   sugestoes: { caso: string; pedido: number; caixas: CaixaComOItem[]; resultado: CaixasDaLinha }[];
   informadas: { caso: string; pedido: number; informadas: { box_code: string; qty: number }[]; caixas: CaixaComOItem[]; resultado: CaixasDaLinha | { problema: string } }[];
@@ -34,16 +39,32 @@ const casos = JSON.parse(readFileSync(resolve(here, "../../../../lib/dominio/src
 
 describe("saldo da caixa: casos de referência", () => {
   it("o JSON de casos foi lido", () => {
-    expect(casos.saldos.length).toBeGreaterThanOrEqual(5);
+    expect(casos.saldos.length).toBeGreaterThanOrEqual(12);
+    expect(casos.ajustadas.length).toBeGreaterThanOrEqual(3);
+    expect(casos.paraOContado.length).toBeGreaterThanOrEqual(6);
     expect(casos.sugestoes.length).toBeGreaterThanOrEqual(8);
     expect(casos.informadas.length).toBeGreaterThanOrEqual(8);
   });
 
   for (const caso of casos.saldos) {
     it(`saldo: ${caso.caso}`, () => {
-      const saldo = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[]);
+      const saldo = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], (caso.ajustes ?? []) as LinhaDaCaixa[]);
       expect(saldo).toEqual(caso.saldo);
       expect(unidadesDaCaixa(saldo)).toBe(caso.unidades);
+    });
+  }
+  for (const caso of casos.ajustadas) {
+    it(`ajustadas: ${caso.caso}`, () => expect(unidadesAjustadas(caso.ajustes as LinhaDaCaixa[])).toBe(caso.unidades));
+  }
+  for (const caso of casos.paraOContado) {
+    it(`para o contado: ${caso.caso}`, () => {
+      const ajuste = ajusteParaOContado(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], caso.ajustes as LinhaDaCaixa[], caso.sku_code, caso.contado);
+      expect(ajuste).toBe(caso.ajuste);
+      // Com o ajuste gravado, a conta fecha no contado.
+      if (caso.sku_code) {
+        const depois = saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], [...(caso.ajustes as LinhaDaCaixa[]), { sku_code: caso.sku_code, qty: ajuste }]);
+        expect(depois.find((linha) => linha.sku_code === caso.sku_code)?.qty ?? 0).toBe(caso.contado);
+      }
     });
   }
   for (const caso of casos.retirados) {

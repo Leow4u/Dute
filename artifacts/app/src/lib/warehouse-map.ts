@@ -9,7 +9,7 @@
  * de referência (50 × 50 × 35 cm) na base; o motor verifica empilhamento.
  */
 
-import { nomeComTamanho } from "@workspace/dominio";
+import { nomeComTamanho, saldoDaCaixa } from "@workspace/dominio";
 
 import type { AnyRecord } from "@/lib/warehouse-ops/model";
 import { boxBalanceUnits, boxIsOpen, type WarehouseBox } from "@/lib/warehouse-boxes";
@@ -307,18 +307,39 @@ const byQuantity = (left: BoxContentLine, right: BoxContentLine) =>
  * só os SKUs que a caixa conhece, com o nome do catálogo.
  */
 export function boxContents(box: WarehouseBox, lines: BoxContentSource[], skuIndex: SkuIndex): BoxContentLine[] {
-  return saldoDoConteudo(conteudoDeEntrada(box, lines, skuIndex), box);
+  return saldoDoConteudo(conteudoDeEntrada(box, lines, skuIndex), box, skuIndex);
 }
 
-/** O saldo (separação com caixas, parte 3): a entrada menos o que as separações tiraram de cada SKU, sem as linhas zeradas. */
-function saldoDoConteudo(entrada: Map<string, BoxContentLine>, box: Pick<WarehouseBox, "taken_lines">): BoxContentLine[] {
-  for (const line of box.taken_lines ?? []) {
-    const atual = entrada.get(line.sku_code.toUpperCase());
-    if (!atual || atual.qty == null) continue;
-    atual.qty -= line.qty;
-    if (atual.qty <= 0) entrada.delete(line.sku_code.toUpperCase());
-  }
-  return [...entrada.values()].sort(byQuantity);
+/**
+ * O saldo (separação com caixas, parte 3, e a contagem por caixa): a entrada
+ * menos o que as separações tiraram de cada SKU mais o que as recontagens
+ * acertaram, sem as linhas zeradas, pela conta do domínio (saldo-da-caixa.ts).
+ * O SKU sem quantidade conhecida (só na lista da caixa) fica como está; o que
+ * só a recontagem pôs na caixa leva o nome que o ajuste gravou, ou o do
+ * catálogo.
+ */
+function saldoDoConteudo(entrada: Map<string, BoxContentLine>, box: Pick<WarehouseBox, "taken_lines" | "count_adjustments">, skuIndex: SkuIndex): BoxContentLine[] {
+  const ajustes = box.count_adjustments ?? [];
+  const retirado = box.taken_lines ?? [];
+  if (!retirado.length && !ajustes.length) return [...entrada.values()].sort(byQuantity);
+  const saldo = saldoDaCaixa(
+    [...entrada].filter(([, line]) => line.qty != null).map(([sku, line]) => ({ sku_code: sku, qty: line.qty ?? 0 })),
+    retirado.map((line) => ({ sku_code: line.sku_code.toUpperCase(), qty: line.qty })),
+    ajustes.map((line) => ({ sku_code: line.sku_code.toUpperCase(), qty: line.qty })),
+  );
+  const linhas = saldo.map(({ sku_code, qty }) => {
+    const daEntrada = entrada.get(sku_code);
+    if (daEntrada) return { ...daEntrada, qty };
+    const ajuste = ajustes.find((line) => line.sku_code.toUpperCase() === sku_code);
+    const nome = ajuste?.product_name || skuIndex.get(sku_code)?.name || ajuste?.sku_code || sku_code;
+    return {
+      code: ajuste?.client_item_code || skuIndex.get(sku_code)?.clientCode || ajuste?.sku_code || sku_code,
+      name: nomeComTamanho({ nome, codigo: ajuste?.client_item_code, tamanho: ajuste?.size }) || nome,
+      qty,
+    };
+  });
+  const semQuantidade = [...entrada.values()].filter((line) => line.qty == null);
+  return [...linhas, ...semQuantidade].sort(byQuantity);
 }
 
 function conteudoDeEntrada(box: WarehouseBox, lines: BoxContentSource[], skuIndex: SkuIndex): Map<string, BoxContentLine> {
@@ -367,8 +388,8 @@ function conteudoDeEntrada(box: WarehouseBox, lines: BoxContentSource[], skuInde
 
 const dataDaSaida = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
 
-/** "aberta": a caixa guardada de onde já saiu alguma coisa; "guardada", a intacta. */
-export function estadoDaCaixa(box: Pick<WarehouseBox, "status" | "taken_units">): "aberta" | "guardada" {
+/** "aberta": a caixa guardada de onde já saiu alguma coisa, ou que a recontagem acertou; "guardada", a intacta. */
+export function estadoDaCaixa(box: Pick<WarehouseBox, "status" | "taken_units" | "count_adjustments">): "aberta" | "guardada" {
   return boxIsOpen(box) ? "aberta" : "guardada";
 }
 

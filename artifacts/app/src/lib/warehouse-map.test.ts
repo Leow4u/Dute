@@ -362,3 +362,41 @@ describe("a caixa na separação", () => {
     expect(boxContents(caixa, [], new Map()).map((line) => line.qty)).toEqual([null, null]);
   });
 });
+
+/** A caixa recontada (contagem por caixa, diagnóstico da Contagem cíclica, seção 6, item 4). */
+describe("a caixa recontada no Mapa", () => {
+  const ajustes = {
+    unit_count: 16,
+    sku_codes: ["SKU-1", "SKU-2"],
+    count_adjustments: [
+      { recount_id: "brc_1", sku_code: "SKU-1", qty: -3 },
+      { recount_id: "brc_1", sku_code: "SKU-3", qty: 2, client_item_code: "A.03", product_name: "Polo Masculino Piquet Preto", size: "GG" },
+    ],
+    balance_at: "2026-11-17T12:00:00.000Z",
+  };
+  const entrada = [
+    { box_code: "CX-000028", sku_code: "SKU-1", client_item_code: "A.01", product_name: "Calça 42", counted_qty: 7 },
+    { box_code: "CX-000028", sku_code: "SKU-2", client_item_code: "A.02", product_name: "Calça 44", counted_qty: 9 },
+  ];
+
+  it("o conteúdo é o contado: o ajuste baixa o que faltou e o item fora da lista entra", () => {
+    // Antes, o Mapa mostrava as 16 un. de entrada e não sabia do item achado.
+    expect(boxContents(box("CX-000028", "A-05", ajustes), entrada, new Map())).toEqual([
+      { code: "A.02", name: "Calça 44", qty: 9 },
+      { code: "A.01", name: "Calça 42", qty: 4 },
+      { code: "A.03", name: "Polo Masculino Piquet Preto · GG", qty: 2 },
+    ]);
+  });
+
+  it("o item fora da lista sem nome gravado leva o do catálogo", () => {
+    const semNome = { ...ajustes, count_adjustments: [{ recount_id: "brc_1", sku_code: "SKU-3", qty: 2 }] };
+    const index = skuIndexFromRows([{ id: "SKU-3", produto: "Polo do catálogo", cod_cliente: "A.03" }]);
+    expect(boxContents(box("CX-000028", "A-05", semNome), entrada, index).at(-1)).toEqual({ code: "A.03", name: "Polo do catálogo", qty: 2 });
+  });
+
+  it("as unidades da prateleira contam o ajuste, e a caixa recontada diz aberta", () => {
+    const [a05] = buildShelves([shelf("A-05", 5)], [box("CX-000028", "A-05", ajustes)]);
+    expect(a05!.unit_count).toBe(15);
+    expect(estadoDaCaixa(box("CX-000028", "A-05", ajustes))).toBe("aberta");
+  });
+});

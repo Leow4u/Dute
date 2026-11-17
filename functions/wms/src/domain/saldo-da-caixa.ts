@@ -1,11 +1,13 @@
 // Cópia literal de lib/dominio/src/saldo-da-caixa.ts: não edite aqui (trava em saldo-da-caixa.test.ts).
 /**
  * O saldo da caixa (docs/plataforma/separacao-com-caixas.md, seção 4.3,
- * parte 3). O conteúdo de entrada da caixa não muda: o que cada separação
- * tira fica gravado na própria caixa (`taken_lines`), e o saldo é a entrada
- * menos o retirado. A linha do pedido sai da caixa mais antiga da prateleira
- * que tem o item; se ela não basta, a seguinte completa; o que as caixas não
- * cobrem sai sem caixa.
+ * parte 3, e a contagem por caixa, docs/plataforma/diagnostico-contagem-
+ * ciclica.md, seção 6, item 4). O conteúdo de entrada da caixa não muda: o
+ * que cada separação tira fica gravado na própria caixa (`taken_lines`), o
+ * que cada recontagem acerta também (`count_adjustments`, com o id da
+ * contagem), e o saldo é a entrada menos o retirado mais os ajustes. A linha
+ * do pedido sai da caixa mais antiga da prateleira que tem o item; se ela
+ * não basta, a seguinte completa; o que as caixas não cobrem sai sem caixa.
  *
  * Funções puras, sem Firestore. functions/wms guarda uma cópia literal
  * (domain/saldo-da-caixa.ts), e os dois rodam os mesmos casos de
@@ -15,17 +17,30 @@
 /** Uma linha do conteúdo da caixa: o que entrou, o que saiu ou o que resta de um SKU. */
 export type LinhaDaCaixa = { sku_code: string; qty: number };
 
+/** Um ajuste da recontagem: quanto um SKU ganhou (positivo) ou perdeu (negativo) na caixa. */
+export type AjusteDaCaixa = { sku_code: string; qty: number };
+
 type LinhaLida = { sku_code?: unknown; qty?: unknown };
+
+function codigo(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 function quantidade(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+/** O ajuste tem sinal: só o que não é número fica de fora. */
+function comSinal(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function porSku(linhas: Iterable<LinhaLida>): Map<string, number> {
   const soma = new Map<string, number>();
   for (const linha of linhas) {
-    const sku = typeof linha.sku_code === "string" ? linha.sku_code.trim() : "";
+    const sku = codigo(linha.sku_code);
     const qty = quantidade(linha.qty);
     if (!sku || !qty) continue;
     soma.set(sku, (soma.get(sku) ?? 0) + qty);
@@ -33,15 +48,64 @@ function porSku(linhas: Iterable<LinhaLida>): Map<string, number> {
   return soma;
 }
 
-/** A entrada menos o retirado, por SKU: nunca negativo, sem as linhas zeradas, na ordem da entrada. */
-export function saldoDaCaixa(entrada: Iterable<LinhaLida>, retirado: Iterable<LinhaLida>): LinhaDaCaixa[] {
+/** Os ajustes somados por SKU, com o sinal, na ordem em que cada SKU apareceu. */
+function ajustesPorSku(ajustes: Iterable<LinhaLida>): Map<string, number> {
+  const soma = new Map<string, number>();
+  for (const ajuste of ajustes) {
+    const sku = codigo(ajuste.sku_code);
+    const qty = comSinal(ajuste.qty);
+    if (!sku || !qty) continue;
+    soma.set(sku, (soma.get(sku) ?? 0) + qty);
+  }
+  return soma;
+}
+
+/**
+ * A entrada menos o retirado mais os ajustes da recontagem, por SKU: nunca
+ * negativo, sem as linhas zeradas, na ordem da entrada; o SKU que só a
+ * recontagem pôs na caixa vem depois, na ordem dos ajustes.
+ */
+export function saldoDaCaixa(entrada: Iterable<LinhaLida>, retirado: Iterable<LinhaLida>, ajustes: Iterable<LinhaLida> = []): LinhaDaCaixa[] {
+  const entrou = porSku(entrada);
   const saiu = porSku(retirado);
+  const ajustou = ajustesPorSku(ajustes);
   const saldo: LinhaDaCaixa[] = [];
-  for (const [sku_code, entrou] of porSku(entrada)) {
-    const resta = entrou - (saiu.get(sku_code) ?? 0);
+  for (const [sku_code, qty] of entrou) {
+    const resta = qty - (saiu.get(sku_code) ?? 0) + (ajustou.get(sku_code) ?? 0);
+    if (resta > 0) saldo.push({ sku_code, qty: resta });
+  }
+  for (const [sku_code, qty] of ajustou) {
+    if (entrou.has(sku_code)) continue;
+    const resta = qty - (saiu.get(sku_code) ?? 0);
     if (resta > 0) saldo.push({ sku_code, qty: resta });
   }
   return saldo;
+}
+
+/** O que as recontagens puseram (positivo) ou tiraram (negativo) da caixa, somado. */
+export function unidadesAjustadas(ajustes: Iterable<LinhaLida>): number {
+  let soma = 0;
+  for (const qty of ajustesPorSku(ajustes).values()) soma += qty;
+  return soma;
+}
+
+/**
+ * O ajuste que deixa um SKU da caixa com o contado: o contado menos a conta
+ * de hoje (entrada menos retirado mais os ajustes anteriores), sem o piso do
+ * saldo. Assim a conta fecha no contado mesmo quando o retirado passou da
+ * entrada (a entrada corrigida depois da separação).
+ */
+export function ajusteParaOContado(
+  entrada: Iterable<LinhaLida>,
+  retirado: Iterable<LinhaLida>,
+  ajustes: Iterable<LinhaLida>,
+  sku_code: string,
+  contado: number,
+): number {
+  const sku = codigo(sku_code);
+  if (!sku) return 0;
+  const conta = (porSku(entrada).get(sku) ?? 0) - (porSku(retirado).get(sku) ?? 0) + (ajustesPorSku(ajustes).get(sku) ?? 0);
+  return quantidade(contado) - conta;
 }
 
 /** As unidades de um conteúdo: a soma das linhas. */

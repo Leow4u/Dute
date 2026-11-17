@@ -448,7 +448,12 @@ com a guarda de volta), as duas linhas na tabela de papéis
   retirado não ganha campo nenhum. A regra sem banco é
   `lib/dominio/src/saldo-da-caixa.ts`, com a cópia literal em
   `functions/wms/src/domain/saldo-da-caixa.ts` travada por teste; os dois
-  lados rodam os mesmos casos (`saldo-da-caixa.casos.json`).
+  lados rodam os mesmos casos (`saldo-da-caixa.casos.json`). Desde a contagem
+  por caixa (17/11/2026, `docs/plataforma/diagnostico-contagem-ciclica.md`,
+  seção 6, item 4), a recontagem também grava na caixa o que acertou
+  (`count_adjustments`, com sinal e o id da contagem), e o saldo passa a ser
+  a entrada menos o retirado mais os ajustes, pela mesma regra, para a
+  separação, a etiqueta, o Mapa, a folha e o "Caixas × saldo".
 - **A baixa na linha (3b).** `setPickLineSeparated` lê as caixas guardadas do
   cliente na prateleira da linha e baixa, na mesma transação, a mais antiga
   que tem o item (a data da guarda; no empate, o código); a seguinte completa,
