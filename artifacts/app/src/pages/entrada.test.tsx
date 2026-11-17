@@ -68,6 +68,20 @@ describe("tela de entrada", () => {
     expect(html).toContain('href="/comercial"');
   });
 
+  it("cada bloco leva a cor do módulo; com número ímpar de módulos, o último ocupa as duas colunas do celular", () => {
+    const tres = entrada("admin", null, true, false);
+    if (tres.kind !== "cards") throw new Error("admin deveria ver cards");
+    const html = render(tres);
+    expect(html).toContain("bg-modulo-wms");
+    expect(html).toContain("bg-modulo-comercial");
+    expect(html).toContain("bg-modulo-financeiro");
+    expect(html.match(/col-span-2 md:col-span-1/g)).toHaveLength(1);
+    expect(html.lastIndexOf("col-span-2")).toBeGreaterThan(html.lastIndexOf("bg-modulo-comercial"));
+    const quatro = entrada("owner", null, true, true);
+    if (quatro.kind !== "cards") throw new Error("owner deveria ver cards");
+    expect(render(quatro)).not.toContain("col-span-2");
+  });
+
   it("sem módulo: o aviso e a saída, nada mais", () => {
     expect(texts(render({ kind: "nenhum" }))).toEqual([
       "Leonardo Silva",
@@ -113,7 +127,7 @@ describe("tela de entrada", () => {
     it("vermelho só no módulo com item crítico; sem nada parado, sem número", () => {
       const html = render(cards(), RESUMOS, true);
       expect(html).toMatch(/<span class="[^"]*bg-v3-marca[^"]*">3<\/span>/);
-      expect(html).toMatch(/<span class="[^"]*bg-muted text-foreground[^"]*">2<\/span>/);
+      expect(html).toMatch(/<span class="[^"]*bg-v3-header-foreground text-v3-header[^"]*">2<\/span>/);
       expect(html).not.toMatch(/>0<\/span>/);
     });
 

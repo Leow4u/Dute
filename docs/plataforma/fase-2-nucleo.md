@@ -793,3 +793,28 @@ do navegador.
     e-mail confirmado, e não lê nem marca o convite; quem administra lê.
   - `eventos-manuais.integration.test.ts`: o `access.invite_accepted` não
     entra à mão.
+
+### Entrada como lobby (16/11/2026)
+
+- O Leonardo pediu a entrada por módulos no formato da tela inicial da Omie
+  e aprovou a prancha `docs/mockups/ModEntradaV2.dc.html` (a recomendada)
+  em 16/11/2026: fundo escuro de página inteira com o visual do login
+  (`auth-visual.jpg`, o mesmo arquivo), a saudação em branco e um bloco
+  colorido por módulo, com o ícone, o nome, a primeira pendência e o
+  contador do "Precisa de você". O que a tela mostra não muda: a lista de
+  textos do teste é a mesma. Quem tem um módulo só continua indo direto
+  para ele.
+- A cor de cada módulo é um token da v3 em `index.css` (`--modulo-wms`,
+  `--modulo-operacao`, `--modulo-comercial`, `--modulo-financeiro` e
+  `--modulo-rh`, com o `--color-modulo-*` do Tailwind) e o campo `cor` do
+  módulo em `lib/platform-modules.ts`; texto branco acima de 4,5:1 em
+  todas. O violeta fica com o Agent Dute e o vermelho com o contador em
+  alerta, que leva um aro branco para não sumir sobre o âmbar e o
+  framboesa; sem alerta, o contador é branco com o número em tinta. O véu
+  sobre a foto lê o `--v3-header`, igual nos dois temas.
+- No celular os blocos ficam em duas colunas e, com número ímpar de módulos,
+  o último ocupa as duas.
+- Testes: `entrada.test.tsx` (a cor por bloco, o último inteiro, o contador
+  sem alerta em branco, a lista de textos e o axe como antes) e
+  `platform-modules.test.ts` (cada módulo tem a cor, e o token dela existe
+  em `index.css`).
