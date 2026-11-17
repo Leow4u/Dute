@@ -34,6 +34,8 @@ export type PlatformModule = {
   key: Modulo;
   label: string;
   icon: LucideIcon;
+  /** A cor do bloco na entrada (docs/mockups/ModEntradaV2.dc.html): o utilitário do token `--modulo-*` de index.css, nunca hex na tela. */
+  cor: `bg-modulo-${Modulo}`;
   /** Tela onde o papel começa no módulo. Sem casa, o módulo não aparece para o papel. */
   home: Partial<Record<Papel, string>>;
   /** Para o cliente o módulo é um card? As faturas fazem parte do portal, não são uma entrada. */
@@ -47,6 +49,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "wms",
     label: MODULO_ROTULO.wms,
     icon: Boxes,
+    cor: "bg-modulo-wms",
     home: {
       owner: "/dashboard",
       admin: "/dashboard",
@@ -61,6 +64,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "operacao",
     label: MODULO_ROTULO.operacao,
     icon: Truck,
+    cor: "bg-modulo-operacao",
     // A coordenação entra no Início da Operação; o campo, no app dele (parte 3.8b); o painel, na TV da sala (parte 3.12b);
     // o cliente, nas OS dele no portal (parte 4.3b).
     home: {
@@ -76,6 +80,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "comercial",
     label: MODULO_ROTULO.comercial,
     icon: Handshake,
+    cor: "bg-modulo-comercial",
     home: Object.fromEntries(COMERCIAL_ROLES.map((role) => [role, ROTA_COMERCIAL])),
     clientCard: false,
     liberacao: "comercial",
@@ -84,6 +89,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "financeiro",
     label: MODULO_ROTULO.financeiro,
     icon: Receipt,
+    cor: "bg-modulo-financeiro",
     home: { owner: "/faturamento", admin: "/faturamento", financeiro: "/faturamento" },
     clientCard: false,
   },
@@ -91,6 +97,7 @@ export const PLATFORM_MODULES: readonly PlatformModule[] = [
     key: "rh",
     label: MODULO_ROTULO.rh,
     icon: Users,
+    cor: "bg-modulo-rh",
     // O RH (Fase 8): owner, admin e rh entram no Início dele, só com a liberação própria.
     home: Object.fromEntries(RH_ROLES.map((role) => [role, ROTA_RH])),
     clientCard: false,

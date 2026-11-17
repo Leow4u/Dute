@@ -686,6 +686,25 @@ tela Estoque › Etiquetas ainda não está na `TELAS_DO_WMS_NA_V3`
 a contagem e a prévia), mas o visual é o das telas do Estoque fora da v3
 (`docs/sistema-visual.md`), sem o fundo, a letra e o botão vermelho da v3.
 
+A prancha "Entrada · lobby" (16/11/2026) é a proposta para a tela de entrada
+por módulos no formato que o Leonardo pediu ao ver a tela inicial da Omie:
+fundo escuro de página inteira com o visual do login (`auth-visual.jpg`), a
+saudação em branco e um bloco colorido por módulo, com o ícone, o nome, a
+primeira pendência e o contador do "Precisa de você". O que a tela mostra não
+muda; muda a forma. Quem tem um módulo só continua indo direto para ele. As
+imagens vêm por caminho relativo de `artifacts/app/public`, então a prancha
+abre do repositório, não do canvas. Aprovada pelo Leonardo em 16/11/2026, a
+recomendada: a entrada do app segue esta prancha, e `ModEntrada.dc.html`
+fica como registro da versão anterior.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Entrada · lobby (computador, celular, variante B e a paleta) | `ModEntradaV2.dc.html` | A recomendada em 1440 × 900; o celular em 390 × 844, com os blocos em duas colunas e o último inteiro; a variante B, sem foto, sobre o fundo claro da v3 com a barra preta de hoje; e a paleta: azul da marca `#0054CE`, âmbar `#B45309`, teal `#0F766E`, verde `#15803D` e framboesa `#BE185D`, todos com texto branco acima de 4,5 : 1, ao lado dos tons dos status da v3, que somem sobre a foto. O violeta fica com o Agent Dute e o vermelho com o contador em alerta, que leva um aro branco. |
+
+Decididas em 16/11/2026, com a aprovação: a cor por módulo é a da
+recomendada, o fundo é a foto, e a entrada continua só para quem tem dois ou
+mais módulos.
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
@@ -705,5 +724,9 @@ a contagem e a prévia), mas o visual é o das telas do Estoque fora da v3
 - TV da sala em modo escuro, fundo `#0E0E10`. Agent Dute em violeta
   (`#C9B8FB`/`#5B3FC4`).
 - Celular: cabeçalho preto e barra inferior com quatro itens.
+- Cor por módulo só na entrada (`ModEntradaV2.dc.html`, 16/11/2026): azul da
+  marca `#0054CE` na Armazenagem, âmbar `#B45309` na Operação, teal `#0F766E`
+  no Comercial, verde `#15803D` no Financeiro e framboesa `#BE185D` no RH, os
+  tokens `--modulo-*` de `index.css`. O violeta continua do Agent Dute.
 - Sem legendas: só rótulos, dados e ações. Explicação vai para manual em `docs/`.
 - Operação e campo nunca veem valores.

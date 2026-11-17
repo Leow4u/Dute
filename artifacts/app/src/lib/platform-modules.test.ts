@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { MODULOS_POR_PAPEL, PAPEIS, type Papel } from "@workspace/dominio";
 import { describe, expect, it } from "vitest";
 
@@ -107,4 +110,17 @@ describe("casa de cada módulo", () => {
     );
     expect(PAPEIS).toContain("cliente");
   });
+});
+
+describe("a cor do bloco de cada módulo na entrada (docs/mockups/ModEntradaV2.dc.html)", () => {
+  const css = readFileSync(fileURLToPath(new URL("../index.css", import.meta.url)), "utf8");
+
+  it.each(PLATFORM_MODULES.map((module) => [module.key, module.cor] as const))(
+    "%s usa %s, e o token dele existe em index.css",
+    (key, cor) => {
+      expect(cor).toBe(`bg-modulo-${key}`);
+      expect(css).toContain(`--modulo-${key}:`);
+      expect(css).toContain(`--color-modulo-${key}: hsl(var(--modulo-${key}));`);
+    },
+  );
 });

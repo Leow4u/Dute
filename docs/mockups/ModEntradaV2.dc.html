@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Entrada · lobby</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+.ic{width:28px;height:28px;flex:0 0 auto}
+
+/* A prancha */
+.pr-raiz{width:1440px;display:flex;flex-direction:column;gap:34px;padding:40px 0 56px}
+.pr-topo{padding:0 56px;display:flex;flex-direction:column;gap:10px}
+.pr-sobre{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5F6368}
+.pr-topo h1{font-size:34px;font-weight:800;letter-spacing:-.02em}
+.pr-tese{font-size:16px;color:#3F403F;max-width:940px}
+.pr-dec{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:10px}
+.pr-dec div{background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:14px 16px}
+.pr-dec b{display:block;font-size:14px;font-weight:800;margin-bottom:4px}
+.pr-dec span{font-size:13.5px;color:#3F403F}
+.pr-rot{display:flex;align-items:baseline;gap:10px;padding:0 56px;margin-bottom:-22px;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5F6368}
+.pr-rot em{font-style:normal;font-weight:600;letter-spacing:0;text-transform:none;color:#8A8A86}
+.quadro{border-top:1px solid #E5E5E1;border-bottom:1px solid #E5E5E1}
+
+/* O lobby, computador */
+.lobby{position:relative;width:1440px;height:900px;overflow:hidden;color:#fff;background:#0B1220 url(../../artifacts/app/public/auth-visual.jpg) no-repeat 50% 27%/cover}
+.lobby::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,12,20,.97) 0%,rgba(8,12,20,.94) 36%,rgba(8,12,20,.72) 62%,rgba(8,12,20,.3) 100%)}
+.lobby::after{content:"";position:absolute;left:0;right:0;bottom:0;height:220px;background:linear-gradient(180deg,rgba(8,12,20,0),rgba(8,12,20,.6))}
+.lobby>*{position:relative;z-index:1}
+.topo{height:76px;display:flex;align-items:center;justify-content:space-between;padding:0 48px}
+.topo img{height:30px;width:auto;display:block}
+.conta{display:flex;align-items:center;gap:12px;font-weight:700;font-size:14px}
+.av2{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.miolo{max-width:1152px;margin:0 auto;padding:74px 48px 0}
+.data{font-size:16px;font-weight:600;color:rgba(255,255,255,.72)}
+.saud{font-size:46px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-top:6px}
+.frase{font-size:19px;margin-top:10px;color:rgba(255,255,255,.86)}
+.frase b{color:#fff;font-weight:800}
+.mods{display:grid;grid-template-columns:repeat(5,206px);gap:16px;margin-top:44px}
+.mod{display:flex;flex-direction:column;justify-content:space-between;height:188px;border-radius:12px;padding:18px 18px 16px;color:#fff;text-decoration:none;box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.mod:hover{filter:brightness(1.06)}
+.mod .cab{display:flex;align-items:flex-start;justify-content:space-between}
+.mod .ico{width:48px;height:48px;border-radius:10px;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.mod .txt{min-width:0}
+.mod b{display:block;font-size:20px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
+.mod .sub{font-size:13px;font-weight:600;line-height:1.35;margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cnt{min-width:30px;height:30px;border-radius:999px;background:#fff;color:#161616;font-size:13px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;flex:0 0 auto}
+.cnt.red{background:#E71C23;color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.92)}
+.c-wms{background:#0054CE}.c-op{background:#B45309}.c-com{background:#0F766E}.c-fin{background:#15803D}.c-rh{background:#BE185D}
+
+/* Variante B: o mesmo lobby sobre o fundo claro da v3 */
+.lobby.claro{color:#161616;background:#F5F5F3}
+.lobby.claro::before,.lobby.claro::after{display:none}
+.lobby.claro .topo{background:#161616;color:#fff;height:64px}
+.lobby.claro .miolo{padding-top:60px}
+.lobby.claro .data{color:#5F6368}
+.lobby.claro .frase{color:#5F6368}.lobby.claro .frase b{color:#E71C23}
+.lobby.claro .mod{box-shadow:none}
+
+/* O lobby, celular */
+.linha2{display:flex;gap:44px;padding:0 56px;align-items:flex-start}
+.aro{flex:0 0 auto;border:1px solid #D4D4CF;border-radius:28px;overflow:hidden;background:#000}
+.cel{position:relative;width:390px;height:844px;overflow:hidden;color:#fff;background:#0B1220 url(../../artifacts/app/public/auth-visual.jpg) no-repeat 62% 28%/cover}
+.cel::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,12,20,.9) 0%,rgba(8,12,20,.93) 58%,rgba(8,12,20,.78) 100%)}
+.cel>*{position:relative;z-index:1}
+.cel .topo{height:60px;padding:0 20px}
+.cel .topo img{height:24px}
+.cel .av2{width:32px;height:32px;font-size:12px}
+.cel .miolo{max-width:none;margin:0;padding:26px 20px 0}
+.cel .data{font-size:13px}
+.cel .saud{font-size:32px}
+.cel .frase{font-size:15px;margin-top:8px}
+.cel .mods{grid-template-columns:repeat(2,1fr);gap:12px;margin-top:26px}
+.cel .mod{height:158px;padding:14px 14px 12px;box-shadow:0 8px 22px rgba(0,0,0,.3)}
+.cel .mod .ico{width:40px;height:40px;border-radius:9px}
+.cel .ic{width:22px;height:22px}
+.cel .mod b{font-size:17px}
+.cel .mod .sub{font-size:12.5px;margin-top:4px}
+.cel .cnt{min-width:26px;height:26px;font-size:12px;padding:0 8px}
+.cel .mods li.largo{grid-column:1/-1}
+.cel .mod.largo{height:auto;min-height:96px;flex-direction:row;align-items:center;gap:14px}
+.cel .mod.largo .cab{display:contents}
+.cel .mod.largo .ico{order:0}
+.cel .mod.largo .txt{order:1;flex:1 1 auto}
+.cel .mod.largo .cnt{order:2}
+
+/* A paleta */
+.pal{flex:1 1 auto;display:flex;flex-direction:column;gap:18px;padding-top:6px}
+.pal h2{font-size:18px;font-weight:800}
+.pal p{font-size:14px;color:#3F403F;max-width:780px}
+.chips{display:flex;gap:12px;flex-wrap:wrap}
+.chip{width:164px;border-radius:12px;padding:14px;color:#fff;display:flex;flex-direction:column;gap:4px}
+.chip b{font-size:15px;font-weight:800}
+.chip span{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip.sobre{background-color:#0B1220;background-image:linear-gradient(0deg,rgba(8,12,20,.9),rgba(8,12,20,.9))}
+.pal .escuro{background:#0B1220;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.pal .escuro h3{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.72)}
+.pal .escuro .chip{width:156px}
+.pal .regra{display:flex;gap:28px;font-size:13.5px;color:#3F403F}
+.pal .regra b{display:block;font-size:13px;font-weight:800;color:#161616}
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-wms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3"/><path d="m17 16.5 4.74-2.85"/><path d="M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15"/><path d="m12 8 4.74-2.85"/><path d="M12 13.5V8"/></symbol>
+  <symbol id="i-op" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-com" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+  <symbol id="i-fin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></symbol>
+  <symbol id="i-rh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol>
+</svg>
+
+<div class="pr-raiz">
+
+<header class="pr-topo">
+  <p class="pr-sobre">Dute · Entrada · 16/11/2026</p>
+  <h1>Entrada como lobby</h1>
+  <p class="pr-tese">A tela de entrada por módulos no formato de lobby: fundo escuro de página inteira com o visual do login, a saudação em branco e um bloco colorido por módulo, com o ícone, o nome, a primeira pendência e o contador do "Precisa de você". O que a tela mostra não muda; muda a forma. Quem tem um módulo só continua indo direto para ele.</p>
+  <div class="pr-dec">
+    <div><b>Cor por módulo</b><span>Azul da marca, âmbar, teal, verde e framboesa, todos com texto branco acima de AA. Os tons dos status da v3 somem sobre a foto; a comparação está no fim da prancha.</span></div>
+    <div><b>Fundo</b><span>O visual do login, escurecido à esquerda para o texto e os blocos e aberto à direita para a cena. A variante B, sem foto, fica sobre o fundo claro da v3 com a barra preta de hoje.</span></div>
+    <div><b>Contador e alerta</b><span>O contador segue a regra do "Precisa de você". Em alerta, o vermelho da marca com um aro branco, para não sumir sobre o âmbar e o framboesa; sem alerta, branco com o número em tinta.</span></div>
+  </div>
+</header>
+
+<p class="pr-rot"><span>Computador</span><em>1440 × 900 · recomendada</em></p>
+<div class="quadro">
+<div class="lobby">
+  <header class="topo">
+    <img src="../../artifacts/app/public/dutelog-logo-light.png" alt="Dutelog">
+    <div class="conta"><span>Leonardo</span><span class="av2">LE</span></div>
+  </header>
+  <main class="miolo">
+    <p class="data">Segunda, 16 de novembro</p>
+    <h1 class="saud">Boa tarde, Leonardo</h1>
+    <p class="frase"><b>7 coisas</b> precisam de você hoje.</p>
+    <ul class="mods">
+      <li><a class="mod c-wms" href="ModWms.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-wms"/></svg></span><span class="cnt">2</span></span><span class="txt"><b>Armazenagem</b><span class="sub">2 pedidos para separar · contagem de abertura em andamento</span></span></a></li>
+      <li><a class="mod c-op" href="ModOpInicio.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-op"/></svg></span><span class="cnt red">3</span></span><span class="txt"><b>Operação</b><span class="sub">2 demandas para planejar · 1 OS sem veículo</span></span></a></li>
+      <li><a class="mod c-com" href="ModComInicio.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-com"/></svg></span><span class="cnt red">1</span></span><span class="txt"><b>Comercial</b><span class="sub">1 orçamento para aprovar</span></span></a></li>
+      <li><a class="mod c-fin" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-fin"/></svg></span></span><span class="txt"><b>Financeiro</b><span class="sub">Faturamento de novembro em dia</span></span></a></li>
+      <li><a class="mod c-rh" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-rh"/></svg></span><span class="cnt">1</span></span><span class="txt"><b>RH</b><span class="sub">1 exame vence em 12 dias</span></span></a></li>
+    </ul>
+  </main>
+</div>
+</div>
+
+<p class="pr-rot"><span>Celular</span><em>390 × 844 · os blocos em duas colunas, o último inteiro</em></p>
+<div class="linha2">
+  <div class="aro">
+  <div class="cel">
+    <header class="topo">
+      <img src="../../artifacts/app/public/dutelog-logo-light.png" alt="Dutelog">
+      <span class="av2">LE</span>
+    </header>
+    <main class="miolo">
+      <p class="data">Segunda, 16 de novembro</p>
+      <h1 class="saud">Boa tarde, Leonardo</h1>
+      <p class="frase"><b>7 coisas</b> precisam de você hoje.</p>
+      <ul class="mods">
+        <li><a class="mod c-wms" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-wms"/></svg></span><span class="cnt">2</span></span><span class="txt"><b>Armazenagem</b><span class="sub">2 pedidos para separar</span></span></a></li>
+        <li><a class="mod c-op" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-op"/></svg></span><span class="cnt red">3</span></span><span class="txt"><b>Operação</b><span class="sub">2 demandas para planejar</span></span></a></li>
+        <li><a class="mod c-com" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-com"/></svg></span><span class="cnt red">1</span></span><span class="txt"><b>Comercial</b><span class="sub">1 orçamento para aprovar</span></span></a></li>
+        <li><a class="mod c-fin" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-fin"/></svg></span></span><span class="txt"><b>Financeiro</b><span class="sub">Faturamento em dia</span></span></a></li>
+        <li class="largo"><a class="mod c-rh largo" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-rh"/></svg></span><span class="cnt">1</span></span><span class="txt"><b>RH</b><span class="sub">1 exame vence em 12 dias</span></span></a></li>
+      </ul>
+    </main>
+  </div>
+  </div>
+
+  <section class="pal">
+    <h2>A paleta dos módulos</h2>
+    <p>Cada cor é um token em <code>index.css</code> e um campo do módulo em <code>platform-modules.ts</code>. O número é o contraste do texto branco sobre a cor; AA pede 4,5 no texto pequeno e 3 no nome.</p>
+    <div class="chips">
+      <div class="chip c-wms"><b>Armazenagem</b><span>#0054CE · azul da marca</span><span>branco 6,6 : 1</span></div>
+      <div class="chip c-op"><b>Operação</b><span>#B45309 · âmbar</span><span>branco 5,0 : 1</span></div>
+      <div class="chip c-com"><b>Comercial</b><span>#0F766E · teal</span><span>branco 5,5 : 1</span></div>
+      <div class="chip c-fin"><b>Financeiro</b><span>#15803D · verde</span><span>branco 5,0 : 1</span></div>
+      <div class="chip c-rh"><b>RH</b><span>#BE185D · framboesa</span><span>branco 6,0 : 1</span></div>
+    </div>
+    <div class="escuro">
+      <h3>Os tons dos status da v3, sobre o fundo escuro</h3>
+      <div class="chips">
+        <div class="chip" style="background:#1E4E9C"><b>Armazenagem</b><span>#1E4E9C · planejada</span><span>branco 8,0 : 1</span></div>
+        <div class="chip" style="background:#8A4B00"><b>Operação</b><span>#8A4B00 · em execução</span><span>branco 6,8 : 1</span></div>
+        <div class="chip" style="background:#0E5F58"><b>Comercial</b><span>#0E5F58 · faturada</span><span>branco 7,5 : 1</span></div>
+        <div class="chip" style="background:#14602F"><b>Financeiro</b><span>#14602F · concluída</span><span>branco 7,6 : 1</span></div>
+        <div class="chip" style="background:#5B21B6"><b>RH</b><span>#5B21B6 · agendada</span><span>branco 9,0 : 1</span></div>
+      </div>
+    </div>
+    <div class="regra">
+      <div><b>Violeta fica com o Agent Dute</b>Nenhum módulo usa o violeta, que é a cor do agente nos shells.</div>
+      <div><b>Vermelho fica com o alerta</b>Só o contador em alerta e a ação principal das telas.</div>
+      <div><b>Sem cor fixa no app</b>Os cinco hex entram como tokens; o teste de tema reprova hex solto em classe.</div>
+    </div>
+  </section>
+</div>
+
+<p class="pr-rot"><span>Variante B</span><em>1440 × 900 · sem foto, sobre o fundo claro da v3</em></p>
+<div class="quadro">
+<div class="lobby claro">
+  <header class="topo">
+    <img src="../../artifacts/app/public/dutelog-logo-light.png" alt="Dutelog">
+    <div class="conta"><span>Leonardo</span><span class="av2">LE</span></div>
+  </header>
+  <main class="miolo">
+    <p class="data">Segunda, 16 de novembro</p>
+    <h1 class="saud">Boa tarde, Leonardo</h1>
+    <p class="frase"><b>7 coisas</b> precisam de você hoje.</p>
+    <ul class="mods">
+      <li><a class="mod c-wms" href="ModWms.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-wms"/></svg></span><span class="cnt">2</span></span><span class="txt"><b>Armazenagem</b><span class="sub">2 pedidos para separar · contagem de abertura em andamento</span></span></a></li>
+      <li><a class="mod c-op" href="ModOpInicio.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-op"/></svg></span><span class="cnt red">3</span></span><span class="txt"><b>Operação</b><span class="sub">2 demandas para planejar · 1 OS sem veículo</span></span></a></li>
+      <li><a class="mod c-com" href="ModComInicio.dc.html"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-com"/></svg></span><span class="cnt red">1</span></span><span class="txt"><b>Comercial</b><span class="sub">1 orçamento para aprovar</span></span></a></li>
+      <li><a class="mod c-fin" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-fin"/></svg></span></span><span class="txt"><b>Financeiro</b><span class="sub">Faturamento de novembro em dia</span></span></a></li>
+      <li><a class="mod c-rh" href="#"><span class="cab"><span class="ico"><svg class="ic"><use href="#i-rh"/></svg></span><span class="cnt">1</span></span><span class="txt"><b>RH</b><span class="sub">1 exame vence em 12 dias</span></span></a></li>
+    </ul>
+  </main>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3460}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
