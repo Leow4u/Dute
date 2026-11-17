@@ -35,6 +35,8 @@ const PAPER_FILES = new Set([
   "features/warehouse-ops/lista-de-separacao-documento.tsx",
   // O romaneio impresso (separação com caixas, parte 4c, docs/mockups/WmsSepararRomaneio.dc.html).
   "features/warehouse-ops/romaneio-documento.tsx",
+  // A folha de contagem por rua (contagem por caixa, docs/mockups/WmsContagemFolha.dc.html).
+  "features/warehouse-ops/folha-de-contagem-documento.tsx",
   "pages/client/relatorio.tsx",
 ]);
 

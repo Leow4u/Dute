@@ -711,9 +711,12 @@ partir do diagnóstico da Contagem cíclica
 (`docs/plataforma/diagnostico-contagem-ciclica.md`), no dia em que a
 recontagem geral das caixas da BTG começou. **A direção foi aprovada pelo
 Leonardo em 17/11/2026**, com uma decisão: a segunda contagem é da operação,
-fora do sistema, e a tela grava só o número já conferido. Nada está no
-código; cada parte entra por PR, a folha e o relatório só de leitura primeiro
-(`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6). As pranchas seguem o shell v3 da
+fora do sistema, e a tela grava só o número já conferido. Cada parte entra
+por PR (`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6): a folha
+e o relatório "Caixas × saldo", só de leitura, estão no código desde
+17/11/2026 (PR 615, `/estoque/contagem/folha` e `/estoque/contagem/caixas`,
+abertos pela Contagem); a rodada, a prateleira caixa a caixa e o celular
+ainda não. As pranchas seguem o shell v3 da
 Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme, Operação
 WMS). As fontes são estáticas. A-03 e as caixas CX-000010 a CX-000016 vêm das
 pranchas da separação; a rodada, as prateleiras e os números são ilustrativos
@@ -750,10 +753,10 @@ tem).
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|
-| Armazenagem · Contagem, a rodada por prateleira | `WmsContagemRodada.dc.html` | A rodada com começo, motivo e quem grava; as prateleiras por rua com o estado (contada, em contagem, por contar, "conte depois da entrega"); o relatório "Caixas × saldo" ao lado. |
+| Armazenagem · Contagem, a rodada por prateleira | `WmsContagemRodada.dc.html` | A rodada com começo, motivo e quem grava; as prateleiras por rua com o estado (contada, em contagem, por contar, "conte depois da entrega"); o relatório "Caixas × saldo" ao lado. O cartão "Caixas × saldo" está no código desde 17/11/2026 como a tela `/estoque/contagem/caixas` (PR 615), inteira, com as contagens do dia; a rodada, não. |
 | Armazenagem · Contagem, a prateleira caixa a caixa | `WmsContagemPrateleira.dc.html` | A-03 com sete caixas: as duas confirmadas em uma linha, com "Contar de novo"; a em contagem, com a diferença antes de gravar e o item fora da lista; as por contar; "Caixa sem registro"; o rodapé com o saldo gravado da prateleira. |
 | Armazenagem · Contagem no celular | `WmsContagemCelular.dc.html` | Uma caixa por vez, campo de 48 px, "Confirmar caixa" como ação principal e as confirmadas em uma linha. |
-| Folha de contagem (A4) | `WmsContagemFolha.dc.html` | A Rua A com as caixas por prateleira: entrou, saiu, esperado e reserva, "Contado" em branco, a linha "Fora da lista" e caixas × saldo por prateleira. |
+| Folha de contagem (A4) | `WmsContagemFolha.dc.html` | A Rua A com as caixas por prateleira: entrou, saiu, esperado e reserva, "Contado" em branco, a linha "Fora da lista" e caixas × saldo por prateleira. No código desde 17/11/2026 (PR 615, `/estoque/contagem/folha?rua=A`), com o cabeçalho reduzido a cliente, rodada, prateleiras, impressa em e por quem: os campos da rodada entram com ela. |
 
 ## Regras da v3
 

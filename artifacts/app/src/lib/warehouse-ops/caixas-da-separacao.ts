@@ -14,8 +14,12 @@ import type { WarehouseTaskItem } from "./model";
  * A conta é a de lib/dominio (saldo-da-caixa.ts), a mesma do servidor.
  */
 
-/** Uma linha do conteúdo de entrada da caixa da abertura (`opening_inventory_lines`). */
-export type LinhaDeEntrada = { box_code: string; sku_code: string; counted_qty: number };
+/**
+ * Uma linha do conteúdo de entrada da caixa da abertura (`opening_inventory_lines`).
+ * O nome, o código do cliente e o tamanho vêm quando a linha os tem: a folha de
+ * contagem (contagem-por-caixa.ts) os mostra; a bancada só soma.
+ */
+export type LinhaDeEntrada = { box_code: string; sku_code: string; counted_qty: number; client_item_code?: string; product_name?: string; size?: string };
 
 const numero = new Intl.NumberFormat("pt-BR");
 const data = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -29,7 +33,18 @@ export function linhaDeEntrada(_id: string, registro: Record<string, unknown>): 
   const box_code = chave(registro.box_code);
   const sku_code = chave(registro.sku_code);
   const counted_qty = Number(registro.counted_qty ?? 0) || 0;
-  return box_code && sku_code && counted_qty > 0 ? { box_code, sku_code, counted_qty } : null;
+  if (!box_code || !sku_code || !(counted_qty > 0)) return null;
+  const client_item_code = String(registro.client_item_code ?? "").trim();
+  const product_name = String(registro.product_name ?? "").trim();
+  const size = String(registro.size ?? "").trim();
+  return {
+    box_code,
+    sku_code,
+    counted_qty,
+    ...(client_item_code ? { client_item_code } : {}),
+    ...(product_name ? { product_name } : {}),
+    ...(size ? { size } : {}),
+  };
 }
 
 /** O que entrou de cada SKU em cada caixa: a do recebimento traz o conteúdo nela; a da abertura, nas linhas da sessão. */

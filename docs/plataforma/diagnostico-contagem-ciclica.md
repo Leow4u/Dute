@@ -759,7 +759,18 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    `stock_balances`, `warehouse_positions` e `cycle_counts`. Tela com mockup,
    lista de textos e `axe`. *Pronto quando* a folha e o relatório batem com o
    emulador e o `--conferir-caixas` do cenário (PR 6) dá zero depois de um
-   acerto.
+   acerto. **No código desde 17/11/2026 (PR 615):** a folha em
+   `/estoque/contagem/folha?rua=A` e o relatório em
+   `/estoque/contagem/caixas`, os dois abertos pela Contagem, na v3, com os
+   papéis do armazém; a conta em `lib/warehouse-ops/contagem-por-caixa.ts`
+   (o esperado pelo `saldoDaCaixa` do domínio, a entrada pela
+   `entradaDasCaixas`), as leituras as do Mapa e das Etiquetas e as
+   contagens do dia lidas de `cycle_counts` por `occurred_at`. A caixa
+   `committing` sai marcada "a caminho" e fora das somas; o saldo que
+   nenhuma caixa tem sai como linha "sem caixa"; a prateleira que fecha no
+   total e não por SKU conta como diferente ("2 itens diferem"). Conferido
+   com a prancha pela folha de estilos do build, não com o emulador; o
+   `--conferir-caixas` (PR 6) continua pendente.
 2. **O servidor da cíclica mais seguro, sem tela (F11, F08, F07, F12, F15,
    F03, F18).** `counted_qty` inteiro com teto; o endereço em maiúsculas e
    conferido em `warehouse_positions`, com a área de passagem só para owner e

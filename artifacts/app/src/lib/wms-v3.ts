@@ -25,6 +25,9 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   "/pedidos/separar",
   // Separação com caixas, parte 4c: o romaneio para imprimir, tela nova já na v3.
   "/pedidos/romaneio",
+  // Contagem por caixa (diagnóstico da Contagem cíclica, seção 6, item 1): a folha por rua e o relatório "Caixas × saldo", telas novas já na v3.
+  "/estoque/contagem/folha",
+  "/estoque/contagem/caixas",
 ];
 
 /**
