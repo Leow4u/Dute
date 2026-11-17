@@ -132,7 +132,7 @@ function Prateleira({ prateleira }: { prateleira: PrateleiraDaContagem }) {
         <Linha key={`sem-caixa-${linha.sku}`} linha={linha} caixa={<span className="font-sans text-[10.5px] text-[#5F6368]">{SEM_CAIXA}</span>} />
       ))}
       <tr className="break-inside-avoid text-[10.5px] font-bold text-[#5F6368]">
-        <td className={TD}>{FORA_DA_LISTA}</td>
+        <td className={`${TD} whitespace-nowrap`}>{FORA_DA_LISTA}</td>
         <td className={TD}>
           <Branco />
         </td>
@@ -177,9 +177,9 @@ export function FolhaDeContagemDocumento({ folha }: { folha: FolhaDeContagem }) 
 
       <table className="w-full table-fixed border-collapse">
         <colgroup>
-          <col className="w-[70px]" />
+          <col className="w-[76px]" />
           <col />
-          <col className="w-[132px]" />
+          <col className="w-[128px]" />
           <col className="w-[46px]" />
           <col className="w-[40px]" />
           <col className="w-[58px]" />
