@@ -30,6 +30,7 @@
  */
 
 import { tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
+import { recontagemNoSku, resumoDosAjustes } from "./ajustes-da-caixa.mjs";
 import {
   ATOR,
   FONTE,
@@ -91,6 +92,23 @@ export function skuCodesTrocados(codigos, skuDe, skuPara) {
 }
 
 const temOSku = (dados, sku) => linhasDe(dados).some((l) => texto(l?.sku_code) === sku) || (Array.isArray(dados?.sku_codes) && dados.sku_codes.includes(sku));
+
+/**
+ * A caixa que a recontagem acertou no SKU errado ou no certo
+ * (`count_adjustments`; diagnóstico da contagem cíclica, seção 6, item 4)
+ * recusa: a transferência passa a linha da caixa de um SKU para o outro e não
+ * reescreve o ajuste, que fica como a recontagem gravou. Com ajuste no
+ * errado, as peças da caixa nesse item não são mais as da linha; com ajuste
+ * no certo, a recontagem pode já ter posto o código certo na caixa. O ajuste
+ * de outro item da caixa não atrapalha. Devolve a frase da recusa, ou null.
+ */
+export function recusaDaRecontagem(dados, codigo, { de, skuDe, para, skuPara }) {
+  const noErrado = recontagemNoSku(dados, codigo, skuDe, `${de} (${skuDe})`);
+  if (noErrado) return `${noErrado}: as peças da caixa nesse item não são mais as da linha, e a correção não mexe no que a recontagem acertou`;
+  const noCerto = recontagemNoSku(dados, codigo, skuPara, `${para} (${skuPara})`);
+  if (noCerto) return `${noCerto}: confira se ela já não pôs o código certo na caixa antes de corrigir`;
+  return null;
+}
 
 // --- Leitura -------------------------------------------------------------------------
 
@@ -157,6 +175,8 @@ async function montarPlano(leitor, db, correcao) {
   if (skuDe === alvo.sku) recusar(`a linha de ${de} já aponta para ${alvo.sku}`);
   for (const c of caixas) {
     if ((Array.isArray(c.dados.taken_lines) ? c.dados.taken_lines : []).some((t) => texto(t?.sku_code) === skuDe)) recusar(`a separação já tirou ${de} da caixa ${c.codigo}`);
+    const recontada = recusaDaRecontagem(c.dados, c.codigo, { de, skuDe, para: alvo.codigo, skuPara: alvo.sku });
+    if (recontada) recusar(recontada);
   }
 
   const chegadaSnap = await leitor.get(db.collection("inbound_receipts").doc(receiptId));
@@ -225,6 +245,15 @@ async function montarPlano(leitor, db, correcao) {
     transferencias,
     custo_unit: num(item.unit_cost) > 0 ? num(item.unit_cost) : null,
   };
+}
+
+/** A caixa do plano congelado que a recontagem acertou depois, no SKU errado ou no certo, recusa. */
+async function conferirRecontagemDasCaixas(leitor, db, plano) {
+  for (const c of plano.caixas) {
+    const snap = await leitor.get(db.collection("warehouse_boxes").doc(c.codigo));
+    const recusa = snap.exists ? recusaDaRecontagem(snap.data(), c.codigo, { de: plano.de, skuDe: plano.sku_de, para: plano.alvo.codigo, skuPara: plano.alvo.sku }) : null;
+    if (recusa) recusar(`${recusa} (a recontagem veio depois de a correção começar: os passos já feitos ficam)`);
+  }
 }
 
 /** O que já foi feito de cada passo, pelos recibos. */
@@ -327,6 +356,8 @@ export async function lerTransferencia(leitor, db, correcao, { info = false } = 
   }
   const plano = congelado.exists ? congelado.data().result : await montarPlano(leitor, db, correcao);
   const passos = await situacaoDosPassos(leitor, db, correcao, plano);
+  // O plano congelado não relê as caixas: a recontagem feita depois dele recusa antes de a linha mudar.
+  if (congelado.exists && !passos.caixa) await conferirRecontagemDasCaixas(leitor, db, plano);
   const remocao = passos.apagar ? { apaga: true, motivos: [], feito: true } : await conferirRemocao(leitor, db, correcao, plano, passos);
   return { jaAplicado: false, congelado: congelado.exists, plano, passos, remocao, estado: info ? await diagnostico(leitor, db, plano, passos) : [] };
 }
@@ -361,7 +392,7 @@ async function diagnostico(leitor, db, plano, passos) {
   for (const c of plano.caixas) {
     const snap = await leitor.get(db.collection("warehouse_boxes").doc(c.codigo));
     const d = snap.exists ? snap.data() : {};
-    caixasHoje.push(`${c.codigo} · ${status(STATUS_DA_CAIXA, d.status)}${texto(d.location_id) ? ` em ${texto(d.location_id)}` : ""} · ${fmt(linhasDe(d).length)} produto(s) · ${plano.de}: ${fmt(c.qtde)} un.${texto(d.label_printed_at) ? ` · etiqueta impressa ${quando(d.label_printed_at)}` : ""}`);
+    caixasHoje.push(`${c.codigo} · ${status(STATUS_DA_CAIXA, d.status)}${texto(d.location_id) ? ` em ${texto(d.location_id)}` : ""} · ${fmt(linhasDe(d).length)} produto(s) · ${plano.de}: ${fmt(c.qtde)} un.${texto(d.label_printed_at) ? ` · etiqueta impressa ${quando(d.label_printed_at)}` : ""}${resumoDosAjustes(d) ? ` · recontagem em outro item, que fica: ${resumoDosAjustes(d)}` : ""}`);
   }
   const avisos = (await leitor.get(db.collection("events").where("entity_id", "==", plano.receipt_id))).docs.filter((d) => texto(d.data().type) === "inventory.arrival_stored");
   const nasceu = plano.sku_de_nasceu_em === plano.receipt_id ? `nesta chegada (${plano.receipt_number})` : plano.sku_de_nasceu_em ? `na chegada ${await nomeDaChegada(plano.sku_de_nasceu_em)}` : "fora do Receber";
@@ -460,12 +491,15 @@ async function corrigirCaixas(db, FieldValue, correcao, plano) {
     for (const snap of caixas) {
       if (!snap.exists) recusar(`a caixa ${snap.id} sumiu no meio da correção`);
       if (!temOSku(snap.data(), plano.sku_de)) recusar(`a caixa ${snap.id} não tem mais o ${plano.sku_de}: confira antes de seguir`);
+      const recontada = recusaDaRecontagem(snap.data(), snap.id, { de: plano.de, skuDe: plano.sku_de, para: plano.alvo.codigo, skuPara: plano.alvo.sku });
+      if (recontada) recusar(`${recontada} (a recontagem veio no meio da correção: confira antes de seguir)`);
     }
     if (!item.exists || texto(item.data().sku_code) !== plano.sku_de) recusar(`a linha da NF ${plano.item_nf.id} não aponta mais para ${plano.sku_de}: confira antes de seguir`);
     for (const snap of caixas) {
       const d = snap.data();
       const linha = linhasDe(d).find((l) => texto(l?.sku_code) === plano.sku_de) ?? {};
       const codigos = skuCodesTrocados(d.sku_codes, plano.sku_de, plano.alvo.sku);
+      // Só os campos da linha: o retirado e os ajustes da recontagem de outros itens da caixa ficam como estão.
       tx.update(snap.ref, {
         lines: linhasTransferidas(linhasDe(d), plano.sku_de, plano.alvo),
         ...(codigos ? { sku_codes: codigos } : {}),

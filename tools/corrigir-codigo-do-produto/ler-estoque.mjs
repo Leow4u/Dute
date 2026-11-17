@@ -4,7 +4,8 @@
  * corrigir (a entrada de 30/10 em B-02 e a CX-000227, 16/11/2026). Para cada
  * código: o SKU, o saldo por prateleira, as datas de entrada (a conta do
  * pedido, functions/wms/lib), os movimentos com a chegada e a NF de cada um,
- * as caixas com o item (o que entrou e o que a separação tirou) e, com
+ * as caixas com o item (o que entrou, o que a separação tirou, o que a
+ * recontagem ajustou e o que fica, pela regra do saldo da caixa) e, com
  * --pedido, as linhas do pedido. No fim, as chegadas citadas, com as linhas
  * da NF, para comparar uma com a outra.
  *
@@ -20,6 +21,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { abrirFirestore, RAIZ } from "../padronizar-nomes/firestore.mjs";
+import { ajustesDoSku, conteudoDaCaixa, saldoDoSku, textoDosAjustes } from "./ajustes-da-caixa.mjs";
 import { chaveDoCodigo, clienteDe, fmt, linhasDe, num, quando, texto } from "./comum.mjs";
 
 // --- Puro ----------------------------------------------------------------------------
@@ -68,6 +70,55 @@ export function entradaDaCaixa(caixa, linhasDaAbertura, sku) {
 /** O que as separações tiraram de um SKU da caixa (taken_lines). */
 export function retiradoDaCaixa(caixa, sku) {
   return (Array.isArray(caixa.taken_lines) ? caixa.taken_lines : []).filter((t) => texto(t?.sku_code) === sku).reduce((s, t) => s + num(t.qty), 0);
+}
+
+/**
+ * O que a caixa tem de um SKU: o que entrou, o que a separação tirou, os
+ * ajustes da recontagem (`count_adjustments`) e o que fica, pela regra do
+ * saldo da caixa (a entrada menos o retirado mais os ajustes).
+ */
+export function contaDoSku(caixa, linhasDaAbertura, sku) {
+  const entrou = entradaDaCaixa(caixa, linhasDaAbertura, sku);
+  const saiu = retiradoDaCaixa(caixa, sku);
+  const ajustes = ajustesDoSku(caixa, sku);
+  return { entrou, saiu, ajustes, fica: saldoDoSku(sku, { entrada: entrou, retirado: saiu, ajustes }) };
+}
+
+/** "entrou 72 · separação tirou 10 · recontagem −2 em 17/11/2026, 14:05, contagem brc_… · fica 60" */
+export function textoDaConta(conta) {
+  const partes = [`entrou ${fmt(conta.entrou)}`, `separação tirou ${fmt(conta.saiu)}`];
+  if (conta.ajustes.length) partes.push(`recontagem ${textoDosAjustes(conta.ajustes)}`);
+  partes.push(`fica ${fmt(conta.fica)}`);
+  return partes.join(" · ");
+}
+
+/**
+ * A caixa inteira (--caixa): a entrada (o conteúdo da caixa do recebimento ou
+ * as linhas da abertura), o retirado, os ajustes da recontagem de cada item e
+ * o que fica de cada um, pela regra.
+ */
+export function textoDaCaixa(codigoDaCaixa, caixa, linhasDaAbertura) {
+  const proprias = linhasDe(caixa);
+  const fonte = proprias.length ? proprias : linhasDaAbertura;
+  const rotulo = (l) => texto(l.client_item_code) || texto(l.sku_code);
+  const foraDoLugar = (l) => !proprias.length && texto(l.location_id) && texto(l.location_id) !== texto(caixa.location_id);
+  const entrou = fonte.map((l) => `${rotulo(l)} ${fmt(num(l.counted_qty))}${foraDoLugar(l) ? ` (linha em ${texto(l.location_id)})` : ""}`);
+  const retirado = (Array.isArray(caixa.taken_lines) ? caixa.taken_lines : []).map((t) => `${texto(t.sku_code)} ${fmt(num(t.qty))}`);
+  const itens = conteudoDaCaixa(
+    caixa,
+    fonte.map((l) => ({ sku_code: l.sku_code, qty: num(l.counted_qty), client_item_code: l.client_item_code, product_name: l.product_name })),
+  );
+  const doItem = (x) => x.codigo || x.sku_code;
+  const partes = [
+    `${codigoDaCaixa} · ${texto(caixa.status)} em ${texto(caixa.location_id) || "sem prateleira"}`,
+    `${fmt(num(caixa.unit_count))} un. no registro`,
+    `entrou: ${entrou.join(", ") || "nada"}`,
+    `separação tirou: ${retirado.join(", ") || "nada"}`,
+  ];
+  const ajustados = itens.filter((x) => x.ajustes.length);
+  if (ajustados.length) partes.push(`recontagem: ${ajustados.map((x) => `${doItem(x)} ${textoDosAjustes(x.ajustes)}`).join("; ")}`);
+  partes.push(`fica: ${itens.filter((x) => x.fica > 0).map((x) => `${doItem(x)} ${fmt(x.fica)}`).join(", ") || "nada"}`);
+  return partes.join(" · ");
 }
 
 /** "A-09 desde 16/10/2026 32 · B-02 desde 30/10/2026 30, desde 06/11/2026 30" */
@@ -206,10 +257,9 @@ async function principal() {
         const origem = caixa.origin ?? {};
         const deOnde = origem.kind === "receipt" ? `chegada ${(await chegada(db, chegadas, texto(origem.receipt_id)))?.numero}` : texto(origem.session_id) ? "abertura" : "outra";
         const linhaAbertura = daAbertura.filter((l) => texto(l.box_code).toUpperCase() === codigoDaCaixa);
-        const entrou = entradaDaCaixa(caixa, linhaAbertura, sku);
-        const saiu = retiradoDaCaixa(caixa, sku);
+        const conta = contaDoSku(caixa, linhaAbertura, sku);
         const localDaLinha = [...new Set(linhaAbertura.map((l) => texto(l.location_id)).filter(Boolean))].join(", ");
-        console.log(`     ${codigoDaCaixa} · ${texto(caixa.status) || "?"} em ${texto(caixa.location_id) || "sem prateleira"}${quando(caixa.stored_at) ? ` desde ${quando(caixa.stored_at)}` : ""} · ${deOnde} · entrou ${fmt(entrou)} · separação tirou ${fmt(saiu)} · fica ${fmt(Math.max(0, entrou - saiu))}${localDaLinha && localDaLinha !== texto(caixa.location_id) ? ` · ATENÇÃO: a linha da abertura diz ${localDaLinha}` : ""}`);
+        console.log(`     ${codigoDaCaixa} · ${texto(caixa.status) || "?"} em ${texto(caixa.location_id) || "sem prateleira"}${quando(caixa.stored_at) ? ` desde ${quando(caixa.stored_at)}` : ""} · ${deOnde} · ${textoDaConta(conta)}${localDaLinha && localDaLinha !== texto(caixa.location_id) ? ` · ATENÇÃO: a linha da abertura diz ${localDaLinha}` : ""}`);
       }
       const doPedido = linhasDoPedido.filter((l) => texto(l.sku_code) === sku);
       for (const l of doPedido) {
@@ -228,11 +278,7 @@ async function principal() {
     }
     const caixa = snap.data();
     const abertura = (await lerDocs(db.collection("opening_inventory_lines").where("box_code", "==", codigoDaCaixa))).map((d) => d.data());
-    const conteudo = linhasDe(caixa).length
-      ? linhasDe(caixa).map((l) => `${texto(l.client_item_code) || texto(l.sku_code)} ${fmt(num(l.counted_qty))}`)
-      : abertura.map((l) => `${texto(l.client_item_code) || texto(l.sku_code)} ${fmt(num(l.counted_qty))}${texto(l.location_id) && texto(l.location_id) !== texto(caixa.location_id) ? ` (linha em ${texto(l.location_id)})` : ""}`);
-    const retirado = (Array.isArray(caixa.taken_lines) ? caixa.taken_lines : []).map((t) => `${texto(t.sku_code)} ${fmt(num(t.qty))}`);
-    console.log(`\n== ${codigoDaCaixa} · ${texto(caixa.status)} em ${texto(caixa.location_id) || "sem prateleira"} · ${fmt(num(caixa.unit_count))} un. no registro · entrou: ${conteudo.join(", ") || "nada"} · separação tirou: ${retirado.join(", ") || "nada"}`);
+    console.log(`\n== ${textoDaCaixa(codigoDaCaixa, caixa, abertura)}`);
   }
 
   // As chegadas citadas, com as linhas da NF: duas chegadas com a mesma NF e as mesmas peças são a mesma mercadoria.

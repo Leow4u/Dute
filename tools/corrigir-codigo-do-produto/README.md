@@ -117,7 +117,46 @@ O dry-run recusa, sem gravar nada, quando:
   fato, e a coordenação conclui a separação com a diferença;
 - **no mesmo SKU**, o SKU não nasceu na chegada, ou teve movimento de fora,
   pedido, reserva ou solicitação aberta, ou o tamanho muda;
-- **o estoque está congelado** (`system_controls/inventory`).
+- **o estoque está congelado** (`system_controls/inventory`);
+- **a recontagem ajustou o item na caixa** (abaixo, "A caixa recontada"):
+  o código errado ou, na transferência, também o certo.
+
+## A caixa recontada (17/11/2026)
+
+A recontagem por caixa (`recountWarehouseBox`, PRs 617 e 618;
+`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6, item 4) não muda
+a entrada da caixa (`lines[]` da caixa do Receber, ou as linhas da abertura)
+nem o retirado (`taken_lines`). Ela grava, por item, um ajuste com sinal em
+`count_adjustments`, com o id da contagem (`recount_id`), a hora (`at`) e,
+no item que passou de uma caixa para outra da prateleira, de onde veio
+(`moved_from`) ou para onde foi (`moved_to`). O saldo da caixa é a entrada
+menos o retirado mais os ajustes.
+
+As ferramentas desta pasta, e o acerto de outubro
+(`tools/acerto-btg-2026-10`), leem a caixa pela mesma regra:
+
+- `saldo-da-caixa.mjs` é a regra, gerada de `lib/dominio/src/saldo-da-caixa.ts`
+  por `gerar-saldo-da-caixa.mjs`, sem os tipos. O vitest do app reprova a
+  cópia desatualizada. Mudou a regra, gere de novo:
+
+  ```powershell
+  cd C:\DEV\Dute
+  node tools/corrigir-codigo-do-produto/gerar-saldo-da-caixa.mjs
+  ```
+
+- `ajustes-da-caixa.mjs` lê o que a recontagem gravou: os ajustes de cada
+  item, o saldo pela regra e o texto do ajuste ("−2 em 17/11/2026, 14:05,
+  contagem brc_…").
+- `ler-estoque.mjs` mostra o ajuste em cada caixa e o que fica pela regra.
+- A correção recusa a caixa em que a recontagem ajustou o código errado,
+  porque o conteúdo dela nesse item não é mais o da chegada. Na
+  transferência, recusa também a caixa em que ela ajustou o código certo,
+  porque a recontagem pode já ter corrigido o código (o item "fora da
+  lista"). A frase diz o ajuste, a hora e a contagem. Na retomada de uma
+  transferência já começada, a caixa recontada depois do plano congelado
+  recusa antes de a linha mudar.
+- O ajuste de outro item da mesma caixa não atrapalha. As escritas na caixa
+  só tocam a linha corrigida, e nenhuma apaga ou reescreve um ajuste.
 
 ## Como rodar, na máquina do Leonardo
 
@@ -179,9 +218,11 @@ apague o campo.
 o SKU, o saldo por prateleira, as datas de entrada (a conta do pedido), os
 movimentos com a chegada e a NF de cada um (a guarda por linha acha a chegada
 pela tarefa de guarda), as caixas com o item (o que entrou, o que a separação
-tirou e o que fica) e, com `--pedido`, as linhas do pedido. No fim, as chegadas
-citadas, com as linhas da NF: duas chegadas com a mesma NF e as mesmas peças
-são a mesma mercadoria lançada duas vezes. `--caixa` mostra uma caixa inteira.
+tirou, o que a recontagem ajustou e o que fica, pela regra do saldo da caixa)
+e, com `--pedido`, as linhas do pedido. No fim, as chegadas citadas, com as
+linhas da NF: duas chegadas com a mesma NF e as mesmas peças são a mesma
+mercadoria lançada duas vezes. `--caixa` mostra uma caixa inteira, com a
+recontagem de cada item e o que fica de cada um.
 
 ```powershell
 cd C:\DEV\Dute
@@ -195,7 +236,11 @@ cd C:\DEV\Dute
 node --test "tools/corrigir-codigo-do-produto/*.test.mjs"
 ```
 
-O CI roda esse `node --test` no job das ferramentas.
+O CI roda esse `node --test` no job das ferramentas. `saldo-da-caixa.test.mjs`
+roda contra a cópia gerada os casos de
+`lib/dominio/src/saldo-da-caixa.casos.json`, os mesmos do app e do WMS;
+`ajustes-da-caixa.test.mjs`, `ler-estoque.test.mjs` e `transferir.test.mjs`
+têm a caixa recontada.
 
 O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
 127.0.0.1. Ele faz as chegadas de verdade, com as funções de domínio de
@@ -228,6 +273,14 @@ O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
 9. **O SKU certo criado pelo acerto**, como a feminina XG do PED-0001: o
    `criar_sku` do acerto de verdade (por um plano só do emulador,
    `ACERTO_PLANO`) cria o XG, e a transferência passa as peças para ele.
+10. **A caixa recontada**, com as escritas da `recountWarehouseBox` simuladas
+    (o ajuste na caixa e a diferença na prateleira). O ajuste de outro item
+    fica, e a caixa e a prateleira batem pela regra. A correção recusa o
+    item ajustado: o errado, o certo posto "fora da lista", no mesmo SKU e
+    na retomada do plano congelado. O acerto de verdade, numa caixa da
+    abertura recontada, recusa no dry-run a baixa, o ajuste e a linha nova
+    do item ajustado, o zerar, a baixa da caixa inteira e a remoção, e
+    grava o ajuste da linha de outro item sem tocar a recontagem.
 
 ```powershell
 cd C:\DEV\Dute

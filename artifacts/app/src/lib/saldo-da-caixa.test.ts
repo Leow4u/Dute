@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import * as regra from "@workspace/dominio";
 import {
   ajusteParaOContado,
   conferirCaixasInformadas,
@@ -84,5 +85,33 @@ describe("saldo da caixa: casos de referência", () => {
     ];
     expect(ordemDeSaida(caixas).map((caixa) => caixa.code)).toEqual(["CX-000001", "CX-000002"]);
     expect(caixas.map((caixa) => caixa.code)).toEqual(["CX-000002", "CX-000001"]);
+  });
+});
+
+describe("saldo da caixa: a cópia das ferramentas é a gerada deste arquivo", () => {
+  const RAIZ = resolve(here, "../../../..");
+  const COPIA = resolve(RAIZ, "tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs");
+
+  it("tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs é o que gerar-saldo-da-caixa.mjs produz de lib/dominio", async () => {
+    const ts = await import("typescript");
+    const gerador = (await import(/* @vite-ignore */ pathToFileURL(resolve(RAIZ, "tools/corrigir-codigo-do-produto/gerar-saldo-da-caixa.mjs")).href)) as {
+      gerar: (fonte: string, typescript: unknown) => string;
+    };
+    const fonte = readFileSync(resolve(RAIZ, "lib/dominio/src/saldo-da-caixa.ts"), "utf8");
+    const esperado = gerador.gerar(fonte, ts.default ?? ts);
+    expect(readFileSync(COPIA, "utf8").replace(/\r\n/g, "\n"), "saldo-da-caixa.mjs desatualizado: rode node tools/corrigir-codigo-do-produto/gerar-saldo-da-caixa.mjs").toBe(esperado);
+  });
+
+  it("as mesmas saídas nos casos com os ajustes da recontagem", async () => {
+    const copia = (await import(/* @vite-ignore */ pathToFileURL(COPIA).href)) as typeof regra;
+    for (const caso of casos.saldos) {
+      const ajustes = (caso.ajustes ?? []) as LinhaDaCaixa[];
+      expect(copia.saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], ajustes), caso.caso).toEqual(
+        regra.saldoDaCaixa(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], ajustes),
+      );
+    }
+    for (const caso of casos.paraOContado) {
+      expect(copia.ajusteParaOContado(caso.entrada as LinhaDaCaixa[], caso.retirado as LinhaDaCaixa[], caso.ajustes as LinhaDaCaixa[], caso.sku_code, caso.contado), caso.caso).toBe(caso.ajuste);
+    }
   });
 });

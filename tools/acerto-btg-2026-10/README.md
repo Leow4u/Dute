@@ -27,6 +27,8 @@ BTG-000088. O plano usa essas formas.
   operação apontando o item do e-mail. `pendente` deixa a operação listada e
   fora da aplicação; para ligar, apague o campo.
 - `acerto.mjs`: o motor. Dry-run por padrão; `--aplicar` grava.
+- `caixa.mjs`: a caixa sem banco (o retirado, a caixa vazia e as recusas da
+  caixa recontada), com o teste `caixa.test.mjs`, que o CI roda.
 - `cenario-emulador.mjs`: cenário sintético da BTG para validar no emulador.
   Recusa rodar fora de `127.0.0.1`.
 
@@ -485,6 +487,52 @@ O romaneio do PED-0001 carregado no caminhão (16/11/2026, 20:25: 88 volumes,
 - **Preta masculina:** GG 94 (as 30 da CX-000227 no volume 86), XG 60 (as 41
   da CX-000227 no volume 87) e XGG 10.
 - **Preta feminina:** a XG não está no pedido; as 12 ficam na CX-000221.
+
+## A caixa recontada (17/11/2026)
+
+A recontagem por caixa (`recountWarehouseBox`, PRs 617 e 618;
+`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6, item 4) passou a
+ser o caminho para acertar o conteúdo de uma caixa. Ela não muda as linhas da
+abertura, o conteúdo da caixa do Receber nem o retirado: grava, por item, um
+ajuste com sinal em `count_adjustments`, com o id da contagem e a hora. O
+saldo da caixa é a entrada menos o retirado mais os ajustes, e o acerto lê a
+caixa pela mesma regra (`caixa.mjs`, com a regra gerada de `lib/dominio` em
+`tools/corrigir-codigo-do-produto/saldo-da-caixa.mjs`).
+
+As operações que mexeriam no conteúdo de um item que a recontagem ajustou na
+caixa recusam, no dry-run e de novo na transação da gravação. A frase diz o
+ajuste, a hora e a contagem, e manda conferir com `--caixa`:
+
+| Operação | Recusa quando a recontagem ajustou |
+|---|---|
+| `baixar_caixa` com `itens` | um item da baixa, nessa caixa |
+| `baixar_caixa` sem `itens` (a caixa inteira) | qualquer item da caixa |
+| `remover_caixa` (remover ou esvaziar) | qualquer item da caixa: remover apagaria o ajuste, e esvaziar zeraria o registro por cima dele |
+| `zerar_sku` | o SKU, em qualquer caixa (as das linhas da abertura dele e as que o têm em `sku_codes`, onde a recontagem põe o item fora da lista) |
+| `corrigir_linha` | o SKU de origem ou o de destino, na caixa da linha |
+| `ajustar_linha` e `adicionar_linha` | o SKU da linha, na caixa |
+| `mover_retirado` | o SKU, em qualquer das duas caixas |
+| `corrigir_caixa_recebimento` | o SKU de origem ou o de destino |
+
+A operação em outro item da mesma caixa grava e deixa o ajuste como está.
+Duas contas acompanham a regra: a caixa vazia (a separação tirou tudo o que
+fica) soma os ajustes dos outros itens, e a caixa com ajuste que fica sem
+retirado (`mover_retirado`) mantém a hora do saldo (`balance_at`), porque a
+"Etiqueta para trocar" a compara com a da etiqueta impressa.
+
+`--caixa` mostra, depois das linhas, o conteúdo da caixa do Receber, o
+retirado, a recontagem e o que fica de cada item pela regra; `--buscar` e
+`--nome` mostram o ajuste do SKU em cada caixa.
+
+Os testes: `caixa.test.mjs`, que o CI roda, e o item 10 do cenário de
+`tools/corrigir-codigo-do-produto/cenario-emulador.mjs`, que roda este
+acerto de verdade numa caixa da abertura recontada, por um plano só do
+emulador (`ACERTO_PLANO`).
+
+```powershell
+cd C:\DEV\Dute
+node --test "tools/acerto-btg-2026-10/*.test.mjs"
+```
 
 ## Validação no emulador (30/10/2026)
 

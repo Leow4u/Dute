@@ -695,8 +695,8 @@ acerto, não pela tela (`tools/acerto-btg-2026-10/README.md`, quinta rodada).
 |---|---|---|
 | Aba "Contagem cíclica" | O saldo da prateleira por SKU, com movimento, evento e recibo, na hora. | Não toca a caixa; não cria saldo em prateleira nova; grava sem conferir a diferença. |
 | "Ajustar saldo" e "Registrar movimentação" (Estoque › Itens, `pages/movements.tsx`) | ENTRADA ou SAIDA por SKU e posição (`createInventoryMovement`), inclusive em posição nova. | Origem e Destino de texto livre com os padrões `ESTOQUE_BTG`, `FORNECEDOR` e `CLIENTE`: com os padrões, o saldo nasce fora do mapa. Sem as travas de separação da Contagem. Não toca a caixa. |
-| Plano do acerto (`tools/acerto-btg-2026-10`) | A caixa e o saldo juntos (`baixar_caixa` com itens, `ajustar_linha`, `adicionar_linha`, `mover_retirado`, `remover_caixa`), com dry-run e recibo. | Cada caixa divergente é uma operação escrita no `plano.mjs` e gravada da máquina do Leonardo. |
-| `tools/corrigir-codigo-do-produto` | O tamanho errado, pela transferência entre SKUs. | Só o caso do código do cliente. |
+| Plano do acerto (`tools/acerto-btg-2026-10`) | A caixa e o saldo juntos (`baixar_caixa` com itens, `ajustar_linha`, `adicionar_linha`, `mover_retirado`, `remover_caixa`), com dry-run e recibo. | Cada caixa divergente é uma operação escrita no `plano.mjs` e gravada da máquina do Leonardo. Desde a recontagem por caixa, lê a caixa pela regra do saldo, com os ajustes (`count_adjustments`), e recusa mexer no item que a recontagem ajustou e na caixa inteira com ajuste (README da pasta, "A caixa recontada"). |
+| `tools/corrigir-codigo-do-produto` | O tamanho errado, pela transferência entre SKUs. | Só o caso do código do cliente. Recusa a caixa em que a recontagem ajustou o código errado ou o certo; o `ler-estoque.mjs` mostra o ajuste e o que fica. |
 
 ### 5.5 Regras de campo, se a recontagem começar com o que existe
 

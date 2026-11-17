@@ -34,6 +34,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { abrirFirestore, lerColecao, RAIZ } from "../padronizar-nomes/firestore.mjs";
 import { familiaDoCodigo, generoDoNome, ordemDoTamanho, padronizarNome, tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
 import { linhaDoSku, nomeDaFamilia } from "../padronizar-nomes/relatorio.mjs";
+import { recontagemNoSku, resumoDosAjustes } from "./ajustes-da-caixa.mjs";
 import {
   ATOR,
   ErroDaCorrecao,
@@ -189,6 +190,12 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   const skusDasLinhas = [...new Set(caixas.map((c) => texto(c.linha.sku_code)))];
   if (skusDasLinhas.length !== 1 || !skusDasLinhas[0]) recusar(`as linhas de ${de} apontam para SKUs diferentes (${skusDasLinhas.join(", ") || "nenhum"})`);
   const skuCode = skusDasLinhas[0];
+  // A caixa que a recontagem acertou neste item (count_adjustments; diagnóstico da contagem cíclica, seção 6, item 4):
+  // o conteúdo dela não é mais o da chegada. A correção não reescreve o ajuste, e recusa antes das outras conferências.
+  for (const c of caixas) {
+    const recontada = recontagemNoSku(c.dados, c.codigo, skuCode, `${de} (${skuCode})`);
+    if (recontada) recusar(`${recontada}: o conteúdo da caixa nesse item não é mais o da chegada, e a correção não mexe no que a recontagem acertou`);
+  }
 
   const receiptSnap = await leitor.get(db.collection("inbound_receipts").doc(receiptId));
   if (!receiptSnap.exists) recusar(`a chegada ${receiptId} das caixas não existe`);
@@ -322,6 +329,7 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   if (idade.exists) grava("update", idadeRef, { client_item_code: para, product_name: nomeNovo }, `ai_stock_age/${idadeRef.id} (dias parado): código e nome`);
   for (const c of caixas) {
     const { linhas } = linhasCorrigidas(linhasDe(c.dados), skuCode, para, nomeNovo);
+    // Só os campos da linha: o retirado e os ajustes da recontagem de outros itens da caixa ficam como estão.
     grava(
       "update",
       c.ref,
@@ -425,7 +433,7 @@ export async function planejar(leitor, db, FieldValue, correcao, { nome, info = 
   const estado = [
     `SKU ${skuCode} · "${nomeAntes}" · gênero ${generoAntes ?? "vazio"} · tamanho ${texto(sku.tamanho || sku.size) || "vazio"} · nasceu na chegada ${numeroDaChegada}${quando(sku.created_at) ? ` em ${quando(sku.created_at)}` : ""}`,
     `chegada ${numeroDaChegada}${texto(chegada.invoice_number) ? ` · NF ${texto(chegada.invoice_number)}` : ""} · ${status(STATUS_DA_CHEGADA, chegada.status)}${num(chegada.box_count) ? ` · ${fmt(num(chegada.boxes_stored))} de ${fmt(num(chegada.box_count))} caixas guardadas` : ""} · linha ${num(item.line_number)} da NF: ${texto(item.client_item_code)} · "${texto(item.product_name)}" · ${fmt(num(item.expected_qty))} na NF, ${fmt(num(item.boxed_qty))} nas caixas`,
-    ...caixas.map((c) => `${c.codigo} · ${status(STATUS_DA_CAIXA, c.dados.status)}${texto(c.dados.location_id) ? ` em ${texto(c.dados.location_id)}` : ""} · ${fmt(linhasDe(c.dados).length)} produto(s) · ${de}: ${fmt(num(c.linha.counted_qty))} un.${texto(c.dados.label_printed_at) ? ` · etiqueta impressa ${quando(c.dados.label_printed_at)}` : ""}`),
+    ...caixas.map((c) => `${c.codigo} · ${status(STATUS_DA_CAIXA, c.dados.status)}${texto(c.dados.location_id) ? ` em ${texto(c.dados.location_id)}` : ""} · ${fmt(linhasDe(c.dados).length)} produto(s) · ${de}: ${fmt(num(c.linha.counted_qty))} un.${texto(c.dados.label_printed_at) ? ` · etiqueta impressa ${quando(c.dados.label_printed_at)}` : ""}${resumoDosAjustes(c.dados) ? ` · recontagem em outro item, que fica: ${resumoDosAjustes(c.dados)}` : ""}`),
     `saldo: ${saldos.length ? saldos.map((d) => `${texto(d.data().location_id)} ${fmt(num(d.data().qty_on_hand))}`).join(", ") : "nenhum (a entrada ainda não foi concluída)"} · reservado 0`,
     `movimentos: ${movimentos.length}, todos da chegada ${numeroDaChegada} (${[...new Set(movimentos.map((d) => texto(d.data().source)))].join(", ") || "nenhum"})`,
     `${cartao ? `${productDe.ref.path} · "${nomeDe(cartao)}"` : ""}${projecao.exists ? ` · portal "${texto(projecao.data().client_item_code)}"` : " · ainda fora do portal"}`,

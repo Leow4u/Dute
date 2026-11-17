@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { tamanhoDoCodigo } from "../padronizar-nomes/regras.mjs";
 import { ErroDaCorrecao, conferirCorrecao } from "./comum.mjs";
-import { chaveDoMovimento, descreverPassos, linhasTransferidas, skuCodesTrocados, transferenciasPorPosicao } from "./transferir.mjs";
+import { chaveDoMovimento, descreverPassos, linhasTransferidas, recusaDaRecontagem, skuCodesTrocados, transferenciasPorPosicao } from "./transferir.mjs";
 
 const alvo = { sku: "BTG-000142", codigo: "A.01.0810.002.M", nome: "Polo Masculino Piquet Azul-Gralha", tamanho: "M" };
 
@@ -73,4 +73,19 @@ test("a chave de cada movimento é fixa por correção, passo e prateleira", () 
   const correcao = { id: "cx-000229-a01-0810-002-m" };
   assert.equal(chaveDoMovimento(correcao, "saida", "B-07"), "corrigir-codigo:cx-000229-a01-0810-002-m:saida:B-07");
   assert.notEqual(chaveDoMovimento(correcao, "saida", "B-07"), chaveDoMovimento(correcao, "entrada", "B-07"));
+});
+
+test("a caixa recontada no SKU errado ou no certo recusa; o ajuste de outro item da caixa não atrapalha", () => {
+  const plano = { de: "A.01.0806.005.XGG", skuDe: "BTG-000092", para: "A.01.0806.005.XG", skuPara: "BTG-000074" };
+  const ajuste = (sku_code, qty, extra = {}) => ({ recount_id: "brc_1", sku_code, qty, at: "2026-11-17T17:05:00.000Z", ...extra });
+  assert.equal(
+    recusaDaRecontagem({ count_adjustments: [ajuste("BTG-000092", -1)] }, "CX-000227", plano),
+    "a recontagem já ajustou A.01.0806.005.XGG (BTG-000092) na caixa CX-000227 (−1 em 17/11/2026, 14:05, contagem brc_1): as peças da caixa nesse item não são mais as da linha, e a correção não mexe no que a recontagem acertou",
+  );
+  assert.equal(
+    recusaDaRecontagem({ count_adjustments: [ajuste("BTG-000074", 41, { from_loose: 41 })] }, "CX-000227", plano),
+    "a recontagem já ajustou A.01.0806.005.XG (BTG-000074) na caixa CX-000227 (+41 em 17/11/2026, 14:05, 41 do saldo sem caixa, contagem brc_1): confira se ela já não pôs o código certo na caixa antes de corrigir",
+  );
+  assert.equal(recusaDaRecontagem({ count_adjustments: [ajuste("BTG-000090", -2)] }, "CX-000227", plano), null, "o ajuste das GG da mesma caixa");
+  assert.equal(recusaDaRecontagem({ taken_lines: [{ sku_code: "BTG-000090", qty: 30 }] }, "CX-000227", plano), null, "a caixa nunca recontada");
 });

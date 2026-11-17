@@ -27,6 +27,12 @@
  *    grava nada; sem o campo, grava.
  * 9. O SKU certo criado pelo acerto (o criar_sku do bloco feminina-xg), como
  *    a feminina XG do PED-0001: a transferência passa as peças para ele.
+ * 10. A caixa recontada (17/11/2026), com as escritas da recountWarehouseBox
+ *    simuladas (o ajuste na caixa e a diferença na prateleira): o ajuste de
+ *    outro item fica; a correção recusa o item que a recontagem ajustou, o
+ *    errado ou o certo, também na retomada do plano congelado; e o acerto
+ *    recusa no dry-run o que mexeria no item ajustado ou na caixa inteira, e
+ *    grava o que mexe em outro item sem tocar o ajuste.
  *
  *   npm --prefix functions/wms ci && npm --prefix functions/wms run build
  *   cd functions/wms
@@ -34,7 +40,7 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -67,6 +73,8 @@ const separacao = await dominio("pick-progress.js");
 const { ErroDaCorrecao, aplicar, idDoItemParado, idDoRecibo, leitorDoBanco, modoDaCorrecao, planejar, prepararNome } = await import("./corrigir.mjs");
 const { aplicarTransferencia, lerTransferencia } = await import("./transferir.mjs");
 const { CORRECOES } = await import("./correcoes.mjs");
+const { contaDoSku, textoDaCaixa, textoDaConta } = await import("./ler-estoque.mjs");
+const { saldoDaCaixa } = await import("./saldo-da-caixa.mjs");
 
 const BTG = "BTG Pactual";
 const guilherme = { uid: "wms-guilherme", name: "Guilherme", role: "wms", email: "guilherme@dutelog.com.br" };
@@ -658,5 +666,209 @@ assert.equal(await existe("skus", XGG_F9), false, "sem pedido, o cadastro errado
 const portal9 = (await db.collection("client_inventory").where("sku_code", "==", XG_F9).get()).docs;
 assert.deepEqual(portal9.map((d) => [d.get("qty_on_hand"), d.get("qty_available"), d.get("size")]), [[12, 12, "XG"]], "um item do portal, com as 12 no XG");
 
-console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio), a correção pendente e o SKU certo criado pelo acerto.");
+// --- 10. A caixa recontada (17/11/2026) ----------------------------------------------------
+// A recontagem por caixa (recountWarehouseBox, PR 618) grava na caixa um ajuste com sinal por item (count_adjustments,
+// com o id da contagem e a hora) e acerta o saldo da prateleira junto. Aqui ela é simulada com as mesmas escritas: o
+// ajuste na caixa (o item fora da lista também em sku_codes) e o movimento na prateleira. As ferramentas leem o ajuste
+// pela regra do saldo da caixa, recusam mexer no item que a recontagem ajustou e não apagam ajuste nenhum.
+
+const CINZA_M = "Polo Masculino Piquet Cinza";
+const CINZA_F = "Polo Feminino Piquet Cinza";
+await posicoes.upsertWarehousePositions(
+  db,
+  { positions: [7, 8, 9, 10, 11, 12].map((shelf) => ({ aisle: "C", shelf, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: BTG })) },
+  coordenacao,
+);
+const lote10 = db.batch();
+for (const [id, codigo] of [
+  ["BTG-000300", "A.01.0820.003.P"],
+  ["BTG-000301", "A.01.0820.003.M"],
+  ["BTG-000302", "A.01.0820.003.G"],
+  ["BTG-000303", "A.01.0820.003.GG"],
+]) {
+  const comum = { customer_code: BTG, cod_cliente: codigo, cod_cliente_key: codigo, produto: CINZA_M, genero: "Masculino", tamanho: tamanho(codigo), size: tamanho(codigo), category: "Uniformes", status: "active", archived: false, source: "opening_inventory" };
+  lote10.set(db.collection("skus").doc(id), { id, ...comum, cod_btg: id, sku_code: id, sku_code_key: id, estoque_atual: 0, estoque_reservado: 0, estoque_disponivel: 0 });
+  lote10.set(db.collection("products").doc(codigo), { id: codigo, ...comum, estoque_btg: 0, num_skus: 1 });
+}
+await lote10.commit();
+
+let recontagens = 0;
+/** A recontagem simulada: os ajustes na caixa, como a recountWarehouseBox grava, e a diferença no saldo da prateleira. */
+async function recontar(codigo, itens) {
+  const caixaAntes = await dado("warehouse_boxes", codigo);
+  const recountId = `brc_cenario_${++recontagens}`;
+  const at = new Date().toISOString();
+  const ajustes = itens.map((i) => ({ recount_id: recountId, sku_code: i.sku, qty: i.qty, at, round_id: "rodada-cenario", ...(i.fora_da_lista ? { client_item_code: i.codigo, product_name: i.nome } : {}) }));
+  const foraDaLista = itens.filter((i) => i.fora_da_lista).map((i) => i.sku);
+  await db
+    .collection("warehouse_boxes")
+    .doc(codigo)
+    .update({
+      count_adjustments: [...(caixaAntes.count_adjustments ?? []), ...ajustes],
+      balance_at: at,
+      last_recount_id: recountId,
+      last_recounted_at: at,
+      ...(foraDaLista.length ? { sku_codes: FieldValue.arrayUnion(...foraDaLista) } : {}),
+    });
+  for (const i of itens) {
+    await operations.createInventoryMovementTransaction(
+      db,
+      { type: i.qty > 0 ? "ENTRADA" : "SAIDA", quantity: Math.abs(i.qty), customer_code: BTG, sku_code: i.sku, location_id: caixaAntes.location_id, reason: `Recontagem da ${codigo} (cenário)`, idempotency_key: `${recountId}-${i.sku}` },
+      coordenacao,
+    );
+  }
+  return recountId;
+}
+const linhasDaCaixa = (caixa) => (Array.isArray(caixa.lines) ? caixa.lines : []);
+const entradaDe = (caixa) => linhasDaCaixa(caixa).map((l) => ({ sku_code: l.sku_code, qty: l.counted_qty }));
+
+// a) O ajuste de outro item da caixa fica: a transferência passa a linha do código errado e não toca a recontagem.
+const r18 = await chegada(
+  [
+    { codigo: "A.02.0820.003.M", nome: CINZA_F, qtd: 12 },
+    { codigo: "A.01.0820.003.G", nome: CINZA_M, qtd: 10, sku: "BTG-000302" },
+  ],
+  { prateleira: "C-07" },
+);
+const cx18 = r18.caixas[0];
+await recontar(cx18, [{ sku: "BTG-000302", qty: -1 }]);
+const ajustes18 = (await dado("warehouse_boxes", cx18)).count_adjustments;
+// O leitor mostra o ajuste e o que fica pela regra.
+assert.equal(textoDaConta(contaDoSku(await dado("warehouse_boxes", cx18), [], "BTG-000302")).replace(/ em [^,]+, [^,]+, /, " em …, "), "entrou 10 · separação tirou 0 · recontagem −1 em …, contagem brc_cenario_1 · fica 9");
+const c18 = correcao("cenario-recontada-outro-item", "A.02.0820.003.M", "A.01.0820.003.M", r18.caixas);
+const leitura18 = await lerTransferencia(leitorDoBanco(), db, c18, { info: true });
+assert.ok(leitura18.estado.some((l) => l.startsWith(cx18) && l.includes("recontagem em outro item, que fica: BTG-000302 −1 em")), leitura18.estado.join("\n"));
+assert.equal((await aplicarTransferencia(db, FieldValue, c18, { operations })).estado, "corrigido");
+const caixa18 = await dado("warehouse_boxes", cx18);
+assert.deepEqual(caixa18.count_adjustments, ajustes18, "o ajuste da recontagem fica como estava");
+assert.deepEqual(linhasDaCaixa(caixa18).map((l) => [l.sku_code, l.counted_qty]), [["BTG-000301", 12], ["BTG-000302", 10]]);
+assert.deepEqual(saldoDaCaixa(entradaDe(caixa18), caixa18.taken_lines ?? [], caixa18.count_adjustments), [{ sku_code: "BTG-000301", qty: 12 }, { sku_code: "BTG-000302", qty: 9 }]);
+assert.deepEqual([await saldos("BTG-000301"), await saldos("BTG-000302")], [[["C-07", 12]], [["C-07", 9], ["RECEBIMENTO", 0]]], "a caixa e a prateleira batem pela regra");
+assert.match(textoDaCaixa(cx18, caixa18, []), /· recontagem: A\.01\.0820\.003\.G −1 em .* · fica: A\.01\.0820\.003\.M 12, A\.01\.0820\.003\.G 9$/);
+
+// b) O SKU errado que a recontagem ajustou: a transferência recusa antes de qualquer movimento.
+const r19 = await chegada([{ codigo: "A.02.0820.003.G", nome: CINZA_F, qtd: 8 }], { prateleira: "C-08" });
+await recontar(r19.caixas[0], [{ sku: r19.skus[0], qty: -2 }]);
+await recusa(
+  correcao("cenario-recontada-no-errado", "A.02.0820.003.G", "A.01.0820.003.G", r19.caixas),
+  new RegExp(`^a recontagem já ajustou A\\.02\\.0820\\.003\\.G \\(${r19.skus[0]}\\) na caixa ${r19.caixas[0]} \\(−2 em .*, contagem brc_cenario_2\\): as peças da caixa nesse item não são mais as da linha`),
+  { transferencia: true },
+);
+
+// c) O SKU certo que a recontagem pôs na caixa (fora da lista): ela pode já ter corrigido o código.
+const r20 = await chegada([{ codigo: "A.02.0820.003.P", nome: CINZA_F, qtd: 5 }], { prateleira: "C-09" });
+await recontar(r20.caixas[0], [{ sku: "BTG-000300", qty: 2, fora_da_lista: true, codigo: "A.01.0820.003.P", nome: CINZA_M }]);
+await recusa(
+  correcao("cenario-recontada-no-certo", "A.02.0820.003.P", "A.01.0820.003.P", r20.caixas),
+  /^a recontagem já ajustou A\.01\.0820\.003\.P \(BTG-000300\) na caixa CX-\d+ \(\+2 em .*\): confira se ela já não pôs o código certo na caixa antes de corrigir$/,
+  { transferencia: true },
+);
+
+// d) No mesmo SKU: o ajuste da recontagem recusa, com a frase dele, antes do movimento de fora da chegada.
+const r21 = await chegada([{ codigo: "A.02.0821.003.M", nome: CINZA_F, qtd: 6 }], { prateleira: "C-10" });
+await recontar(r21.caixas[0], [{ sku: r21.skus[0], qty: -1 }]);
+const c21 = correcao("cenario-recontada-mesmo-sku", "A.02.0821.003.M", "A.01.0821.003.M", r21.caixas);
+assert.equal(await modoDaCorrecao(leitorDoBanco(), db, c21), "mesmo_sku");
+await recusa(c21, new RegExp(`^a recontagem já ajustou A\\.02\\.0821\\.003\\.M \\(${r21.skus[0]}\\) na caixa ${r21.caixas[0]} \\(−1 em .*\\): o conteúdo da caixa nesse item não é mais o da chegada`));
+
+// e) A recontagem no meio da transferência (plano congelado, saída feita): a retomada recusa antes de mexer na caixa.
+const r22 = await chegada([{ codigo: "A.02.0820.003.GG", nome: CINZA_F, qtd: 4 }], { prateleira: "C-11" });
+const c22 = correcao("cenario-recontada-no-meio", "A.02.0820.003.GG", "A.01.0820.003.GG", r22.caixas);
+await assert.rejects(aplicarTransferencia(db, FieldValue, c22, { operations, depoisDaSaida: () => { throw new Error("queda simulada"); } }), /queda simulada/);
+await recontar(r22.caixas[0], [{ sku: "BTG-000303", qty: 1, fora_da_lista: true, codigo: "A.01.0820.003.GG", nome: CINZA_M }]);
+await assert.rejects(lerTransferencia(leitorDoBanco(), db, c22), (erro) => erro instanceof ErroDaCorrecao && /confira se ela já não pôs o código certo na caixa antes de corrigir \(a recontagem veio depois de a correção começar/.test(erro.message));
+await assert.rejects(aplicarTransferencia(db, FieldValue, c22, { operations }), ErroDaCorrecao);
+assert.deepEqual(linhasDaCaixa(await dado("warehouse_boxes", r22.caixas[0])).map((l) => l.sku_code), [r22.skus[0]], "a linha da caixa não mudou");
+
+// f) O acerto (tools/acerto-btg-2026-10) numa caixa da abertura recontada: o que mexe no item ajustado ou na caixa
+// inteira recusa no dry-run; o que mexe em outro item grava e deixa o ajuste como estava.
+const SESSAO10 = "opening_cenario_recontagem";
+const lote10b = db.batch();
+lote10b.set(db.collection("warehouse_boxes").doc("CX-000900"), {
+  code: "CX-000900",
+  customer_code: BTG,
+  status: "stored",
+  location_id: "C-12",
+  stored_at: "2026-10-16T12:00:00.000Z",
+  line_count: 2,
+  unit_count: 30,
+  sku_codes: ["BTG-000300", "BTG-000301"],
+  origin: { kind: "opening_inventory", session_id: SESSAO10 },
+});
+for (const [id, sku, codigo, qtd] of [
+  ["line_cenario_900_p", "BTG-000300", "A.01.0820.003.P", 20],
+  ["line_cenario_900_m", "BTG-000301", "A.01.0820.003.M", 10],
+]) {
+  lote10b.set(db.collection("opening_inventory_lines").doc(id), { id, session_id: SESSAO10, customer_code: BTG, sku_code: sku, client_item_code: codigo, product_name: CINZA_M, location_id: "C-12", box_code: "CX-000900", counted_qty: qtd, status: "counted" });
+}
+await lote10b.commit();
+for (const [sku, qtd] of [["BTG-000300", 20], ["BTG-000301", 10]]) {
+  await operations.createInventoryMovementTransaction(db, { type: "ENTRADA", quantity: qtd, customer_code: BTG, sku_code: sku, location_id: "C-12", reason: "Abertura do cenário", idempotency_key: `abertura-900-${sku}` }, coordenacao);
+}
+await recontar("CX-000900", [
+  { sku: "BTG-000300", qty: -2 },
+  { sku: "BTG-000302", qty: 1, fora_da_lista: true, codigo: "A.01.0820.003.G", nome: CINZA_M },
+]);
+const ajustes900 = (await dado("warehouse_boxes", "CX-000900")).count_adjustments;
+const acertoCli = path.join(raiz, "tools", "acerto-btg-2026-10", "acerto.mjs");
+const planoRecontada = path.join(os.tmpdir(), `plano-acerto-recontada-${process.pid}.mjs`);
+const op = (id, tipo, extra) => ({ id, tipo, motivo: "cenário", ...extra });
+writeFileSync(
+  planoRecontada,
+  `export const PLANO = ${JSON.stringify({ id: "cenario-recontada", cliente: BTG, referencia: "cenário", ator: { uid: "script:acerto-cenario", role: "admin", name: "Acerto do cenário", email: "ops@dutelog.com.br" } })};\n` +
+    `export const BLOCOS = ${JSON.stringify([
+      {
+        id: "recontada",
+        titulo: "cenário",
+        ops: [
+          op("baixa-item-recontado", "baixar_caixa", { caixa: "CX-000900", itens: [{ codigo: "BTG-000300", qtde: 5 }] }),
+          op("baixa-caixa-inteira", "baixar_caixa", { caixa: "CX-000900" }),
+          op("ajustar-item-recontado", "ajustar_linha", { caixa: "CX-000900", codigo: "BTG-000300", delta: -1 }),
+          op("adicionar-fora-da-lista", "adicionar_linha", { caixa: "CX-000900", codigo: "A.01.0820.003.G", qtde: 1 }),
+          op("zerar-item-recontado", "zerar_sku", { codigo: "BTG-000300" }),
+          op("remover-recontada", "remover_caixa", { caixa: "CX-000900" }),
+          op("ajustar-outro-item", "ajustar_linha", { caixa: "CX-000900", codigo: "BTG-000301", delta: 1 }),
+        ],
+      },
+    ])};\n`,
+);
+const acerto = (...extra) => spawnSync(process.execPath, [acertoCli, "--projeto", PROJETO, ...extra], { encoding: "utf8", env: { ...process.env, ACERTO_PLANO: planoRecontada } });
+/** As linhas de uma operação no dry-run do acerto: do "[id]" até a próxima operação. */
+const daOp = (saida, id) => {
+  const linhas = saida.split(/\r?\n/);
+  const inicio = linhas.findIndex((l) => l.startsWith(`[${id}]`));
+  assert.ok(inicio >= 0, `a operação ${id} não está na saída:\n${saida}`);
+  const fim = linhas.findIndex((l, i) => i > inicio && (l.startsWith("[") || !l.trim()));
+  return linhas.slice(inicio, fim < 0 ? undefined : fim).join("\n");
+};
+const antesDoAcerto = await contarTudo();
+const seco = acerto();
+assert.equal(seco.status, 1, `o dry-run com recusa sai com 1:\n${seco.stdout}\n${seco.stderr}`);
+for (const [id, frase] of [
+  ["baixa-item-recontado", /ERRO {4}: a recontagem já ajustou BTG-000300 \(A\.01\.0820\.003\.P\) na caixa CX-000900 \(−2 em .*\): a baixa pela linha da abertura contaria de novo o que ela acertou\. Confira com --caixa CX-000900/],
+  ["baixa-caixa-inteira", /ERRO {4}: a recontagem já ajustou a caixa CX-000900 \(BTG-000300 −2 em .*; BTG-000302 \+1 em .*\): a baixa da caixa inteira tira o que as linhas da abertura têm/],
+  ["ajustar-item-recontado", /ERRO {4}: a recontagem já ajustou BTG-000300 .*: ajustar a linha da abertura contaria de novo o que ela acertou/],
+  ["adicionar-fora-da-lista", /ERRO {4}: a recontagem já ajustou BTG-000302 \(A\.01\.0820\.003\.G\) na caixa CX-000900 \(\+1 em .*\): a linha nova contaria de novo o que ela pôs na caixa/],
+  ["zerar-item-recontado", /ERRO {4}: a recontagem já ajustou A?.*BTG-000300.* na caixa CX-\d+ .*: zerar o SKU tira o saldo e as linhas da abertura, e o ajuste dela ficaria sozinho na caixa/],
+  ["remover-recontada", /ERRO {4}: a recontagem já ajustou a caixa CX-000900 .*: remover ou esvaziar zera o registro da caixa por cima do que a recontagem acertou, e remover apaga o ajuste/],
+]) {
+  assert.match(daOp(seco.stdout, id), frase, daOp(seco.stdout, id));
+}
+assert.match(daOp(seco.stdout, "ajustar-outro-item"), /grava {3}: linha e caixa 10 → 11/, daOp(seco.stdout, "ajustar-outro-item"));
+assert.deepEqual(await contarTudo(), antesDoAcerto, "o dry-run não grava");
+// O --caixa mostra a recontagem e o que fica pela regra.
+const listagem = acerto("--caixa", "CX-000900");
+assert.equal(listagem.status, 0, listagem.stderr);
+assert.match(listagem.stdout, /recontagem: BTG-000300 \(A\.01\.0820\.003\.P\) −2 em .*; BTG-000302 \(A\.01\.0820\.003\.G\) \+1 em /);
+// Na ordem das linhas da abertura (o id delas), e o item que só a recontagem pôs na caixa por último.
+assert.match(listagem.stdout, /fica pela regra \(entrada − retirado \+ ajustes\): BTG-000301 \(A\.01\.0820\.003\.M\) 10, BTG-000300 \(A\.01\.0820\.003\.P\) 18, BTG-000302 \(A\.01\.0820\.003\.G\) 1\n/);
+assert.match(acerto("--buscar", "BTG-000300").stdout, /recontagem na CX-000900 \(C-12\): −2 em /);
+// Só a operação no outro item grava, e o ajuste da recontagem fica como estava.
+const grava900 = acerto("--op", "ajustar-outro-item", "--aplicar");
+assert.equal(grava900.status, 0, `${grava900.stdout}\n${grava900.stderr}`);
+const caixa900 = await dado("warehouse_boxes", "CX-000900");
+assert.deepEqual([caixa900.unit_count, caixa900.status, (await dado("opening_inventory_lines", "line_cenario_900_m")).counted_qty], [31, "stored", 11]);
+assert.deepEqual(caixa900.count_adjustments, ajustes900, "o ajuste da recontagem fica como estava");
+
+console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio), a correção pendente, o SKU certo criado pelo acerto e a caixa recontada (o ajuste de outro item fica; o item ajustado recusa, na correção e no acerto).");
 process.exit(0);
