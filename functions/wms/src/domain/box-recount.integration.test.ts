@@ -285,6 +285,19 @@ describe("Recontar a caixa: a caixa e a prateleira na mesma transação", () => 
     ]);
   });
 
+  // Decisão de 17/11/2026 (pergunta 1 do PR 618): a peça a mais vale o dia que o FIFO já dá ao conteúdo da caixa.
+  it("a caixa da abertura: a peça achada a mais vale o dia da sessão, como o resto da caixa, e não abre data nova no portal", async () => {
+    await db.collection("opening_inventory_sessions").doc("opening_BTG_Pactual").set({ id: "opening_BTG_Pactual", customer_code: BTG, status: "completed", started_at: "2026-10-16T12:00:00.000Z" });
+    // O conteúdo da abertura entrou pela sessão: o FIFO data as 120 polos M pelo dia em que ela começou.
+    await db.collection("movements").doc("mov_abertura_m").set({ customer_code: BTG, sku_code: POLO_M, location_id: "A-03", tipo_mov: "ENTRADA", quantity: 120, source: "functions_opening_inventory", opening_inventory_session_id: "opening_BTG_Pactual", created_at: new Date("2026-10-20T14:00:00.000Z") });
+    await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 62 }] });
+    const movimento = (await todos("movements")).find((item) => item.source === "functions_cycle_count")!;
+    assert.deepEqual([movimento.tipo_mov, movimento.quantity, movimento.fifo_opening_session_id], ["ENTRADA", 2, "opening_BTG_Pactual"]);
+    // Antes, as 2 peças viravam "desde 20/10" (o stored_at da caixa) ao lado das 120 "desde 16/10".
+    const datas = await lerDatasDoEstoque(db, BTG, POLO_M);
+    assert.deepEqual(datas.datas, [{ desde: "2026-10-16", pecas: 122 }]);
+  });
+
   it("a caixa aberta pela separação: o esperado é a entrada menos o retirado; sem diferença, só a confirmação", async () => {
     await db.collection("warehouse_boxes").doc("CX-000011").update({ taken_lines: [{ sku_code: POLO_M, qty: 10 }], taken_units: 10, balance_at: "2026-11-12T12:00:00.000Z" });
     const confere = await recontar({ box_code: "CX-000011", lines: [{ sku_code: POLO_M, counted_qty: 50 }] });
@@ -319,7 +332,9 @@ describe("Recontar a caixa: a caixa e a prateleira na mesma transação", () => 
     assert.equal((await todos("movements")).length, 0);
     assert.equal((await saldoNaCaixa("CX-000012", POLO_GG)) + (await saldoNaCaixa("CX-000014", POLO_GG)), 50);
     const payload = (await eventos(BOX_RECOUNT_EVENT_TYPE))[0]!.payload as { items: Array<Record<string, unknown>> };
-    assert.deepEqual(payload.items.find((item) => item.sku_code === POLO_GG)?.moved_from, [{ box_code: "CX-000014", qty: 2 }]);
+    // A resposta e o evento dizem de onde veio cada peça.
+    assert.deepEqual(resultado.lines.find((linha) => linha.sku_code === POLO_GG)?.origins, [{ kind: "box", box_code: "CX-000014", qty: 2 }]);
+    assert.deepEqual(payload.items.find((item) => item.sku_code === POLO_GG)?.origins, [{ kind: "box", box_code: "CX-000014", qty: 2 }]);
   });
 
   it("o item fora da lista sem saldo em caixa nenhuma entra na prateleira, com a data da caixa; o produto arquivado volta a ativo", async () => {
@@ -337,7 +352,44 @@ describe("Recontar a caixa: a caixa e a prateleira na mesma transação", () => 
     assert.equal((await db.collection("products").doc("C.0900.001.U").get()).get("status"), "active");
     // A origem fica no evento: entrou na prateleira, sem vir de outra caixa.
     const item = ((await eventos(BOX_RECOUNT_EVENT_TYPE))[0]!.payload as { items: Array<Record<string, unknown>> }).items.find((linha) => linha.sku_code === BONE)!;
-    assert.deepEqual([item.out_of_list, item.shelf_delta, item.moved_from], [true, 2, undefined]);
+    assert.deepEqual([item.out_of_list, item.shelf_delta, item.origins], [true, 2, [{ kind: "entry", qty: 2 }]]);
+  });
+
+  // Decisão de 17/11/2026 (pergunta 2 do PR 618): o saldo solto vem antes das outras caixas.
+  it("o fora da lista consome primeiro o saldo da prateleira que nenhuma caixa cobre, sem mexer na prateleira nem nas outras caixas", async () => {
+    // A A-03 tem 53 polos GG no razão e 50 na CX-000014: 3 sem caixa.
+    await db.collection("stock_balances").doc(`bal_${POLO_GG}_A-03`).update({ qty_on_hand: 53, qty_available: 53 });
+    const resultado = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 60 }], extra_lines: [{ sku_code: POLO_GG, counted_qty: 2 }] });
+    // Antes, a peça saía da CX-000014, que ficava com sobra falsa, e o "sem caixa" continuava.
+    assert.deepEqual(resultado.lines.find((linha) => linha.sku_code === POLO_GG)?.origins, [{ kind: "loose", qty: 2 }]);
+    assert.deepEqual([resultado.shelf_delta_units, resultado.movement_ids], [0, []]);
+    assert.equal((await caixa("CX-000014")).count_adjustments, undefined);
+    const [ajuste] = (await caixa("CX-000012")).count_adjustments as Array<Record<string, unknown>>;
+    assert.deepEqual([ajuste!.sku_code, ajuste!.qty, ajuste!.from_loose, ajuste!.moved_from], [POLO_GG, 2, 2, undefined]);
+    assert.equal((await saldo(POLO_GG))[0]!.qty_on_hand, 53);
+    // Sobra 1 sem caixa: a regra de ouro fecha mais perto.
+    assert.equal(53 - (await saldoNaCaixa("CX-000012", POLO_GG)) - (await saldoNaCaixa("CX-000014", POLO_GG)), 1);
+  });
+
+  it("o saldo solto não basta: as outras caixas completam, e só o resto entra na prateleira; a resposta diz cada origem", async () => {
+    // A A-03 tem 61 polos P no razão e 60 na CX-000010: 1 sem caixa. A CX-000012 achou 63 polos P.
+    await db.collection("stock_balances").doc(`bal_${POLO_P}_A-03`).update({ qty_on_hand: 61, qty_available: 61 });
+    const resultado = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 60 }], extra_lines: [{ sku_code: POLO_P, counted_qty: 63 }] });
+    const linha = resultado.lines.find((item) => item.sku_code === POLO_P)!;
+    assert.deepEqual(linha.origins, [
+      { kind: "loose", qty: 1 },
+      { kind: "box", box_code: "CX-000010", qty: 60 },
+      { kind: "entry", qty: 2 },
+    ]);
+    assert.deepEqual([linha.difference, linha.shelf_delta, resultado.shelf_delta_units], [63, 2, 2]);
+    assert.equal((await saldo(POLO_P))[0]!.qty_on_hand, 63);
+    // A CX-000010 cedeu tudo e segue guardada, com saldo zero, até alguém contá-la vazia (pergunta 5).
+    const cedeu = await caixa("CX-000010");
+    assert.deepEqual([cedeu.status, await saldoNaCaixa("CX-000010", POLO_P)], ["stored", 0]);
+    const contagem = (await todos("cycle_counts")).find((item) => item.sku_code === POLO_P)!;
+    assert.deepEqual(contagem.origins, linha.origins);
+    const [movimento] = await todos("movements");
+    assert.deepEqual([movimento!.tipo_mov, movimento!.quantity, movimento!.movement_kind], ["ENTRADA", 2, "box_recount_out_of_list"]);
   });
 
   it("na mesma rodada, a caixa já recontada não cede peça ao fora da lista: a peça entra na prateleira", async () => {
@@ -488,7 +540,7 @@ describe("Recontar a caixa: as recusas", () => {
     await db.collection("stock_balances").doc(`bal_${POLO_M}_A-03`).update({ qty_on_hand: 50, qty_available: 50 });
     const erro = await recusa(recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 0 }] }));
     assert.equal(codigoDa(erro), "BOX_RECOUNT_SHELF_SHORT");
-    assert.match(erro.message, /as caixas dizem mais do que a prateleira/);
+    assert.match(erro.message, /as caixas dizem mais do que a prateleira\. A prateleira precisa do acerto antes da recontagem: veja a diferença no relatório "Caixas × saldo", na Contagem\./);
   });
 });
 

@@ -17,8 +17,9 @@
  * movimento, a hora do servidor; o campo data, que a movimentação manual e a
  * API deixam digitar, não conta. A ENTRADA da contagem de abertura vale um dia
  * só por cliente, o do started_at da sessão dele. A ENTRADA da recontagem da
- * caixa vale o dia da caixa, que o servidor grava no movimento (fifo_day): a
- * peça achada a mais sempre esteve na caixa. O local é o location_id como
+ * caixa vale o dia que o FIFO já dá ao conteúdo da caixa (a peça achada a
+ * mais sempre esteve nela): o da sessão na caixa da abertura, o da guarda
+ * (fifo_day) na do recebimento. O local é o location_id como
  * o alocador o compara, só sem o espaço das pontas (chaveDoLocal).
  *
  * A ordem do pedido: primeiro o local com data livre, do dia livre mais antigo
@@ -216,9 +217,12 @@ export function skusQuePrecisamDasDatas(itens: readonly ItemDoPedido[], saldosPo
  * do created_at em São Paulo; a ENTRADA da abertura do cliente (com o
  * opening_inventory_session_id da sessão) vale o dia do started_at dela, e,
  * sem started_at válido, o do created_at. A ENTRADA da recontagem da caixa
- * (contagem por caixa) leva o dia da caixa em fifo_day ("AAAA-MM-DD"), que o
- * servidor grava; o fifo_day que não é dia de calendário cai no created_at.
- * O que não é ENTRADA, ou não tem local ou quantidade, fica de fora.
+ * (contagem por caixa) vale o dia do conteúdo da caixa: na caixa da abertura,
+ * o movimento leva a sessão dela (fifo_opening_session_id) e vale o dia da
+ * sessão, como o conteúdo de entrada; nas outras, o dia da guarda, que o
+ * servidor grava em fifo_day ("AAAA-MM-DD"). Sem a sessão lida, vale o
+ * fifo_day; o fifo_day que não é dia de calendário cai no created_at. O que
+ * não é ENTRADA, ou não tem local ou quantidade, fica de fora.
  */
 export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertura = {}): Map<string, Entrada[]> {
   const sessao = texto(abertura?.id);
@@ -231,13 +235,27 @@ export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertu
     const local = chaveDoLocal(movimento.location_id);
     const pecas = quantidade(movimento.quantity ?? movimento.qtde);
     if (!local || pecas <= 0) continue;
-    const daAbertura = diaDaAbertura !== null && texto(movimento.opening_inventory_session_id) === sessao;
+    const daAbertura =
+      diaDaAbertura !== null && (texto(movimento.opening_inventory_session_id) === sessao || texto(movimento.fifo_opening_session_id) === sessao);
     const diaDaCaixa = typeof movimento.fifo_day === "string" ? diaValido(movimento.fifo_day.trim()) : null;
     const doLocal = porLocal.get(local) ?? [];
     doLocal.push({ dia: daAbertura ? diaDaAbertura : diaDaCaixa ?? diaDeSaoPaulo(movimento.created_at), quantidade: pecas });
     porLocal.set(local, doLocal);
   }
   return porLocal;
+}
+
+/**
+ * A ENTRADA que vale o dia da sessão de abertura: a da contagem de abertura
+ * e a da recontagem numa caixa da abertura. Quem lê o razão só lê a sessão
+ * quando alguma ENTRADA precisa dela.
+ */
+export function precisaDaAbertura(movimentos: readonly unknown[]): boolean {
+  return lista(movimentos).some((valor) => {
+    if (!valor || typeof valor !== "object") return false;
+    const movimento = valor as Record<string, unknown>;
+    return Boolean(texto(movimento.opening_inventory_session_id) || texto(movimento.fifo_opening_session_id));
+  });
 }
 
 function tirarDasMaisAntigas(fisicas: readonly DataDoSaldo[], reservado: number): DataDoSaldo[] {

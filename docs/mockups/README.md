@@ -749,7 +749,12 @@ folha e o relatório entram antes da bancada; o ajuste acima do limite grava
 na hora e vai para a revisão do admin, sem ficar pendente; e a peça fora da
 lista entra sempre (movida de outra caixa da prateleira quando o SKU tem
 saldo nela, ou como entrada na prateleira, com a origem dita, quando não
-tem).
+tem). Refinado nas respostas ao PR 618 (17/11/2026): a peça fora da lista
+consome primeiro o saldo da prateleira que nenhuma caixa cobre, depois as
+outras caixas da prateleira, e só o resto entra como entrada; a data FIFO
+da peça a mais é a que o FIFO já dá ao conteúdo da caixa. A prancha
+`WmsContagemPrateleira.dc.html` ("entrada em A-03" para a GG que outras
+caixas da A-03 têm) muda no PR da tela.
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|

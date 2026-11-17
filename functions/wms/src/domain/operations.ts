@@ -45,6 +45,7 @@ import {
   datasLivresPorLocal,
   entradasDoRazao,
   ordenarCandidatos,
+  precisaDaAbertura,
   skusQuePrecisamDasDatas,
   type Entrada,
 } from "./datas-do-saldo.js";
@@ -937,7 +938,8 @@ async function ledgerEntriesForOrder(
         .where("sku_code", "==", skuCode)
         .where("tipo_mov", "==", "ENTRADA"),
     );
-    const session = entries.some((row) => text(row.data.opening_inventory_session_id))
+    // A contagem de abertura e a recontagem numa caixa da abertura valem o dia da sessão.
+    const session = precisaDaAbertura(entries.map((row) => row.data))
       ? await (openingSession ??= transaction
           .get(sessionRef)
           .then((snapshot) => snapshot.data()))

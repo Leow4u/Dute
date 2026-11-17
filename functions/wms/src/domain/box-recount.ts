@@ -52,15 +52,19 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  *   da contagem cíclica (`functions_cycle_count`: fora da cobrança e do
  *   relógio dos parados), a projeção do portal, um `cycle_counts` por item
  *   e os agregados do catálogo. Nunca grava preço (o custo não entra).
- * - O item fora da lista sai antes das outras caixas guardadas da mesma
- *   prateleira que o têm, da mais antiga para a mais nova (um ajuste em cada
- *   uma, e o saldo da prateleira não muda); a caixa já recontada na mesma
- *   rodada não cede peça. O que as outras caixas não cobrem entra na
- *   prateleira, com a origem no evento. O item tem de estar no cadastro do
- *   cliente: o arquivado volta a ativo, como a abertura faz; produto novo
- *   nasce no Receber.
- * - A ENTRADA da contagem vale o dia da caixa (`fifo_day`, o do stored_at):
- *   a peça achada a mais sempre esteve na caixa (decisão de 17/11/2026).
+ * - O item fora da lista (decisões de 17/11/2026) consome, nesta ordem: o
+ *   saldo do item na prateleira que nenhuma caixa guardada cobre (o "sem
+ *   caixa" do relatório Caixas × saldo), sem mexer no saldo da prateleira;
+ *   as outras caixas guardadas da prateleira que o têm, da mais antiga para
+ *   a mais nova (um ajuste em cada uma, e o saldo da prateleira não muda; a
+ *   caixa já recontada na mesma rodada não cede peça); e só o resto entra
+ *   na prateleira. A resposta diz a origem de cada peça, com a quantidade.
+ *   O item tem de estar no cadastro do cliente: o arquivado volta a ativo,
+ *   como a abertura faz; produto novo nasce no Receber.
+ * - A ENTRADA da contagem vale o dia que o FIFO já dá ao conteúdo da caixa
+ *   (a peça achada a mais sempre esteve nela): na caixa da abertura, o dia
+ *   da sessão (o movimento leva `fifo_opening_session_id`); nas outras, o
+ *   do stored_at (`fifo_day`). A conta é a de datas-do-saldo.ts.
  * - Contado zero em tudo deixa a caixa vazia (`emptied`), com o evento
  *   `warehouse.box_emptied`, como a separação faz.
  * - Um evento por caixa recontada (`inventory.box_recounted`), com a caixa e
@@ -284,10 +288,21 @@ type PlanoDoItem = {
   ajusteNaCaixa: number;
   /** Do item fora da lista: de quais caixas da prateleira as peças saíram. */
   movidas: Array<{ box_code: string; qty: number }>;
+  /** Do item fora da lista: de onde veio cada peça, com a quantidade (o saldo solto, as caixas, a entrada nova). */
+  origens: OrigemDaPeca[];
+  /** Do item fora da lista: o que veio do saldo da prateleira que nenhuma caixa cobria. */
+  doSolto: number;
   /** O que o saldo da prateleira ganha ou perde. */
   naPrateleira: number;
   nome: NomeDoItem;
 };
+
+/**
+ * De onde veio a peça fora da lista: o saldo da prateleira que nenhuma caixa
+ * cobria (`loose`), outra caixa da prateleira (`box`) ou a entrada nova na
+ * prateleira (`entry`).
+ */
+export type OrigemDaPeca = { kind: "loose"; qty: number } | { kind: "box"; box_code: string; qty: number } | { kind: "entry"; qty: number };
 
 /** O cadastro do item fora da lista: tem de existir e ser do cliente; o arquivado volta a ativo. */
 type CadastroDoItem = { skuRef: DocumentReference<DocumentData>; sku: Data; productRef?: DocumentReference<DocumentData>; product?: Data; alvo: CatalogAggregateTarget };
@@ -537,16 +552,36 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
       nomes.set(linha.sku_code, nomeDe(cadastro.sku));
     }
 
-    // As outras caixas guardadas da prateleira, para o fora da lista: a recontada na mesma rodada não cede peça.
-    const outras = caixasDaPrateleira.filter(
-      (row) => row.id !== boxCode && text(row.data.status) === BOX_STATUS_STORED && !(roundId && text(row.data.last_recount_round_id) === roundId),
-    );
+    // As outras caixas guardadas da prateleira, para o fora da lista: todas cobrem o saldo do item; a recontada
+    // na mesma rodada não cede peça.
+    const guardadas = caixasDaPrateleira.filter((row) => row.id !== boxCode && text(row.data.status) === BOX_STATUS_STORED);
+    const cedem = guardadas.filter((row) => !(roundId && text(row.data.last_recount_round_id) === roundId));
     const daAberturaPorCaixa = new Map<string, Row[]>();
     for (const row of linhasDaPrateleira) {
       const codigo = chave(row.data.box_code);
       if (codigo) daAberturaPorCaixa.set(codigo, [...(daAberturaPorCaixa.get(codigo) ?? []), row]);
     }
+    /** As caixas, como a separação as lê (box-balance.ts), com a entrada do item em cada uma. */
+    const prateleiraDoItem = (rows: Row[], sku: string) => ({
+      porCodigo: new Map(rows.map((row) => [chave(row.data.code) || row.id, row] as const)),
+      entradaDoItem: new Map(
+        rows.map((row) => {
+          const codigo = chave(row.data.code) || row.id;
+          const doItem = entradaDaCaixa(row.data, daAberturaPorCaixa.get(codigo) ?? []).filter((entrou) => entrou.sku_code === sku);
+          return [codigo, doItem.reduce((soma, entrou) => soma + entrou.qty, 0)] as const;
+        }),
+      ),
+    });
     const movidasDe = new Map<string, { row: Row; entradas: Data[] }>();
+    const saldos = new Map<string, { rows: Row[]; todos: Row[] }>();
+    const lerOSaldo = async (sku: string) => {
+      const lido = saldos.get(sku) ?? (await lerSaldo(transaction, db, customerCode, sku, locationId));
+      if (lido.rows.length > 1) {
+        recusa("failed-precondition", `Mais de um saldo existe para SKU ${sku} no local ${locationId}.`, "BOX_RECOUNT_DUPLICATED_BALANCE", { sku_code: sku });
+      }
+      saldos.set(sku, lido);
+      return lido;
+    };
 
     const planos: PlanoDoItem[] = [];
     for (const linha of lines) {
@@ -560,34 +595,41 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
         diferenca,
         ajusteNaCaixa: ajusteParaOContado(entrada, retirado, ajustes, linha.sku_code, linha.counted_qty),
         movidas: [],
+        origens: [],
+        doSolto: 0,
         naPrateleira: diferenca,
         nome: nomes.get(linha.sku_code) ?? {},
       });
     }
     for (const linha of extra) {
       const sku = linha.sku_code;
-      const prateleira = {
-        porCodigo: new Map(outras.map((row) => [chave(row.data.code) || row.id, row] as const)),
-        entradaDoItem: new Map(
-          outras.map((row) => {
-            const codigo = chave(row.data.code) || row.id;
-            const doItem = entradaDaCaixa(row.data, daAberturaPorCaixa.get(codigo) ?? []).filter((entrou) => entrou.sku_code === sku);
-            return [codigo, doItem.reduce((soma, entrou) => soma + entrou.qty, 0)] as const;
-          }),
-        ),
-      };
       let falta = linha.counted_qty;
+      const origens: OrigemDaPeca[] = [];
+      // (a) O saldo do item na prateleira que nenhuma caixa guardada cobre: a peça é dele, e a prateleira não muda.
+      const lido = await lerOSaldo(sku);
+      const cobertas = caixasComOItem(prateleiraDoItem(guardadas, sku), new Map(), sku).reduce((soma, caixa) => soma + caixa.disponivel, 0);
+      const solto = Math.max(0, number(lido.rows[0]?.data.qty_on_hand) - cobertas);
+      const doSolto = Math.min(falta, solto);
+      if (doSolto > 0) {
+        origens.push({ kind: "loose", qty: doSolto });
+        falta -= doSolto;
+      }
+      // (b) As outras caixas da prateleira, da mais antiga para a mais nova: a prateleira não muda.
+      const prateleira = prateleiraDoItem(cedem, sku);
       const movidas: Array<{ box_code: string; qty: number }> = [];
       for (const candidata of ordemDeSaida(caixasComOItem(prateleira, new Map(), sku))) {
         if (falta <= 0) break;
         const qty = Math.min(falta, candidata.disponivel);
         if (qty <= 0) continue;
         movidas.push({ box_code: candidata.code, qty });
+        origens.push({ kind: "box", box_code: candidata.code, qty });
         falta -= qty;
         const fonte = movidasDe.get(candidata.code) ?? { row: prateleira.porCodigo.get(candidata.code)!, entradas: [] };
         fonte.entradas.push(clean({ recount_id: recountId, sku_code: sku, qty: -qty, moved_to: boxCode, at: occurredAt, round_id: roundId }));
         movidasDe.set(candidata.code, fonte);
       }
+      // (c) Só o resto entra na prateleira.
+      if (falta > 0) origens.push({ kind: "entry", qty: falta });
       planos.push({
         sku,
         foraDaLista: true,
@@ -596,19 +638,16 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
         diferenca: linha.counted_qty,
         ajusteNaCaixa: ajusteParaOContado(entrada, retirado, ajustes, sku, linha.counted_qty),
         movidas,
+        origens,
+        doSolto,
         naPrateleira: falta,
         nome: nomes.get(sku) ?? {},
       });
     }
 
     // O saldo da prateleira de cada item contado, e as travas da reserva e da separação.
-    const saldos = new Map<string, { rows: Row[]; todos: Row[] }>();
     for (const plano of planos) {
-      const lido = await lerSaldo(transaction, db, customerCode, plano.sku, locationId);
-      if (lido.rows.length > 1) {
-        recusa("failed-precondition", `Mais de um saldo existe para SKU ${plano.sku} no local ${locationId}.`, "BOX_RECOUNT_DUPLICATED_BALANCE", { sku_code: plano.sku });
-      }
-      saldos.set(plano.sku, lido);
+      const lido = await lerOSaldo(plano.sku);
       const saldo = lido.rows[0]?.data ?? {};
       const antes = number(saldo.qty_on_hand);
       const reservado = number(saldo.qty_reserved);
@@ -619,7 +658,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
       if (depois < 0) {
         recusa(
           "failed-precondition",
-          `A prateleira ${locationId} tem ${unidades.format(antes)} un. de ${nome} no saldo, e a caixa ${boxCode} esperava ${unidades.format(plano.esperado)}: as caixas dizem mais do que a prateleira. Acerte a prateleira antes de recontar a caixa.`,
+          `A prateleira ${locationId} tem ${unidades.format(antes)} un. de ${nome} no saldo, e a caixa ${boxCode} esperava ${unidades.format(plano.esperado)}: as caixas dizem mais do que a prateleira. A prateleira precisa do acerto antes da recontagem: veja a diferença no relatório "Caixas × saldo", na Contagem.`,
           "BOX_RECOUNT_SHELF_SHORT",
           { sku_code: plano.sku, shelf_qty: antes, box_expected: plano.esperado },
         );
@@ -648,7 +687,10 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
     }
 
     // ------------------------------------------------------------ escritas
+    // O dia que o FIFO dá ao conteúdo da caixa: o da sessão na caixa da abertura (datas-do-saldo.ts), o da guarda nas outras.
     const diaDaCaixa = diaDeSaoPaulo(text(box.stored_at));
+    const origemDaCaixa = box.origin && typeof box.origin === "object" ? (box.origin as Data) : {};
+    const sessaoDaCaixa = text(origemDaCaixa.kind) === "opening_inventory" ? text(origemDaCaixa.session_id) : "";
     const by = actorFields(actor);
     const cycleCountIds: string[] = [];
     const movementIds: string[] = [];
@@ -715,8 +757,9 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
               box_recount_id: recountId,
               round_id: roundId,
               movement_kind: plano.foraDaLista ? "box_recount_out_of_list" : "box_recount",
-              // A peça achada a mais vale a data da caixa no FIFO (datas-do-saldo.ts).
+              // A peça achada a mais vale no FIFO o dia do conteúdo da caixa (datas-do-saldo.ts).
               fifo_day: tipo === "ENTRADA" ? diaDaCaixa ?? undefined : undefined,
+              fifo_opening_session_id: tipo === "ENTRADA" && sessaoDaCaixa ? sessaoDaCaixa : undefined,
               operational_operation_id: operationId,
             }),
           },
@@ -754,12 +797,12 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
           adjustment_delta: plano.diferenca,
           adjustment_qty: Math.abs(plano.diferenca),
           adjustment_type: plano.diferenca === 0 ? "SEM_DIVERGENCIA" : plano.diferenca > 0 ? "ENTRADA" : "SAIDA",
-          // Na prateleira: o saldo antes e depois, e de quais caixas veio o fora da lista.
+          // Na prateleira: o saldo antes e depois, e de onde veio cada peça do fora da lista.
           shelf_qty_before: antes,
           shelf_qty_after: depois,
           shelf_delta: plano.naPrateleira,
           qty_reserved: reservado,
-          moved_from: plano.movidas.length ? plano.movidas : undefined,
+          origins: plano.origens.length ? plano.origens : undefined,
           reason,
           reference,
           movement_id: movimento,
@@ -781,7 +824,8 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
           counted: plano.contado,
           difference: plano.diferenca,
           shelf_delta: plano.naPrateleira,
-          moved_from: plano.movidas.length ? plano.movidas : undefined,
+          // De onde veio cada peça do fora da lista: o saldo solto, as caixas, a entrada nova.
+          origins: plano.origens.length ? plano.origens : undefined,
           cycle_count_id: cycleCountId,
           movement_id: movimento,
         }),
@@ -812,6 +856,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
           round_id: roundId,
           // O item fora da lista leva o nome: a etiqueta e o Mapa não o acham na entrada da caixa.
           ...(plano.foraDaLista ? plano.nome : {}),
+          from_loose: plano.doSolto || undefined,
           moved_from: plano.movidas.length ? plano.movidas : undefined,
         }),
       );

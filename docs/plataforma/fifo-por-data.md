@@ -71,10 +71,13 @@ só lê e nunca dá erro.
   digitar, não conta.
 - O estoque da contagem de abertura vale um dia só por cliente: o
   `started_at` da sessão `opening_<cliente>` (pergunta 1).
-- A peça achada a mais na recontagem da caixa vale o dia da caixa, não o da
-  contagem: o movimento grava `fifo_day` (o dia do `stored_at` da caixa) e a
-  conta usa esse dia (decisão do Leonardo de 17/11/2026,
-  `docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6, item 4).
+- A peça achada a mais na recontagem da caixa vale o dia que esta conta já
+  dá ao conteúdo da caixa, não o da contagem, para não abrir data nova no
+  portal: na caixa da abertura, o dia da sessão (o movimento leva
+  `fifo_opening_session_id`, e quem lê o razão lê a sessão também por ele);
+  nas outras, o dia do `stored_at`, gravado em `fifo_day` (decisões do
+  Leonardo de 17/11/2026, `docs/plataforma/diagnostico-contagem-ciclica.md`,
+  seções 6, item 4, e 7).
 - O que as entradas não cobrirem fica "sem data", e o total sempre fecha com
   o saldo.
 - O local é o `location_id` como o alocador o compara, só sem o espaço das

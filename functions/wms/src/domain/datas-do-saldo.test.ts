@@ -13,6 +13,7 @@ import {
   diaLivreMaisAntigo,
   entradasDoRazao,
   ordenarCandidatos,
+  precisaDaAbertura,
   precisaDasDatas,
   skusQuePrecisamDasDatas,
   type Abertura,
@@ -144,6 +145,14 @@ describe("datas do saldo: o instante do Firestore e o que não é data", () => {
   });
 });
 
+describe("a sessão de abertura no razão", () => {
+  it("só se lê quando alguma ENTRADA vale o dia dela: a da abertura e a da recontagem numa caixa da abertura", () => {
+    assert.equal(precisaDaAbertura([{ tipo_mov: "ENTRADA", opening_inventory_session_id: "opening_BTG_Pactual" }]), true);
+    assert.equal(precisaDaAbertura([{ tipo_mov: "ENTRADA", fifo_day: "2026-10-20", fifo_opening_session_id: "opening_BTG_Pactual" }]), true);
+    assert.equal(precisaDaAbertura([{ tipo_mov: "ENTRADA", fifo_day: "2026-11-06" }, null, "ENTRADA", { opening_inventory_session_id: " " }]), false);
+  });
+});
+
 describe("datas do saldo: nunca lança erro", () => {
   it("entradas, saldos, candidatos e movimentos estranhos dão um resultado vazio ou sem data", () => {
     const estranho = null as unknown as never;
@@ -157,6 +166,7 @@ describe("datas do saldo: nunca lança erro", () => {
     assert.deepEqual(ordenarCandidatos([null, { location_id: 7 }, {}], {}), [null, {}, { location_id: 7 }]);
     assert.deepEqual([...datasLivresPorLocal(estranho, estranho)], []);
     assert.deepEqual([...entradasDoRazao(estranho, estranho)], []);
+    assert.equal(precisaDaAbertura(estranho), false);
     assert.equal(precisaDasDatas(estranho), false);
     assert.deepEqual(skusQuePrecisamDasDatas(estranho, estranho), []);
     assert.deepEqual(skusQuePrecisamDasDatas([null, 5, { sku_code: {} }, { sku_code: "S" }] as never, { S: null, X: 5 } as never), []);

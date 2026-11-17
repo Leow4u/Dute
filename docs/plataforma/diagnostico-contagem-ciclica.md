@@ -856,19 +856,26 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    caixa e o saldo da prateleira antes e depois), o recibo e um evento por
    caixa (`inventory.box_recounted`, `attention` só com diferença, a caixa e
    a prateleira só no payload, rascunho de aviso interno). O item fora da
-   lista sai antes das outras caixas guardadas da prateleira que o têm, da
-   mais antiga para a mais nova (o saldo da prateleira não muda; a caixa já
-   recontada na mesma rodada não cede peça); o resto entra na prateleira,
-   com a origem no evento; o SKU arquivado do cliente volta a ativo e o que
-   não está no cadastro é recusado (produto novo nasce no Receber). Contado
-   zero em tudo deixa a caixa `emptied`, com `warehouse.box_emptied`. A
-   ENTRADA da contagem vale o dia da caixa (`fifo_day`, o do `stored_at`),
-   que `entradasDoRazao` usa. As recusas da cíclica continuam (estoque
+   lista consome primeiro o saldo da prateleira que nenhuma caixa cobre,
+   depois as outras caixas guardadas da prateleira que o têm, da mais antiga
+   para a mais nova (o saldo da prateleira não muda; a caixa já recontada na
+   mesma rodada não cede peça), e só o resto entra na prateleira; a resposta
+   diz a origem de cada peça (`origins`: `loose`, `box`, `entry`, com a
+   quantidade); o SKU arquivado do cliente volta a ativo e o que não está no
+   cadastro é recusado (produto novo nasce no Receber). Contado zero em tudo
+   deixa a caixa `emptied`, com `warehouse.box_emptied`; a caixa que cede a
+   última peça fica guardada com saldo zero. A ENTRADA da contagem vale o dia
+   que o FIFO já dá ao conteúdo da caixa: na da abertura, o da sessão (o
+   movimento leva `fifo_opening_session_id`); nas outras, o do `stored_at`
+   (`fifo_day`); `entradasDoRazao` faz a conta, e o pedido e as datas do
+   portal leem a sessão também por esse campo. As recusas da cíclica continuam (estoque
    congelado, prateleira fora do cadastro, abaixo da reserva, separado
    esperando a entrega, linha já separada) e entram as da prateleira com
    guarda aberta chegando ou saindo ou com caixa a caminho (G01 a G03), da
    caixa que não está guardada nela, da lista que mudou desde a tela e da
-   prateleira com menos saldo do que as caixas dizem. A régua
+   prateleira com menos saldo do que as caixas dizem (a frase manda ao
+   acerto pelo "Caixas × saldo"). As sete perguntas do PR foram decididas
+   pelo Leonardo em 17/11/2026 (seção 7). A régua
    `billing-callables` roda uma recontagem de verdade: não cobra. Ficam: a
    tela (a rodada, a bancada e o celular), a coleção da rodada, a fila de
    revisão do admin, "Cadastrar caixa" (a caixa física sem registro), o
@@ -938,6 +945,24 @@ da mesma prateleira, a tela move entre caixas e o saldo da prateleira não
 muda; sem saldo em caixa nenhuma da prateleira, a tela cria o saldo ali, com
 a origem dita ("entrada em A-03"), e a prateleira onde a peça estava
 registrada se acerta quando for contada.
+
+*Refinado pelo Leonardo em 17/11/2026, nas respostas às perguntas do PR 618:*
+a peça fora da lista consome, nesta ordem, (a) o saldo do SKU na prateleira
+que nenhuma caixa guardada cobre (o saldo da prateleira menos a soma das
+caixas guardadas dela para o SKU, quando positivo), sem mexer no saldo da
+prateleira; (b) as outras caixas guardadas da prateleira, da mais antiga para
+a mais nova, menos a já recontada na mesma rodada; (c) só o resto entra como
+entrada nova na prateleira, com a origem. O saldo solto é a diferença que o
+"Caixas × saldo" mostra, quase sempre registro sem peça própria: consumi-lo
+primeiro fecha a diferença, e tirar antes de outra caixa a manteria e
+deixaria aquela caixa com sobra falsa. A resposta da recontagem diz a origem
+de cada peça, com a quantidade. A data FIFO da peça achada a mais é a que o
+FIFO já dá ao conteúdo da caixa: o dia da sessão na caixa da abertura, o da
+guarda na do recebimento (a peça a mais não abre data nova no portal). A
+caixa que cede a última peça fica guardada com saldo zero até alguém contá-la
+vazia; as travas da separação continuam na recontagem por caixa; e a falta
+que deixaria a prateleira negativa é recusada, com a prateleira mandada ao
+acerto pelo "Caixas × saldo".
 
 ## 8. Como este levantamento foi feito
 
