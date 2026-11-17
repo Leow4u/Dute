@@ -260,6 +260,13 @@ depois. Se o CI do HEAD ainda não está verde, nada sobe nessa execução; a
 publicação fica para o `workflow_run` do HEAD. CI vermelho não dispara
 publicação, e a homologação fica no último commit publicado.
 
+O commit que só muda documentação (`docs/**` e `**/*.md`) não tem CI, pelo
+`paths-ignore` do `ci.yml`. Quando ele é o HEAD, a homologação que o CI verde do
+commit de código anterior dispara publica o HEAD, que tem o mesmo código
+(`tools/esperar_ci.py --sha`, desde 17/11/2026). Antes, o merge do PR 621, só do
+diagnóstico, virou o HEAD logo depois do PR 620, e a homologação do 620 saiu sem
+publicar.
+
 Até 22/10/2026 a fila da homologação era do job do `ci.yml`, que só entrava nela
 quando os testes acabavam. Os testes terminam fora de ordem (a instalação do
 Chromium leva de 20 s a 12 min), e o GitHub mantém o último a chegar, não o
