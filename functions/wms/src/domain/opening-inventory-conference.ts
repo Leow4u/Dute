@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { FieldValue, type Firestore, type Transaction, type DocumentReference } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
-import { CycleCountSchema } from "./cycle-count-input.js";
+import { CycleCountFieldsSchema } from "./cycle-count-input.js";
 import {
   assertBarcodeAvailable, catalogSkuCode, clientCodeRelease, clientCodeStillHasStockMessage,
   normalizeBarcode, readCatalogQuantities, readCustomerSkuPrefix,
@@ -32,7 +32,7 @@ export const CreateOpeningConferenceBoxSchema = z.object({
   customer_code: baseFields.customer_code, session_id: identity, idempotency_key: identity,
 });
 export const GetOpeningConferenceBoxSchema = z.object(baseFields);
-export const SaveOpeningConferenceLineSchema = CycleCountSchema.omit({
+export const SaveOpeningConferenceLineSchema = CycleCountFieldsSchema.omit({
   mode: true, location_id: true, occurred_at: true,
 }).extend({
   ...mutationFields, line_id: identity.optional(), counted_qty: z.number().finite().positive(),

@@ -128,7 +128,7 @@ import {
   rememberCatalogPrice,
   splitCatalogPriceBatch,
 } from "./domain/catalog-prices.js";
-import { CycleCountSchema } from "./domain/cycle-count-input.js";
+import { CycleCountSchema, problemaDaEntradaDaContagem } from "./domain/cycle-count-input.js";
 import {
   createOpeningConferenceBox as createOpeningConferenceBoxFor,
   getOpeningConferenceBox as getOpeningConferenceBoxFor,
@@ -6929,7 +6929,11 @@ export const manageCatalogPhotos = onCall(async (request) => {
 export const recordCycleCount = onCall(async (request) => {
   const profile = await getProfile(request);
   requireWarehouseWrite(profile);
-  const input = CycleCountSchema.parse(request.data ?? {});
+  // A entrada fora do formato recusa com a frase para quem opera (a quantidade
+  // diz o que corrigir); o ZodError cru viraria INTERNAL.
+  const parsed = CycleCountSchema.safeParse(request.data ?? {});
+  if (!parsed.success) throw new HttpsError("invalid-argument", problemaDaEntradaDaContagem(parsed.error));
+  const input = parsed.data;
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return recordCycleCountTransaction(
     db,

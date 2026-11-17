@@ -1751,6 +1751,51 @@ describe("ledger manual e congelamento", () => {
     assert.equal(events.docs[0]?.data().payload?.location_id, "LOC-CYCLE");
   });
 
+  it("a contagem cíclica recusa a quantidade fracionada e a acima do teto antes de ler o estoque", async () => {
+    await clearFirestore();
+    await db.collection("stock_balances").doc("cycle-balance").set({
+      id: "cycle-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      client_item_code: "ITEM-CYCLE-1",
+      product_name: "Produto de teste inventário cíclico",
+      location_id: "LOC-CYCLE",
+      qty_on_hand: 10,
+      qty_reserved: 0,
+      qty_available: 10,
+    });
+    const contar = (counted_qty: number, idempotency_key: string) =>
+      recordCycleCountTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          sku_code: "BTG-CYCLE-1",
+          client_item_code: "ITEM-CYCLE-1",
+          location_id: "LOC-CYCLE",
+          counted_qty,
+          reason: "Contagem da prateleira",
+          idempotency_key,
+        },
+        actor,
+      );
+    await assert.rejects(contar(2.5, "cycle-fracao"), {
+      code: "invalid-argument",
+      message: "A quantidade contada precisa ser um número inteiro de unidades, sem casas decimais.",
+    });
+    await assert.rejects(contar(100_001, "cycle-teto"), {
+      code: "invalid-argument",
+      message: "A quantidade contada não pode passar de 100.000 unidades. Confira o número digitado.",
+    });
+    // Nada foi gravado: saldo, contagem, movimento, evento e recibo.
+    assert.equal((await db.collection("stock_balances").doc("cycle-balance").get()).get("qty_on_hand"), 10);
+    for (const colecao of ["cycle_counts", "movements", "events", "operational_operations"]) {
+      assert.equal((await db.collection(colecao).get()).size, 0, colecao);
+    }
+    // O teto, inteiro, passa.
+    const noTeto = await contar(100_000, "cycle-no-teto");
+    assert.equal(noTeto.adjustment_delta, 99_990);
+  });
+
   it("a contagem cíclica espera a entrega do que já foi separado na posição", async () => {
     await clearFirestore();
     // 10 no saldo, 3 separados para um pedido: na prateleira ficaram 7.

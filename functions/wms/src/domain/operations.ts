@@ -83,6 +83,7 @@ import {
   rememberCatalogPrice,
   unitPriceOf,
 } from "./catalog-prices.js";
+import { problemaDaQuantidadeContada } from "./cycle-count-input.js";
 import {
   FieldValue,
   type DocumentData,
@@ -1973,6 +1974,12 @@ export async function recordCycleCountTransaction(
       "invalid-argument",
       "A contagem física não pode ser negativa.",
     );
+  }
+  // A contagem cíclica é de unidades inteiras e tem teto (diagnóstico da
+  // Contagem cíclica, F11); a abertura não muda aqui.
+  const problemaDaQuantidade = problemaDaQuantidadeContada(mode, countedQty);
+  if (problemaDaQuantidade) {
+    throw new HttpsError("invalid-argument", problemaDaQuantidade);
   }
 
   const sessionId =
