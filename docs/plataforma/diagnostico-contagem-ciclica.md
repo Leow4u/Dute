@@ -839,7 +839,9 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    folha com o Caixas × saldo leem os ajustes pela mesma regra. Na folha, o
    achado a mais soma em "entrou" e o a menos em "saiu", sem coluna nova; a
    caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
-   acerto passaram a ler os ajustes no PR 619 (abaixo).
+   acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
+   leem os ajustes pela mesma regra desde o PR 619, de 17/11/2026 (abaixo e
+   na tabela da seção 5.4).
 
    *O servidor no código desde 17/11/2026 (PR 618, sem tela):* a callable
    `recountWarehouseBox` (`functions/wms/src/domain/box-recount.ts`), de
@@ -894,8 +896,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    na caixa inteira com ajuste, e a caixa que a recontagem esvaziou fica
    `emptied` no registro. Nenhuma ferramenta apaga um ajuste. Achado na
    revisão: desfazer a separação numa caixa recontada apagava o `balance_at`
-   dela no WMS, e a caixa voltava para "Etiquetas para trocar"; a correção
-   está no PR 620.
+   dela no WMS, e a caixa voltava para "Etiquetas para trocar"; corrigido no
+   PR 620.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais

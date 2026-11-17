@@ -14,6 +14,7 @@ import {
   type OperationalActor,
 } from "./operations.js";
 import { billingMovementDirection } from "./billing-scope.js";
+import { etiquetaParaTrocar, recordBoxBalanceLabelPrint } from "./box-relabel.js";
 import { closeOrderVolume, completeOrderSeparation, setPickLineSeparated } from "./pick-progress.js";
 
 /**
@@ -852,6 +853,45 @@ describe("A caixa na separação (separação com caixas, parte 3b)", () => {
     ]);
     const guardadas = await caixas();
     assert.deepEqual([guardadas["CX-000004"]!.status, guardadas["CX-000004"]!.taken_units, guardadas["CX-000004"]!.emptied_whole], ["emptied", 4, true]);
+  });
+
+  it("a caixa recontada: desfazer a separação tira o retirado e deixa a hora do saldo, e a etiqueta da recontagem continua para trocar", async () => {
+    await prateleiras();
+    // A recontagem achou 5 polos na CX-000002 (entraram 4) e gravou a hora do saldo; a etiqueta com esse saldo ainda não saiu.
+    const ajuste = { recount_id: "brc_1", sku_code: POLO, qty: 1 };
+    await db.collection("warehouse_boxes").doc("CX-000002").update({ count_adjustments: [ajuste], balance_at: "2026-11-17T12:00:00.000Z" });
+    assert.equal(etiquetaParaTrocar((await caixas())["CX-000002"]!), true);
+    const { pickTaskId, linhaPolo } = await pedidoAprovado();
+    const polo = await separar(pickTaskId, linhaPolo);
+    assert.deepEqual(polo.boxes, [
+      { box_code: "CX-000001", qty: 3, whole: true },
+      { box_code: "CX-000002", qty: 2 },
+    ]);
+
+    await desfazer(pickTaskId, linhaPolo);
+    const [desfeita] = await eventos("picking.line_unseparated");
+    let guardadas = await caixas();
+    // O retirado sai e o ajuste fica, com a hora do saldo do desfazer. Antes, a hora saía junto com o retirado.
+    assert.deepEqual(
+      [guardadas["CX-000002"]!.taken_lines, guardadas["CX-000002"]!.taken_units, guardadas["CX-000002"]!.count_adjustments, guardadas["CX-000002"]!.balance_at],
+      [undefined, undefined, [ajuste], desfeita!.occurred_at],
+    );
+    // Sem a hora, a caixa recontada saía de "Etiquetas para trocar" com a etiqueta de entrada ainda nela.
+    assert.equal(etiquetaParaTrocar(guardadas["CX-000002"]!), true);
+    // A caixa sem ajuste volta a ser a de entrada, como sempre.
+    assert.deepEqual(
+      [guardadas["CX-000001"]!.status, guardadas["CX-000001"]!.taken_units, guardadas["CX-000001"]!.balance_at, etiquetaParaTrocar(guardadas["CX-000001"]!)],
+      ["stored", undefined, undefined, false],
+    );
+
+    // A etiqueta impressa agora sai com o saldo e a hora do desfazer, e a caixa sai da lista.
+    const impressa = (await recordBoxBalanceLabelPrint(db, { box_codes: ["CX-000002"], idempotency_key: chave("etiqueta") }, guilherme)) as Record<string, unknown>;
+    assert.deepEqual(impressa.printed, ["CX-000002"]);
+    guardadas = await caixas();
+    assert.equal(guardadas["CX-000002"]!.balance_label_printed_for, desfeita!.occurred_at);
+    assert.equal(etiquetaParaTrocar(guardadas["CX-000002"]!), false);
+    const [registro] = await eventos("warehouse.box_balance_label_printed");
+    assert.deepEqual([registro!.payload.balance_units, registro!.payload.balance_at], [11, desfeita!.occurred_at]);
   });
 });
 
