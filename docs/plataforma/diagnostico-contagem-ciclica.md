@@ -840,7 +840,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    achado a mais soma em "entrou" e o a menos em "saiu", sem coluna nova; a
    caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
    acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
-   ainda não leem `count_adjustments`.
+   leem os ajustes pela mesma regra desde o PR 619, de 17/11/2026 (tabela da
+   seção 5.4).
 
    *O servidor no código desde 17/11/2026 (PR 618, sem tela):* a callable
    `recountWarehouseBox` (`functions/wms/src/domain/box-recount.ts`), de
