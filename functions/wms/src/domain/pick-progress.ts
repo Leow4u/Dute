@@ -855,14 +855,23 @@ export async function setPickLineSeparated(db: Firestore, raw: unknown, actor: O
       for (const [codigo, box] of tocadas) {
         const retirado = retirados.get(codigo) ?? [];
         const tirou = unidadesDaCaixa(retirado);
+        const ajustes = ajustesDaCaixa(box.data);
         // A entrada mais o que as recontagens acertaram (saldo-da-caixa.ts): a caixa esvazia quando a separação tira o que sobra.
-        const saldoDaCaixaAgora = quantity(box.data.unit_count) + unidadesAjustadas(ajustesDaCaixa(box.data)) - tirou;
+        const saldoDaCaixaAgora = quantity(box.data.unit_count) + unidadesAjustadas(ajustes) - tirou;
         const estavaVazia = text(box.data.status) === BOX_STATUS_EMPTIED;
         const vazia = tirou > 0 && saldoDaCaixaAgora <= 0;
         const inteira = caixas.some((caixa) => caixa.box_code === codigo && caixa.inteira);
+        // Sem retirado, a caixa recontada não volta a ser a de entrada: continua
+        // aberta (box-relabel.ts), e a hora do saldo fica, com a desta mudança,
+        // porque a "etiqueta para trocar" a compara com a da etiqueta impressa.
         const update: Row = retirado.length
           ? { taken_lines: retirado, taken_units: tirou, balance_at: occurredAt, updated_at: FieldValue.serverTimestamp() }
-          : { taken_lines: FieldValue.delete(), taken_units: FieldValue.delete(), balance_at: FieldValue.delete(), updated_at: FieldValue.serverTimestamp() };
+          : {
+              taken_lines: FieldValue.delete(),
+              taken_units: FieldValue.delete(),
+              balance_at: ajustes.length ? occurredAt : FieldValue.delete(),
+              updated_at: FieldValue.serverTimestamp(),
+            };
         if (vazia && !estavaVazia) {
           // A caixa levada como volume ("Levar a caixa") diz qual volume ela é.
           const doVolume = volumesDepois.volumes.find((volume) => volume.box_code === codigo);

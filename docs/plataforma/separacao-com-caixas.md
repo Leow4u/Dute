@@ -453,7 +453,11 @@ com a guarda de volta), as duas linhas na tabela de papéis
   seção 6, item 4), a recontagem também grava na caixa o que acertou
   (`count_adjustments`, com sinal e o id da contagem), e o saldo passa a ser
   a entrada menos o retirado mais os ajustes, pela mesma regra, para a
-  separação, a etiqueta, o Mapa, a folha e o "Caixas × saldo".
+  separação, a etiqueta, o Mapa, a folha e o "Caixas × saldo". A caixa
+  recontada continua aberta sem retirado: quando a separação devolve tudo o
+  que tirou dela (a linha desfeita, ou separada de outra caixa), saem o
+  `taken_lines` e o `taken_units`, e o `balance_at` fica, com a hora da
+  mudança, para a "etiqueta para trocar" e a data do saldo na etiqueta.
 - **A baixa na linha (3b).** `setPickLineSeparated` lê as caixas guardadas do
   cliente na prateleira da linha e baixa, na mesma transação, a mais antiga
   que tem o item (a data da guarda; no empate, o código); a seguinte completa,
