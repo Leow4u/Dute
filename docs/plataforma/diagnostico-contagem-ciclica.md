@@ -850,7 +850,9 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    da lista (`extra_lines`, 1 ou mais), o motivo (sem ele, "Recontagem por
    caixa"), a referência, a chave e o `round_id` opcional. O esperado é o
    saldo da caixa; a diferença de cada item acerta a caixa (um ajuste com o
-   id da contagem) e o saldo da prateleira, com o movimento
+   id da contagem) e o saldo da prateleira (a sobra consome antes o saldo
+   da prateleira que nenhuma caixa cobre, sem mexer nela, e só o resto sobe a
+   prateleira), com o movimento
    `functions_cycle_count`, a projeção do portal, os agregados do catálogo,
    um `cycle_counts` por item (`mode: "box"`, com o esperado e o contado na
    caixa e o saldo da prateleira antes e depois), o recibo e um evento por
@@ -860,8 +862,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    depois as outras caixas guardadas da prateleira que o têm, da mais antiga
    para a mais nova (o saldo da prateleira não muda; a caixa já recontada na
    mesma rodada não cede peça), e só o resto entra na prateleira; a resposta
-   diz a origem de cada peça (`origins`: `loose`, `box`, `entry`, com a
-   quantidade); o SKU arquivado do cliente volta a ativo e o que não está no
+   diz a origem de cada peça a mais, no fora da lista e na sobra (`origins`:
+   `loose`, `box`, `entry`, com a quantidade); o SKU arquivado do cliente volta a ativo e o que não está no
    cadastro é recusado (produto novo nasce no Receber). Contado zero em tudo
    deixa a caixa `emptied`, com `warehouse.box_emptied`; a caixa que cede a
    última peça fica guardada com saldo zero. A ENTRADA da contagem vale o dia
@@ -874,8 +876,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    guarda aberta chegando ou saindo ou com caixa a caminho (G01 a G03), da
    caixa que não está guardada nela, da lista que mudou desde a tela e da
    prateleira com menos saldo do que as caixas dizem (a frase manda ao
-   acerto pelo "Caixas × saldo"). As sete perguntas do PR foram decididas
-   pelo Leonardo em 17/11/2026 (seção 7). A régua
+   acerto pelo "Caixas × saldo"). As sete perguntas do PR e a pergunta nova
+   (a sobra) foram decididas pelo Leonardo em 17/11/2026 (seção 7). A régua
    `billing-callables` roda uma recontagem de verdade: não cobra. Ficam: a
    tela (a rodada, a bancada e o celular), a coleção da rodada, a fila de
    revisão do admin, "Cadastrar caixa" (a caixa física sem registro), o
@@ -955,8 +957,15 @@ a mais nova, menos a já recontada na mesma rodada; (c) só o resto entra como
 entrada nova na prateleira, com a origem. O saldo solto é a diferença que o
 "Caixas × saldo" mostra, quase sempre registro sem peça própria: consumi-lo
 primeiro fecha a diferença, e tirar antes de outra caixa a manteria e
-deixaria aquela caixa com sobra falsa. A resposta da recontagem diz a origem
-de cada peça, com a quantidade. A data FIFO da peça achada a mais é a que o
+deixaria aquela caixa com sobra falsa. A sobra num item que a caixa já lista
+(a contagem achou mais do que o esperado) também consome primeiro esse saldo
+solto, sem mexer no saldo da prateleira, e só o que passar dele sobe a
+prateleira; ela não tira de outras caixas, porque cada caixa que lista o item
+é contada por conta própria e a falta numa e a sobra noutra se compensam na
+prateleira (o saldo solto quase sempre é peça que alguém já pôs numa caixa, e
+subir a prateleira a contaria duas vezes; decidido em 17/11/2026, na
+pergunta nova do PR 618). A resposta da recontagem diz a origem de cada peça
+a mais, com a quantidade. A data FIFO da peça achada a mais é a que o
 FIFO já dá ao conteúdo da caixa: o dia da sessão na caixa da abertura, o da
 guarda na do recebimento (a peça a mais não abre data nova no portal). A
 caixa que cede a última peça fica guardada com saldo zero até alguém contá-la

@@ -392,6 +392,37 @@ describe("Recontar a caixa: a caixa e a prateleira na mesma transação", () => 
     assert.deepEqual([movimento!.tipo_mov, movimento!.quantity, movimento!.movement_kind], ["ENTRADA", 2, "box_recount_out_of_list"]);
   });
 
+  // Decisão de 17/11/2026 (pergunta nova do PR 618): a sobra num item da lista também consome antes o saldo solto.
+  it("a sobra num item da lista consome primeiro o saldo solto da prateleira, sem tirar de outras caixas; só o que passa dele sobe a prateleira", async () => {
+    // A A-03 tem 123 polos M no razão e 60 em cada caixa (CX-000011 e CX-000012): 3 sem caixa.
+    await db.collection("stock_balances").doc(`bal_${POLO_M}_A-03`).update({ qty_on_hand: 123, qty_available: 123 });
+    const primeira = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 62 }] });
+    // Antes, a sobra subia a prateleira para 125 e o "sem caixa" continuava: as 2 peças contavam duas vezes.
+    assert.deepEqual(primeira.lines[0]!.origins, [{ kind: "loose", qty: 2 }]);
+    assert.deepEqual([primeira.difference_units, primeira.shelf_delta_units, primeira.movement_ids], [2, 0, []]);
+    assert.equal((await saldo(POLO_M))[0]!.qty_on_hand, 123);
+    const [ajuste] = (await caixa("CX-000012")).count_adjustments as Array<Record<string, unknown>>;
+    assert.deepEqual([ajuste!.qty, ajuste!.from_loose], [2, 2]);
+    // A outra caixa que lista o item não cede nada: cada caixa é contada por conta própria.
+    assert.equal((await caixa("CX-000011")).count_adjustments, undefined);
+
+    // Sobra 1 solto: a próxima sobra o consome, e só o que passa dele sobe a prateleira.
+    const segunda = await recontar({ box_code: "CX-000011", lines: [{ sku_code: POLO_M, counted_qty: 63 }] });
+    assert.deepEqual(segunda.lines[0]!.origins, [
+      { kind: "loose", qty: 1 },
+      { kind: "entry", qty: 2 },
+    ]);
+    assert.deepEqual([segunda.difference_units, segunda.shelf_delta_units], [3, 2]);
+    assert.equal((await saldo(POLO_M))[0]!.qty_on_hand, 125);
+    const [movimento, ...outros] = await todos("movements");
+    assert.deepEqual([outros.length, movimento!.tipo_mov, movimento!.quantity, movimento!.qty_before, movimento!.qty_after], [0, "ENTRADA", 2, 123, 125]);
+    // A regra de ouro fecha: as caixas somam o saldo da prateleira.
+    assert.equal((await saldoNaCaixa("CX-000011", POLO_M)) + (await saldoNaCaixa("CX-000012", POLO_M)), 125);
+    // A falta não mexe no saldo solto: baixa a prateleira, como antes.
+    const falta = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 61 }] });
+    assert.deepEqual([falta.difference_units, falta.shelf_delta_units, falta.lines[0]!.origins], [-1, -1, undefined]);
+  });
+
   it("na mesma rodada, a caixa já recontada não cede peça ao fora da lista: a peça entra na prateleira", async () => {
     await recontar({ box_code: "CX-000014", lines: [{ sku_code: POLO_GG, counted_qty: 50 }], round_id: "rodada-17-11" });
     const resultado = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 60 }], extra_lines: [{ sku_code: POLO_GG, counted_qty: 2 }], round_id: "rodada-17-11" });

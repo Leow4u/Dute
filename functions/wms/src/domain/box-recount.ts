@@ -48,7 +48,12 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  *   caixa não tem vem como "fora da lista".
  * - A diferença de cada item da lista acerta a caixa (um ajuste em
  *   `count_adjustments`, com o id da contagem; a entrada e o retirado ficam
- *   como estão) e o saldo da prateleira (`stock_balances`), com o movimento
+ *   como estão) e o saldo da prateleira (`stock_balances`). A sobra consome
+ *   antes o saldo do item na prateleira que nenhuma caixa guardada cobre (o
+ *   "sem caixa" do Caixas × saldo, quase sempre a peça que alguém já pôs numa
+ *   caixa), sem mexer na prateleira; só o que passa dele sobe a prateleira.
+ *   Ela não tira de outras caixas: cada caixa que lista o item é contada por
+ *   conta própria (decisão de 17/11/2026). A prateleira muda com o movimento
  *   da contagem cíclica (`functions_cycle_count`: fora da cobrança e do
  *   relógio dos parados), a projeção do portal, um `cycle_counts` por item
  *   e os agregados do catálogo. Nunca grava preço (o custo não entra).
@@ -288,9 +293,9 @@ type PlanoDoItem = {
   ajusteNaCaixa: number;
   /** Do item fora da lista: de quais caixas da prateleira as peças saíram. */
   movidas: Array<{ box_code: string; qty: number }>;
-  /** Do item fora da lista: de onde veio cada peça, com a quantidade (o saldo solto, as caixas, a entrada nova). */
+  /** Do item fora da lista e da sobra: de onde veio cada peça, com a quantidade (o saldo solto, as caixas, a entrada nova). */
   origens: OrigemDaPeca[];
-  /** Do item fora da lista: o que veio do saldo da prateleira que nenhuma caixa cobria. */
+  /** Do item fora da lista e da sobra: o que veio do saldo da prateleira que nenhuma caixa cobria. */
   doSolto: number;
   /** O que o saldo da prateleira ganha ou perde. */
   naPrateleira: number;
@@ -298,9 +303,10 @@ type PlanoDoItem = {
 };
 
 /**
- * De onde veio a peça fora da lista: o saldo da prateleira que nenhuma caixa
- * cobria (`loose`), outra caixa da prateleira (`box`) ou a entrada nova na
- * prateleira (`entry`).
+ * De onde veio a peça a mais (o fora da lista e a sobra num item da lista): o
+ * saldo da prateleira que nenhuma caixa cobria (`loose`), outra caixa da
+ * prateleira (`box`, só no fora da lista) ou a entrada nova na prateleira
+ * (`entry`).
  */
 export type OrigemDaPeca = { kind: "loose"; qty: number } | { kind: "box"; box_code: string; qty: number } | { kind: "entry"; qty: number };
 
@@ -583,10 +589,28 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
       return lido;
     };
 
+    /**
+     * O saldo do item na prateleira que nenhuma caixa guardada cobre: o saldo da prateleira menos o que as
+     * caixas guardadas dela têm do item (esta, pelo esperado, e as outras), quando positivo.
+     */
+    const saldoSolto = async (sku: string) => {
+      const lido = await lerOSaldo(sku);
+      const nasOutras = caixasComOItem(prateleiraDoItem(guardadas, sku), new Map(), sku).reduce((soma, caixa) => soma + caixa.disponivel, 0);
+      return Math.max(0, number(lido.rows[0]?.data.qty_on_hand) - nasOutras - (esperado.get(sku) ?? 0));
+    };
+
     const planos: PlanoDoItem[] = [];
     for (const linha of lines) {
       const qtyEsperada = esperado.get(linha.sku_code) ?? 0;
       const diferenca = linha.counted_qty - qtyEsperada;
+      // A sobra consome antes o saldo solto da prateleira (a prateleira não muda); só o resto sobe a prateleira.
+      const origens: OrigemDaPeca[] = [];
+      let doSolto = 0;
+      if (diferenca > 0) {
+        doSolto = Math.min(diferenca, await saldoSolto(linha.sku_code));
+        if (doSolto > 0) origens.push({ kind: "loose", qty: doSolto });
+        if (diferenca > doSolto) origens.push({ kind: "entry", qty: diferenca - doSolto });
+      }
       planos.push({
         sku: linha.sku_code,
         foraDaLista: false,
@@ -595,9 +619,9 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
         diferenca,
         ajusteNaCaixa: ajusteParaOContado(entrada, retirado, ajustes, linha.sku_code, linha.counted_qty),
         movidas: [],
-        origens: [],
-        doSolto: 0,
-        naPrateleira: diferenca,
+        origens,
+        doSolto,
+        naPrateleira: diferenca - doSolto,
         nome: nomes.get(linha.sku_code) ?? {},
       });
     }
@@ -606,10 +630,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
       let falta = linha.counted_qty;
       const origens: OrigemDaPeca[] = [];
       // (a) O saldo do item na prateleira que nenhuma caixa guardada cobre: a peça é dele, e a prateleira não muda.
-      const lido = await lerOSaldo(sku);
-      const cobertas = caixasComOItem(prateleiraDoItem(guardadas, sku), new Map(), sku).reduce((soma, caixa) => soma + caixa.disponivel, 0);
-      const solto = Math.max(0, number(lido.rows[0]?.data.qty_on_hand) - cobertas);
-      const doSolto = Math.min(falta, solto);
+      const doSolto = Math.min(falta, await saldoSolto(sku));
       if (doSolto > 0) {
         origens.push({ kind: "loose", qty: doSolto });
         falta -= doSolto;
@@ -797,7 +818,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
           adjustment_delta: plano.diferenca,
           adjustment_qty: Math.abs(plano.diferenca),
           adjustment_type: plano.diferenca === 0 ? "SEM_DIVERGENCIA" : plano.diferenca > 0 ? "ENTRADA" : "SAIDA",
-          // Na prateleira: o saldo antes e depois, e de onde veio cada peça do fora da lista.
+          // Na prateleira: o saldo antes e depois, e de onde veio cada peça a mais.
           shelf_qty_before: antes,
           shelf_qty_after: depois,
           shelf_delta: plano.naPrateleira,
@@ -824,7 +845,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
           counted: plano.contado,
           difference: plano.diferenca,
           shelf_delta: plano.naPrateleira,
-          // De onde veio cada peça do fora da lista: o saldo solto, as caixas, a entrada nova.
+          // De onde veio cada peça a mais (o fora da lista e a sobra): o saldo solto, as caixas, a entrada nova.
           origins: plano.origens.length ? plano.origens : undefined,
           cycle_count_id: cycleCountId,
           movement_id: movimento,

@@ -751,7 +751,8 @@ lista entra sempre (movida de outra caixa da prateleira quando o SKU tem
 saldo nela, ou como entrada na prateleira, com a origem dita, quando não
 tem). Refinado nas respostas ao PR 618 (17/11/2026): a peça fora da lista
 consome primeiro o saldo da prateleira que nenhuma caixa cobre, depois as
-outras caixas da prateleira, e só o resto entra como entrada; a data FIFO
+outras caixas da prateleira, e só o resto entra como entrada (a sobra num
+item da lista também consome antes esse saldo solto); a data FIFO
 da peça a mais é a que o FIFO já dá ao conteúdo da caixa. A prancha
 `WmsContagemPrateleira.dc.html` ("entrada em A-03" para a GG que outras
 caixas da A-03 têm) muda no PR da tela.
