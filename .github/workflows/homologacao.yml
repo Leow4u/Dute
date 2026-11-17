@@ -9,9 +9,9 @@ name: Homologação
 # GitHub guarda só uma execução pendente no grupo. Se o CI de um commit mais
 # antigo termina por último e tira da fila o do HEAD, o passo --sha publica o
 # HEAD se o CI dele já está verde (tools/esperar_ci.py). Commit que não é o
-# HEAD e cujo HEAD ainda não tem CI verde sai sem publicar, salvo quando o
-# HEAD só mudou o que o CI ignora no push (docs/**, **/*.md): esse nunca tem
-# CI, e o HEAD sobe com o CI verde de antes (incidente de 17/11/2026).
+# HEAD e cujo HEAD ainda não tem CI verde sai sem publicar. O HEAD só de
+# documentação (docs/** e **/*.md, que o CI ignora) nunca tem CI: o CI verde
+# do commit de código antes dele publica o HEAD (desde 17/11/2026).
 #
 # Até 22/10/2026 a fila era do job de publicação do ci.yml, que só entrava nela
 # quando os testes acabavam, fora de ordem. Até esta troca, o homologacao.yml

@@ -258,12 +258,14 @@ e o CI do HEAD já está verde, publica o HEAD (`tools/esperar_ci.py --sha`): o
 workflow dele pode ter sido tirado da fila por um CI mais antigo que terminou
 depois. Se o CI do HEAD ainda não está verde, nada sobe nessa execução; a
 publicação fica para o `workflow_run` do HEAD. CI vermelho não dispara
-publicação, e a homologação fica no último commit publicado. O HEAD que só
-mudou o que o CI ignora no push (`docs/**` e `**/*.md`) nunca ganha CI
-nem `workflow_run`: quando o HEAD não tem CI e a diferença entre ele e o
-commit do CI verde é só disso, a execução publica o HEAD. Até 17/11/2026 não
-publicava: o #621, só de docs, virou o HEAD antes de o CI do #620 acabar, e o
-código do #620 ficou fora da homologação até o push seguinte com código.
+publicação, e a homologação fica no último commit publicado.
+
+O commit que só muda documentação (`docs/**` e `**/*.md`) não tem CI, pelo
+`paths-ignore` do `ci.yml`. Quando ele é o HEAD, a homologação que o CI verde do
+commit de código anterior dispara publica o HEAD, que tem o mesmo código
+(`tools/esperar_ci.py --sha`, desde 17/11/2026). Antes, o merge do PR 621, só do
+diagnóstico, virou o HEAD logo depois do PR 620, e a homologação do 620 saiu sem
+publicar.
 
 Até 22/10/2026 a fila da homologação era do job do `ci.yml`, que só entrava nela
 quando os testes acabavam. Os testes terminam fora de ordem (a instalação do

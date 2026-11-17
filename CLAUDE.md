@@ -304,10 +304,11 @@ documentação de produto e operação está em `docs/`.
   publica regras e índices, frontend e functions na homologação
   (`dute-homolog`) pelo `.github/workflows/homologacao.yml`, que nasce quando o
   CI desse commit termina verde (`workflow_run`; o SHA sai de
-  `tools/esperar_ci.py --sha`, que publica também o HEAD só de docs, que
-  nunca ganha CI). A fila é do workflow, uma publicação por vez,
-  sem cancelar a que está rodando, então dá para mergear PRs seguidos sem
-  esperar (em 22/10/2026 a fila de job do `ci.yml` perdeu o commit mais novo).
+  `tools/esperar_ci.py --sha`; o HEAD só de documentação, sem CI, sai com o CI
+  verde do commit de código antes dele). A fila é do workflow, uma publicação
+  por vez, sem cancelar a que está rodando, então dá para mergear PRs seguidos
+  sem esperar (em 22/10/2026 a fila de job do `ci.yml` perdeu o commit mais
+  novo).
   A produção
   só recebe por disparo manual (Actions > CI > Run
   workflow com `publicar_producao` marcado), depois de conferir na homologação.

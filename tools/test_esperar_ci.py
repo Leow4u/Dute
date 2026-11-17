@@ -149,107 +149,19 @@ class ShaParaHomologacaoTest(unittest.TestCase):
         self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [execucao("in_progress", run_id=3)]))
         self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [execucao("completed", "failure", run_id=4)]))
 
+    def test_head_so_de_documentacao_sem_ci_publica_o_head(self) -> None:
+        # 17/11/2026: o merge do PR 621, só do diagnóstico, virou o HEAD logo depois do PR 620.
+        # Pelo paths-ignore ele nunca tem CI, e a homologação do 620 saiu sem publicar.
+        self.assertEqual(e.sha_para_homologacao(OUTRO, SHA, [], ["docs/plataforma/diagnostico-contagem-ciclica.md"]), OUTRO)
+
+    def test_head_sem_ci_com_codigo_no_caminho_nao_publica(self) -> None:
+        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [], ["docs/a.md", "functions/wms/src/index.ts"]))
+        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [], None))
+
     def test_vale_a_execucao_mais_nova_do_head(self) -> None:
         self.assertIsNone(
             e.sha_para_homologacao(OUTRO, SHA, [execucao("completed", "success", run_id=1), execucao("completed", "failure", run_id=9)]),
         )
-
-
-class SoOQueOCiIgnoraTest(unittest.TestCase):
-    """O push que só muda o que o CI ignora (docs/**, **/*.md) nunca ganha CI: o HEAD dele sobe pelo CI verde de antes."""
-
-    def test_docs_e_markdown_em_qualquer_pasta(self) -> None:
-        self.assertTrue(e.so_o_que_o_ci_ignora(["docs/plataforma/diagnostico.md", "docs/mockups/Tela.dc.html", "README.md", "tools/acerto/README.md"]))
-
-    def test_qualquer_outro_arquivo_conta(self) -> None:
-        self.assertFalse(e.so_o_que_o_ci_ignora(["docs/plataforma/diagnostico.md", "tools/esperar_ci.py"]))
-        self.assertFalse(e.so_o_que_o_ci_ignora([".github/workflows/ci.yml"]))
-        # O filtro do GitHub diferencia maiúscula: README.MD não é *.md.
-        self.assertFalse(e.so_o_que_o_ci_ignora(["README.MD"]))
-        self.assertFalse(e.so_o_que_o_ci_ignora(["documentos/a.md.bak"]))
-
-    def test_sem_arquivos_ou_sem_a_comparacao_nao_publica(self) -> None:
-        self.assertFalse(e.so_o_que_o_ci_ignora([]))
-        self.assertFalse(e.so_o_que_o_ci_ignora(None))
-
-
-class HeadSoDeDocsTest(unittest.TestCase):
-    """Incidente de 17/11/2026: o #621, só de docs, virou o HEAD antes de o CI do #620 acabar, e o #620 não subiu."""
-
-    def test_head_sem_ci_que_so_mudou_docs_publica_o_head(self) -> None:
-        self.assertEqual(e.sha_para_homologacao(OUTRO, SHA, [], ["docs/plataforma/diagnostico-contagem-ciclica.md"]), OUTRO)
-
-    def test_head_sem_ci_com_codigo_espera_o_ci_dele(self) -> None:
-        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [], ["docs/a.md", "functions/wms/src/index.ts"]))
-        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [], None))
-
-    def test_head_com_ci_proprio_decide_pelo_ci_dele(self) -> None:
-        self.assertIsNone(e.sha_para_homologacao(OUTRO, SHA, [execucao("in_progress", run_id=3)], ["docs/a.md"]))
-
-
-class GitHubFalso(e.GitHub):
-    def __init__(self, respostas: dict[str, Any]):
-        super().__init__("Leow4u/Dute", "token")
-        self.respostas = respostas
-        self.caminhos: list[str] = []
-
-    def _get(self, caminho: str) -> Any:
-        self.caminhos.append(caminho)
-        for prefixo, resposta in self.respostas.items():
-            if caminho.startswith(prefixo):
-                if isinstance(resposta, Exception):
-                    raise resposta
-                return resposta
-        raise AssertionError(f"caminho inesperado: {caminho}")
-
-
-class ArquivosEntreTest(unittest.TestCase):
-    def comparar(self, resposta: dict[str, Any]) -> list[str] | None:
-        return GitHubFalso({"/repos/Leow4u/Dute/compare/": resposta}).arquivos_entre(SHA, OUTRO)
-
-    def test_o_head_a_frente_devolve_os_arquivos(self) -> None:
-        api = GitHubFalso({"/repos/Leow4u/Dute/compare/": {"status": "ahead", "files": [{"filename": "docs/a.md"}, {"filename": "README.md"}]}})
-        self.assertEqual(api.arquivos_entre(SHA, OUTRO), ["docs/a.md", "README.md"])
-        self.assertEqual(api.caminhos, [f"/repos/Leow4u/Dute/compare/{SHA}...{OUTRO}"])
-
-    def test_historia_que_nao_e_avanco_ou_lista_cortada_nao_serve(self) -> None:
-        for status in ("diverged", "behind", "identical"):
-            with self.subTest(status=status):
-                self.assertIsNone(self.comparar({"status": status, "files": [{"filename": "docs/a.md"}]}))
-        # A comparação do GitHub para em 300 arquivos: a lista pode estar cortada.
-        self.assertIsNone(self.comparar({"status": "ahead", "files": [{"filename": f"docs/{n}.md"} for n in range(300)]}))
-        self.assertIsNone(self.comparar({"status": "ahead"}))
-
-
-class MainShaTest(unittest.TestCase):
-    def rodar(self, respostas: dict[str, Any]) -> tuple[int, str]:
-        with tempfile.TemporaryDirectory() as pasta:
-            saida = Path(pasta) / "output"
-            codigo = e.main_sha(env={"CI_SHA": SHA, "GITHUB_OUTPUT": str(saida)}, api=GitHubFalso(respostas))
-            return codigo, saida.read_text(encoding="utf-8")
-
-    def respostas(self, arquivos: list[str], execucoes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-        return {
-            "/repos/Leow4u/Dute/git/ref/heads/main": {"object": {"sha": OUTRO}},
-            "/repos/Leow4u/Dute/actions/workflows/ci.yml/runs": {"workflow_runs": execucoes or []},
-            "/repos/Leow4u/Dute/compare/": {"status": "ahead", "files": [{"filename": nome} for nome in arquivos]},
-        }
-
-    def test_head_so_de_docs_sobe(self) -> None:
-        self.assertEqual(self.rodar(self.respostas(["docs/plataforma/diagnostico-contagem-ciclica.md"])), (0, f"sha={OUTRO}\n"))
-
-    def test_head_com_codigo_sem_ci_ainda_nao_sobe(self) -> None:
-        self.assertEqual(self.rodar(self.respostas(["tools/esperar_ci.py"])), (0, "sha=\n"))
-
-    def test_head_com_ci_verde_sobe_sem_comparar(self) -> None:
-        respostas = self.respostas(["tools/esperar_ci.py"], [execucao("completed", "success", run_id=7)])
-        respostas["/repos/Leow4u/Dute/compare/"] = AssertionError("não compara quando o HEAD tem CI")
-        self.assertEqual(self.rodar(respostas), (0, f"sha={OUTRO}\n"))
-
-    def test_falha_de_rede_na_comparacao_nao_sobe(self) -> None:
-        respostas = self.respostas([])
-        respostas["/repos/Leow4u/Dute/compare/"] = e.ErroTransitorio("502")
-        self.assertEqual(self.rodar(respostas), (1, "sha=\n"))
 
 
 class WorkflowsTest(unittest.TestCase):
@@ -276,12 +188,97 @@ class WorkflowsTest(unittest.TestCase):
     def test_ci_nao_publica_a_homologacao(self) -> None:
         self.assertNotIn("ambiente: homologacao", self.ler("ci.yml"))
 
-    def test_o_que_o_ci_ignora_no_push_e_o_que_esperar_ci_conhece(self) -> None:
-        texto = self.ler("ci.yml")
-        bloco = re.search(r"(?m)^  push:\n(?:    .*\n)*?    paths-ignore:\n((?:      - .*\n)+)", texto)
-        self.assertIsNotNone(bloco, "o push do ci.yml sem paths-ignore")
-        padroes = tuple(linha.strip()[2:].strip().strip('"') for linha in bloco.group(1).splitlines())
-        self.assertEqual(padroes, e.IGNORADOS_PELO_CI)
+
+
+class SoCaminhosQueOCiIgnoraTest(unittest.TestCase):
+    def test_documentacao_e_markdown(self) -> None:
+        self.assertTrue(e.so_caminhos_que_o_ci_ignora(["docs/plataforma/diagnostico-contagem-ciclica.md"]))
+        self.assertTrue(e.so_caminhos_que_o_ci_ignora(["CLAUDE.md", "docs/mockups/x.dc.html", "tools/acerto-btg-2026-10/README.md"]))
+
+    def test_codigo_ou_lista_vazia_nao(self) -> None:
+        self.assertFalse(e.so_caminhos_que_o_ci_ignora(["docs/a.md", "tools/esperar_ci.py"]))
+        self.assertFalse(e.so_caminhos_que_o_ci_ignora([]))
+
+    def test_e_a_lista_do_paths_ignore_do_ci(self) -> None:
+        texto = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        listas = re.findall(r"paths-ignore:\n((?:      - .+\n)+)", texto)
+        self.assertEqual(len(listas), 2, "push e pull_request")
+        for lista in listas:
+            self.assertEqual(tuple(re.findall(r'- "(.+)"', lista)), e.CAMINHOS_QUE_O_CI_IGNORA)
+
+
+class ArquivosEntreTest(unittest.TestCase):
+    class GitHubFalso(e.GitHub):
+        def __init__(self, resposta: dict[str, Any]):
+            super().__init__("dono/repo", "token")
+            self.resposta = resposta
+            self.caminhos: list[str] = []
+
+        def _get(self, caminho: str) -> Any:
+            self.caminhos.append(caminho)
+            return self.resposta
+
+    def test_lista_os_arquivos_com_o_nome_antigo_dos_renomeados(self) -> None:
+        api = self.GitHubFalso(
+            {"status": "ahead", "files": [{"filename": "docs/a.md"}, {"filename": "docs/b.py", "previous_filename": "tools/b.py"}]}
+        )
+        self.assertEqual(api.arquivos_entre(SHA, OUTRO), ["docs/a.md", "docs/b.py", "tools/b.py"])
+        self.assertEqual(api.caminhos, [f"/repos/dono/repo/compare/{SHA}...{OUTRO}"])
+
+    def test_head_que_nao_descende_ou_lista_cortada_vira_none(self) -> None:
+        self.assertIsNone(self.GitHubFalso({"status": "diverged", "files": [{"filename": "docs/a.md"}]}).arquivos_entre(SHA, OUTRO))
+        cheia = {"status": "ahead", "files": [{"filename": f"docs/{n}.md"} for n in range(300)]}
+        self.assertIsNone(self.GitHubFalso(cheia).arquivos_entre(SHA, OUTRO))
+
+
+class ApiDoSha:
+    def __init__(self, head: str, execucoes: list[dict[str, Any]], arquivos: list[str] | None | Exception = None):
+        self.head = head
+        self.execucoes = execucoes
+        self.arquivos = arquivos
+        self.comparacoes: list[tuple[str, str]] = []
+
+    def head_main(self) -> str:
+        return self.head
+
+    def execucoes_ci(self, sha: str) -> list[dict[str, Any]]:
+        assert sha == self.head
+        return self.execucoes
+
+    def arquivos_entre(self, base: str, head: str) -> list[str] | None:
+        self.comparacoes.append((base, head))
+        if isinstance(self.arquivos, Exception):
+            raise self.arquivos
+        return self.arquivos
+
+
+class MainShaTest(unittest.TestCase):
+    def rodar(self, api: Any) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as pasta:
+            saida = Path(pasta) / "output"
+            codigo = e.main_sha(env={"CI_SHA": SHA, "GITHUB_OUTPUT": str(saida)}, api=api)
+            return codigo, saida.read_text(encoding="utf-8")
+
+    def test_ainda_no_head_publica_sem_comparar(self) -> None:
+        api = ApiDoSha(SHA, [])
+        self.assertEqual(self.rodar(api), (0, f"sha={SHA}\n"))
+        self.assertEqual(api.comparacoes, [])
+
+    def test_head_so_de_documentacao_sem_ci_publica_o_head(self) -> None:
+        api = ApiDoSha(OUTRO, [], ["docs/plataforma/diagnostico-contagem-ciclica.md"])
+        self.assertEqual(self.rodar(api), (0, f"sha={OUTRO}\n"))
+        self.assertEqual(api.comparacoes, [(SHA, OUTRO)])
+
+    def test_head_com_codigo_sem_ci_ainda_fica_para_o_ci_dele(self) -> None:
+        self.assertEqual(self.rodar(ApiDoSha(OUTRO, [], ["functions/wms/src/index.ts"])), (0, "sha=\n"))
+
+    def test_head_com_ci_nao_compara(self) -> None:
+        api = ApiDoSha(OUTRO, [execucao("in_progress")])
+        self.assertEqual(self.rodar(api), (0, "sha=\n"))
+        self.assertEqual(api.comparacoes, [])
+
+    def test_falha_na_comparacao_nao_publica(self) -> None:
+        self.assertEqual(self.rodar(ApiDoSha(OUTRO, [], e.ErroTransitorio("502"))), (1, "sha=\n"))
 
 
 if __name__ == "__main__":
