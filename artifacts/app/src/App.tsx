@@ -66,6 +66,9 @@ const CustomerRequests = telaSobDemanda("pages/customer-requests", () => import(
 const WarehouseOps = telaSobDemanda("pages/warehouse-ops", () => import("./pages/warehouse-ops"));
 const Receber = telaSobDemanda("pages/receber", () => import("./pages/receber"));
 const WmsInventoryPage = telaSobDemanda("pages/wms-inventory", () => import("./pages/wms-inventory"));
+// A folha de contagem por rua e o relatório "Caixas × saldo", só leitura (diagnóstico da Contagem cíclica, seção 6, item 1).
+const EstoqueContagemFolha = telaSobDemanda("pages/estoque-contagem-folha", () => import("./pages/estoque-contagem-folha"));
+const EstoqueContagemCaixas = telaSobDemanda("pages/estoque-contagem-caixas", () => import("./pages/estoque-contagem-caixas"));
 const WarehousePositionsPage = telaSobDemanda("pages/warehouse-positions", () => import("./pages/warehouse-positions"));
 const WarehouseLabelsPage = telaSobDemanda("pages/warehouse-labels", () => import("./pages/warehouse-labels"));
 const EstoqueAlertas = telaSobDemanda("pages/estoque-alertas", () => import("./pages/estoque-alertas"));
@@ -373,6 +376,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // O romaneio do pedido separado para imprimir (separação com caixas, parte 4c).
   protectedRoute("/pedidos/romaneio", PedidosRomaneio),
   protectedRoute("/wms/contagem", WmsInventoryPage),
+  protectedRoute("/estoque/contagem/folha", EstoqueContagemFolha),
+  protectedRoute("/estoque/contagem/caixas", EstoqueContagemCaixas),
   protectedRoute("/wms/recebimento", WmsReceiveRedirect),
   protectedRoute("/wms/inventario", WmsCountRedirect),
   protectedRoute("/wms/qualidade", WmsQuality),

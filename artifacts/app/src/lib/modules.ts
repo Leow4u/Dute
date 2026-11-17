@@ -927,6 +927,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/skus", roles: WMS_ROLES },
   // Etiquetas de caixa e de posição para imprimir, abertas pela Contagem e por Posições.
   { path: "/estoque/etiquetas", roles: WMS_ROLES },
+  // A folha de contagem por rua e o relatório "Caixas × saldo", só leitura, abertos pela Contagem.
+  { path: "/estoque/contagem/folha", roles: WMS_ROLES },
+  { path: "/estoque/contagem/caixas", roles: WMS_ROLES },
   // A lista de separação do pedido para imprimir, aberta por "Imprimir lista" em Pedidos.
   { path: "/pedidos/lista", roles: WMS_ROLES },
   // A bancada do pedido, aberta por "Separar" e "Continuar" em Pedidos; o suporte só consulta.

@@ -35,6 +35,8 @@ describe("título da aba do navegador", () => {
     ["/estoque/mapa", "Dutelog | Mapa"],
     ["/estoque/posicoes", "Dutelog | Posições"],
     ["/estoque/etiquetas", "Dutelog | Etiquetas"],
+    ["/estoque/contagem/folha", "Dutelog | Folha de contagem"],
+    ["/estoque/contagem/caixas", "Dutelog | Caixas × saldo"],
     ["/wms/receber", "Dutelog | Receber"],
     ["/wms/contagem", "Dutelog | Contagem"],
     ["/wms/qualidade", "Dutelog | Qualidade"],
