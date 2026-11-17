@@ -28,6 +28,11 @@ A ferramenta escolhe pelo banco, e o dry-run diz qual:
   própria chegada, sem outro movimento: o SKU passa a ter o código e o nome
   certos, sem movimento nenhum (`corrigir.mjs`).
 
+O tamanho errado (o XGG lançado no lugar do XG, 16/11/2026) só vai pela
+transferência: as peças passam para o SKU que já tem o código certo, e a linha
+da caixa, da tarefa de guarda e da NF ficam com o tamanho dele. No mesmo SKU,
+o tamanho do cadastro não muda, e a correção recusa.
+
 ## Transferência: o que grava
 
 Passo a passo, cada um com recibo próprio. Se parar no meio, rodar de novo
@@ -67,7 +72,9 @@ BTG já recebeu.
 - todo movimento dele é a entrada ou a guarda desta chegada, ou a saída desta
   correção;
 - nada aberto usa o SKU: chegada a conferir, chegada com entrada, caixa de
-  outra chegada, linha da abertura ou solicitação do portal em aberto.
+  outra chegada, linha da abertura, solicitação do portal em aberto ou pedido
+  ainda não entregue (a linha separada a menos, até zero, fica no pedido até
+  a entrega).
 
 Senão, as peças vão para o certo do mesmo jeito, e o dry-run diz por que o
 cadastro fica. Se o motivo some depois (por exemplo, a chegada aberta é
@@ -100,13 +107,16 @@ de hoje com o gênero da correção.
 O dry-run recusa, sem gravar nada, quando:
 
 - **a caixa não serve**: não veio do Receber, não tem exatamente uma linha com
-  o código errado, ou a separação já tirou dela;
+  o código errado, ou a separação já tirou dela o código errado (o que a
+  separação tirou de outro produto da mesma caixa não atrapalha);
 - **o SKU errado está em outra caixa** da chegada que não está na correção
   (`caixas`);
 - **na transferência**, falta saldo livre na prateleira para o que a caixa
-  tem, ou a caixa já tem uma linha do SKU certo;
+  tem, ou a caixa já tem uma linha do SKU certo. A recusa diz qual pedido
+  segura a reserva: antes, na linha dele, "Separar menos" com o que existe de
+  fato, e a coordenação conclui a separação com a diferença;
 - **no mesmo SKU**, o SKU não nasceu na chegada, ou teve movimento de fora,
-  pedido, reserva ou solicitação aberta;
+  pedido, reserva ou solicitação aberta, ou o tamanho muda;
 - **o estoque está congelado** (`system_controls/inventory`).
 
 ## Como rodar, na máquina do Leonardo
@@ -159,7 +169,24 @@ Depois:
 
 `--correcao <id>` limita a uma correção de `correcoes.mjs`; `--json` dá o
 resultado para outro script. Correção nova entra em `correcoes.mjs`, com `id`
-novo.
+novo. A correção com `pendente` (o motivo) aparece no dry-run, com o estado de
+hoje e a recusa, se houver, mas não grava, nem com `--aplicar`; para ligar,
+apague o campo.
+
+## Ler antes de corrigir
+
+`ler-estoque.mjs` só lê, e não mostra quem fez cada coisa. Para cada código:
+o SKU, o saldo por prateleira, as datas de entrada (a conta do pedido), os
+movimentos com a chegada e a NF de cada um (a guarda por linha acha a chegada
+pela tarefa de guarda), as caixas com o item (o que entrou, o que a separação
+tirou e o que fica) e, com `--pedido`, as linhas do pedido. No fim, as chegadas
+citadas, com as linhas da NF: duas chegadas com a mesma NF e as mesmas peças
+são a mesma mercadoria lançada duas vezes. `--caixa` mostra uma caixa inteira.
+
+```powershell
+cd C:\DEV\Dute
+node tools/corrigir-codigo-do-produto/ler-estoque.mjs --projeto dute-prod --pedido PED-0001 --codigo A.01.0806.005.GG --codigo A.01.0806.005.XG
+```
 
 ## Testes
 
@@ -188,6 +215,19 @@ O cenário no emulador usa Java 21 e firebase-tools, e recusa rodar fora de
    aberta, que sai depois de ela ser cancelada.
 5. **O caminho no mesmo SKU**, inclusive antes da guarda e antes da entrada.
 6. **As recusas.**
+7. **O PED-0001**: o XG lançado como XGG numa caixa com GG, a XGG certa em
+   outra caixa da mesma prateleira e a feminina nascida na chegada. A
+   separação tira as GG da caixa do erro e "Separar menos" registra a falta;
+   a correção recusa enquanto o pedido reserva as peças e diz qual pedido;
+   depois da conclusão pela coordenação, as peças passam para o XG com o
+   tamanho dele, o retirado das GG fica, o cadastro errado só sai depois da
+   entrega, e um pedido novo de XG acha as peças na caixa.
+8. **A correção pendente**, numa lista só do emulador (`CORRECOES_ARQUIVO`):
+   o dry-run mostra o que gravaria, `--aplicar` não grava nada, e sem o campo
+   grava.
+9. **O SKU certo criado pelo acerto**, como a feminina XG do PED-0001: o
+   `criar_sku` do acerto de verdade (por um plano só do emulador,
+   `ACERTO_PLANO`) cria o XG, e a transferência passa as peças para ele.
 
 ```powershell
 cd C:\DEV\Dute
@@ -244,3 +284,85 @@ não pedem índice composto.
     com a correção do aviso de chegada de 10/11.
   - **Etiqueta:** o Leonardo reimprimiu a etiqueta da CX-000229 e a colocou
     na caixa, em 11/11/2026. Com isso, a correção está concluída.
+
+- **16/11/2026, aplicação na produção da `cx-000221-a02-0806-005-xg`**, pelo
+  Leonardo, da máquina dele, com o código do `cabf6da`, logo depois do acerto
+  que criou o BTG-000226 (`A.02.0806.005.XG`). O dry-run e a gravação deram 1
+  correção, sem erro:
+  - **Movimentos:** SAIDA de 12 do BTG-000186 em B-01 e ENTRADA de 12 no
+    BTG-000226 em B-01, os dois Ajuste, fora da cobrança.
+  - **Caixa e NF:** a linha da CX-000221 (2 produtos), a tarefa de guarda e a
+    linha 2 da NF da AVL-38450703 passaram para o BTG-000226, com o de antes em
+    `acerto_codigo`.
+  - **O BTG-000186** continua no cadastro: está no PED-0001, ainda não
+    entregue.
+  - **O aviso de chegada de 05/11** saiu com `A.02.0806.005.XGG`, e a correção
+    não reenvia.
+  - **Etiqueta:** o Leonardo reimprimiu a da CX-000221 em 16/11/2026, às
+    17:10, com o BTG-000226 XG, e a mandou para a operação trocar na caixa.
+- **17/11/2026, depois da entrega do PED-0001**, a mesma correção de novo, da
+  máquina do Leonardo. O dry-run mostrou os quatro passos de 16/11 como feitos
+  e só a remoção a gravar; a gravação deu 1 correção, sem erro:
+  - **O BTG-000186 saiu do cadastro:** o SKU, o cartão de products, o item do
+    portal, o preço guardado e os saldos zerados, com tudo no recibo.
+  - **O histórico fica:** os movimentos e os eventos guardam
+    `A.02.0806.005.XGG`. A SAIDA de 12 de 16/11, às 16:57, é a da própria
+    transferência e não segurou a remoção.
+  - Com isso, a correção da CX-000221 está concluída.
+
+## As correções da separação do PED-0001 (16/11/2026)
+
+Na separação do PED-0001, o Leonardo achou duas caixas com o tamanho lançado
+errado: a CX-000227 (41 polos masculinas piquet pretas XGG que são XG) e a
+CX-000221 (12 polos femininas piquet pretas XGG que são XG). A leitura da
+produção (`ler-estoque.mjs`, 16/11/2026, com o PED-0001 já concluído pela
+coordenação) separou os dois casos:
+
+- **CX-000227: a chegada repetida, pelo acerto.** A chegada dela
+  (AVL-B1FE59A8, 06/11, por caixa) repetiu a AVL-0D0E620B (30/10, por linha,
+  sem caixa), da mesma NF 046143 e com as mesmas peças: GG 30 e as 41 (XG em
+  30/10, XGG em 06/11). As 41 XG já estavam no saldo, em B-02, e a
+  transferência as dobraria. Por isso ela não está em `correcoes.mjs`: o
+  acerto tira o que a segunda chegada lançou a mais e corrige a caixa sem
+  movimento (`tools/acerto-btg-2026-10`, bloco `duplicada-0611`). É também a
+  resposta das 30 GG que a operação não achou em B-02 e da linha da XG sem
+  caixa.
+- **CX-000221: o tamanho trocado, por esta ferramenta.** O BTG-000186
+  (`A.02.0806.005.XGG`, "POLO FEMININA PIQUET PRETO") nasceu na chegada
+  AVL-38450703 (05/11, por caixa, NF 046143) e só tem as 12 da CX-000221, em
+  B-01. A linha 44 do PED-0001 separou 0, com a falta "CX-000221 tem XG", e a
+  conclusão soltou a reserva. O `A.02.0806.005.XG` não está no cadastro: o
+  acerto o cria (bloco `feminina-xg`, cópia do BTG-000186 com o tamanho XG),
+  e a correção `cx-000221-a02-0806-005-xg` passa as 12 para ele pela
+  transferência. O BTG-000186 fica até a entrega do PED-0001, que o cita.
+
+A ordem:
+
+1. **O acerto** dos três blocos do PED-0001, dry-run e gravação (os comandos
+   em `tools/acerto-btg-2026-10/README.md`, "O PED-0001"). Antes dele, a
+   correção recusa: o XG não está no cadastro, e o tamanho só muda pela
+   transferência.
+2. **Dry-run da correção**, conferindo o caminho (transferência para o
+   `A.02.0806.005.XG` que o acerto criou), a caixa (CX-000221 em B-01, 12
+   peças), o SKU errado (BTG-000186, nascido na AVL-38450703, "não apaga",
+   porque está no PED-0001) e a lista "grava":
+
+   ```powershell
+   cd C:\DEV\Dute
+   node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto dute-prod --correcao cx-000221-a02-0806-005-xg
+   ```
+
+3. **Gravar**, só com o dry-run limpo:
+
+   ```powershell
+   cd C:\DEV\Dute
+   node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto dute-prod --correcao cx-000221-a02-0806-005-xg --aplicar --confirmo "CORRIGIR CODIGO dute-prod"
+   ```
+
+4. **Reimprimir** a etiqueta da CX-000221 (Estoque › Etiquetas) e trocar na
+   caixa. A CX-000227 e as CX-000136, CX-000138 e CX-000140 saem da prateleira
+   vazias pelo acerto: não têm etiqueta para trocar.
+5. **Depois da entrega do PED-0001**, o dry-run e a gravação da mesma correção
+   de novo: o BTG-000186 sai do cadastro.
+6. **Avisar a BTG**: o portal mostrava XGG que eram XG, e peças da chegada
+   repetida que não existiam.

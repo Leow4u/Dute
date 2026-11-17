@@ -17,6 +17,16 @@
  * 5. No mesmo SKU, quando o código certo está livre: tudo o que o mesmo SKU
  *    grava, antes da guarda e antes da entrada.
  * 6. As recusas.
+ * 7. O PED-0001 (16/11/2026): o tamanho trocado (XG lançado como XGG) na
+ *    caixa que a separação já abriu para outro item, com a XGG certa em outra
+ *    caixa da mesma prateleira e a feminina nascida na chegada. A correção
+ *    recusa enquanto o pedido reserva as peças e diz qual pedido; "Separar
+ *    menos" e a conclusão pela coordenação soltam a reserva; a correção passa
+ *    as peças para o XG, e o cadastro errado só sai depois da entrega.
+ * 8. A correção pendente: o dry-run mostra o que gravaria, e --aplicar não
+ *    grava nada; sem o campo, grava.
+ * 9. O SKU certo criado pelo acerto (o criar_sku do bloco feminina-xg), como
+ *    a feminina XG do PED-0001: a transferência passa as peças para ele.
  *
  *   npm --prefix functions/wms ci && npm --prefix functions/wms run build
  *   cd functions/wms
@@ -25,7 +35,9 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -177,7 +189,9 @@ const pedidoDoPortal = async (sku, nome, quantidade) => {
 const aprovar = (requestId) => operations.decideCustomerRequestTransaction(db, { request_id: requestId, action: "approve", expected_status: "open", idempotency_key: chave("aprovar") }, coordenacao);
 
 const cli = path.join(raiz, "tools", "corrigir-codigo-do-produto", "corrigir.mjs");
-const rodar = (...extra) => JSON.parse(execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", ...extra], { encoding: "utf8", env: process.env }));
+// Só a correção da CX-000229: as outras de correcoes.mjs são da produção e não têm o que corrigir no cenário.
+const SO_A_229 = ["--correcao", CORRECOES[0].id];
+const rodar = (...extra) => JSON.parse(execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", ...SO_A_229, ...extra], { encoding: "utf8", env: process.env }));
 
 /** Onde um texto aparece no banco inteiro: coleção/documento:campo. */
 async function ondeAparece(alvo) {
@@ -234,7 +248,7 @@ assert.deepEqual(mostra.grava.slice(0, 2), [
 ]);
 assert.ok(mostra.grava.some((l) => l.startsWith("apaga o cadastro errado BTG-000213") && l.includes(`a linha 1 da chegada cancelada ${primeira.receiptNumber} passa para BTG-000142`)), mostra.grava.join("\n"));
 assert.deepEqual(await contarTudo(), antes, "o dry-run não grava");
-console.log(execFileSync(process.execPath, [cli, "--projeto", PROJETO], { encoding: "utf8", env: process.env }));
+console.log(execFileSync(process.execPath, [cli, "--projeto", PROJETO, ...SO_A_229], { encoding: "utf8", env: process.env }));
 
 // Grava.
 const movimentosDaSegunda = (await db.collection("movements").where("sku_code", "==", "BTG-000213").get()).docs.map((d) => JSON.stringify(d.data())).sort();
@@ -464,5 +478,185 @@ assert.equal((await aplicarTransferencia(db, FieldValue, correcao("cenario-duas-
 // O plano lido com o banco é o mesmo da transação: a do mesmo SKU já aplicada diz isso.
 assert.equal((await planejar(leitorDoBanco(), db, FieldValue, c5, { nome: nome5 })).jaAplicado, true);
 
-console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU e as recusas.");
+// --- 7. O PED-0001: o XG lançado como XGG, com a separação no meio -----------------------
+
+const PRETA_M = "Polo Masculino Piquet Preto";
+const PRETA_F = "Polo Feminino Piquet Preto";
+await posicoes.upsertWarehousePositions(
+  db,
+  { positions: [2, 4].map((shelf) => ({ aisle: "B", shelf, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: BTG })) },
+  coordenacao,
+);
+// A polo preta piquet como veio da abertura: a masculina GG, XG e XGG e a feminina XG.
+const lote7 = db.batch();
+for (const [id, codigo, produto, genero] of [
+  ["BTG-000090", "A.01.0806.005.GG", PRETA_M, "Masculino"],
+  ["BTG-000074", "A.01.0806.005.XG", PRETA_M, "Masculino"],
+  ["BTG-000092", "A.01.0806.005.XGG", PRETA_M, "Masculino"],
+  ["BTG-000080", "A.02.0806.005.XG", PRETA_F, "Feminino"],
+]) {
+  const comum = { customer_code: BTG, cod_cliente: codigo, cod_cliente_key: codigo, produto, genero, tamanho: tamanho(codigo), size: tamanho(codigo), category: "Uniformes", status: "active", archived: false, source: "opening_inventory" };
+  lote7.set(db.collection("skus").doc(id), { id, ...comum, cod_btg: id, sku_code: id, sku_code_key: id, estoque_atual: 0, estoque_reservado: 0, estoque_disponivel: 0 });
+  lote7.set(db.collection("products").doc(codigo), { id: codigo, ...comum, estoque_btg: 0, num_skus: 1 });
+}
+await lote7.commit();
+// A XGG certa: 10 numa caixa guardada antes em B-02, como a CX-000215.
+const r13 = await chegada([{ codigo: "A.01.0806.005.XGG", nome: PRETA_M, qtd: 10, sku: "BTG-000092" }], { prateleira: "B-02" });
+// A caixa do erro, como a CX-000227: 30 GG certas e 41 XG lançadas como XGG, também em B-02.
+const r14 = await chegada(
+  [
+    { codigo: "A.01.0806.005.GG", nome: PRETA_M, qtd: 30, sku: "BTG-000090" },
+    { codigo: "A.01.0806.005.XGG", nome: PRETA_M, qtd: 41, sku: "BTG-000092" },
+  ],
+  { prateleira: "B-02" },
+);
+// A feminina, como a CX-000221: 12 XG lançadas como XGG, produto novo nesta chegada, em B-04.
+const r15 = await chegada([{ codigo: "A.02.0806.005.XGG", nome: PRETA_F, qtd: 12 }], { prateleira: "B-04" });
+const XGG_F = r15.skus[0];
+assert.deepEqual(await saldos("BTG-000092"), [["B-02", 51], ["RECEBIMENTO", 0]]);
+
+// O pedido: as 30 GG, 51 XGG (as 10 certas e as 41 que são XG) e as 12 XGG femininas.
+const pedido7 = await operations.createCustomerRequestTransaction(
+  db,
+  {
+    type: "retirada",
+    priority: "normal",
+    title: "Uniformes",
+    customer_code: BTG,
+    idempotency_key: chave("pedido"),
+    items: [
+      { sku_code: "BTG-000090", product_name: PRETA_M, quantity: 30 },
+      { sku_code: "BTG-000092", product_name: PRETA_M, quantity: 51 },
+      { sku_code: XGG_F, product_name: PRETA_F, quantity: 12 },
+    ],
+  },
+  cliente,
+);
+const aprovado7 = await aprovar(String(pedido7.id));
+const tarefa7 = String(aprovado7.pick_task_id);
+const ordem7 = String(aprovado7.order_id);
+const numero7 = String((await dado("orders", ordem7)).order_number);
+const linhas7 = (await db.collection("pick_lines").where("pick_task_id", "==", tarefa7).get()).docs;
+assert.deepEqual(linhas7.map((d) => [d.get("sku_code"), d.get("location_id"), d.get("qty_to_pick")]).sort(), [["BTG-000090", "B-02", 30], ["BTG-000092", "B-02", 51], [XGG_F, "B-04", 12]].sort());
+const linha7 = (sku) => linhas7.find((d) => d.get("sku_code") === sku).id;
+const separar7 = (sku, extra = {}) => separacao.setPickLineSeparated(db, { pick_task_id: tarefa7, pick_line_id: linha7(sku), separated: true, ...extra, idempotency_key: chave("separar") }, guilherme);
+// As 30 GG saem da caixa do erro: ela fica aberta, com o retirado delas.
+await separar7("BTG-000090");
+// A XGG separa as 10 da caixa certa (a mais antiga da prateleira) e registra a falta das 41.
+await separar7("BTG-000092", { separated_qty: 10, shortage_reason: "falta", shortage_detail: "as 41 da outra caixa são XG" });
+// A feminina XGG não tem peça: 0, com a falta.
+await separar7(XGG_F, { separated_qty: 0, shortage_reason: "falta", shortage_detail: "a caixa tem XG" });
+assert.deepEqual((await dado("warehouse_boxes", r13.caixas[0])).taken_lines, [{ sku_code: "BTG-000092", qty: 10 }], "a XGG saiu da caixa certa");
+assert.deepEqual((await dado("warehouse_boxes", r14.caixas[0])).taken_lines, [{ sku_code: "BTG-000090", qty: 30 }], "da caixa do erro, só as GG");
+assert.equal((await dado("warehouse_boxes", r15.caixas[0])).taken_lines, undefined, "da feminina, nada");
+
+// Enquanto o pedido reserva as peças, a correção recusa e diz qual pedido.
+const cx227 = correcao("cenario-ped-0001-masculina", "A.01.0806.005.XGG", "A.01.0806.005.XG", r14.caixas);
+const cx221 = correcao("cenario-ped-0001-feminina", "A.02.0806.005.XGG", "A.02.0806.005.XG", r15.caixas, { genero: "Feminino" });
+await recusa(cx227, new RegExp(`tem 0 livre em B-02, e as caixas pedem 41 \\(reservado: 51, ${numero7} 51\\)\\. A reserva sai antes`), { transferencia: true });
+await recusa(cx221, new RegExp(`tem 0 livre em B-04, e as caixas pedem 12 \\(reservado: 12, ${numero7} 12\\)`), { transferencia: true });
+// No mesmo SKU o tamanho não muda: com o código certo fora do cadastro (o PP), a correção recusa.
+const paraPP = correcao("cenario-tamanho-no-mesmo-sku", "A.01.0806.005.XGG", "A.01.0806.005.PP", r14.caixas);
+assert.equal(await modoDaCorrecao(leitorDoBanco(), db, paraPP), "mesmo_sku");
+await recusa(paraPP, /o tamanho muda \(A\.01\.0806\.005\.XGG → A\.01\.0806\.005\.PP\), e o A\.01\.0806\.005\.PP não está no cadastro/);
+
+// A coordenação conclui a separação com a diferença: as 41 XGG e as 12 femininas ficam livres.
+const concluido7 = await separacao.completeOrderSeparation(db, { pick_task_id: tarefa7, seal_code: "L-0001", idempotency_key: chave("concluir") }, coordenacao);
+const livre = async (sku, local) => {
+  const d = (await db.collection("stock_balances").where("sku_code", "==", sku).where("location_id", "==", local).get()).docs[0];
+  return Number(d.get("qty_on_hand")) - Number(d.get("qty_reserved"));
+};
+assert.deepEqual([await livre("BTG-000092", "B-02"), await livre(XGG_F, "B-04")], [41, 12]);
+
+// A masculina: dry-run, transferência para o XG, e o XGG continua (as 10 certas, já separadas).
+const mostra7 = await lerTransferencia(leitorDoBanco(), db, cx227, { info: true });
+assert.deepEqual(mostra7.plano.transferencias, [{ posicao: "B-02", qtde: 41 }]);
+assert.deepEqual(mostra7.plano.alvo, { sku: "BTG-000074", codigo: "A.01.0806.005.XG", nome: PRETA_M, tamanho: "XG" });
+assert.equal(mostra7.remocao.apaga, false);
+assert.ok(mostra7.remocao.motivos.includes(`está no pedido ${numero7}, ainda não entregue`), mostra7.remocao.motivos.join("; "));
+const feita7 = await aplicarTransferencia(db, FieldValue, cx227, { operations });
+assert.deepEqual([feita7.estado, feita7.apagado], ["corrigido", false]);
+assert.deepEqual(await saldos("BTG-000092"), [["B-02", 10], ["RECEBIMENTO", 0]]);
+assert.deepEqual(await saldos("BTG-000074"), [["B-02", 41]]);
+const caixa227 = await dado("warehouse_boxes", r14.caixas[0]);
+assert.deepEqual(caixa227.lines.map((l) => [l.sku_code, l.client_item_code, l.size, l.counted_qty]), [["BTG-000090", "A.01.0806.005.GG", "GG", 30], ["BTG-000074", "A.01.0806.005.XG", "XG", 41]]);
+assert.deepEqual(caixa227.taken_lines, [{ sku_code: "BTG-000090", qty: 30 }], "o retirado das GG fica como estava");
+assert.deepEqual([[...caixa227.sku_codes].sort(), caixa227.status, caixa227.unit_count], [["BTG-000074", "BTG-000090"], "stored", 71]);
+const nf227 = await dado("inbound_items", r14.linhas[1]);
+assert.deepEqual([nf227.sku_code, nf227.client_item_code, nf227.size], ["BTG-000074", "A.01.0806.005.XG", "XG"]);
+assert.equal(await existe("skus", "BTG-000092"), true, "a XGG de verdade fica");
+
+// A feminina: as 12 passam para o XG; o cadastro errado fica enquanto o pedido não é entregue.
+const feita221 = await aplicarTransferencia(db, FieldValue, cx221, { operations });
+assert.deepEqual([feita221.estado, feita221.apagado], ["corrigido", false]);
+assert.deepEqual(feita221.nao_apagado, [`está no pedido ${numero7}, ainda não entregue`]);
+assert.deepEqual(await saldos("BTG-000080"), [["B-04", 12]]);
+assert.equal(await existe("skus", XGG_F), true);
+
+// A entrega do pedido baixa o separado, e a correção feminina termina: o cadastro errado sai.
+const remessa7 = String(concluido7.shipment_id);
+await operations.advanceWarehouseTaskTransaction(db, { task_uid: `shipping:${remessa7}`, expected_status: "ready_to_dispatch", operation: { carrier: "Dutelog", driver_name: "Rafael", vehicle_plate: "DUTE-001" }, idempotency_key: chave("despachar") }, guilherme);
+await operations.advanceWarehouseTaskTransaction(db, { task_uid: `shipping:${remessa7}`, expected_status: "dispatched", operation: { proof_reference: "Carlos Lima", delivery_notes: "Recebido." }, idempotency_key: chave("entregar") }, guilherme);
+assert.equal((await dado("orders", ordem7)).status, "ENTREGUE");
+const depoisDaEntrega = await lerTransferencia(leitorDoBanco(), db, cx221, { info: true });
+assert.deepEqual([depoisDaEntrega.jaAplicado, depoisDaEntrega.soRemocao, depoisDaEntrega.remocao.apaga], [false, true, true], JSON.stringify(depoisDaEntrega.remocao));
+const terminou7 = await aplicarTransferencia(db, FieldValue, cx221, { operations });
+assert.deepEqual([terminou7.estado, terminou7.apagado], ["corrigido", true]);
+assert.equal(await existe("skus", XGG_F), false, "o cadastro errado saiu depois da entrega");
+
+// A operação segue: o pedido de XG acha as 41 na caixa do erro, em B-02.
+const aprovadoXg = await aprovar(await pedidoDoPortal("BTG-000074", PRETA_M, 41));
+const linhaXg = (await db.collection("pick_lines").where("pick_task_id", "==", String(aprovadoXg.pick_task_id)).get()).docs[0];
+assert.equal(linhaXg.get("location_id"), "B-02");
+await separacao.setPickLineSeparated(db, { pick_task_id: String(aprovadoXg.pick_task_id), pick_line_id: linhaXg.id, separated: true, idempotency_key: chave("separar") }, guilherme);
+const caixaDepois = await dado("warehouse_boxes", r14.caixas[0]);
+assert.deepEqual([caixaDepois.taken_lines, caixaDepois.status], [[{ sku_code: "BTG-000090", qty: 30 }, { sku_code: "BTG-000074", qty: 41 }], "emptied"], "a linha de XG saiu da caixa do erro, que esvaziou");
+
+// A correção pendente: o dry-run mostra o que gravaria, e --aplicar não grava nada; sem o campo, grava. A lista vem de
+// um arquivo só do emulador (CORRECOES_ARQUIVO), com uma correção que passaria.
+const r16 = await chegada([{ codigo: "A.02.0810.002.P", nome: FEMININA, qtd: 5 }], { prateleira: "B-11" });
+const umaCorrecao = (extra) => ({ id: "cenario-pendente", cliente: BTG, de: "A.02.0810.002.P", para: "A.01.0810.002.P", caixas: r16.caixas, genero: "Masculino", referencia: "cenário", motivo: "cenário", decisao: "cenário", ...extra });
+const listaDoEmulador = async (correcoes) => {
+  const arquivo = path.join(os.tmpdir(), `correcoes-cenario-${process.pid}-${++contador}.mjs`);
+  writeFileSync(arquivo, `export const CORRECOES = ${JSON.stringify(correcoes)};\n`);
+  return arquivo;
+};
+const comLista = async (correcoes, ...extra) =>
+  JSON.parse(execFileSync(process.execPath, [cli, "--projeto", PROJETO, "--json", ...extra], { encoding: "utf8", env: { ...process.env, CORRECOES_ARQUIVO: await listaDoEmulador(correcoes) } }));
+const antesDaPendente = await contarTudo();
+const pendente = (await comLista([umaCorrecao({ pendente: "teste" })], "--aplicar")).correcoes[0];
+assert.deepEqual([pendente.estado, pendente.pendente, pendente.grava?.[0]], ["pendente", "teste", `SAIDA 5 de ${r16.skus[0]} (A.02.0810.002.P) em B-11 · Ajuste −, não cobra`]);
+assert.deepEqual(await contarTudo(), antesDaPendente, "a correção pendente não grava, nem com --aplicar");
+assert.equal((await comLista([umaCorrecao({})], "--aplicar")).correcoes[0].estado, "corrigido", "sem o campo, grava");
+
+// --- 9. O SKU certo criado pelo acerto (a feminina XG do PED-0001) ----------------------
+// Na produção, o A.02.0806.005.XG não existia: o acerto (bloco feminina-xg) cria o SKU, copiando o XGG, e a correção
+// passa as peças para ele. Aqui, com outra família, pelo acerto de verdade e por um plano só do emulador (ACERTO_PLANO).
+const r17 = await chegada([{ codigo: "A.02.0807.005.XGG", nome: PRETA_F, qtd: 12 }], { prateleira: "B-04" });
+const XGG_F9 = r17.skus[0];
+const planoDoAcerto = path.join(os.tmpdir(), `plano-acerto-cenario-${process.pid}.mjs`);
+writeFileSync(
+  planoDoAcerto,
+  `export const PLANO = ${JSON.stringify({ id: "cenario-corrigir-codigo", cliente: BTG, referencia: "cenário", ator: { uid: "script:acerto-cenario", role: "admin", name: "Acerto do cenário", email: "ops@dutelog.com.br" } })};\n` +
+    `export const BLOCOS = ${JSON.stringify([{ id: "feminina-xg", titulo: "cenário", ops: [{ id: "criar-xg-cenario", tipo: "criar_sku", codigo: "A.02.0807.005.XG", copiar_de: "A.02.0807.005.XGG", tamanho: "XG", manter_nome: true, motivo: "cenário" }] }])};\n`,
+);
+execFileSync(process.execPath, [path.join(raiz, "tools", "acerto-btg-2026-10", "acerto.mjs"), "--projeto", PROJETO, "--aplicar"], { encoding: "utf8", env: { ...process.env, ACERTO_PLANO: planoDoAcerto } });
+const doAcerto = (await db.collection("skus").where("cod_cliente", "==", "A.02.0807.005.XG").get()).docs;
+assert.equal(doAcerto.length, 1, "o acerto criou o XG");
+const XG_F9 = doAcerto[0].id;
+assert.deepEqual([doAcerto[0].get("tamanho"), doAcerto[0].get("produto")], ["XG", (await dado("skus", XGG_F9)).produto]);
+const c9 = { id: "cenario-feminina-xg", cliente: BTG, de: "A.02.0807.005.XGG", para: "A.02.0807.005.XG", caixas: r17.caixas, genero: "Feminino", referencia: "cenário", motivo: "cenário", decisao: "cenário" };
+const dry9 = (await comLista([c9])).correcoes[0];
+assert.deepEqual([dry9.modo, dry9.estado, dry9.alvo?.sku, dry9.alvo?.tamanho], ["transferencia", "a_gravar", XG_F9, "XG"]);
+assert.ok(dry9.grava.some((g) => g.includes(`tamanho XGG → XG`)), dry9.grava.join("\n"));
+const feito9 = (await comLista([c9], "--aplicar")).correcoes[0];
+assert.deepEqual([feito9.estado, feito9.resultado?.apagado], ["corrigido", true], JSON.stringify(feito9));
+assert.deepEqual(await saldos(XG_F9), [["B-04", 12]]);
+const caixa9 = await dado("warehouse_boxes", r17.caixas[0]);
+assert.deepEqual(caixa9.lines.map((l) => [l.sku_code, l.client_item_code, l.size, l.counted_qty]), [[XG_F9, "A.02.0807.005.XG", "XG", 12]]);
+assert.equal(await existe("skus", XGG_F9), false, "sem pedido, o cadastro errado sai");
+const portal9 = (await db.collection("client_inventory").where("sku_code", "==", XG_F9).get()).docs;
+assert.deepEqual(portal9.map((d) => [d.get("qty_on_hand"), d.get("qty_available"), d.get("size")]), [[12, 12, "XG"]], "um item do portal, com as 12 no XG");
+
+console.log("Cenário da correção de código no emulador ok: a CX-000229 por transferência, com o cadastro errado apagado e o código só no histórico, a retomada depois da queda, antes da guarda e antes da entrada, o SKU com outra vida que fica, o caminho no mesmo SKU, as recusas, o PED-0001 (o XG lançado como XGG, com a separação no meio), a correção pendente e o SKU certo criado pelo acerto.");
 process.exit(0);

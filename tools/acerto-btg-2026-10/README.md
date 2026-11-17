@@ -41,6 +41,10 @@ BTG-000088. O plano usa essas formas.
 | `saldao` | Saída de tudo que estava nas caixas 5, 32 e 130, e do que saiu da 4; a linha da abertura dessas caixas sai do registro (o Mapa e as Etiquetas montam o conteúdo pelas linhas), com o que ela tinha guardado no evento. Com `itens` ([{ codigo, qtde }]), a baixa é parcial: a linha diminui, ou sai se zerar, e a caixa continua | 8, 10 |
 | `caixas` | Remove as caixas 5, 19, 32 e 130 e corrige SKU e quantidade das linhas da abertura das outras, para o Mapa e as Etiquetas | 4 a 13 |
 | `arquivar` | Arquiva os SKUs errados já em zero, inclusive no portal | 2, 6, 7, 11, 12 |
+| `saldao-novembro` | O saldão de 03/11: zera os 8 itens da planilha e remove as caixas 131 e 132 | (telefone, 03/11) |
+| `recontagem-1611` | Desfaz a quarta rodada pela recontagem de 16/11: baixa parcial das CX-000136, CX-000138 e CX-000140, o saldo e as linhas; o retirado do M passa da 138 para a 140; as caixas que a separação esvaziou saem da prateleira | 14 |
+| `duplicada-0611` | A chegada AVL-B1FE59A8 repetiu a AVL-0D0E620B: sai o saldo a mais (GG 30 e XGG 41 em B-02), e a CX-000227 passa a XG sem movimento | (PED-0001) |
+| `feminina-xg` | Cria a polo feminina piquet preta XG, para as 12 da CX-000221 | (PED-0001) |
 
 Movimentos saem com origem `functions_inventory_movement` e não entram na
 cobrança (`billingMovementDirection` só conta `wms_receiving` e
@@ -350,6 +354,137 @@ O tipo `zerar_sku` tirou todo o saldo e as linhas deles: 47 peças em B-09
 P 3 e M 1 na CX-000132; jaqueta copa azul G 1 na CX-000190). A CX-000131 e a
 CX-000132 ficaram vazias e saem do registro (`saldao2-cx-131` e `-132`).
 Aplicado em 03/11/2026: as 8 zeragens e as 2 remoções de caixa, sem falha.
+
+## Quinta rodada: a recontagem de 16/11 desfaz a quarta
+
+Na separação do PED-0001 faltaram cerca de 20 G, 20 GG e 20 M da azul-marinho.
+A operação recontou peça por peça as três caixas de B-10, sem usar a etiqueta
+do fornecedor (folha do PED-0001, 16/11/2026):
+
+| Caixa | Abertura | Quarta rodada (03/11) | Recontagem (16/11) |
+|---|---|---|---|
+| CX-000136 | G 72 | G 88 | G 72 |
+| CX-000138 | GG 41 | GG 61, M 1, G 4, XGG 1 | GG 41 (a XGG 1 já tinha saído no PED-0001) |
+| CX-000140 | M 72 | M 90 | M 72 |
+
+A contagem da abertura estava certa, e as etiquetas do fornecedor, erradas: G
+20, GG 20 e M 19 que a quarta rodada somou não existem. O bloco
+`recontagem-1611` tira essas peças pelo `baixar_caixa` com `itens`: a SAIDA do
+saldo em B-10 (Ajuste −, fora da cobrança) e a linha da abertura que diminui
+(GG da 138, G da 136, M da 140) ou sai (M e G da 138), com os contadores da
+caixa. O evento diz o motivo (`texto_da_baixa`), e não "saldão". A XGG 1 da
+CX-000138 fica: a separação do PED-0001 tirou 1 dela, antes da recontagem
+(segundo dry-run, abaixo).
+
+Duas travas novas no `baixar_caixa`, para a caixa que a separação já abriu
+(separação com caixas, parte 3):
+
+- a linha não fica com menos do que a separação já tirou da caixa
+  (`taken_lines`); se ficaria, o dry-run recusa e pede para conferir de qual
+  caixa a peça saiu;
+- a recusa por falta de saldo livre diz o reservado: a reserva do PED-0001 sai
+  na conclusão da separação com a diferença.
+
+**O primeiro dry-run na produção (16/11/2026, com o PED-0001 já concluído)**
+deu 2 a gravar e 1 erro: a linha do M do pedido tinha baixado do registro 1 da
+CX-000138 (o M 1 da quarta rodada, que não existe) e 71 da CX-000140; na
+prateleira, as 72 saíram da CX-000140. A separação também já tinha tirado
+tudo: 72 G da CX-000136, 41 GG da CX-000138 e as M. Por isso o bloco ganhou:
+
+- `recontagem-retirado-m` (tipo novo `mover_retirado`), antes da baixa da 138:
+  o retirado de 1 M passa da CX-000138 para a CX-000140, e a linha do M do
+  PED-0001 passa a dizer 72 da CX-000140. Saldo e reserva não mudam. A leitura
+  de uma baixa conta com o `mover_retirado` do plano ainda não gravado.
+- no `baixar_caixa`, a caixa de que a separação já tirou tudo o que fica no
+  registro sai da prateleira (`emptied`, com o pedido de `pedido`), como a
+  separação faz, com o evento `warehouse.box_emptied`. As três caixas saem
+  vazias: não há etiqueta para reimprimir.
+
+**O segundo dry-run e a primeira tentativa de gravação (16/11/2026)**, com
+os três blocos do PED-0001: 7 a gravar e 1 erro, e a gravação abortou sem
+gravar nada. A separação do PED-0001 tinha tirado 1 XGG (BTG-000119) da
+CX-000138, e a baixa levava a linha da XGG a 0. A XGG saiu da baixa da 138: a
+linha fica com o que a separação tirou, e o pedido a entrega. A caixa sai da
+prateleira com GG 41 e XGG 1, as duas tiradas.
+
+A ordem: a coordenação conclui o PED-0001 com a diferença (feito em
+16/11/2026); dry-run dos blocos; gravação com o dry-run limpo. O comando dos
+três blocos do PED-0001 está em "O PED-0001", abaixo.
+
+No emulador (16/11/2026), com o cenário semeado, o plano aplicado até o
+`saldao-novembro` e o estado da produção depois da conclusão do PED-0001 por
+cima (o retirado das três caixas, a linha do M com 1 da CX-000138, a linha
+da XGG com 1 da CX-000138, as reservas do separado), o dry-run deu 8 a gravar
+e 0 erro, a gravação deixou a CX-000136 com G 72, a CX-000138 com GG 41 e
+XGG 1 e a CX-000140 com M 72, as três vazias no PED-0001, a linha do M com 72
+da CX-000140, e B-10 só com o que o pedido separou (G 72, GG 41, M 72, XGG 1);
+o dry-run seguinte deu 8 já aplicadas. Antes, com a caixa aberta além da recontagem e com a reserva de 92
+G em B-10, o dry-run recusou.
+
+## O PED-0001: a chegada repetida e a feminina XG (16/11/2026)
+
+A leitura do estoque na produção (`tools/corrigir-codigo-do-produto/ler-estoque.mjs`,
+16/11/2026) mostrou a polo masculina piquet preta:
+
+- a chegada AVL-0D0E620B (30/10, por linha, antes do recebimento por caixa na
+  produção) lançou GG 30 e XG 41 em B-02, sem caixa;
+- a AVL-B1FE59A8 (06/11, pela caixa CX-000227), da mesma NF 046143, lançou de
+  novo GG 30 e, como XGG, as mesmas 41;
+- na prateleira só havia a CX-000227: as 30 GG dela saíram na linha da GG do
+  PED-0001 (as outras 30 deram "Produto não encontrado"), e as 41 XG na linha
+  da XG, sem caixa no registro.
+
+O bloco `duplicada-0611` tira o que a segunda chegada lançou a mais: SAIDA de 30
+GG e de 41 XGG em B-02 (Ajuste −, fora da cobrança), pelo `ajuste`. A
+CX-000227 é corrigida pelo tipo novo `corrigir_caixa_recebimento`: a linha da
+caixa, a da tarefa de guarda e a da NF passam de XGG a XG sem movimento, a
+caixa registra que as 41 XG saíram dela na linha da XG do PED-0001, e sai da
+prateleira (vazia).
+
+A polo feminina piquet preta XG não existe no cadastro, e a CX-000221 tem 12
+dela lançadas como XGG (BTG-000186, que nasceu na chegada dela). O bloco
+`feminina-xg` cria o `A.02.0806.005.XG` (`criar_sku`, copiando o BTG-000186:
+o mesmo produto, com o nome dele); as 12 passam para ele pela correção de
+código (`tools/corrigir-codigo-do-produto`, `cx-000221-a02-0806-005-xg`), que
+depois da entrega do PED-0001 apaga o XGG.
+
+Dry-run dos três blocos do PED-0001, só leitura:
+
+```powershell
+cd C:\DEV\Dute
+node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --bloco recontagem-1611 --bloco duplicada-0611 --bloco feminina-xg
+```
+
+Gravação, só com o dry-run limpo (8 a gravar, 0 erro):
+
+```powershell
+cd C:\DEV\Dute
+node tools/acerto-btg-2026-10/acerto.mjs --projeto dute-prod --bloco recontagem-1611 --bloco duplicada-0611 --bloco feminina-xg --aplicar --confirmo "ACERTO BTG dute-prod"
+```
+
+**Aplicado na produção em 16/11/2026**, pelo Leonardo, da máquina dele, com
+o código do `cabf6da`. O dry-run deu 8 a gravar e 0 erro, e a gravação, 8
+gravadas, sem falha:
+
+- **CX-000136, CX-000138 e CX-000140:** baixadas e fora da prateleira, vazias
+  no PED-0001. A CX-000138 ficou com GG 41 e XGG 1, as duas tiradas.
+- **Linha 63 do PED-0001 (o M):** 72 da CX-000140.
+- **B-02:** SAIDA de 30 GG (BTG-000090) e de 41 XGG (BTG-000181).
+- **CX-000227:** passou a XG (BTG-000074), com a NF e a guarda, e saiu da
+  prateleira vazia no PED-0001.
+- **O XG feminino:** o `A.02.0806.005.XG` é o BTG-000226.
+
+Logo depois, a correção de código passou as 12 da CX-000221 para ele
+(`tools/corrigir-codigo-do-produto`, "Registro").
+
+O romaneio do PED-0001 carregado no caminhão (16/11/2026, 20:25: 88 volumes,
+3.188 unidades, lacre 050412) bate com o saldo depois do acerto:
+
+- **Azul-marinho masculina:** PP 12, P 78, M 248, G 229, GG 100, XG 64 e
+  XGG 14. A XGG 1 de B-10 está no volume 88.
+- **Preta masculina:** GG 94 (as 30 da CX-000227 no volume 86), XG 60 (as 41
+  da CX-000227 no volume 87) e XGG 10.
+- **Preta feminina:** a XG não está no pedido; as 12 ficam na CX-000221.
 
 ## Validação no emulador (30/10/2026)
 

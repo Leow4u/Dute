@@ -515,14 +515,22 @@ async function principal() {
   if (args.aplicar && naNuvem && args.confirmo !== confirmacaoDe(args.projeto)) {
     abortar(`Para gravar, passe --confirmo "${confirmacaoDe(args.projeto)}". Sem isso o script só mostra o que muda.`);
   }
-  const desconhecidas = args.correcoes.filter((id) => !CORRECOES.some((c) => c.id === id));
-  if (desconhecidas.length) abortar(`Correção desconhecida: ${desconhecidas.join(", ")}. As de correcoes.mjs: ${CORRECOES.map((c) => c.id).join(", ")}.`);
-  const escolhidas = CORRECOES.filter((c) => !args.correcoes.length || args.correcoes.includes(c.id));
+  // Só no emulador: outra lista de correções (o teste da pendente), como o ACERTO_PLANO do acerto.
+  const lista =
+    process.env.CORRECOES_ARQUIVO && process.env.FIRESTORE_EMULATOR_HOST
+      ? (await import(pathToFileURL(path.resolve(process.env.CORRECOES_ARQUIVO)).href)).CORRECOES
+      : CORRECOES;
+  const desconhecidas = args.correcoes.filter((id) => !lista.some((c) => c.id === id));
+  if (desconhecidas.length) abortar(`Correção desconhecida: ${desconhecidas.join(", ")}. As de correcoes.mjs: ${lista.map((c) => c.id).join(", ")}.`);
+  const escolhidas = lista.filter((c) => !args.correcoes.length || args.correcoes.includes(c.id));
 
   const { app, db, FieldPath, FieldValue } = abrirFirestore(args.projeto, abortar);
   const saida = { projeto: args.projeto, aplicar: args.aplicar, correcoes: [] };
   for (const correcao of escolhidas) {
     const registro = { id: correcao.id, de: correcao.de, para: correcao.para, caixas: correcao.caixas };
+    // A correção pendente aparece no dry-run com o estado de hoje, mas não grava, nem com --aplicar.
+    const pendente = texto(correcao.pendente);
+    if (pendente) registro.pendente = pendente;
     try {
       registro.modo = await modoDaCorrecao(leitorDoBanco(), db, correcao);
       if (registro.modo === "transferencia") {
@@ -530,12 +538,12 @@ async function principal() {
         registro.estado_hoje = leitura.estado;
         if (leitura.jaAplicado) registro.estado = "ja_aplicado";
         else {
-          registro.estado = "a_gravar";
+          registro.estado = pendente ? "pendente" : "a_gravar";
           registro.sku = leitura.plano.sku_de;
           registro.alvo = leitura.plano.alvo;
           registro.passos = descreverPassos(leitura);
           registro.grava = registro.passos.filter((p) => !p.feito && !p.informativo).map((p) => p.texto);
-          if (args.aplicar) {
+          if (args.aplicar && !pendente) {
             const resultado = await aplicarTransferencia(db, FieldValue, correcao, { operations: await carregarOperacoes(abortar) });
             registro.estado = resultado.estado;
             registro.resultado = resultado;
@@ -549,10 +557,10 @@ async function principal() {
         if (plano.jaAplicado) {
           registro.estado = "ja_aplicado";
         } else {
-          registro.estado = "a_gravar";
+          registro.estado = pendente ? "pendente" : "a_gravar";
           registro.sku = plano.skuCode;
           registro.grava = plano.escritas.map((e) => e.descricao);
-          if (args.aplicar) {
+          if (args.aplicar && !pendente) {
             const resultado = await aplicar(db, FieldValue, correcao, nome);
             registro.estado = resultado.estado;
             registro.resultado = resultado;
@@ -561,7 +569,8 @@ async function principal() {
       }
     } catch (erro) {
       if (!(erro instanceof ErroDaCorrecao)) throw erro;
-      registro.estado = "erro";
+      // A pendente que hoje recusaria continua pendente: a recusa é só o estado de hoje.
+      registro.estado = pendente ? "pendente" : "erro";
       registro.erro = erro.message;
     }
     saida.correcoes.push(registro);
@@ -574,7 +583,7 @@ async function principal() {
   } else {
     console.log(`\nCorreção de código do produto · projeto ${args.projeto}${naNuvem ? "" : ` · EMULADOR ${process.env.FIRESTORE_EMULATOR_HOST}`} · ${args.aplicar ? "APLICAR" : "DRY-RUN, nada será gravado"}\n`);
     for (const c of saida.correcoes) {
-      const correcao = CORRECOES.find((x) => x.id === c.id);
+      const correcao = lista.find((x) => x.id === c.id);
       console.log(`[${c.id}] ${c.de} → ${c.para} · ${correcao.cliente} · caixa ${c.caixas.join(", ")}`);
       if (c.modo === "transferencia" && c.alvo) {
         console.log(`   caminho : transferência. O ${c.para} já existe (${c.alvo.sku} · "${c.alvo.nome}"): as peças passam para ele, e o código de nenhum SKU muda`);
@@ -584,6 +593,8 @@ async function principal() {
       for (const linha of c.estado_hoje ?? []) console.log(`   agora   : ${linha}`);
       if (c.nome) console.log(`   nome    : "${c.nome}" · ${c.nome_origem}`);
       if (c.nomes_da_familia) console.log(`   atenção : a família tem mais de um nome: ${c.nomes_da_familia.join(", ")}`);
+      if (c.pendente) console.log(`   PENDENTE: ${c.pendente}${c.estado === "ja_aplicado" ? "" : " (não grava, nem com --aplicar)"}`);
+      if (c.estado === "pendente" && c.erro) console.log(`   (hoje)  : ${c.erro}`);
       if (c.estado === "erro") console.log(`   ERRO    : ${c.erro}`);
       else if (c.estado === "ja_aplicado") console.log("   feito   : já aplicada");
       else if (c.passos && c.estado !== "corrigido") {
@@ -596,7 +607,7 @@ async function principal() {
       }
       console.log("");
     }
-    console.log(`Resumo: ${saida.correcoes.length} correção(ões) · ${conta("a_gravar")} a gravar · ${conta("corrigido")} gravada(s) · ${conta("ja_aplicado")} já aplicada(s) · ${conta("erro")} com erro`);
+    console.log(`Resumo: ${saida.correcoes.length} correção(ões) · ${conta("a_gravar")} a gravar · ${conta("corrigido")} gravada(s) · ${conta("ja_aplicado")} já aplicada(s) · ${conta("pendente")} pendente(s) · ${conta("erro")} com erro`);
     if (!args.aplicar && conta("a_gravar") && !conta("erro")) {
       const transferencia = saida.correcoes.some((c) => c.estado === "a_gravar" && c.modo === "transferencia");
       console.log(`\nPara gravar${transferencia ? " (a transferência usa functions/wms/lib: antes, npm --prefix functions/wms run build)" : ""}:\n  node tools/corrigir-codigo-do-produto/corrigir.mjs --projeto ${args.projeto} --aplicar --confirmo "${confirmacaoDe(args.projeto)}"`);

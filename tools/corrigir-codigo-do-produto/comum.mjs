@@ -105,13 +105,20 @@ export const doCliente = (docs, cliente) => docs.filter((doc) => clienteDe(doc.d
 export const descreverMovimento = (d) =>
   `${texto(d.source) || "sem origem"} ${texto(d.tipo_mov || d.type)} ${fmt(num(d.quantity ?? d.qtde))} em ${texto(d.location_id) || "?"}${quando(d.occurred_at) ? ` ${quando(d.occurred_at)}` : ""}`;
 
-/** Confere os campos da correção (correcoes.mjs). */
-export function conferirCorrecao(correcao, tamanhoDoCodigo) {
+/**
+ * Confere os campos da correção (correcoes.mjs). O tamanho só muda na
+ * transferência (`tamanhoPodeMudar`), em que as peças vão para o SKU certo,
+ * que tem o tamanho dele (o XGG lançado no lugar do XG, 16/11/2026). No mesmo
+ * SKU, o código muda e o tamanho do cadastro não.
+ */
+export function conferirCorrecao(correcao, tamanhoDoCodigo, { tamanhoPodeMudar = false } = {}) {
   const cliente = texto(correcao.cliente);
   const kDe = chaveDoCodigo(correcao.de);
   const kPara = chaveDoCodigo(correcao.para);
   if (!cliente || !kDe || !kPara || kDe === kPara) recusar("a correção precisa de cliente, de e para diferentes");
-  if (tamanhoDoCodigo(correcao.de) !== tamanhoDoCodigo(correcao.para)) recusar(`os dois códigos precisam terminar no mesmo tamanho (${correcao.de}, ${correcao.para})`);
+  if (!tamanhoPodeMudar && tamanhoDoCodigo(correcao.de) !== tamanhoDoCodigo(correcao.para)) {
+    recusar(`o tamanho muda (${correcao.de} → ${correcao.para}), e o ${correcao.para} não está no cadastro: com tamanho diferente, as peças só passam para um SKU que já tenha o código certo`);
+  }
   if (!(correcao.caixas ?? []).length) recusar("a correção precisa da caixa (caixas)");
   if (!["Masculino", "Feminino"].includes(correcao.genero)) recusar('o gênero da correção é "Masculino" ou "Feminino"');
 }
