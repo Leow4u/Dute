@@ -1943,6 +1943,9 @@ export async function completeOpeningInventorySessionTransaction(
   });
 }
 
+/** Quem conta uma área de passagem (RECEBIMENTO, EXPEDICAO) na contagem cíclica. */
+const CYCLE_COUNT_AREA_ROLES: readonly string[] = ["owner", "admin"];
+
 export async function recordCycleCountTransaction(
   db: Firestore,
   input: RecordCycleCountInput,
@@ -1956,7 +1959,13 @@ export async function recordCycleCountTransaction(
   const generatesSku =
     mode === "opening" && text(input.product_registration) === "new";
   const requestedSku = generatesSku ? "" : normalizedIdentity(input.sku_code);
-  const locationId = text(input.location_id);
+  // A contagem cíclica fala da prateleira pela etiqueta: o endereço vale em
+  // maiúsculas, e a área de passagem, pelo nome dela em qualquer grafia
+  // (diagnóstico da Contagem cíclica, F08). A abertura grava como veio.
+  const locationTyped = text(input.location_id);
+  const countedArea = mode === "cycle" ? areaDePassagem(locationTyped) : null;
+  const locationId =
+    mode === "cycle" ? countedArea ?? locationTyped.toUpperCase() : locationTyped;
   const reason = text(input.reason);
   const countedQty = number(input.counted_qty);
   const boxCode = mode === "opening" ? text(input.box_code).toUpperCase() : "";
@@ -1980,6 +1989,14 @@ export async function recordCycleCountTransaction(
   const problemaDaQuantidade = problemaDaQuantidadeContada(mode, countedQty);
   if (problemaDaQuantidade) {
     throw new HttpsError("invalid-argument", problemaDaQuantidade);
+  }
+  // O RECEBIMENTO e a EXPEDICAO não são prateleira: o que está neles tem guarda
+  // a caminho e muda o "Em recebimento" do portal. Só a administração conta ali.
+  if (countedArea && !CYCLE_COUNT_AREA_ROLES.includes(actor.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      `O local ${countedArea} é área de passagem, não prateleira: só a administração (owner ou admin) conta nele. Conte a prateleira onde o item está ou peça à administração.`,
+    );
   }
 
   const sessionId =
@@ -2033,6 +2050,20 @@ export async function recordCycleCountTransaction(
     }
 
     await assertInventoryOperationsEnabled(transaction, db);
+
+    // A prateleira contada existe no mapa do armazém (Estoque › Posições). A
+    // área de passagem não é posição cadastrada e já passou pelo papel.
+    if (mode === "cycle" && !countedArea) {
+      const position = await transaction.get(
+        db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(locationId),
+      );
+      if (!position.exists) {
+        throw new HttpsError(
+          "not-found",
+          `A posição ${locationTyped} não está cadastrada no mapa do armazém. Confira o código na etiqueta da prateleira (a rua e o número, como B-10) ou cadastre a posição em Estoque › Posições.`,
+        );
+      }
+    }
 
     // Leituras do SKU gerado (sigla, contador, código livre) e da
     // duplicidade por código de barras, antes de qualquer escrita. Recontar

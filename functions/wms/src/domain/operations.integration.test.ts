@@ -39,6 +39,21 @@ async function storedUnitPrice(database: Firestore, customer: string, sku: strin
   return snap.data()?.preco_unit;
 }
 
+/** A prateleira no mapa do armazém (Estoque › Posições): a contagem cíclica só grava em posição cadastrada. */
+function registerPosition(code: string, customer = "BTG Pactual") {
+  return db.collection("warehouse_positions").doc(code).set({
+    code,
+    aisle: code.split("-")[0],
+    shelf: 1,
+    sequence: 1,
+    length_m: 1.8,
+    depth_m: 0.75,
+    height_m: 0.5,
+    customer_code: customer,
+    status: "active",
+  });
+}
+
 let db: Firestore;
 let app: ReturnType<typeof initializeApp>;
 
@@ -1640,6 +1655,7 @@ describe("inventário de abertura transacional", () => {
 describe("ledger manual e congelamento", () => {
   it("registra inventário cíclico transacional sem romper reservas", async () => {
     await clearFirestore();
+    await registerPosition("LOC-CYCLE");
     await db.collection("stock_balances").doc("cycle-balance").set({
       id: "cycle-balance",
       customer_code: "BTG Pactual",
@@ -1753,6 +1769,7 @@ describe("ledger manual e congelamento", () => {
 
   it("a contagem cíclica recusa a quantidade fracionada e a acima do teto antes de ler o estoque", async () => {
     await clearFirestore();
+    await registerPosition("LOC-CYCLE");
     await db.collection("stock_balances").doc("cycle-balance").set({
       id: "cycle-balance",
       customer_code: "BTG Pactual",
@@ -1798,6 +1815,7 @@ describe("ledger manual e congelamento", () => {
 
   it("a contagem cíclica espera a entrega do que já foi separado na posição", async () => {
     await clearFirestore();
+    await registerPosition("LOC-CYCLE");
     // 10 no saldo, 3 separados para um pedido: na prateleira ficaram 7.
     await db.collection("stock_balances").doc("cycle-balance").set({
       id: "cycle-balance",
@@ -2557,6 +2575,7 @@ describe("integridade de reservas e agregados de catálogo", () => {
 
   it("inventário cíclico sem divergência preserva a projeção agregada multi-localização", async () => {
     await Promise.all([
+      registerPosition("LOC-CYC-A"),
       db.collection("stock_balances").doc("balance-cyc-a").set({
         id: "balance-cyc-a",
         customer_code: "BTG Pactual",
@@ -2622,6 +2641,7 @@ describe("integridade de reservas e agregados de catálogo", () => {
 
   it("movimentos manuais e ajustes cíclicos mantêm os agregados de skus/products", async () => {
     await Promise.all([
+      registerPosition("LOC-AGG"),
       db.collection("stock_balances").doc("balance-agg").set({
         id: "balance-agg",
         customer_code: "BTG Pactual",
