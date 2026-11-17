@@ -35,6 +35,7 @@ const SKU = "BTG-PRATELEIRA-1";
 const PORTAL = `cinv_BTG_Pactual__${SKU}`;
 const coordenacao: OperationalActor = { uid: "coord-1", email: "coord@dutelog.com.br", name: "Mariana Lopes", role: "interno", customer_code: "Dutelog" };
 const armazem: OperationalActor = { uid: "wms-1", email: "wms@dutelog.com.br", name: "Rafael", role: "wms", customer_code: "Dutelog" };
+const administracao: OperationalActor = { uid: "admin-1", email: "admin@dutelog.com.br", name: "Administração Dutelog", role: "admin", customer_code: "Dutelog" };
 const cliente: OperationalActor = { uid: "client-1", email: "compras@btg.com.br", name: "Compras BTG", role: "cliente", customer_code: BTG };
 
 let db: Firestore;
@@ -186,6 +187,15 @@ async function reservasPorLocal(campo: "customer_request_id" | "order_id", valor
 async function portal() {
   const data = (await db.collection("client_inventory").doc(PORTAL).get()).data() ?? {};
   return { qty_on_hand: data.qty_on_hand, qty_reserved: data.qty_reserved, qty_available: data.qty_available, qty_receiving: data.qty_receiving };
+}
+
+/** A contagem cíclica de um local, como a aba Contagem cíclica grava. */
+function contar(location_id: string, counted_qty: number, chave: string, ator: OperationalActor = armazem) {
+  return recordCycleCountTransaction(
+    db,
+    { mode: "cycle", customer_code: BTG, sku_code: SKU, client_item_code: "POLO-P", product_name: "Camiseta polo P", location_id, counted_qty, reason: "Contagem cíclica", idempotency_key: chave },
+    ator,
+  ) as Promise<Record<string, unknown>>;
 }
 
 describe("o pedido do cliente reserva só da prateleira (recebimento com caixas, parte 7)", () => {
@@ -458,19 +468,52 @@ describe("o portal conta como disponível só o que está na prateleira (parte 7
     assert.deepEqual(await portal(), { qty_on_hand: 10, qty_reserved: 0, qty_available: 3, qty_receiving: 5 });
   });
 
-  it("a contagem no RECEBIMENTO muda o em recebimento; sem diferença, o portal se acerta pelos saldos", async () => {
-    const contar = (location_id: string, counted_qty: number, chave: string) =>
-      recordCycleCountTransaction(
-        db,
-        { mode: "cycle", customer_code: BTG, sku_code: SKU, client_item_code: "POLO-P", product_name: "Camiseta polo P", location_id, counted_qty, reason: "Contagem cíclica", idempotency_key: chave },
-        armazem,
-      );
-    await contar("RECEBIMENTO", 3, "contagem-1");
+  it("a contagem no RECEBIMENTO, pela administração, muda o em recebimento; sem diferença, o portal se acerta pelos saldos", async () => {
+    // A área de passagem só se conta pela administração (o caso seguinte); a prateleira, por quem opera.
+    await contar("RECEBIMENTO", 3, "contagem-1", administracao);
     assert.deepEqual(await saldos(), { "A-01": [3, 0], EXPEDICAO: [2, 0], RECEBIMENTO: [3, 0], "S-01": [4, 0] });
     assert.deepEqual(await portal(), { qty_on_hand: 12, qty_reserved: 0, qty_available: 7, qty_receiving: 3 });
 
     await db.collection("client_inventory").doc(PORTAL).update({ qty_available: 12, qty_receiving: 0 });
     await contar("A-01", 3, "contagem-2");
     assert.deepEqual(await portal(), { qty_on_hand: 12, qty_reserved: 0, qty_available: 7, qty_receiving: 3 });
+  });
+
+  it("a área de passagem só se conta pela administração: quem opera é recusado com a frase, e nada muda", async () => {
+    const casos: Array<[OperationalActor, string, string]> = [
+      [armazem, "RECEBIMENTO", "RECEBIMENTO"],
+      [coordenacao, "EXPEDICAO", "EXPEDICAO"],
+      [armazem, "expedição", "EXPEDICAO"],
+    ];
+    for (const [ator, digitado, area] of casos) {
+      await assert.rejects(contar(digitado, 1, `area-${ator.role}-${digitado}`, ator), {
+        code: "permission-denied",
+        message: `O local ${area} é área de passagem, não prateleira: só a administração (owner ou admin) conta nele. Conte a prateleira onde o item está ou peça à administração.`,
+      });
+    }
+    assert.deepEqual(await saldos(), { "A-01": [3, 0], EXPEDICAO: [2, 0], RECEBIMENTO: [5, 0], "S-01": [4, 0] });
+    assert.equal((await db.collection("cycle_counts").get()).size, 0);
+
+    // A administração conta a área em qualquer grafia, e o registro sai pelo nome dela.
+    await contar("recebimento", 4, "area-admin-recebimento", administracao);
+    await contar("Expedição", 1, "area-owner-expedicao", { ...administracao, uid: "owner-1", role: "owner" });
+    assert.deepEqual(await saldos(), { "A-01": [3, 0], EXPEDICAO: [1, 0], RECEBIMENTO: [4, 0], "S-01": [4, 0] });
+    const contagens = (await db.collection("cycle_counts").get()).docs.map((doc) => String(doc.get("location_id"))).sort();
+    assert.deepEqual(contagens, ["EXPEDICAO", "RECEBIMENTO"]);
+  });
+
+  it("a prateleira digitada em minúscula vale em maiúsculas; a posição fora do mapa é recusada dizendo o que foi digitado", async () => {
+    await contar("a-01", 2, "prateleira-minuscula");
+    assert.deepEqual(await saldos(), { "A-01": [2, 0], EXPEDICAO: [2, 0], RECEBIMENTO: [5, 0], "S-01": [4, 0] });
+    assert.deepEqual((await db.collection("cycle_counts").get()).docs.map((doc) => doc.get("location_id")), ["A-01"]);
+    assert.deepEqual((await db.collection("movements").get()).docs.map((doc) => doc.get("location_id")), ["A-01"]);
+
+    for (const digitado of ["B-10", "b10", "CX-000221"]) {
+      await assert.rejects(contar(digitado, 2, `fora-do-mapa-${digitado}`), {
+        code: "not-found",
+        message: `A posição ${digitado} não está cadastrada no mapa do armazém. Confira o código na etiqueta da prateleira (a rua e o número, como B-10) ou cadastre a posição em Estoque › Posições.`,
+      });
+    }
+    assert.equal((await db.collection("cycle_counts").get()).size, 1);
   });
 });

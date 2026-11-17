@@ -79,10 +79,13 @@ import {
   type SkuAllocator,
 } from "./catalog-codes.js";
 import {
+  CATALOG_PRICES,
+  catalogPriceId,
   publishedMoneyDeletes,
   rememberCatalogPrice,
   unitPriceOf,
 } from "./catalog-prices.js";
+import { problemaDaQuantidadeContada } from "./cycle-count-input.js";
 import {
   FieldValue,
   type DocumentData,
@@ -335,11 +338,13 @@ export type RecordCycleCountInput = {
   photo_storage_paths?: string[];
   location_id: string;
   counted_qty: number;
+  /** Só na abertura: a cíclica ignora e usa o custo do saldo ou do catálogo. */
   unit_cost?: number;
   reason: string;
   reference?: string;
   /** Caixa (unidade de manuseio) onde o produto foi lançado; só na abertura. */
   box_code?: string;
+  /** Só na abertura: a cíclica grava a hora do servidor. */
   occurred_at?: string;
   idempotency_key: string;
 };
@@ -1942,6 +1947,9 @@ export async function completeOpeningInventorySessionTransaction(
   });
 }
 
+/** Quem conta uma área de passagem (RECEBIMENTO, EXPEDICAO) na contagem cíclica. */
+const CYCLE_COUNT_AREA_ROLES: readonly string[] = ["owner", "admin"];
+
 export async function recordCycleCountTransaction(
   db: Firestore,
   input: RecordCycleCountInput,
@@ -1955,7 +1963,13 @@ export async function recordCycleCountTransaction(
   const generatesSku =
     mode === "opening" && text(input.product_registration) === "new";
   const requestedSku = generatesSku ? "" : normalizedIdentity(input.sku_code);
-  const locationId = text(input.location_id);
+  // A contagem cíclica fala da prateleira pela etiqueta: o endereço vale em
+  // maiúsculas, e a área de passagem, pelo nome dela em qualquer grafia
+  // (diagnóstico da Contagem cíclica, F08). A abertura grava como veio.
+  const locationTyped = text(input.location_id);
+  const countedArea = mode === "cycle" ? areaDePassagem(locationTyped) : null;
+  const locationId =
+    mode === "cycle" ? countedArea ?? locationTyped.toUpperCase() : locationTyped;
   const reason = text(input.reason);
   const countedQty = number(input.counted_qty);
   const boxCode = mode === "opening" ? text(input.box_code).toUpperCase() : "";
@@ -1974,6 +1988,20 @@ export async function recordCycleCountTransaction(
       "A contagem física não pode ser negativa.",
     );
   }
+  // A contagem cíclica é de unidades inteiras e tem teto (diagnóstico da
+  // Contagem cíclica, F11); a abertura não muda aqui.
+  const problemaDaQuantidade = problemaDaQuantidadeContada(mode, countedQty);
+  if (problemaDaQuantidade) {
+    throw new HttpsError("invalid-argument", problemaDaQuantidade);
+  }
+  // O RECEBIMENTO e a EXPEDICAO não são prateleira: o que está neles tem guarda
+  // a caminho e muda o "Em recebimento" do portal. Só a administração conta ali.
+  if (countedArea && !CYCLE_COUNT_AREA_ROLES.includes(actor.role)) {
+    throw new HttpsError(
+      "permission-denied",
+      `O local ${countedArea} é área de passagem, não prateleira: só a administração (owner ou admin) conta nele. Conte a prateleira onde o item está ou peça à administração.`,
+    );
+  }
 
   const sessionId =
     mode === "opening" ? safeDocId(text(input.session_id)) : undefined;
@@ -1987,7 +2015,11 @@ export async function recordCycleCountTransaction(
     );
   }
 
-  const occurredAt = input.occurred_at ?? new Date().toISOString();
+  // A hora da contagem cíclica é a do servidor, como em recordOperationalEvent
+  // (diagnóstico da Contagem cíclica, F12): o relógio do aparelho não entra no
+  // movimento, no registro nem no saldo. A abertura segue com a hora digitada.
+  const occurredAt =
+    mode === "cycle" ? new Date().toISOString() : input.occurred_at ?? new Date().toISOString();
   const operationId = `op_${mode === "opening" ? "opening_inventory" : "cycle_count"}_${digest({
     customer: customerCode,
     // Produto novo ainda não tem SKU: o código do cliente distingue a operação.
@@ -2026,6 +2058,20 @@ export async function recordCycleCountTransaction(
     }
 
     await assertInventoryOperationsEnabled(transaction, db);
+
+    // A prateleira contada existe no mapa do armazém (Estoque › Posições). A
+    // área de passagem não é posição cadastrada e já passou pelo papel.
+    if (mode === "cycle" && !countedArea) {
+      const position = await transaction.get(
+        db.collection(WAREHOUSE_POSITIONS_COLLECTION).doc(locationId),
+      );
+      if (!position.exists) {
+        throw new HttpsError(
+          "not-found",
+          `A posição ${locationTyped} não está cadastrada no mapa do armazém. Confira o código na etiqueta da prateleira (a rua e o número, como B-10) ou cadastre a posição em Estoque › Posições.`,
+        );
+      }
+    }
 
     // Leituras do SKU gerado (sigla, contador, código livre) e da
     // duplicidade por código de barras, antes de qualquer escrita. Recontar
@@ -2174,6 +2220,15 @@ export async function recordCycleCountTransaction(
       transaction,
       exactBalanceQuery(db, customerCode, skuCode, locationId),
     );
+    // O custo da contagem cíclica vem do saldo ou do preço de catálogo
+    // (catalog_prices), nunca do digitado (F07): quem conta não vê preço, e o
+    // digitado reescrevia a base do ad valorem.
+    const catalogPriceSnapshot =
+      mode === "cycle"
+        ? await transaction.get(
+            db.collection(CATALOG_PRICES).doc(catalogPriceId(customerCode, skuCode)),
+          )
+        : undefined;
     if (balanceRows.length > 1) {
       throw new HttpsError(
         "failed-precondition",
@@ -2488,14 +2543,21 @@ export async function recordCycleCountTransaction(
     const catalogProduct =
       productRows[0]?.data ?? productCodeSnapshot?.data() ?? {};
     const catalogSku = skuRows[0]?.data ?? skuCodeSnapshot?.data() ?? {};
-    const unitCost = number(
-      input.unit_cost ||
-        balanceRow.data.unit_cost ||
-        catalogSku.preco_unit ||
-        catalogSku.unit_cost ||
-        catalogProduct.preco_unit ||
-        catalogProduct.unit_cost,
-    );
+    const unitCost =
+      mode === "cycle"
+        ? number(balanceRow.data.unit_cost) || unitPriceOf(catalogPriceSnapshot?.data()) || 0
+        : number(
+            input.unit_cost ||
+              balanceRow.data.unit_cost ||
+              catalogSku.preco_unit ||
+              catalogSku.unit_cost ||
+              catalogProduct.preco_unit ||
+              catalogProduct.unit_cost,
+          );
+    // A contagem cíclica não grava preço: a projeção do cliente vai sem o
+    // custo, e rememberCatalogPrice não toca em catalog_prices, com ou sem
+    // diferença. Só a abertura publica o custo do produto.
+    const projectedUnitCost = mode === "cycle" ? undefined : unitCost;
     if (mode === "opening" && unitCost <= 0) {
       throw new HttpsError(
         "failed-precondition",
@@ -2878,7 +2940,7 @@ export async function recordCycleCountTransaction(
         size,
         color,
         photoUrls,
-        unitCost,
+        unitCost: projectedUnitCost,
         onHandDelta: delta,
         split: clientSplit(
           balancesAfter(aggregateBalanceRows, [
@@ -2915,7 +2977,7 @@ export async function recordCycleCountTransaction(
         size,
         color,
         photoUrls,
-        unitCost,
+        unitCost: projectedUnitCost,
         qtyOnHand: aggregateOnHand,
         qtyReserved: aggregateReserved,
         split: clientSplit(

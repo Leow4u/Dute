@@ -39,6 +39,21 @@ async function storedUnitPrice(database: Firestore, customer: string, sku: strin
   return snap.data()?.preco_unit;
 }
 
+/** A prateleira no mapa do armazém (Estoque › Posições): a contagem cíclica só grava em posição cadastrada. */
+function registerPosition(code: string, customer = "BTG Pactual") {
+  return db.collection("warehouse_positions").doc(code).set({
+    code,
+    aisle: code.split("-")[0],
+    shelf: 1,
+    sequence: 1,
+    length_m: 1.8,
+    depth_m: 0.75,
+    height_m: 0.5,
+    customer_code: customer,
+    status: "active",
+  });
+}
+
 let db: Firestore;
 let app: ReturnType<typeof initializeApp>;
 
@@ -1640,6 +1655,7 @@ describe("inventário de abertura transacional", () => {
 describe("ledger manual e congelamento", () => {
   it("registra inventário cíclico transacional sem romper reservas", async () => {
     await clearFirestore();
+    await registerPosition("LOC-CYCLE");
     await db.collection("stock_balances").doc("cycle-balance").set({
       id: "cycle-balance",
       customer_code: "BTG Pactual",
@@ -1751,8 +1767,55 @@ describe("ledger manual e congelamento", () => {
     assert.equal(events.docs[0]?.data().payload?.location_id, "LOC-CYCLE");
   });
 
+  it("a contagem cíclica recusa a quantidade fracionada e a acima do teto antes de ler o estoque", async () => {
+    await clearFirestore();
+    await registerPosition("LOC-CYCLE");
+    await db.collection("stock_balances").doc("cycle-balance").set({
+      id: "cycle-balance",
+      customer_code: "BTG Pactual",
+      sku_code: "BTG-CYCLE-1",
+      client_item_code: "ITEM-CYCLE-1",
+      product_name: "Produto de teste inventário cíclico",
+      location_id: "LOC-CYCLE",
+      qty_on_hand: 10,
+      qty_reserved: 0,
+      qty_available: 10,
+    });
+    const contar = (counted_qty: number, idempotency_key: string) =>
+      recordCycleCountTransaction(
+        db,
+        {
+          customer_code: "BTG Pactual",
+          sku_code: "BTG-CYCLE-1",
+          client_item_code: "ITEM-CYCLE-1",
+          location_id: "LOC-CYCLE",
+          counted_qty,
+          reason: "Contagem da prateleira",
+          idempotency_key,
+        },
+        actor,
+      );
+    await assert.rejects(contar(2.5, "cycle-fracao"), {
+      code: "invalid-argument",
+      message: "A quantidade contada precisa ser um número inteiro de unidades, sem casas decimais.",
+    });
+    await assert.rejects(contar(100_001, "cycle-teto"), {
+      code: "invalid-argument",
+      message: "A quantidade contada não pode passar de 100.000 unidades. Confira o número digitado.",
+    });
+    // Nada foi gravado: saldo, contagem, movimento, evento e recibo.
+    assert.equal((await db.collection("stock_balances").doc("cycle-balance").get()).get("qty_on_hand"), 10);
+    for (const colecao of ["cycle_counts", "movements", "events", "operational_operations"]) {
+      assert.equal((await db.collection(colecao).get()).size, 0, colecao);
+    }
+    // O teto, inteiro, passa.
+    const noTeto = await contar(100_000, "cycle-no-teto");
+    assert.equal(noTeto.adjustment_delta, 99_990);
+  });
+
   it("a contagem cíclica espera a entrega do que já foi separado na posição", async () => {
     await clearFirestore();
+    await registerPosition("LOC-CYCLE");
     // 10 no saldo, 3 separados para um pedido: na prateleira ficaram 7.
     await db.collection("stock_balances").doc("cycle-balance").set({
       id: "cycle-balance",
@@ -2512,6 +2575,7 @@ describe("integridade de reservas e agregados de catálogo", () => {
 
   it("inventário cíclico sem divergência preserva a projeção agregada multi-localização", async () => {
     await Promise.all([
+      registerPosition("LOC-CYC-A"),
       db.collection("stock_balances").doc("balance-cyc-a").set({
         id: "balance-cyc-a",
         customer_code: "BTG Pactual",
@@ -2577,6 +2641,7 @@ describe("integridade de reservas e agregados de catálogo", () => {
 
   it("movimentos manuais e ajustes cíclicos mantêm os agregados de skus/products", async () => {
     await Promise.all([
+      registerPosition("LOC-AGG"),
       db.collection("stock_balances").doc("balance-agg").set({
         id: "balance-agg",
         customer_code: "BTG Pactual",
@@ -2683,6 +2748,96 @@ describe("integridade de reservas e agregados de catálogo", () => {
     assert.equal(sku.data()?.custo_total, undefined);
     assert.equal(product.data()?.estoque_btg, 10);
     assert.equal(product.data()?.custo_total, undefined);
+  });
+
+  it("a contagem cíclica ignora o custo digitado e a hora do aparelho: catalog_prices não muda, e o registro sai na hora do servidor", async () => {
+    const SKU = "SKU-CUSTO-1";
+    const priceRef = db.collection("catalog_prices").doc(catalogPriceId("BTG Pactual", SKU));
+    await Promise.all([
+      registerPosition("LOC-CUSTO"),
+      db.collection("stock_balances").doc("balance-custo").set({
+        id: "balance-custo",
+        customer_code: "BTG Pactual",
+        sku_code: SKU,
+        client_item_code: "ITEM-CUSTO-1",
+        product_name: "Produto com preço de catálogo",
+        location_id: "LOC-CUSTO",
+        qty_on_hand: 10,
+        qty_reserved: 0,
+        qty_available: 10,
+      }),
+      // O preço que a BTG paga de ad valorem: só o Catálogo muda, por quem vê valor.
+      priceRef.set({ id: priceRef.id, customer_code: "BTG Pactual", sku_code: SKU, item_code: "ITEM-CUSTO-1", preco_unit: 10, total_cost: 100 }),
+    ]);
+    const precoAntes = (await priceRef.get()).data();
+    const contar = (counted_qty: number, idempotency_key: string) =>
+      recordCycleCountTransaction(
+        db,
+        {
+          mode: "cycle",
+          customer_code: "BTG Pactual",
+          sku_code: SKU,
+          client_item_code: "ITEM-CUSTO-1",
+          location_id: "LOC-CUSTO",
+          counted_qty,
+          // O que a tela manda hoje: o custo que ficou no campo e o relógio do aparelho.
+          unit_cost: 12,
+          occurred_at: "2020-01-01T00:00:00.000Z",
+          reason: "Contagem com custo digitado por engano",
+          idempotency_key,
+        },
+        actor,
+      ) as Promise<Record<string, unknown>>;
+
+    // Com diferença: o preço de catálogo fica, e o custo registrado é o dele.
+    const antes = Date.now();
+    const ajustada = await contar(8, "custo-com-diferenca");
+    const depois = Date.now();
+    assert.equal(ajustada.adjustment_delta, -2);
+    assert.deepEqual((await priceRef.get()).data(), precoAntes);
+    const [contagem] = (await db.collection("cycle_counts").where("sku_code", "==", SKU).get()).docs;
+    assert.equal(contagem!.get("unit_cost"), 10);
+    const [movimento] = (await db.collection("movements").where("sku_code", "==", SKU).get()).docs;
+    const hora = String(movimento!.get("occurred_at"));
+    const quando = Date.parse(hora);
+    assert.ok(quando >= antes - 1000 && quando <= depois + 1000, `occurred_at ${hora} fora da hora do servidor`);
+    assert.equal(contagem!.get("occurred_at"), hora);
+    assert.equal((await db.collection("stock_balances").doc("balance-custo").get()).get("last_cycle_count_at"), hora);
+
+    // Sem diferença: nada em catalog_prices também.
+    await contar(8, "custo-sem-diferenca");
+    assert.deepEqual((await priceRef.get()).data(), precoAntes);
+    assert.equal(await storedUnitPrice(db, "BTG Pactual", SKU), 10);
+  });
+
+  it("sem preço de catálogo nem custo no saldo, o custo digitado na contagem cíclica não cria o preço", async () => {
+    const SKU = "SKU-CUSTO-2";
+    await Promise.all([
+      registerPosition("LOC-CUSTO-2"),
+      db.collection("stock_balances").doc("balance-custo-2").set({
+        id: "balance-custo-2",
+        customer_code: "BTG Pactual",
+        sku_code: SKU,
+        client_item_code: "ITEM-CUSTO-2",
+        product_name: "Produto sem preço",
+        location_id: "LOC-CUSTO-2",
+        qty_on_hand: 5,
+        qty_reserved: 0,
+        qty_available: 5,
+      }),
+    ]);
+    const contar = (counted_qty: number, idempotency_key: string) =>
+      recordCycleCountTransaction(
+        db,
+        { mode: "cycle", customer_code: "BTG Pactual", sku_code: SKU, location_id: "LOC-CUSTO-2", counted_qty, unit_cost: 12, reason: "Contagem com custo digitado", idempotency_key },
+        actor,
+      ) as Promise<Record<string, unknown>>;
+    await contar(7, "sem-preco-com-diferenca");
+    await contar(7, "sem-preco-sem-diferenca");
+    assert.equal((await db.collection("catalog_prices").doc(catalogPriceId("BTG Pactual", SKU)).get()).exists, false);
+    const contagens = (await db.collection("cycle_counts").where("sku_code", "==", SKU).get()).docs;
+    assert.equal(contagens.length, 2);
+    assert.ok(contagens.every((doc) => doc.get("unit_cost") === undefined));
   });
 
   it("resolve catálogo importado (id stable_id, sem *_key) pelos campos crus", async () => {
