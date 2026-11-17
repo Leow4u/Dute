@@ -400,6 +400,30 @@
         "ENTRADA"
       ],
       "entradas": { "A-01": [{ "dia": null, "quantidade": 7 }] }
+    },
+    {
+      "caso": "a ENTRADA da recontagem numa caixa do recebimento vale o dia da guarda (fifo_day), não o do created_at: a peça achada a mais sempre esteve na caixa; o fifo_day inválido cai no created_at",
+      "abertura": { "id": "opening_Cliente_Novo", "started_at": "2026-10-16T12:00:00.000Z" },
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_cycle_count", "location_id": "A-03", "quantity": 2, "created_at": "2026-11-17T15:00:00.000Z", "box_code": "CX-000012", "fifo_day": "2026-10-20" },
+        { "tipo_mov": "ENTRADA", "source": "functions_cycle_count", "location_id": "A-03", "quantity": 1, "created_at": "2026-11-17T15:00:00.000Z", "fifo_day": "2026-02-30" },
+        { "tipo_mov": "ENTRADA", "source": "functions_cycle_count", "location_id": "A-03", "quantity": 3, "created_at": "2026-11-17T15:00:00.000Z" },
+        { "tipo_mov": "SAIDA", "source": "functions_cycle_count", "location_id": "A-03", "quantity": 5, "created_at": "2026-11-17T15:00:00.000Z", "fifo_day": "2026-10-20" }
+      ],
+      "entradas": { "A-03": [{ "dia": "2026-10-20", "quantidade": 2 }, { "dia": "2026-11-17", "quantidade": 1 }, { "dia": "2026-11-17", "quantidade": 3 }] }
+    },
+    {
+      "caso": "a ENTRADA da recontagem numa caixa da abertura vale o dia da sessão, como o conteúdo de entrada dela: não abre uma data nova; a de outra sessão fica com o fifo_day",
+      "abertura": { "id": "opening_Cliente_Novo", "started_at": "2026-10-16T12:00:00.000Z" },
+      "movimentos": [
+        { "tipo_mov": "ENTRADA", "source": "functions_opening_inventory", "location_id": "A-03", "quantity": 60, "created_at": "2026-10-18T15:00:00.000Z", "opening_inventory_session_id": "opening_Cliente_Novo" },
+        { "tipo_mov": "ENTRADA", "source": "functions_cycle_count", "location_id": "A-03", "quantity": 2, "created_at": "2026-11-17T15:00:00.000Z", "box_code": "CX-000012", "fifo_day": "2026-10-20", "fifo_opening_session_id": "opening_Cliente_Novo" },
+        { "tipo_mov": "ENTRADA", "source": "functions_cycle_count", "location_id": "B-01", "quantity": 1, "created_at": "2026-11-17T15:00:00.000Z", "fifo_day": "2026-10-21", "fifo_opening_session_id": "opening_Outro_Cliente" }
+      ],
+      "entradas": {
+        "A-03": [{ "dia": "2026-10-16", "quantidade": 60 }, { "dia": "2026-10-16", "quantidade": 2 }],
+        "B-01": [{ "dia": "2026-10-21", "quantidade": 1 }]
+      }
     }
   ],
   "leituras": [

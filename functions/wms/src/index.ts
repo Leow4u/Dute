@@ -74,6 +74,7 @@ import {
   setPickLineSeparated as setPickLineSeparatedFor,
 } from "./domain/pick-progress.js";
 import { recordBoxBalanceLabelPrint as recordBoxBalanceLabelPrintFor } from "./domain/box-relabel.js";
+import { BOX_RECOUNT_EVENT_TYPE, entradaDaRecontagem, recountWarehouseBoxTransaction } from "./domain/box-recount.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -1612,6 +1613,8 @@ function notificationKindForEvent(eventType: string, severity?: string) {
  * A caixa é detalhe interno (P8, decidido em 02/11/2026): o aviso ao cliente
  * nunca cita um CX-. O evento da abertura do inventário diz a caixa e a
  * posição, e vira rascunho interno, como qualquer evento que cite uma caixa.
+ * O da recontagem da caixa (contagem por caixa) também: a caixa e a
+ * prateleira estão no payload dele.
  */
 const AVISO_INTERNO_DO_ESTOQUE = {
   topic: "inventory",
@@ -1653,7 +1656,7 @@ function notificationDraftFromEvent(event: EventRow) {
   if (!tipo) return null;
   const kind =
     tipo.audience === "client" &&
-    (type.toLowerCase().startsWith("inventory.opening_") || citaCaixa([title, description]))
+    (type.toLowerCase().startsWith("inventory.opening_") || type === BOX_RECOUNT_EVENT_TYPE || citaCaixa([title, description]))
       ? AVISO_INTERNO_DO_ESTOQUE
       : tipo;
 
@@ -6943,6 +6946,20 @@ export const recordCycleCount = onCall(async (request) => {
     },
     profile,
   );
+});
+
+/**
+ * Recontar uma caixa (contagem por caixa, diagnóstico da Contagem cíclica,
+ * seção 6, item 4): a caixa e o saldo da prateleira na mesma transação.
+ * Quem conta é quem opera o armazém; a diferença grava na hora.
+ */
+export const recountWarehouseBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  // A entrada fora do formato recusa com a frase para quem opera; o ZodError cru viraria INTERNAL.
+  const input = entradaDaRecontagem(request.data);
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return recountWarehouseBoxTransaction(db, { ...input, customer_code }, profile);
 });
 
 export const createReturnReceipt = onCall(async (request) => {

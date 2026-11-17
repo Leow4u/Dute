@@ -27,8 +27,9 @@ const EVENTOS: { id: string; type: string; severity: string; description?: strin
 
 /**
  * A caixa é detalhe interno (P8, decidido em 02/11/2026): o evento da
- * abertura do inventário, que diz a caixa e a posição, e qualquer evento que
- * cite um CX- viram rascunho interno.
+ * abertura do inventário, que diz a caixa e a posição, o da recontagem da
+ * caixa, que as tem no payload, e qualquer evento que cite um CX- viram
+ * rascunho interno.
  */
 const EVENTOS_COM_CAIXA = [
   {
@@ -48,6 +49,13 @@ const EVENTOS_COM_CAIXA = [
     type: "inventory.received",
     severity: "info",
     description: "Entrada conferida na caixa CX-000003.",
+  },
+  {
+    // A recontagem por caixa: o texto não cita a caixa, que fica no payload.
+    id: "evt_caixa_recontada",
+    type: "inventory.box_recounted",
+    severity: "attention",
+    description: "2 itens contados · 115 un. · diferença −5 un.",
   },
 ];
 
@@ -151,7 +159,7 @@ describe("os rascunhos de aviso do Agent Dute", () => {
     assert.equal(rascunhos.get("evt_sinal")?.subject, `Sinal operacional para acompanhamento: ${CLIENTE}`);
   });
 
-  it("a caixa é detalhe interno: o evento da abertura e o que cita CX- viram rascunho interno", () => {
+  it("a caixa é detalhe interno: o evento da abertura, o da recontagem da caixa e o que cita CX- viram rascunho interno", () => {
     for (const evento of EVENTOS_COM_CAIXA) {
       const rascunho = rascunhos.get(evento.id);
       assert.equal(rascunho?.audience, "internal", evento.id);

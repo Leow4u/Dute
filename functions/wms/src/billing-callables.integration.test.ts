@@ -649,8 +649,10 @@ describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () 
    * movimento semeado: a entrada cobra as peças uma vez, como uma linha de
    * recebimento, na competência da conclusão, e a guarda da caixa (o par
    * wms_putaway) não cobra. Entradas 10 × 1,00; movimento 1 × 0,50: 10,50.
+   * A recontagem da caixa guardada (contagem por caixa), pela callable de
+   * verdade, com falta e item fora da lista, também não cobra.
    */
-  it("a entrada da NF cobra as peças uma vez, na competência da conclusão, e a guarda da caixa não cobra", async () => {
+  it("a entrada da NF cobra as peças uma vez, na competência da conclusão, e a guarda e a recontagem da caixa não cobram", async () => {
     const CAIXAS = "Cliente das Caixas";
     const operacao = { uid: "arm", role: "wms", name: "Armazém" };
     const competencia = competenciaFromDate(new Date());
@@ -700,6 +702,21 @@ describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () 
     const depoisDaGuarda = await previa({ competencia, customer_code: CAIXAS });
     assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDaGuarda).get(id)?.qtde ?? 0), [10, 0, 1]);
     assert.equal(depoisDaGuarda.total_cents, 1050);
+
+    // A recontagem achou 8 polos e um boné fora da lista: a saída e a entrada da contagem não cobram.
+    await db.collection("skus").doc("CXA-000002").set({ id: "CXA-000002", customer_code: CAIXAS, cod_cliente: "CXA.BONE", cod_btg: "CXA-000002", sku_code: "CXA-000002", produto: "BONE", status: "active" });
+    const recontada = await chamar<{ difference_units: number; shelf_delta_units: number }>(wms.recountWarehouseBox, "arm", {
+      customer_code: CAIXAS,
+      box_code: caixa,
+      location_id: "Z-01",
+      lines: [{ sku_code: "CXA-000001", counted_qty: 8 }],
+      extra_lines: [{ sku_code: "CXA-000002", counted_qty: 1 }],
+      idempotency_key: "regua-recontar",
+    });
+    assert.deepEqual([recontada.difference_units, recontada.shelf_delta_units], [-1, -1]);
+    const depoisDaRecontagem = await previa({ competencia, customer_code: CAIXAS });
+    assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDaRecontagem).get(id)?.qtde ?? 0), [10, 0, 1]);
+    assert.equal(depoisDaRecontagem.total_cents, 1050);
   });
 });
 

@@ -841,6 +841,48 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    caixa recontada fica "aberta" (etiqueta com "saldo em"). As ferramentas do
    acerto (`tools/acerto-btg-2026-10`, `tools/corrigir-codigo-do-produto`)
    ainda não leem `count_adjustments`.
+
+   *O servidor no código desde 17/11/2026 (PR 618, sem tela):* a callable
+   `recountWarehouseBox` (`functions/wms/src/domain/box-recount.ts`), de
+   owner, admin, interno e wms, reconta uma caixa guardada numa transação só.
+   Entrada: o cliente, a caixa, a prateleira, todos os itens da caixa com o
+   contado (`lines`, inteiro até 100.000, a regra da cíclica), os itens fora
+   da lista (`extra_lines`, 1 ou mais), o motivo (sem ele, "Recontagem por
+   caixa"), a referência, a chave e o `round_id` opcional. O esperado é o
+   saldo da caixa; a diferença de cada item acerta a caixa (um ajuste com o
+   id da contagem) e o saldo da prateleira (a sobra consome antes o saldo
+   da prateleira que nenhuma caixa cobre, sem mexer nela, e só o resto sobe a
+   prateleira), com o movimento
+   `functions_cycle_count`, a projeção do portal, os agregados do catálogo,
+   um `cycle_counts` por item (`mode: "box"`, com o esperado e o contado na
+   caixa e o saldo da prateleira antes e depois), o recibo e um evento por
+   caixa (`inventory.box_recounted`, `attention` só com diferença, a caixa e
+   a prateleira só no payload, rascunho de aviso interno). O item fora da
+   lista consome primeiro o saldo da prateleira que nenhuma caixa cobre,
+   depois as outras caixas guardadas da prateleira que o têm, da mais antiga
+   para a mais nova (o saldo da prateleira não muda; a caixa já recontada na
+   mesma rodada não cede peça), e só o resto entra na prateleira; a resposta
+   diz a origem de cada peça a mais, no fora da lista e na sobra (`origins`:
+   `loose`, `box`, `entry`, com a quantidade); o SKU arquivado do cliente volta a ativo e o que não está no
+   cadastro é recusado (produto novo nasce no Receber). Contado zero em tudo
+   deixa a caixa `emptied`, com `warehouse.box_emptied`; a caixa que cede a
+   última peça fica guardada com saldo zero. A ENTRADA da contagem vale o dia
+   que o FIFO já dá ao conteúdo da caixa: na da abertura, o da sessão (o
+   movimento leva `fifo_opening_session_id`); nas outras, o do `stored_at`
+   (`fifo_day`); `entradasDoRazao` faz a conta, e o pedido e as datas do
+   portal leem a sessão também por esse campo. As recusas da cíclica continuam (estoque
+   congelado, prateleira fora do cadastro, abaixo da reserva, separado
+   esperando a entrega, linha já separada) e entram as da prateleira com
+   guarda aberta chegando ou saindo ou com caixa a caminho (G01 a G03), da
+   caixa que não está guardada nela, da lista que mudou desde a tela e da
+   prateleira com menos saldo do que as caixas dizem (a frase manda ao
+   acerto pelo "Caixas × saldo"). As sete perguntas do PR e a pergunta nova
+   (a sobra) foram decididas pelo Leonardo em 17/11/2026 (seção 7). A régua
+   `billing-callables` roda uma recontagem de verdade: não cobra. Ficam: a
+   tela (a rodada, a bancada e o celular), a coleção da rodada, a fila de
+   revisão do admin, "Cadastrar caixa" (a caixa física sem registro), o
+   status `review` e `blocked` da posição (pergunta 9) e as ferramentas do
+   acerto.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
@@ -905,6 +947,31 @@ da mesma prateleira, a tela move entre caixas e o saldo da prateleira não
 muda; sem saldo em caixa nenhuma da prateleira, a tela cria o saldo ali, com
 a origem dita ("entrada em A-03"), e a prateleira onde a peça estava
 registrada se acerta quando for contada.
+
+*Refinado pelo Leonardo em 17/11/2026, nas respostas às perguntas do PR 618:*
+a peça fora da lista consome, nesta ordem, (a) o saldo do SKU na prateleira
+que nenhuma caixa guardada cobre (o saldo da prateleira menos a soma das
+caixas guardadas dela para o SKU, quando positivo), sem mexer no saldo da
+prateleira; (b) as outras caixas guardadas da prateleira, da mais antiga para
+a mais nova, menos a já recontada na mesma rodada; (c) só o resto entra como
+entrada nova na prateleira, com a origem. O saldo solto é a diferença que o
+"Caixas × saldo" mostra, quase sempre registro sem peça própria: consumi-lo
+primeiro fecha a diferença, e tirar antes de outra caixa a manteria e
+deixaria aquela caixa com sobra falsa. A sobra num item que a caixa já lista
+(a contagem achou mais do que o esperado) também consome primeiro esse saldo
+solto, sem mexer no saldo da prateleira, e só o que passar dele sobe a
+prateleira; ela não tira de outras caixas, porque cada caixa que lista o item
+é contada por conta própria e a falta numa e a sobra noutra se compensam na
+prateleira (o saldo solto quase sempre é peça que alguém já pôs numa caixa, e
+subir a prateleira a contaria duas vezes; decidido em 17/11/2026, na
+pergunta nova do PR 618). A resposta da recontagem diz a origem de cada peça
+a mais, com a quantidade. A data FIFO da peça achada a mais é a que o
+FIFO já dá ao conteúdo da caixa: o dia da sessão na caixa da abertura, o da
+guarda na do recebimento (a peça a mais não abre data nova no portal). A
+caixa que cede a última peça fica guardada com saldo zero até alguém contá-la
+vazia; as travas da separação continuam na recontagem por caixa; e a falta
+que deixaria a prateleira negativa é recusada, com a prateleira mandada ao
+acerto pelo "Caixas × saldo".
 
 ## 8. Como este levantamento foi feito
 

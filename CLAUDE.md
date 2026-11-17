@@ -432,8 +432,12 @@ documentação de produto e operação está em `docs/`.
 - **FIFO por data (P8, versão enxuta, decidida em 02/11/2026):** a separação
   tira primeiro o mais antigo, por prateleira e data, sem conteúdo por caixa.
   As datas saem do ledger (o que sobra numa prateleira são as entradas mais
-  recentes nela), o cliente vê só a data e a quantidade, e o aviso ao cliente
-  não cita caixa (`CX-`) nem posição. As datas que as telas mostram vêm da
+  recentes nela; a ENTRADA da recontagem por caixa, `recountWarehouseBox`,
+  vale o dia que o FIFO já dá ao conteúdo da caixa: o da sessão na caixa da
+  abertura, `fifo_opening_session_id`, e o da guarda nas outras,
+  `fifo_day`), o cliente vê só a data e a quantidade, e o aviso ao cliente
+  não cita caixa (`CX-`) nem posição. As
+  datas que as telas mostram vêm da
   callable só de leitura `getStockDates` (cliente sem prateleira; equipe por
   prateleira). Desenho, partes e hábitos da prateleira em
   `docs/plataforma/fifo-por-data.md`.

@@ -207,6 +207,7 @@ const MATRIZ: Record<string, Linha> = {
   readShipmentInvoice: { passam: CLIENTE, recusa: "Leitura de nota disponível no portal do cliente." },
   receiveOrderReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recordCycleCount: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  recountWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Os tipos que entram à mão estão em eventos-manuais.integration.test.ts.
   recordOperationalEvent: {
     passam: INTERNOS,

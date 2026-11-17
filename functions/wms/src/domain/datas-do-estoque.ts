@@ -28,6 +28,7 @@ import {
   datasDoSaldo,
   entradasDoRazao,
   ordenarCandidatos,
+  precisaDaAbertura,
   type DataDoSaldo,
   type Dia,
   type Entrada,
@@ -114,7 +115,7 @@ export async function lerDatasDoEstoque(db: Firestore, customerCode: string, sku
   ]);
   const entradas = movimentos.docs.map((doc) => doc.data());
   const sessao = db.collection("opening_inventory_sessions").doc(openingInventorySessionDocumentId(customerCode));
-  const abertura: DocumentData | undefined = entradas.some((entrada) => texto(entrada.opening_inventory_session_id))
+  const abertura: DocumentData | undefined = precisaDaAbertura(entradas)
     ? (await sessao.get()).data()
     : undefined;
   return datasDoEstoque(
