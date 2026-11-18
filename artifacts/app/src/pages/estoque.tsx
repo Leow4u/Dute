@@ -33,6 +33,8 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
+import { contarOItem } from "@/lib/warehouse-ops/recontagem-por-caixa";
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
@@ -336,7 +338,7 @@ export default function Estoque() {
         actions={
           warehouseWriter ? (
             <Button asChild variant="outline" size="sm">
-              <Link href="/wms/contagem">
+              <Link href={ROTA_DA_ABERTURA}>
                 <ClipboardCheck className="size-4" />
                 {openingSession.data?.status === "open"
                   ? "Continuar contagem"
@@ -745,6 +747,8 @@ export function ItemCard({
   const { code: customerCode } = useActiveCustomer();
   const role = user?.publicMetadata.role;
   const catalogWriter = canWriteCatalog(role);
+  // "Contar este item": a bancada da prateleira do item, ou a rodada quando ele está em várias (18/11/2026).
+  const contar = contarOItem(item.locations);
   const photoWriter = canAddItemPhotos(role);
   // Contar é de quem opera o armazém; o suporte só consulta a ficha.
   const warehouseWriter = canOperateWarehouse(role);
@@ -1045,9 +1049,9 @@ export function ItemCard({
       {warehouseWriter ? (
         <div className="mt-auto flex flex-wrap gap-2 border-t border-border/60 bg-muted/20 p-4">
           <Button asChild variant={catalogWriter ? "outline" : "default"} className={cn(!catalogWriter && "w-full")}>
-            <Link href="/wms/contagem">
+            <Link href={contar.href}>
               <ClipboardCheck className="size-4" />
-              Contar este item
+              {contar.rotulo}
             </Link>
           </Button>
           {catalogWriter ? (

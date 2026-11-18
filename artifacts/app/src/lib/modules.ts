@@ -352,8 +352,9 @@ export const APP_MODULES: AppModule[] = [
         href: "/wms/contagem",
         icon: ClipboardCheck,
         roles: WMS_OPERATOR_ROLES,
-        // As telas da contagem por caixa, abertas pela Contagem: a folha, o Caixas × saldo, a rodada e a bancada.
-        tambem: ["/estoque/contagem/folha", "/estoque/contagem/caixas", "/estoque/contagem/rodada", "/estoque/contagem/prateleira"],
+        // A tela da abertura e da cíclica (as abas), para o cliente com a abertura pendente ou em curso, e as telas
+        // da contagem por caixa, abertas pela Contagem: a folha, o Caixas × saldo, a rodada e a bancada.
+        tambem: ["/wms/contagem/abertura", "/estoque/contagem/folha", "/estoque/contagem/caixas", "/estoque/contagem/rodada", "/estoque/contagem/prateleira"],
       }),
       // Mapa do armazém: prateleiras, ocupação e caixas por zona (só leitura).
       navRoute({
@@ -935,6 +936,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // A recontagem caixa a caixa, aberta pela Contagem: a rodada e a bancada da prateleira; o suporte só consulta.
   { path: "/estoque/contagem/rodada", roles: WMS_ROLES },
   { path: "/estoque/contagem/prateleira", roles: WMS_ROLES },
+  // A tela da abertura e da cíclica (as abas), com os papéis da Contagem: a entrada manda para cá com a abertura
+  // pendente ou em curso (18/11/2026).
+  { path: "/wms/contagem/abertura", roles: [...WMS_OPERATOR_ROLES] },
   // A lista de separação do pedido para imprimir, aberta por "Imprimir lista" em Pedidos.
   { path: "/pedidos/lista", roles: WMS_ROLES },
   // A bancada do pedido, aberta por "Separar" e "Continuar" em Pedidos; o suporte só consulta.

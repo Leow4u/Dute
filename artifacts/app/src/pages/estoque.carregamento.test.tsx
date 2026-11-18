@@ -322,7 +322,8 @@ const TEXTOS_DA_FICHA = [
   "B-02",
   "12 un.",
   "Últimos movimentos",
-  "Contar este item",
+  // O item numa prateleira só: "Contar em <prateleira>" leva à bancada dela (18/11/2026).
+  "Contar em B-02",
   "Editar cadastro",
   "Ajustar saldo",
 ];

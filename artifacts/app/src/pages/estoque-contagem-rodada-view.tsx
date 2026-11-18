@@ -3,6 +3,7 @@ import { Link } from "wouter";
 
 import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { Badge } from "@/components/ui/badge";
+import { CartaoDaRodada } from "@/features/warehouse-ops/cartao-da-rodada";
 import { Button } from "@/components/ui/button";
 import { BlocoSemConexao, FalhaNaLeitura, erroDaLeituraAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Esqueleto } from "@/components/ui/esqueleto";
@@ -23,8 +24,6 @@ import {
   hrefDaPrateleira,
   resumoDaRua,
   seloDaPrateleira,
-  textoDoComeco,
-  unidadesComSinal,
   type PrateleiraDaRodada,
   type RodadaDaContagem,
 } from "@/lib/warehouse-ops/recontagem-por-caixa";
@@ -49,8 +48,6 @@ const MENSAGEM_DA_FALHA = "Não consegui carregar as prateleiras.";
 /** Quantas prateleiras que diferem o cartão "Caixas × saldo" mostra. */
 const DIFERENTES_A_VISTA = 6;
 const ID_DA_LINHA = "rodada-linha-de-estado";
-
-const numero = new Intl.NumberFormat("pt-BR");
 
 /** O selo da prateleira: verde sem diferença, âmbar com ela, violeta em contagem, neutro antes desta rodada. */
 function corDoSelo(prateleira: PrateleiraDaRodada): string {
@@ -79,43 +76,6 @@ function Fantasmas() {
         </div>
       ))}
     </div>
-  );
-}
-
-/** O cabeçalho da rodada: o nome, quando começou e quem, os números e a barra. */
-function Numeros({ rodada, agora }: { rodada: RodadaDaContagem; agora: Date }) {
-  const percentual = rodada.caixas ? Math.round((rodada.caixasConfirmadas / rodada.caixas) * 100) : 0;
-  const numeros: Array<{ valor: string; de?: string; rotulo: string }> = [
-    { valor: numero.format(rodada.prateleirasContadas), de: `de ${numero.format(rodada.prateleiras)}`, rotulo: "prateleiras" },
-    { valor: numero.format(rodada.caixasConfirmadas), de: `de ${numero.format(rodada.caixas)}`, rotulo: "caixas" },
-    { valor: numero.format(rodada.caixasComDiferenca), rotulo: "caixas com diferença" },
-    { valor: unidadesComSinal(rodada.diferenca), rotulo: "diferença líquida" },
-  ];
-  return (
-    <section aria-labelledby="rodada-titulo" className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:gap-6">
-        <div className="min-w-0">
-          <h2 id="rodada-titulo" className="text-base font-extrabold text-foreground">
-            {rodada.titulo}
-          </h2>
-          {rodada.comeco ? <p className="text-sm text-muted-foreground">{textoDoComeco(rodada.comeco, agora)}</p> : null}
-        </div>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:ml-auto">
-          {numeros.map((item) => (
-            <div key={item.rotulo} className="flex flex-col-reverse lg:text-right">
-              <dt className="text-xs font-semibold text-muted-foreground">{item.rotulo}</dt>
-              <dd className="text-2xl font-extrabold tabular-nums text-foreground">
-                {item.valor}
-                {item.de ? <span className="ml-1 text-sm font-bold text-muted-foreground">{item.de}</span> : null}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-      <div aria-hidden="true" className="h-1.5 bg-muted">
-        <div className="h-full bg-foreground" style={{ width: `${percentual}%` }} />
-      </div>
-    </section>
   );
 }
 
@@ -256,7 +216,8 @@ export function EstoqueContagemRodadaView({
       ) : rodada ? (
         <>
           {aoVivo?.falta === "conexao" && aoVivo.lidaEm == null ? <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} /> : null}
-          <Numeros rodada={rodada} agora={agora} />
+          {/* O cabeçalho da rodada: o mesmo cartão do "Em andamento" da entrada da Contagem. */}
+          <CartaoDaRodada rodada={rodada} agora={agora} />
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
             <div className="flex flex-col gap-4">
               {rodada.ruas.length ? (

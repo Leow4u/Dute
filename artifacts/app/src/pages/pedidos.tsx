@@ -45,6 +45,7 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import {
   CancelarPedidoView,
   motivoValido,
@@ -840,7 +841,7 @@ export default function Pedidos() {
         session={openingSession.data}
         actions={
           <Button asChild variant="outline" size="sm">
-            <Link href="/wms/contagem">Continuar contagem</Link>
+            <Link href={ROTA_DA_ABERTURA}>Continuar contagem</Link>
           </Button>
         }
       />

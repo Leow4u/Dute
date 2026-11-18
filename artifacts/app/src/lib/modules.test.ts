@@ -65,6 +65,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   // A recontagem caixa a caixa: os mesmos papéis da Contagem; quem grava é a callable (o suporte só consulta).
   ["/estoque/contagem/rodada", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/contagem/prateleira", ["owner", "admin", "interno", "wms", "suporte"]],
+  // A tela da abertura e da cíclica (as abas), com os papéis da Contagem: a entrada manda para cá (18/11/2026).
+  ["/wms/contagem/abertura", ["owner", "admin", "interno", "wms"]],
   // O alerta do item parado: só a coordenação decide (parte 5.4e).
   ["/estoque/alertas", ["owner", "admin", "interno"]],
   ["/estoque/mapa", ["owner", "admin", "interno", "wms", "suporte"]],
@@ -286,6 +288,7 @@ describe("grupo ativo", () => {
     ["/movements", "Estoque"],
     ["/wms/receber", "Estoque"],
     ["/wms/contagem", "Estoque"],
+    ["/wms/contagem/abertura", "Estoque"],
     ["/estoque/etiquetas", "Estoque"],
     ["/estoque/contagem/folha", "Estoque"],
     ["/estoque/contagem/caixas", "Estoque"],
