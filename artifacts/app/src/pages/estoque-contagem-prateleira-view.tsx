@@ -54,13 +54,18 @@ import {
  * props (pages/estoque-contagem-prateleira.tsx). Sem legenda.
  */
 
-export type EstadoDaPrateleira = "carregando" | "erro" | "nao_encontrada" | "pronto";
+export type EstadoDaPrateleira = "carregando" | "erro" | "nao_encontrada" | "sem_rodada" | "pronto";
 
 const MENSAGENS: Record<Exclude<EstadoDaPrateleira, "pronto">, string> = {
   carregando: "Carregando a prateleira…",
   erro: "Não consegui carregar a prateleira.",
   nao_encontrada: "Nenhuma caixa do cliente nesta prateleira.",
+  // Sem rodada aberta, a bancada não conta (decisão 2 de 18/11/2026): "Iniciar contagem" fica na entrada da Contagem.
+  sem_rodada: "Nenhuma contagem em andamento.",
 };
+
+/** A entrada da Contagem, onde a rodada se inicia. */
+const ROTA_DA_CONTAGEM = "/wms/contagem";
 
 /** O aviso do catálogo que não chegou: o item fora da lista não tem como ser escolhido. */
 export const SEM_CATALOGO = "Não consegui carregar o catálogo.";
@@ -182,6 +187,16 @@ export function EstoqueContagemPrateleiraView({
         <CarregandoNaRegiao rotulo={MENSAGENS.carregando} continuaARota onTentar={onTentar} className="rounded-lg border border-border bg-card px-5 py-6" />
       ) : estado === "erro" && onTentar ? (
         <FalhaNaLeitura leitura={{ error: erroDaLeituraAoVivo(leitura?.falta), refetch: async () => onTentar() }} mensagem={MENSAGENS.erro} />
+      ) : estado === "sem_rodada" ? (
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card px-5 py-6">
+          <p className="text-sm font-semibold text-muted-foreground">{MENSAGENS.sem_rodada}</p>
+          <Button asChild>
+            <Link href={ROTA_DA_CONTAGEM}>
+              <ChevronRight className="size-4" aria-hidden="true" />
+              Iniciar contagem
+            </Link>
+          </Button>
+        </div>
       ) : mensagem || !bancada ? (
         <p role={estado === "erro" ? "alert" : undefined} className="rounded-lg border border-border bg-card px-5 py-6 text-sm font-semibold text-muted-foreground">
           {mensagem ?? MENSAGENS.nao_encontrada}

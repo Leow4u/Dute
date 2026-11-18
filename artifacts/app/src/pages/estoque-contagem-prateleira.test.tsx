@@ -80,7 +80,10 @@ import { RODADA_DA_RECONTAGEM_GERAL } from "@/lib/warehouse-ops/recontagem-por-c
 import PaginaPrateleiraDaContagem from "./estoque-contagem-prateleira";
 
 const AGORA = new Date("2026-11-17T12:30:00.000Z");
-const RODADA = RODADA_DA_RECONTAGEM_GERAL.id;
+/** A rodada aberta do cliente, registrada em count_rounds. */
+const RODADA = "cr_1";
+const RODADA_ABERTA = { id: RODADA, customer_code: BTG, title: "Contagem geral · 17/11/2026", scope: "general", status: "open", started_at: "2026-11-17T11:00:00.000Z", started_by: { name: "Guilherme Dantas" } };
+const LEGADA = RODADA_DA_RECONTAGEM_GERAL.id;
 
 const caixa = (code: string, extra: Record<string, unknown> = {}) => ({
   id: code,
@@ -107,6 +110,9 @@ function semear() {
     [`putaway_tasks:${BTG}:planned`]: [],
     [`putaway_tasks:${BTG}:in_progress`]: [],
     [`cycle_counts:${BTG}:${RODADA}`]: [],
+    // As rodadas do cliente: uma aberta, registrada; nenhuma recontagem com o id fixo da recontagem geral.
+    [`count_rounds:${BTG}`]: [RODADA_ABERTA],
+    [`cycle_counts:${BTG}:${LEGADA}:uma`]: [],
   };
 }
 
@@ -228,7 +234,7 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
       location_id: "A-03",
       lines: [{ sku_code: M.sku_code, counted_qty: 48 }],
       extra_lines: [{ sku_code: GG.sku_code, counted_qty: 2 }],
-      round_id: "recontagem-geral-2026-11-17",
+      round_id: RODADA,
       idempotency_key: expect.any(String),
     });
     expect(JSON.stringify(enviado, (_chave, valor) => (valor === undefined ? "INDEFINIDO" : valor))).not.toMatch(/INDEFINIDO|null/);
@@ -305,9 +311,11 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
     expect(contar("CX-000010")).toBeNull();
   });
 
-  it("a recontagem geral atravessa o dia: no dia seguinte, a caixa contada ontem continua confirmada e a chamada leva o mesmo round_id", async () => {
-    // 10:00 de 18/11 em São Paulo; a CX-000010 foi recontada às 09:02 de 17/11, na recontagem geral.
+  it("a recontagem geral de 17/11 sem documento continua a rodada: no dia seguinte, a caixa contada ontem continua confirmada e a chamada leva o id fixo", async () => {
+    // 10:00 de 18/11 em São Paulo; a CX-000010 foi recontada às 09:02 de 17/11, na recontagem geral, que ainda não tem documento.
     vi.setSystemTime(new Date("2026-11-18T13:00:00.000Z"));
+    estado.consultas[`count_rounds:${BTG}`] = [];
+    estado.consultas[`cycle_counts:${BTG}:${LEGADA}:uma`] = [{ id: "cc_1" }];
     estado.consultas[`cycle_counts:${BTG}:recontagem-geral-2026-11-17`] = [
       {
         id: "cc_1",
@@ -333,6 +341,23 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
     await digitar("contado-CX-000013-0", "20");
     await tocar(container.querySelector("#confirmar-CX-000013"));
     expect(recontar.mock.calls[0][0]).toMatchObject({ box_code: "CX-000013", round_id: "recontagem-geral-2026-11-17" });
+  });
+
+  it("sem rodada aberta e sem recontagem legada, a bancada diz que não há contagem e não conta (decisão 2 de 18/11/2026)", async () => {
+    estado.consultas[`count_rounds:${BTG}`] = [];
+    await montar();
+    expect(container.textContent).toContain("Nenhuma contagem em andamento.");
+    expect(container.textContent).toContain("Iniciar contagem");
+    expect(contar("CX-000010")).toBeNull();
+    expect(recontar).not.toHaveBeenCalled();
+  });
+
+  it("enquanto as rodadas não chegam, a prateleira espera: nem a frase nem a lista", async () => {
+    delete estado.consultas[`count_rounds:${BTG}`];
+    await montar();
+    expect(container.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
+    expect(container.textContent).not.toContain("Nenhuma contagem em andamento.");
+    expect(contar("CX-000010")).toBeNull();
   });
 
   it("a prateleira sem caixa do cliente diz isso, depois de ler", async () => {
