@@ -100,6 +100,7 @@ export type AcoesDaContagem = {
 export function EstoqueContagemPrateleiraView({
   estado,
   posicao,
+  agora,
   bancada,
   operador,
   emContagem,
@@ -119,6 +120,8 @@ export function EstoqueContagemPrateleiraView({
   estado: EstadoDaPrateleira;
   /** "A-03": o título, também enquanto lê. */
   posicao: string;
+  /** O dia da tela: a recontagem de outro dia sai com o dia ("confirmada 17/11 09:11"). */
+  agora: Date;
   bancada: BancadaDaPrateleira | null;
   /** Quem grava a recontagem: o suporte só consulta. */
   operador: boolean;
@@ -211,6 +214,7 @@ export function EstoqueContagemPrateleiraView({
                   key={caixa.code}
                   caixa={caixa}
                   posicao={bancada.posicao}
+                  agora={agora}
                   operador={operador}
                   bloqueada={Boolean(bancada.bloqueio) || (emContagem !== null && confirmar.estado === "andamento")}
                   onContar={onContar}
@@ -266,7 +270,7 @@ function Progresso({ bancada }: { bancada: BancadaDaPrateleira }) {
 }
 
 /** O selo da caixa confirmada: verde sem diferença, âmbar com ela. */
-function SeloDaConfirmada({ caixa }: { caixa: CaixaDaBancada }) {
+function SeloDaConfirmada({ caixa, agora }: { caixa: CaixaDaBancada; agora: Date }) {
   if (!caixa.recontagem) return null;
   return (
     <Badge
@@ -276,7 +280,7 @@ function SeloDaConfirmada({ caixa }: { caixa: CaixaDaBancada }) {
         caixa.recontagem.diferenca === 0 ? "border-success-soft-border bg-success-soft text-success-soft-foreground" : "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
       )}
     >
-      {seloDaRecontagem(caixa.recontagem)}
+      {seloDaRecontagem(caixa.recontagem, agora)}
     </Badge>
   );
 }
@@ -288,12 +292,14 @@ function SeloDaConfirmada({ caixa }: { caixa: CaixaDaBancada }) {
 function CaixaFechada({
   caixa,
   posicao,
+  agora,
   operador,
   bloqueada,
   onContar,
 }: {
   caixa: CaixaDaBancada;
   posicao: string;
+  agora: Date;
   operador: boolean;
   /** A prateleira com a guarda aberta, ou outra caixa gravando: a caixa espera. */
   bloqueada: boolean;
@@ -323,7 +329,7 @@ function CaixaFechada({
             {`em separação · ${separados.join(", ")}`}
           </Badge>
         ) : null}
-        <SeloDaConfirmada caixa={caixa} />
+        <SeloDaConfirmada caixa={caixa} agora={agora} />
         {podeContar && caixa.estado !== "vazia" ? (
           <Button
             id={ids.contar}

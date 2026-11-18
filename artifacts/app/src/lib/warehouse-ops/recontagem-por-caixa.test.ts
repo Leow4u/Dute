@@ -6,6 +6,7 @@ import type { LinhaDeEntrada } from "./caixas-da-separacao";
 import { prateleirasDaContagem } from "./contagem-por-caixa";
 import {
   CONTAGEM_EM_BRANCO,
+  RODADA_DA_RECONTAGEM_GERAL,
   bancadaDaPrateleira,
   bloqueioDaPrateleira,
   buscarProdutos,
@@ -21,18 +22,19 @@ import {
   problemaDaQuantidade,
   produtosDoCliente,
   proximaPorContar,
+  quandoEmTexto,
   recontagemDaResposta,
   recontagensDasLinhas,
   resumoDaBancada,
   resumoDaRua,
   rodadaDaContagem,
-  rodadaDoDia,
   seloDaPrateleira,
   seloDaRecontagem,
   soAlgarismos,
   textoDaCaixaFechada,
   textoDaOrigem,
   textoDaPrateleiraNaBancada,
+  textoDoComeco,
   textoDoProgresso,
   tituloDaCaixa,
   type ContagemDigitada,
@@ -49,7 +51,8 @@ import {
 
 const BTG = "BTG Pactual";
 const AGORA = new Date("2026-11-17T12:30:00.000Z"); // 09:30 em São Paulo
-const RODADA = "recontagem-2026-11-17";
+const RODADA = RODADA_DA_RECONTAGEM_GERAL.id;
+const DIA_SEGUINTE = new Date("2026-11-18T13:00:00.000Z"); // 10:00 de 18/11 em São Paulo
 
 const posicao = (code: string, sequence: number) => ({ code, aisle: code.split("-")[0], shelf: Number(code.split("-")[1]), sequence, customer_code: BTG });
 const POSICOES = [posicao("A-03", 3), posicao("A-04", 4), posicao("B-09", 20)];
@@ -119,11 +122,17 @@ const RECONTAGEM_DA_011 = recontagensDasLinhas(
   BTG,
 );
 
-describe("a rodada do dia", () => {
-  it("é o dia em São Paulo: a madrugada em UTC ainda é o dia anterior", () => {
-    expect(rodadaDoDia(AGORA)).toBe(RODADA);
-    expect(rodadaDoDia(new Date("2026-11-18T02:30:00.000Z"))).toBe(RODADA);
-    expect(rodadaDoDia(new Date("2026-11-18T03:00:00.000Z"))).toBe("recontagem-2026-11-18");
+describe("a rodada da recontagem geral", () => {
+  it("é fixa até a coleção da rodada: o mesmo round_id em qualquer dia (decisão de 17/11/2026)", () => {
+    expect(RODADA_DA_RECONTAGEM_GERAL).toEqual({ id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026" });
+  });
+
+  it("a hora de hoje sai só com a hora; a de outro dia, com o dia, no horário de São Paulo", () => {
+    expect(quandoEmTexto("2026-11-17T12:11:00.000Z", AGORA)).toBe("09:11");
+    expect(quandoEmTexto("2026-11-17T12:11:00.000Z", DIA_SEGUINTE)).toBe("17/11 09:11");
+    // 01:30 de 18/11 em UTC ainda é 17/11 em São Paulo.
+    expect(quandoEmTexto("2026-11-18T01:30:00.000Z", AGORA)).toBe("22:30");
+    expect(quandoEmTexto("", AGORA)).toBe("—");
   });
 
   it("a prateleira vai na busca em maiúsculas", () => {
@@ -158,7 +167,7 @@ describe("a bancada da prateleira", () => {
     const bancada = bancadaDaPrateleira(dados({ recontagens: RECONTAGEM_DA_011 }))!;
     const confirmada = bancada.caixas.find((item) => item.code === "CX-000011")!;
     expect(confirmada.estado).toBe("confirmada");
-    expect(seloDaRecontagem(confirmada.recontagem!)).toBe("confirmada 09:11 · 55 · −5");
+    expect(seloDaRecontagem(confirmada.recontagem!, AGORA)).toBe("confirmada 09:11 · 55 · −5");
     expect(textoDaCaixaFechada(confirmada)).toBe("60 esperadas");
     expect(bancada).toMatchObject({ total: 3, confirmadas: 1, esperadasConfirmadas: 60, contadasConfirmadas: 55, diferencaConfirmadas: -5 });
     // A de outra rodada, ou de outra prateleira, não confirma a caixa daqui.
@@ -191,7 +200,7 @@ describe("a bancada da prateleira", () => {
     expect(bancada.caixas.map((item) => item.code)).toEqual(["CX-000010", "CX-000011", "CX-000012", "CX-000013"]);
     const daRodada = bancada.caixas[3];
     expect(daRodada).toMatchObject({ estado: "vazia", itens: [], esperado: 0 });
-    expect(seloDaRecontagem(daRodada.recontagem!)).toBe("confirmada 09:11 · vazia · −4");
+    expect(seloDaRecontagem(daRodada.recontagem!, AGORA)).toBe("confirmada 09:11 · vazia · −4");
     expect(tituloDaCaixa(daRodada)).toBe("Polo Masculino Piquet Preto · GG");
     expect(bancada).toMatchObject({ total: 4, confirmadas: 1 });
   });
@@ -269,7 +278,7 @@ describe("a recontagem gravada e a resposta", () => {
       ["Polo Masculino Piquet Preto · GG", true],
     ]);
     expect(itensComDiferenca(recontagens[0]).map((item) => item.texto)).toEqual(["−2", "+2 · fora da lista · 1 do saldo sem caixa · 1 de CX-000014"]);
-    expect(seloDaRecontagem(recontagens[0])).toBe("confirmada 09:11 · 50 · sem diferença");
+    expect(seloDaRecontagem(recontagens[0], AGORA)).toBe("confirmada 09:11 · 50 · sem diferença");
   });
 
   it("as três origens da peça a mais", () => {
@@ -379,11 +388,11 @@ describe("a rodada por prateleira", () => {
       recontagens: [recontada("CX-000010", "A-03", "2026-11-17T11:10:00.000Z"), recontada("CX-000011", "A-03", "2026-11-17T12:11:00.000Z", -5)],
       guardas: [],
       reservas: [{ sku_code: P.sku_code, location_id: "B-09", status: "picked", order_number: "PED-0002", customer_code: BTG }],
-      rodada: RODADA,
+      rodada: RODADA_DA_RECONTAGEM_GERAL,
       agora: AGORA,
     });
     expect(rodada).toMatchObject({
-      titulo: "Recontagem · 17/11/2026",
+      titulo: "Recontagem geral · 17/11/2026",
       comeco: { quando: "2026-11-17T11:10:00.000Z", quem: "Guilherme Dantas" },
       prateleiras: 3,
       prateleirasContadas: 0,
@@ -394,9 +403,9 @@ describe("a rodada por prateleira", () => {
       continuar: "A-03",
     });
     const [a03, a04] = rodada.ruas[0].prateleiras;
-    expect(seloDaPrateleira(a03)).toBe("em contagem · Guilherme Dantas · 2 de 3 caixas");
+    expect(seloDaPrateleira(a03, AGORA)).toBe("em contagem · Guilherme Dantas · 2 de 3 caixas");
     expect(a04.estado).toBe("contada_antes");
-    expect(seloDaPrateleira(a04)).toBe("contada 16/11");
+    expect(seloDaPrateleira(a04, AGORA)).toBe("contada 16/11");
     const b09 = rodada.ruas[1].prateleiras[0];
     expect(b09.bloqueio).toBe("em separação · PED-0002");
     expect(rodada.ruas.map((rua) => [rua.rua, resumoDaRua(rua)])).toEqual([
@@ -413,15 +422,32 @@ describe("a rodada por prateleira", () => {
       recontagens: ["CX-000010", "CX-000011", "CX-000012"].map((code, indice) => recontada(code, "A-03", `2026-11-17T11:4${indice}:00.000Z`, indice === 1 ? -3 : 0)),
       guardas: [{ status: "planned", customer_code: BTG, destination_location_id: "A-04", receipt_number: "AVL-7C21A9F0" }],
       reservas: [],
-      rodada: RODADA,
+      rodada: RODADA_DA_RECONTAGEM_GERAL,
       agora: AGORA,
     });
     const [a03, a04] = rodada.ruas[0].prateleiras;
-    expect(seloDaPrateleira(a03)).toBe("contada 08:42 · 1 diferença · −3 un.");
+    expect(seloDaPrateleira(a03, AGORA)).toBe("contada 08:42 · 1 diferença · −3 un.");
     expect(a04.bloqueio).toBe("guarda aberta · AVL-7C21A9F0");
     // A A-04 tem a guarda aberta: a próxima livre é a B-09.
     expect(rodada.continuar).toBe("B-09");
     expect(rodada.prateleirasContadas).toBe(1);
+  });
+
+  it("a recontagem geral atravessa o dia: no dia seguinte, a prateleira contada ontem continua contada, com o dia", () => {
+    const rodada = rodadaDaContagem({
+      cliente: BTG,
+      prateleiras: PRATELEIRAS,
+      caixas: [...CAIXAS, caixa("CX-000020", "A-04", { unit_count: 30 }), caixa("CX-000030", "B-09", { unit_count: 16 })],
+      recontagens: ["CX-000010", "CX-000011", "CX-000012"].map((code, indice) => recontada(code, "A-03", `2026-11-17T11:4${indice}:00.000Z`, indice === 1 ? -3 : 0)),
+      guardas: [],
+      reservas: [],
+      rodada: RODADA_DA_RECONTAGEM_GERAL,
+      agora: DIA_SEGUINTE,
+    });
+    expect(rodada).toMatchObject({ titulo: "Recontagem geral · 17/11/2026", prateleirasContadas: 1, caixasConfirmadas: 3, continuar: "A-04" });
+    expect(seloDaPrateleira(rodada.ruas[0].prateleiras[0], DIA_SEGUINTE)).toBe("contada 17/11 08:42 · 1 diferença · −3 un.");
+    expect(textoDoComeco(rodada.comeco!, DIA_SEGUINTE)).toBe("começou 17/11 08:40 · Guilherme Dantas");
+    expect(textoDoComeco(rodada.comeco!, AGORA)).toBe("começou 08:40 · Guilherme Dantas");
   });
 
   it("a recontagem de outra rodada não conta nesta", () => {
@@ -432,7 +458,7 @@ describe("a rodada por prateleira", () => {
       recontagens: [{ ...recontada("CX-000010", "A-03", "2026-11-16T11:10:00.000Z"), rodada: "recontagem-2026-11-16" }],
       guardas: [],
       reservas: [],
-      rodada: RODADA,
+      rodada: RODADA_DA_RECONTAGEM_GERAL,
       agora: AGORA,
     });
     expect(rodada.caixasConfirmadas).toBe(0);

@@ -11,13 +11,13 @@ import { canOperateWarehouse } from "@/lib/permissions";
 import { horaEmTexto, hrefDaFolha } from "@/lib/warehouse-ops/contagem-por-caixa";
 import {
   CONTAGEM_EM_BRANCO,
+  RODADA_DA_RECONTAGEM_GERAL,
   comRecontagensLocais,
   contagemDaCaixaVazia,
   entradaDaRecontagem,
   posicaoDaBusca,
   proximaPorContar,
   recontagemDaResposta,
-  rodadaDoDia,
   soAlgarismos,
   unidadesComSinal,
   type CaixaDaBancada,
@@ -34,7 +34,7 @@ import { EstoqueContagemPrateleiraView, idsDaCaixa, type EstadoDaPrateleira } fr
  * bancada da recontagem caixa a caixa (diagnóstico da Contagem cíclica,
  * seção 6, item 4). Cada "Confirmar caixa" grava a caixa e o saldo da
  * prateleira juntos, pela callable `recountWarehouseBox`, com o `round_id`
- * da rodada do dia; a resposta mostra na hora a caixa confirmada e a origem
+ * da recontagem geral; a resposta mostra na hora a caixa confirmada e a origem
  * da peça a mais, e a leitura ao vivo traz o que outra pessoa grava.
  */
 
@@ -54,8 +54,10 @@ export default function PaginaPrateleiraDaContagem() {
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // A rodada é a do dia em que a tela abriu: a recontagem leva o `round_id` dela.
-  const [rodada] = useState(() => rodadaDoDia(new Date()));
+  // A rodada é a da recontagem geral, fixa até a coleção da rodada: a recontagem leva o `round_id` dela em qualquer dia.
+  const rodada = RODADA_DA_RECONTAGEM_GERAL.id;
+  // O dia da tela, para a hora das recontagens: a de outro dia sai com o dia.
+  const [agora] = useState(() => new Date());
   const leitura = useBancadaDaPrateleira(cliente, posicao, rodada);
 
   const [emContagem, setEmContagem] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export default function PaginaPrateleiraDaContagem() {
     <EstoqueContagemPrateleiraView
       estado={estado}
       posicao={posicao ?? "Prateleira"}
+      agora={agora}
       bancada={bancada}
       operador={operador}
       emContagem={emContagem}

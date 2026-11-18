@@ -31,8 +31,8 @@ import {
 
 /**
  * Estoque › Contagem por caixa, a rodada (diagnóstico da Contagem cíclica,
- * seção 6, item 4; docs/mockups/WmsContagemRodada.dc.html): a rodada do dia
- * com quando começou e os números dela, as prateleiras com caixa por rua, na
+ * seção 6, item 4; docs/mockups/WmsContagemRodada.dc.html): a rodada da
+ * recontagem geral, com quando começou e os números dela, as prateleiras com caixa por rua, na
  * ordem de caminhada, com o estado nesta rodada (por contar, em contagem,
  * contada) e o que impede recontá-las (a guarda aberta, o pedido separado
  * esperando a entrega), e o "Caixas × saldo" ao lado. Os dados chegam por
@@ -83,7 +83,7 @@ function Fantasmas() {
 }
 
 /** O cabeçalho da rodada: o nome, quando começou e quem, os números e a barra. */
-function Numeros({ rodada }: { rodada: RodadaDaContagem }) {
+function Numeros({ rodada, agora }: { rodada: RodadaDaContagem; agora: Date }) {
   const percentual = rodada.caixas ? Math.round((rodada.caixasConfirmadas / rodada.caixas) * 100) : 0;
   const numeros: Array<{ valor: string; de?: string; rotulo: string }> = [
     { valor: numero.format(rodada.prateleirasContadas), de: `de ${numero.format(rodada.prateleiras)}`, rotulo: "prateleiras" },
@@ -98,7 +98,7 @@ function Numeros({ rodada }: { rodada: RodadaDaContagem }) {
           <h2 id="rodada-titulo" className="text-base font-extrabold text-foreground">
             {rodada.titulo}
           </h2>
-          {rodada.comeco ? <p className="text-sm text-muted-foreground">{textoDoComeco(rodada.comeco)}</p> : null}
+          {rodada.comeco ? <p className="text-sm text-muted-foreground">{textoDoComeco(rodada.comeco, agora)}</p> : null}
         </div>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:ml-auto">
           {numeros.map((item) => (
@@ -119,8 +119,8 @@ function Numeros({ rodada }: { rodada: RodadaDaContagem }) {
   );
 }
 
-function LinhaDaPrateleira({ prateleira }: { prateleira: PrateleiraDaRodada }) {
-  const selo = seloDaPrateleira(prateleira);
+function LinhaDaPrateleira({ prateleira, agora }: { prateleira: PrateleiraDaRodada; agora: Date }) {
+  const selo = seloDaPrateleira(prateleira, agora);
   const [caixas, ...resto] = prateleira.resumo.split(" · ");
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-4 py-3 first:border-t-0">
@@ -186,6 +186,7 @@ export function EstoqueContagemRodadaView({
   falha = null,
   clienteFalhou = false,
   hrefDaFolha,
+  agora,
 }: {
   estado: EstadoDaRodada;
   rodada: RodadaDaContagem | null;
@@ -200,6 +201,8 @@ export function EstoqueContagemRodadaView({
   clienteFalhou?: boolean;
   /** A folha de contagem da primeira rua. */
   hrefDaFolha: string;
+  /** O dia da tela: a recontagem de outro dia sai com o dia ("contada 17/11 08:41"). */
+  agora: Date;
 }) {
   const continuar = rodada?.continuar ?? null;
   return (
@@ -253,7 +256,7 @@ export function EstoqueContagemRodadaView({
       ) : rodada ? (
         <>
           {aoVivo?.falta === "conexao" && aoVivo.lidaEm == null ? <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} /> : null}
-          <Numeros rodada={rodada} />
+          <Numeros rodada={rodada} agora={agora} />
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
             <div className="flex flex-col gap-4">
               {rodada.ruas.length ? (
@@ -267,7 +270,7 @@ export function EstoqueContagemRodadaView({
                       </h2>
                       <ul className="rounded-xl border border-border bg-card">
                         {rua.prateleiras.map((prateleira) => (
-                          <LinhaDaPrateleira key={prateleira.posicao} prateleira={prateleira} />
+                          <LinhaDaPrateleira key={prateleira.posicao} prateleira={prateleira} agora={agora} />
                         ))}
                       </ul>
                     </section>

@@ -5,7 +5,7 @@ import { Router } from "wouter";
 
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import type { LinhaDeEntrada } from "@/lib/warehouse-ops/caixas-da-separacao";
-import { bancadaDaPrateleira, linhaRecontada, produtosDoCliente, recontagensDasLinhas, type ContagemDigitada } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import { RODADA_DA_RECONTAGEM_GERAL, bancadaDaPrateleira, linhaRecontada, produtosDoCliente, recontagensDasLinhas, type ContagemDigitada } from "@/lib/warehouse-ops/recontagem-por-caixa";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela as textosComAsCamadas } from "@/test/textos";
@@ -39,7 +39,8 @@ function textosDaTela(html: string): string[] {
 }
 
 const BTG = "BTG Pactual";
-const RODADA = "recontagem-2026-11-17";
+const RODADA = RODADA_DA_RECONTAGEM_GERAL.id;
+const AGORA = new Date("2026-11-17T13:00:00.000Z"); // 10:00 de 17/11 em São Paulo
 const P = { sku_code: "BTG-000121", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", size: "P" };
 const M = { sku_code: "BTG-000123", client_item_code: "A.01.0806.005.M", product_name: "Polo Masculino Piquet Preto", size: "M" };
 const G = { sku_code: "BTG-000124", client_item_code: "A.01.0806.005.G", product_name: "Polo Masculino Piquet Preto", size: "G" };
@@ -120,6 +121,7 @@ function render(estado: EstadoDaPrateleira = "pronto", extra: Partial<Parameters
       <EstoqueContagemPrateleiraView
         estado={estado}
         posicao="A-03"
+        agora={AGORA}
         bancada={estado === "pronto" ? BANCADA : null}
         operador
         emContagem="CX-000012"
@@ -199,6 +201,13 @@ describe("Estoque › Contagem por caixa › a prateleira", () => {
       "Contar",
       "saldo da prateleira 257 · caixas 257 · reservadas 20",
     ]);
+  });
+
+  it("no dia seguinte, a caixa confirmada na recontagem geral continua confirmada, com o dia", () => {
+    const textos = textosDaTela(render("pronto", { agora: new Date("2026-11-18T13:00:00.000Z") }));
+    expect(textos).toContain("confirmada 17/11 09:02 · 60 · sem diferença");
+    expect(textos).toContain("confirmada 17/11 09:11 · 57 · −3");
+    expect(textos).toContain("2 de 4 caixas");
   });
 
   it("o campo do contado diz o item e a caixa, e o fora da lista diz que é fora da lista", () => {

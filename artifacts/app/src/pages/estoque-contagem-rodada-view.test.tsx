@@ -6,7 +6,7 @@ import { Router } from "wouter";
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import type { LinhaDeEntrada } from "@/lib/warehouse-ops/caixas-da-separacao";
 import { prateleirasDaContagem, relatorioCaixasSaldo } from "@/lib/warehouse-ops/contagem-por-caixa";
-import { rodadaDaContagem, type Recontagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import { RODADA_DA_RECONTAGEM_GERAL, rodadaDaContagem, type Recontagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
@@ -21,7 +21,7 @@ import { EstoqueContagemRodadaView, SEM_PRATELEIRAS_COM_CAIXA, type EstadoDaRoda
  */
 
 const BTG = "BTG Pactual";
-const RODADA = "recontagem-2026-11-17";
+const RODADA = RODADA_DA_RECONTAGEM_GERAL.id;
 const AGORA = new Date("2026-11-17T12:30:00.000Z");
 const P = { sku_code: "BTG-000121", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", size: "P" };
 const M = { sku_code: "BTG-000123", client_item_code: "A.01.0806.005.M", product_name: "Polo Masculino Piquet Preto", size: "M" };
@@ -71,7 +71,7 @@ const RODADA_DO_DIA = rodadaDaContagem({
   recontagens: [recontada("CX-000010", "A-01", "2026-11-17T11:10:00.000Z"), recontada("CX-000011", "A-01", "2026-11-17T11:22:00.000Z", -3)],
   guardas: [{ status: "planned", customer_code: BTG, destination_location_id: "A-02", receipt_number: "AVL-7C21A9F0" }],
   reservas: [{ sku_code: P.sku_code, location_id: "B-09", status: "picked", order_number: "PED-0002", customer_code: BTG }],
-  rodada: RODADA,
+  rodada: RODADA_DA_RECONTAGEM_GERAL,
   agora: AGORA,
 });
 
@@ -83,6 +83,7 @@ function render(estado: EstadoDaRodada = "pronto", extra: Partial<Parameters<typ
         rodada={estado === "pronto" ? RODADA_DO_DIA : null}
         relatorio={estado === "pronto" ? relatorioCaixasSaldo(PRATELEIRAS) : null}
         hrefDaFolha="/estoque/contagem/folha?rua=A"
+        agora={AGORA}
         {...extra}
       />
     </Router>,
@@ -101,7 +102,7 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
       "Caixas × saldo",
       "Imprimir folha",
       "Continuar A-02",
-      "Recontagem · 17/11/2026",
+      "Recontagem geral · 17/11/2026",
       "começou 08:10 · Guilherme Dantas",
       "prateleiras",
       "1",
@@ -163,7 +164,7 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
   });
 
   it("sem prateleira com caixa do cliente, a tela diz só depois de ler", async () => {
-    const vazia = rodadaDaContagem({ cliente: BTG, prateleiras: [], caixas: [], recontagens: [], guardas: [], reservas: [], rodada: RODADA, agora: AGORA });
+    const vazia = rodadaDaContagem({ cliente: BTG, prateleiras: [], caixas: [], recontagens: [], guardas: [], reservas: [], rodada: RODADA_DA_RECONTAGEM_GERAL, agora: AGORA });
     const html = render("pronto", { rodada: vazia, relatorio: relatorioCaixasSaldo([]) });
     const textos = textosDaTela(html);
     expect(textos).toContain(SEM_PRATELEIRAS_COM_CAIXA);

@@ -8,7 +8,6 @@ import {
   horaEmTexto,
   prateleirasDaContagem,
   resumoDaPrateleira,
-  rodadaEmTexto,
   textoDaDiferenca,
   type NomeDoSku,
   type PosicaoDaContagem,
@@ -25,10 +24,12 @@ import {
  * caixa.ts), a mesma do servidor (functions/wms, domain/box-recount.ts), que
  * grava pela callable `recountWarehouseBox`. Funções puras, sem Firestore.
  *
- * A rodada, enquanto a coleção dela não existe (PR seguinte), é o dia em São
- * Paulo: o progresso sai das recontagens gravadas com o `round_id` do dia, e
- * a caixa já recontada nele não cede peça ao item fora da lista de outra
- * caixa da prateleira (a regra do servidor).
+ * A rodada, enquanto a coleção dela não existe (PR seguinte), é a da
+ * recontagem geral, com um `round_id` fixo (decisão do Leonardo em
+ * 17/11/2026, nas respostas ao PR 625): a recontagem leva vários dias, e o
+ * progresso não volta a "por contar" na virada do dia; a caixa já recontada
+ * nela, em qualquer dia, não cede peça ao item fora da lista de outra caixa
+ * da prateleira (a regra do servidor).
  */
 
 const numero = new Intl.NumberFormat("pt-BR");
@@ -63,15 +64,28 @@ function plural(quantos: number, singular: string, varios: string): string {
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
 const DATA_CURTA = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
 
-/** O id da rodada do dia ("recontagem-2026-11-17"): vai como `round_id` em cada recontagem. */
-export function rodadaDoDia(agora: Date): string {
-  return `recontagem-${DIA_EM_SAO_PAULO.format(agora)}`;
-}
+/** Uma rodada de recontagem: o id que vai como `round_id` e o nome que a tela mostra. */
+export type RodadaDaRecontagem = { id: string; titulo: string };
+
+/**
+ * A recontagem geral das caixas da BTG, começada em 17/11/2026: a rodada de
+ * toda recontagem por caixa até a coleção da rodada (PR seguinte), que dará
+ * a cada rodada o id dela. Fixa: não muda na virada do dia.
+ */
+export const RODADA_DA_RECONTAGEM_GERAL: RodadaDaRecontagem = { id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026" };
 
 /** "17/11", no horário de São Paulo; "" sem instante válido. */
 export function dataCurta(instante: string | null | undefined): string {
   const data = new Date(String(instante ?? ""));
   return instante && !Number.isNaN(data.getTime()) ? DATA_CURTA.format(data) : "";
+}
+
+/** "09:11" no mesmo dia de `agora`, em São Paulo; "17/11 09:11" em outro dia; "—" sem instante válido. */
+export function quandoEmTexto(instante: string, agora: Date): string {
+  const data = new Date(instante);
+  if (!instante || Number.isNaN(data.getTime())) return "—";
+  const hora = horaEmTexto(instante);
+  return DIA_EM_SAO_PAULO.format(data) === DIA_EM_SAO_PAULO.format(agora) ? hora : `${dataCurta(instante)} ${hora}`;
 }
 
 // ------------------------------------------------- a recontagem gravada
@@ -602,11 +616,15 @@ export function textoDaCaixaFechada(caixa: CaixaDaBancada): string {
   return [plural(esperado, "esperada", "esperadas"), textoDaReserva(caixa.itens)].filter(Boolean).join(" · ");
 }
 
-/** "confirmada 09:11 · 55 · −5", "confirmada 09:02 · 60 · sem diferença" ou, na caixa esvaziada, "confirmada 09:15 · vazia · −60". */
-export function seloDaRecontagem(recontagem: Pick<Recontagem, "quando" | "contado" | "diferenca" | "vazia">): string {
+/**
+ * "confirmada 09:11 · 55 · −5", "confirmada 09:02 · 60 · sem diferença" ou,
+ * na caixa esvaziada, "confirmada 09:15 · vazia · −60"; em outro dia que não
+ * o de `agora`, com o dia: "confirmada 17/11 09:11 · 55 · −5".
+ */
+export function seloDaRecontagem(recontagem: Pick<Recontagem, "quando" | "contado" | "diferenca" | "vazia">, agora: Date): string {
   const quanto = recontagem.vazia ? "vazia" : numero.format(recontagem.contado);
   const diferenca = recontagem.diferenca === 0 ? "sem diferença" : textoDaDiferenca(recontagem.diferenca);
-  return `confirmada ${horaEmTexto(recontagem.quando)} · ${quanto} · ${diferenca}`;
+  return `confirmada ${quandoEmTexto(recontagem.quando, agora)} · ${quanto} · ${diferenca}`;
 }
 
 /** Os itens que mudaram na recontagem: a diferença e, na peça a mais, de onde ela veio. */
@@ -805,8 +823,9 @@ export type PrateleiraDaRodada = {
 export type RuaDaRodada = { rua: string; prateleiras: PrateleiraDaRodada[] };
 
 export type RodadaDaContagem = {
+  /** O id da rodada (o `round_id`). */
   rodada: string;
-  /** "Recontagem · 17/11/2026" */
+  /** "Recontagem geral · 17/11/2026" */
   titulo: string;
   /** A primeira recontagem da rodada: quando e quem. */
   comeco: Pick<Recontagem, "quando" | "quem"> | null;
@@ -830,7 +849,7 @@ export type DadosDaRodada = {
   recontagens: readonly Recontagem[];
   guardas: readonly GuardaLida[];
   reservas: readonly ReservaLida[];
-  rodada: string;
+  rodada: RodadaDaRecontagem;
   agora: Date;
 };
 
@@ -850,11 +869,11 @@ function separacaoDaPrateleira(reservas: readonly ReservaLida[], posicao: string
 export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   const dono = texto(dados.cliente);
   const doCliente = dados.caixas.filter((caixa) => Boolean(dono) && belongsToCustomer(caixa, dono));
-  const recontagens = dados.recontagens.filter((recontagem) => recontagem.rodada === dados.rodada);
+  const recontagens = dados.recontagens.filter((recontagem) => recontagem.rodada === dados.rodada.id);
   const ultimas = ultimaDeCadaCaixa(recontagens);
   const vaziasPorLocal = new Map<string, WarehouseBox[]>();
   for (const caixa of doCliente) {
-    if (!esvaziadaNaRodada(caixa, dados.rodada)) continue;
+    if (!esvaziadaNaRodada(caixa, dados.rodada.id)) continue;
     const local = chave(caixa.location_id);
     vaziasPorLocal.set(local, [...(vaziasPorLocal.get(local) ?? []), caixa]);
   }
@@ -906,8 +925,8 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   const comeco = recontagens.reduce<Recontagem | null>((menor, recontagem) => (!menor || recontagem.quando < menor.quando ? recontagem : menor), null);
   const confirmadas = linhas.reduce((soma, linha) => soma + linha.confirmadas, 0);
   return {
-    rodada: dados.rodada,
-    titulo: rodadaEmTexto(dados.agora),
+    rodada: dados.rodada.id,
+    titulo: dados.rodada.titulo,
     comeco: comeco ? { quando: comeco.quando, quem: comeco.quem } : null,
     prateleiras: linhas.length,
     prateleirasContadas: linhas.filter((linha) => linha.estado === "contada").length,
@@ -920,9 +939,9 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   };
 }
 
-/** "começou 08:10 · Guilherme Dantas" */
-export function textoDoComeco(comeco: Pick<Recontagem, "quando" | "quem">): string {
-  return `começou ${horaEmTexto(comeco.quando)} · ${comeco.quem}`;
+/** "começou 08:10 · Guilherme Dantas"; em outro dia que não o de `agora`, "começou 17/11 08:10 · Guilherme Dantas". */
+export function textoDoComeco(comeco: Pick<Recontagem, "quando" | "quem">, agora: Date): string {
+  return `começou ${quandoEmTexto(comeco.quando, agora)} · ${comeco.quem}`;
 }
 
 /** "15 prateleiras · 2 contadas · 1 em contagem": o que a rua tem nesta rodada. */
@@ -936,13 +955,17 @@ export function resumoDaRua(rua: RuaDaRodada): string {
   return partes.join(" · ");
 }
 
-/** O selo da prateleira na rodada: "contada 08:41 · 1 diferença · −3 un.", "em contagem · Guilherme · 2 de 7 caixas" ou "contada 17/11". */
-export function seloDaPrateleira(prateleira: PrateleiraDaRodada): string {
+/**
+ * O selo da prateleira na rodada: "contada 08:41 · 1 diferença · −3 un." (em
+ * outro dia que não o de `agora`, "contada 17/11 08:41 · …"), "em contagem ·
+ * Guilherme · 2 de 7 caixas" ou, na recontada em outra rodada, "contada 16/11".
+ */
+export function seloDaPrateleira(prateleira: PrateleiraDaRodada, agora: Date): string {
   if (prateleira.estado === "contada" && prateleira.ultima) {
     const diferencas = prateleira.comDiferenca
       ? [plural(prateleira.comDiferenca, "diferença", "diferenças"), unidadesComSinal(prateleira.diferenca)]
       : [prateleira.vazias ? `${plural(prateleira.vazias, "caixa vazia saiu", "caixas vazias saíram")}` : "sem diferença"];
-    return [`contada ${horaEmTexto(prateleira.ultima.quando)}`, ...diferencas].join(" · ");
+    return [`contada ${quandoEmTexto(prateleira.ultima.quando, agora)}`, ...diferencas].join(" · ");
   }
   if (prateleira.estado === "em_contagem" && prateleira.ultima) {
     return `em contagem · ${prateleira.ultima.quem} · ${numero.format(prateleira.confirmadas)} de ${plural(prateleira.total, "caixa", "caixas")}`;

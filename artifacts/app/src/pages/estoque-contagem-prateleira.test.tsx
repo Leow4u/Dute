@@ -75,12 +75,12 @@ vi.mock("@/lib/warehouse-ops/model", async (original) => ({
 }));
 vi.mock("@/lib/wms/recontagem", () => ({ recontarCaixa: recontar }));
 
-import { rodadaDoDia } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import { RODADA_DA_RECONTAGEM_GERAL } from "@/lib/warehouse-ops/recontagem-por-caixa";
 
 import PaginaPrateleiraDaContagem from "./estoque-contagem-prateleira";
 
 const AGORA = new Date("2026-11-17T12:30:00.000Z");
-const RODADA = rodadaDoDia(AGORA);
+const RODADA = RODADA_DA_RECONTAGEM_GERAL.id;
 
 const caixa = (code: string, extra: Record<string, unknown> = {}) => ({
   id: code,
@@ -228,7 +228,7 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
       location_id: "A-03",
       lines: [{ sku_code: M.sku_code, counted_qty: 48 }],
       extra_lines: [{ sku_code: GG.sku_code, counted_qty: 2 }],
-      round_id: "recontagem-2026-11-17",
+      round_id: "recontagem-geral-2026-11-17",
       idempotency_key: expect.any(String),
     });
     expect(JSON.stringify(enviado, (_chave, valor) => (valor === undefined ? "INDEFINIDO" : valor))).not.toMatch(/INDEFINIDO|null/);
@@ -301,6 +301,36 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
     await montar();
     expect(container.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
     expect(contar("CX-000010")).toBeNull();
+  });
+
+  it("a recontagem geral atravessa o dia: no dia seguinte, a caixa contada ontem continua confirmada e a chamada leva o mesmo round_id", async () => {
+    // 10:00 de 18/11 em São Paulo; a CX-000010 foi recontada às 09:02 de 17/11, na recontagem geral.
+    vi.setSystemTime(new Date("2026-11-18T13:00:00.000Z"));
+    estado.consultas[`cycle_counts:${BTG}:recontagem-geral-2026-11-17`] = [
+      {
+        id: "cc_1",
+        customer_code: BTG,
+        location_id: "A-03",
+        box_code: "CX-000010",
+        box_recount_id: "brc_010",
+        round_id: "recontagem-geral-2026-11-17",
+        mode: "box",
+        ...P,
+        qty_before: 60,
+        counted_qty: 60,
+        adjustment_delta: 0,
+        actor: { name: "Guilherme Dantas" },
+        occurred_at: "2026-11-17T12:02:00.000Z",
+      },
+    ];
+    recontar.mockResolvedValue({ ok: true, box_recount_id: "brc_013", box_code: "CX-000013", location_id: "A-03", round_id: "recontagem-geral-2026-11-17", lines: [{ ...M, expected: 20, counted: 20, difference: 0 }] });
+    await montar();
+    expect(container.textContent).toContain("confirmada 17/11 09:02 · 60 · sem diferença");
+    expect(container.textContent).toContain("1 de 3 caixas");
+    await tocar(contar("CX-000013"));
+    await digitar("contado-CX-000013-0", "20");
+    await tocar(container.querySelector("#confirmar-CX-000013"));
+    expect(recontar.mock.calls[0][0]).toMatchObject({ box_code: "CX-000013", round_id: "recontagem-geral-2026-11-17" });
   });
 
   it("a prateleira sem caixa do cliente diz isso, depois de ler", async () => {
