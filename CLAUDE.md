@@ -552,12 +552,12 @@ documentação de produto e operação está em `docs/`.
   avulsa, a API e o Catálogo recusam o que contradiz o código, o aviso do
   cliente não recusa; o Catálogo só aplica quando o nome ou o tamanho mudam.
   As listas com uma linha por tamanho mostram "Nome · XG" (`nomeComTamanho`).
-  Os nomes antigos mudam no passo 3, sem planilha
+  Os nomes antigos mudaram no passo 3, gravado na produção em 18/11/2026
+  (201 renomeados, os 218 ativos no padrão), sem planilha
   (`tools/padronizar-nomes/aplicar.mjs`: a proposta do relatório só de
   leitura, `relatorio.mjs`, com as escolhas de 06/11 em `decisoes.mjs` por
-  cima, recibo e evento por SKU), só depois de a `main` com o passo 2 estar
-  na produção; roteiro no README da pasta, pranchas "proposta" em
-  `docs/mockups/Nome*.dc.html`.
+  cima, recibo e evento por SKU); roteiro e registro no README da pasta,
+  pranchas "proposta" em `docs/mockups/Nome*.dc.html`.
 - **`pnpm` não está no PATH.** Use `corepack pnpm`. Os diretórios
   `functions/wms/` e `functions/comercial/` usam **npm** (cada um tem
   `package-lock.json` próprio), não pnpm. Como o `pnpm-workspace.yaml` inclui
