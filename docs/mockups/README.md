@@ -718,8 +718,8 @@ e o relatório "Caixas × saldo", só de leitura, estão no código desde
 abertos pela Contagem); a rodada, a prateleira caixa a caixa e o celular,
 desde 17/11/2026 (PR 625, `/estoque/contagem/rodada` e
 `/estoque/contagem/prateleira`, abertos por "Contagem por caixa" na
-Contagem), com a rodada do dia no lugar da coleção da rodada, que vem
-depois (sem o cartão "Rodada", o "Anteriores" e "Cadastrar caixa"). As pranchas seguem o shell v3 da
+Contagem), com a rodada da recontagem geral, fixa, no lugar da coleção da
+rodada, que vem depois (sem o cartão "Rodada", o "Anteriores" e "Cadastrar caixa"). As pranchas seguem o shell v3 da
 Armazenagem com o menu de quem opera (cliente ativo BTG, Guilherme, Operação
 WMS). As fontes são estáticas. A-03 e as caixas CX-000010 a CX-000016 vêm das
 pranchas da separação; a rodada, as prateleiras e os números são ilustrativos
@@ -765,7 +765,7 @@ CX-000014", "entrada de 2 em A-03"); as duas pranchas da bancada perderam o
 
 | Tela | Arquivo | O que mostra |
 |---|---|---|
-| Armazenagem · Contagem, a rodada por prateleira | `WmsContagemRodada.dc.html` | A rodada com começo, motivo e quem grava; as prateleiras por rua com o estado (contada, em contagem, por contar, "conte depois da entrega"); o relatório "Caixas × saldo" ao lado. O cartão "Caixas × saldo" está no código desde 17/11/2026 como a tela `/estoque/contagem/caixas` (PR 615), inteira, com as contagens do dia; a rodada, desde o PR 625 (`/estoque/contagem/rodada`), como a rodada do dia, sem o cartão "Rodada" e o "Anteriores", que esperam a coleção da rodada. |
+| Armazenagem · Contagem, a rodada por prateleira | `WmsContagemRodada.dc.html` | A rodada com começo, motivo e quem grava; as prateleiras por rua com o estado (contada, em contagem, por contar, "conte depois da entrega"); o relatório "Caixas × saldo" ao lado. O cartão "Caixas × saldo" está no código desde 17/11/2026 como a tela `/estoque/contagem/caixas` (PR 615), inteira, com as contagens do dia; a rodada, desde o PR 625 (`/estoque/contagem/rodada`), como a rodada da recontagem geral (o `round_id` fixo, decisão de 17/11/2026), sem o cartão "Rodada" e o "Anteriores", que esperam a coleção da rodada. |
 | Armazenagem · Contagem, a prateleira caixa a caixa | `WmsContagemPrateleira.dc.html` | A-03 com sete caixas: as duas confirmadas em uma linha, com "Contar de novo"; a em contagem, com a diferença antes de gravar e o item fora da lista; as por contar; "Caixa sem registro"; o rodapé com o saldo gravado da prateleira. No código desde o PR 625 (`/estoque/contagem/prateleira?posicao=A-03`), sem "Caixa sem registro", que espera a porta do servidor. |
 | Armazenagem · Contagem no celular | `WmsContagemCelular.dc.html` | Uma caixa por vez, campo de 48 px, "Confirmar caixa" como ação principal e as confirmadas em uma linha. No código desde o PR 625, a mesma tela da bancada. |
 | Folha de contagem (A4) | `WmsContagemFolha.dc.html` | A Rua A com as caixas por prateleira: entrou, saiu, esperado e reserva, "Contado" em branco, a linha "Fora da lista" e caixas × saldo por prateleira. No código desde 17/11/2026 (PR 615, `/estoque/contagem/folha?rua=A`), com o cabeçalho reduzido a cliente, rodada, prateleiras, impressa em e por quem: os campos da rodada entram com ela. |
