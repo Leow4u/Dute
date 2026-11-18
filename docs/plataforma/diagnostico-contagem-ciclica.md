@@ -742,11 +742,14 @@ também se acerta pela bancada (decisão de 18/11/2026, seção 7): o tamanho
 registrado recebe o que existe dele de fato (zero, se todas as peças são do
 outro tamanho) e o tamanho certo entra por "Item fora da lista"; a prateleira
 se conta inteira, porque o fora da lista pode puxar por um momento de outra
-caixa ainda não contada, e a contagem dela acerta a diferença. Só três casos
-vão para a ferramenta de correção (`tools/corrigir-codigo-do-produto`, rodada
-da máquina do Leonardo): o tamanho certo fora do cadastro, a recusa por
-reserva de pedido no tamanho errado e a recusa da prateleira que precisa de
-acerto (`BOX_RECOUNT_SHELF_SHORT`). As guardas da prateleira se concluem antes de
+caixa ainda não contada, e a contagem dela acerta a diferença. Três casos não
+fecham na bancada, e a caixa espera: o tamanho certo fora do cadastro, que o
+plano do acerto cria antes (`criar_sku` em `tools/acerto-btg-2026-10`, rodado
+da máquina do Leonardo), para a caixa se contar com ele por "Item fora da
+lista"; a recusa por reserva de pedido no tamanho errado, que espera a linha do
+pedido separar a menos e a coordenação concluir; e a recusa da prateleira que
+precisa de acerto (`BOX_RECOUNT_SHELF_SHORT`), que passa antes pelo plano do
+acerto. As guardas da prateleira se concluem antes de
 contá-la, e as prateleiras com pedido em separação ficam para o fim, com a
 separação parada naquela rua, ou o pedido é entregue antes. Uma pessoa por
 rua, com a separação parada na rua em contagem, até a rodada ter o estado "em
@@ -1084,12 +1087,17 @@ acerta pela bancada. O tamanho registrado recebe o que existe dele de fato
 (zero, se todas as peças são do outro tamanho), e o tamanho certo entra por
 "Item fora da lista". A prateleira é contada inteira, porque o fora da lista
 pode puxar por um momento de outra caixa ainda não contada, e a contagem dela
-acerta a diferença. Vão para a ferramenta de correção
-(`tools/corrigir-codigo-do-produto`), rodada da máquina do Leonardo, só três
-casos: o tamanho certo fora do cadastro (a bancada recusa com
-`BOX_RECOUNT_PRODUCT_NOT_FOUND`), a recusa por reserva de pedido no tamanho
-errado (`BOX_RECOUNT_BELOW_RESERVED`) e a recusa da prateleira que precisa de
-acerto (`BOX_RECOUNT_SHELF_SHORT`).
+acerta a diferença. Três casos não fecham na bancada, e a caixa espera: o
+tamanho certo fora do cadastro (a bancada recusa com
+`BOX_RECOUNT_PRODUCT_NOT_FOUND`), que o plano do acerto cria antes (`criar_sku`
+em `tools/acerto-btg-2026-10`, com o cadastro copiado de um irmão da família e
+sem saldo, rodado da máquina do Leonardo); a recusa por reserva de pedido no
+tamanho errado (`BOX_RECOUNT_BELOW_RESERVED`), que espera a linha do pedido
+separar a menos e a coordenação concluir; e a recusa da prateleira que precisa
+de acerto (`BOX_RECOUNT_SHELF_SHORT`), que passa antes pelo plano do acerto. A
+ferramenta de correção (`tools/corrigir-codigo-do-produto`) segue para a caixa
+do Receber lançada com o código errado; a primeira versão desta decisão mandava
+os três casos para ela (corrigido em 18/11/2026).
 
 ## 8. Como este levantamento foi feito
 
