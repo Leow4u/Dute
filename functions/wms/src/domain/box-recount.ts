@@ -9,6 +9,7 @@ import { areaDePassagem } from "./areas-de-passagem.js";
 import { BOX_STATUS_EMPTIED, BOX_STATUS_STORED, ajustesDaCaixa, caixasComOItem, retiradoDaCaixa } from "./box-balance.js";
 import { publishedMoneyDeletes } from "./catalog-prices.js";
 import { isArchivedCatalogRecord } from "./catalog-codes.js";
+import { caixaDaRodada, conferirRodadaDaRecontagem, lerRodada } from "./count-rounds.js";
 import { recordOwner } from "./customer-scope.js";
 import { problemaDaQuantidadeContada } from "./cycle-count-input.js";
 import { diaDeSaoPaulo } from "./datas-do-saldo.js";
@@ -439,7 +440,7 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
     const occurredAt = new Date().toISOString();
 
     // A caixa: existe, é do cliente e está guardada nesta prateleira (o molde é a abertura, operations.ts).
-    const [boxSnapshot, positionSnapshot] = await Promise.all([transaction.get(boxRef), transaction.get(positionRef)]);
+    const [boxSnapshot, positionSnapshot, rodada] = await Promise.all([transaction.get(boxRef), transaction.get(positionRef), roundId ? lerRodada(transaction, db, roundId) : Promise.resolve(null)]);
     if (!boxSnapshot.exists) {
       recusa("not-found", `A caixa ${boxCode} não está cadastrada. Confira o código na etiqueta da caixa.`, "BOX_RECOUNT_BOX_NOT_FOUND");
     }
@@ -507,6 +508,8 @@ export async function recountWarehouseBoxTransaction(db: Firestore, input: Entra
         { box_code: aCaminho ? chave(aCaminho.data.code) || aCaminho.id : null, putaway_task_id: guarda?.id ?? null },
       );
     }
+    // A rodada: só a aberta do cliente, e só a prateleira do alcance dela (o registro da rodada, 18/11/2026).
+    conferirRodadaDaRecontagem(rodada, roundId, customerCode, locationId, caixasDaPrateleira.map((row) => caixaDaRodada(row.id, row.data)));
 
     // O esperado de cada item: o saldo da caixa (entrada − retirado + ajustes).
     const entrada = entradaDaCaixa(box, linhasDaCaixa);

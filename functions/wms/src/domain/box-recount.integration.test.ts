@@ -7,6 +7,7 @@ import { HttpsError } from "firebase-functions/https";
 
 import { billingMovementDirection } from "./billing-scope.js";
 import { BOX_RECOUNT_EVENT_TYPE, entradaDaRecontagem, recountWarehouseBoxTransaction } from "./box-recount.js";
+import { LEGACY_ROUND_ID, completeCountRoundTransaction, entradaDaConclusao, entradaDoInicio, startCountRoundTransaction } from "./count-rounds.js";
 import { lerDatasDoEstoque } from "./datas-do-estoque.js";
 import {
   clientScopedInventoryId,
@@ -424,12 +425,14 @@ describe("Recontar a caixa: a caixa e a prateleira na mesma transação", () => 
   });
 
   it("na mesma rodada, a caixa já recontada não cede peça ao fora da lista: a peça entra na prateleira", async () => {
-    await recontar({ box_code: "CX-000014", lines: [{ sku_code: POLO_GG, counted_qty: 50 }], round_id: "rodada-17-11" });
-    const resultado = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 60 }], extra_lines: [{ sku_code: POLO_GG, counted_qty: 2 }], round_id: "rodada-17-11" });
+    // A rodada é um registro (count-rounds.ts): a recontagem só grava na aberta do cliente.
+    const rodada = await startCountRoundTransaction(db, entradaDoInicio({ customer_code: BTG, scope: "general", idempotency_key: chave("rodada") }), guilherme);
+    await recontar({ box_code: "CX-000014", lines: [{ sku_code: POLO_GG, counted_qty: 50 }], round_id: rodada.round_id });
+    const resultado = await recontar({ box_code: "CX-000012", lines: [{ sku_code: POLO_M, counted_qty: 60 }], extra_lines: [{ sku_code: POLO_GG, counted_qty: 2 }], round_id: rodada.round_id });
     assert.equal(resultado.shelf_delta_units, 2);
     assert.equal((await caixa("CX-000014")).count_adjustments, undefined);
     assert.equal((await saldo(POLO_GG))[0]!.qty_on_hand, 52);
-    assert.equal((await caixa("CX-000012")).last_recount_round_id, "rodada-17-11");
+    assert.equal((await caixa("CX-000012")).last_recount_round_id, rodada.round_id);
   });
 
   it("a separação depois da recontagem tira das caixas pelo que a recontagem deixou", async () => {
@@ -615,5 +618,50 @@ describe("Recontar a caixa: a entrada", () => {
     const resultado = await recontar({ box_code: "cx-000012", lines: [{ sku_code: POLO_M.toLowerCase(), counted_qty: 60 }] });
     assert.equal(resultado.box_code, "CX-000012");
     assert.equal((await todos("cycle_counts"))[0]!.reason, "Recontagem por caixa");
+  });
+});
+
+describe("Recontar a caixa: a rodada", () => {
+  const iniciar = (alcance: { scope: "general" | "aisle" | "item"; aisle?: string; sku_code?: string }, cliente = BTG) =>
+    startCountRoundTransaction(db, entradaDoInicio({ customer_code: cliente, idempotency_key: chave("rodada"), ...alcance }), guilherme);
+  const concluir = (roundId: string) => completeCountRoundTransaction(db, entradaDaConclusao({ customer_code: BTG, round_id: roundId, idempotency_key: chave("concluir") }), guilherme);
+  const semDiferenca = (box_code: string, location_id: string, sku: string, qty: number, round_id: string) => recontar({ box_code, location_id, lines: [{ sku_code: sku, counted_qty: qty }], round_id });
+
+  it("a rodada aberta do cliente grava; a concluída recusa; a que não existe recusa; o id fixo sem documento passa", async () => {
+    const aberta = await iniciar({ scope: "general" });
+    const gravada = await semDiferenca("CX-000010", "A-03", POLO_P, 60, aberta.round_id);
+    assert.equal(gravada.round_id, aberta.round_id);
+    assert.equal((await caixa("CX-000010")).last_recount_round_id, aberta.round_id);
+    await concluir(aberta.round_id);
+    const concluida = await recusa(semDiferenca("CX-000010", "A-03", POLO_P, 60, aberta.round_id));
+    assert.equal(codigoDa(concluida), "BOX_RECOUNT_ROUND_CLOSED");
+    assert.equal(concluida.message, `A contagem «${aberta.title}» já foi concluída: abra a Contagem e inicie outra.`);
+    const inexistente = await recusa(semDiferenca("CX-000010", "A-03", POLO_P, 60, "cr_000000000000000000000000"));
+    assert.equal(codigoDa(inexistente), "BOX_RECOUNT_ROUND_NOT_FOUND");
+    await semDiferenca("CX-000011", "A-03", POLO_M, 60, LEGACY_ROUND_ID);
+    assert.equal((await caixa("CX-000011")).last_recount_round_id, LEGACY_ROUND_ID);
+  });
+
+  it("fora do alcance: a prateleira de outra rua e a prateleira sem caixa com o item recusam; a rua é a inteira antes do hífen", async () => {
+    const posicao = (code: string, aisle: string) => db.collection("warehouse_positions").doc(code).set({ code, aisle, shelf: 1, sequence: 1, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: BTG, status: "active" });
+    await Promise.all([posicao("B-01", "B"), posicao("AB-01", "AB"), caixaDaAbertura("CX-000020", "B-01", "2026-10-20T15:00:00.000Z", [[POLO_P, 10]]), caixaDaAbertura("CX-000021", "AB-01", "2026-10-20T16:00:00.000Z", [[POLO_P, 10]])]);
+    const ruaA = await iniciar({ scope: "aisle", aisle: "A" });
+    await semDiferenca("CX-000010", "A-03", POLO_P, 60, ruaA.round_id);
+    const outraRua = await recusa(semDiferenca("CX-000020", "B-01", POLO_P, 10, ruaA.round_id));
+    assert.equal(codigoDa(outraRua), "BOX_RECOUNT_OUT_OF_SCOPE");
+    assert.equal(outraRua.message, `A prateleira B-01 está fora da contagem «${ruaA.title}».`);
+    assert.equal(codigoDa(await recusa(semDiferenca("CX-000021", "AB-01", POLO_P, 10, ruaA.round_id))), "BOX_RECOUNT_OUT_OF_SCOPE");
+    await concluir(ruaA.round_id);
+
+    // Por item: a prateleira com caixa que tem o item se conta inteira; a sem o item fica fora.
+    const porItem = await iniciar({ scope: "item", sku_code: POLO_GG });
+    await semDiferenca("CX-000010", "A-03", POLO_P, 60, porItem.round_id);
+    assert.equal(codigoDa(await recusa(semDiferenca("CX-000020", "B-01", POLO_P, 10, porItem.round_id))), "BOX_RECOUNT_OUT_OF_SCOPE");
+  });
+
+  it("a rodada de outro cliente é permission-denied", async () => {
+    const deOutro = await iniciar({ scope: "general" }, "Outro Cliente");
+    const erro = await recusa(semDiferenca("CX-000010", "A-03", POLO_P, 60, deOutro.round_id));
+    assert.equal(erro.code, "permission-denied");
   });
 });

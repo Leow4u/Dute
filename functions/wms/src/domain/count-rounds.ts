@@ -607,3 +607,35 @@ export async function completeCountRoundTransaction(db: Firestore, input: Entrad
     return result;
   });
 }
+
+// ------------------------------------------------ a recontagem na rodada
+
+export type RodadaLida = { id: string; customer_code: string; title: string; status: string; alcance: AlcanceDaRodada };
+
+/** O documento da rodada, no que a recontagem confere; null quando não existe. */
+export async function lerRodada(transaction: Transaction, db: Firestore, roundId: string): Promise<RodadaLida | null> {
+  const snapshot = await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(roundId));
+  if (!snapshot.exists) return null;
+  const data = snapshot.data() ?? {};
+  return { id: snapshot.id, customer_code: text(data.customer_code), title: text(data.title), status: text(data.status), alcance: alcanceDoDocumento(data) };
+}
+
+/**
+ * A recontagem só grava na rodada aberta do cliente e dentro do alcance
+ * dela (box-recount.ts). Sem `round_id`, nada a conferir. O id fixo da
+ * recontagem geral passa enquanto o documento dela não existe.
+ */
+export function conferirRodadaDaRecontagem(rodada: RodadaLida | null, roundId: string | undefined, customerCode: string, locationId: string, caixasDaPrateleira: readonly CaixaDaRodada[]): void {
+  if (!roundId) return;
+  if (!rodada) {
+    if (roundId === LEGACY_ROUND_ID) return;
+    recusa("failed-precondition", "A contagem não existe mais: abra a Contagem e inicie uma.", "BOX_RECOUNT_ROUND_NOT_FOUND", { round_id: roundId });
+  }
+  if (rodada.customer_code !== customerCode) throw new HttpsError("permission-denied", "A contagem é de outro cliente.");
+  if (rodada.status !== "open") {
+    recusa("failed-precondition", `A contagem «${rodada.title}» já foi concluída: abra a Contagem e inicie outra.`, "BOX_RECOUNT_ROUND_CLOSED", { round_id: roundId });
+  }
+  if (!prateleiraNoAlcance(rodada.alcance, locationId, caixasDaPrateleira, roundId)) {
+    recusa("failed-precondition", `A prateleira ${locationId} está fora da contagem «${rodada.title}».`, "BOX_RECOUNT_OUT_OF_SCOPE", { round_id: roundId, location_id: locationId });
+  }
+}
