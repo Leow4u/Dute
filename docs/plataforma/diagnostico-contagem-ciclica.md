@@ -87,6 +87,17 @@ As ressalvas:
    abertura e "Imprimir etiquetas"). Quem for recontar pode achar que corrige
    ali; toda correção vai para a aba cíclica, que não sabe de caixa (seção 3).
    A lista das linhas da abertura, com caixa e endereço, ajuda a comparar.
+   *No código desde 18/11/2026 (PR N):* com a sessão concluída,
+   `/wms/contagem` é a entrada das contagens, na v3 (desenho em
+   `docs/superpowers/specs/2026-11-18-abertura-concluida-na-contagem-design.md`,
+   fotos em `docs/mockups/contagem-entrada/`): "Em andamento" com o cartão
+   da recontagem geral, "Continuar" e "Ver prateleiras", e "Anteriores" com
+   a linha do inventário de abertura (quando, quem, lançamentos e unidades,
+   da sessão). A aba da abertura e a cíclica saíram da Contagem da BTG: a
+   tela de hoje, com as abas, passou para `/wms/contagem/abertura`, para o
+   cliente com a abertura pendente ou em curso, e volta à entrada quando a
+   sessão conclui. "Iniciar contagem", o fim da contagem e as anteriores
+   além da abertura esperam a coleção da rodada (seção 6, item 4).
 2. **A abertura continua existindo para outro cliente** que entre com
    estoque já no galpão: cada cliente tem a própria sessão e o próprio
    bloqueio de saída (`domain/customer-scope.ts:39-49`). Cliente que começa
@@ -968,6 +979,23 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    caixa" (a caixa física sem registro), a linha separada antes de contar e
    o estado "em contagem" da prateleira (decididos para o PR da coleção, na
    seção 7).
+
+   *A entrada da Contagem no código desde 18/11/2026 (PR N; o cartão
+   "Rodada" e "Anteriores", em parte):* `/wms/contagem` passou a ser a
+   entrada das contagens, na v3: "Em andamento" com o cartão da recontagem
+   geral (o mesmo cabeçalho da rodada, agora o componente `CartaoDaRodada`),
+   "Continuar" e "Ver prateleiras", e "Anteriores" com a linha do inventário
+   de abertura, lida da sessão. A rodada continua em
+   `/estoque/contagem/rodada`, com "Contagem" para voltar à entrada. A tela
+   de hoje, com as abas da abertura e da cíclica, passou para
+   `/wms/contagem/abertura` (a entrada manda para lá com a abertura pendente
+   ou em curso; ela volta à entrada quando a sessão conclui): para a BTG, a
+   cíclica saiu da Contagem, como decidido em 17/11/2026. Fotos aprovadas em
+   `docs/mockups/contagem-entrada/`; desenho em
+   `docs/superpowers/specs/2026-11-18-abertura-concluida-na-contagem-design.md`.
+   Ficam para a coleção da rodada: "Iniciar contagem" (geral, por rua ou por
+   item), o fim da contagem e as anteriores além da abertura (a segunda
+   foto).
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais

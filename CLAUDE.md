@@ -256,7 +256,11 @@ documentação de produto e operação está em `docs/`.
 - **Telas novas seguem a v3** (`docs/mockups/README.md`). O WMS está no shell
   v3 da Armazenagem desde a parte 4.7a; cada tela dele entra na v3 pela lista
   `TELAS_DO_WMS_NA_V3` (`artifacts/app/src/lib/wms-v3.ts`): Início, Pedidos,
-  Estoque e Receber até aqui, e a tela nova Estoque › Alertas (parte 5.4e). As que não estão na lista seguem
+  Estoque e Receber até aqui, a tela nova Estoque › Alertas (parte 5.4e), as
+  telas da contagem por caixa e, desde 18/11/2026, a Contagem, a entrada das
+  contagens (em andamento e anteriores, `docs/mockups/contagem-entrada/`); a
+  abertura e a cíclica, as abas de antes, ficam em `/wms/contagem/abertura`,
+  no visual antigo, só para o cliente com a abertura pendente ou em curso. As que não estão na lista seguem
   `docs/sistema-visual.md`. A Configuração tem a barra preta da v3 desde 11/11/2026, e o
   conteúdo de cada seção entra pela lista `SECOES_DA_CONFIGURACAO_NA_V3` (`lib/settings-nav.ts`):
   Pessoas e acessos (a equipe e o índice dos clientes; as pessoas de cada portal na página do
