@@ -26,6 +26,8 @@ const RODADA: RodadaDaContagem = {
   diferenca: -3,
   ruas: [],
   continuar: "B-10",
+  alcance: { tipo: "geral" },
+  concluida: null,
 };
 const TEXTOS = [
   "Recontagem geral · 17/11/2026",

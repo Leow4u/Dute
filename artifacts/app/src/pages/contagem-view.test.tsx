@@ -32,6 +32,8 @@ const RODADA: RodadaDaContagem = {
   diferenca: -3,
   ruas: [],
   continuar: "A-02",
+  alcance: { tipo: "geral" },
+  concluida: null,
 };
 const ABERTURA: RegistroDaAberturaConcluida = {
   titulo: "Inventário de abertura",
