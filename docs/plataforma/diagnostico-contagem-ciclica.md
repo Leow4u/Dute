@@ -898,6 +898,42 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    revisão: desfazer a separação numa caixa recontada apagava o `balance_at`
    dela no WMS, e a caixa voltava para "Etiquetas para trocar"; corrigido no
    PR 620.
+
+   *A tela no código desde 17/11/2026 (PR 625, nas pranchas aprovadas):* a
+   rodada em `/estoque/contagem/rodada`, aberta por "Contagem por caixa" na
+   Contagem, e a bancada da prateleira em
+   `/estoque/contagem/prateleira?posicao=A-03`, que é também a do celular,
+   as duas na v3 (`TELAS_DO_WMS_NA_V3`), sem legenda, com a lista dos
+   textos e o `axe`. A bancada lista as caixas guardadas da prateleira com o
+   esperado de cada item (o saldo da caixa pela regra do domínio, a mesma
+   conta da folha e do servidor: a lista só com o esperado maior que zero) e
+   a reserva com o pedido antes de digitar; uma caixa por vez se conta, com a
+   diferença antes de gravar, "Caixa vazia", "Item fora da lista" (a busca no
+   catálogo do cliente, o arquivado também) e "Confirmar caixa" ("Confirmar
+   caixa vazia" com tudo em zero); a confirmada fica numa linha, com "Contar
+   de novo" e o que mudou, com a origem de cada peça a mais que a resposta
+   devolve ("1 do saldo sem caixa", "2 de CX-000014", "entrada de 2 em
+   A-03"), e a próxima por contar abre com o foco no primeiro campo. A guarda
+   aberta e a caixa a caminho da prateleira e o pedido separado esperando a
+   entrega aparecem antes de contar e travam o "Contar"; a linha já separada
+   de um pedido em separação só aparece na recusa do servidor. A gravação é
+   a `recountWarehouseBox`, com a lista inteira da caixa, o fora da lista, a
+   chave da tentativa (a repetição depois do resultado incerto leva a mesma)
+   e o `round_id` da rodada, sem campo vazio. A rodada, enquanto a coleção
+   dela não existe, é o dia em São Paulo (`recontagem-2026-11-17`): o
+   progresso sai das recontagens gravadas com esse `round_id`, lidas ao
+   vivo, e a caixa recontada no dia não cede peça ao fora da lista de outra
+   caixa. A tela da rodada mostra as prateleiras com caixa por rua, com o
+   estado (por contar, em contagem, contada, "contada 17/11" na recontada em
+   outro dia), os números do dia, "Continuar" na prateleira em contagem (ou
+   na primeira por contar livre) e o "Caixas × saldo" ao lado. Conferido no
+   emulador: a A-03 com três caixas, uma contada com −3 e outra com 2 peças
+   fora da lista vindas do saldo sem caixa, recontada pela tela, e o "Caixas
+   × saldo" passou de −2 a zero nela. Ficam: a coleção da rodada (o motivo, o
+   alcance, quem grava, o cartão "Rodada" e "Anteriores"), a fila de revisão
+   do admin, "Cadastrar caixa" (a caixa física sem registro), a linha
+   separada antes de contar e a prateleira "em contagem" (pergunta 9); as
+   perguntas 1, 3, 8 e 9 vistas pela tela estão no corpo do PR.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
