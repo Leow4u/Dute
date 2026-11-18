@@ -8,6 +8,7 @@ import {
   CONTAGEM_EM_BRANCO,
   RODADA_DA_RECONTAGEM_GERAL,
   bancadaDaPrateleira,
+  contarOItem,
   bloqueioDaPrateleira,
   buscarProdutos,
   caixasComEtiquetaNova,
@@ -493,5 +494,21 @@ describe("a rodada por prateleira", () => {
     });
     expect(rodada.caixasConfirmadas).toBe(0);
     expect(rodada.comeco).toBeNull();
+  });
+});
+
+describe("contar o item pela ficha (\"Contar este item\", 18/11/2026)", () => {
+  it("o item numa prateleira só vai à bancada dela; as áreas de passagem e o saldo zero não contam", () => {
+    expect(contarOItem([{ id: "A-03", qty: 12 }, { id: "RECEBIMENTO", qty: 2 }, { id: "B-01", qty: 0 }])).toEqual({
+      href: "/estoque/contagem/prateleira?posicao=A-03",
+      rotulo: "Contar em A-03",
+    });
+  });
+
+  it("em várias prateleiras, ou em nenhuma, vai à rodada", () => {
+    const rodada = { href: "/estoque/contagem/rodada", rotulo: "Contagem por caixa" };
+    expect(contarOItem([{ id: "A-03", qty: 1 }, { id: "B-09", qty: 4 }])).toEqual(rodada);
+    expect(contarOItem([])).toEqual(rodada);
+    expect(contarOItem([{ id: "EXPEDICAO", qty: 3 }])).toEqual(rodada);
   });
 });

@@ -84,9 +84,17 @@ async function montar() {
       </ProvedorDaConexao>,
     );
   });
-  await act(async () => {
-    await new Promise((pronto) => setTimeout(pronto, 20));
-  });
+}
+
+/** Espera o estado chegar, nunca um tempo fixo (CLAUDE.md, "Carregamento v2"). */
+async function esperar(condicao: () => boolean, oQue: string) {
+  for (let volta = 0; volta < 300; volta += 1) {
+    if (condicao()) return;
+    await act(async () => {
+      await new Promise((pronto) => setTimeout(pronto, 10));
+    });
+  }
+  throw new Error(`Não aconteceu: ${oQue}`);
 }
 
 beforeEach(() => {
@@ -110,6 +118,7 @@ describe("Estoque › Contagem, a page da entrada", () => {
   it("a sessão concluída: a entrada com a abertura em Anteriores, sem redirecionar", async () => {
     estado.sessao = { data: CONCLUIDA, isLoading: false, isError: false, error: null };
     await montar();
+    await esperar(() => naTela().includes("Anteriores"), "a entrada pronta");
     expect(naTela()).toContain("Contagem · BTG");
     expect(naTela()).toContain("Anteriores");
     expect(naTela()).toContain("Inventário de abertura");
@@ -121,6 +130,7 @@ describe("Estoque › Contagem, a page da entrada", () => {
   it("a sessão aberta ou pendente: vai para a tela da abertura, uma vez", async () => {
     estado.sessao = { data: { ...CONCLUIDA, status: "open" }, isLoading: false, isError: false, error: null };
     await montar();
+    await esperar(() => estado.navegar.mock.calls.length > 0, "o redirecionamento");
     expect(estado.navegar).toHaveBeenCalledTimes(1);
     expect(estado.navegar).toHaveBeenCalledWith("/wms/contagem/abertura", { replace: true });
     act(() => raiz?.unmount());
@@ -128,6 +138,7 @@ describe("Estoque › Contagem, a page da entrada", () => {
     estado.navegar.mockReset();
     estado.sessao = { data: { status: "not_started", opening_required: true }, isLoading: false, isError: false, error: null };
     await montar();
+    await esperar(() => estado.navegar.mock.calls.length > 0, "o redirecionamento da abertura pendente");
     expect(estado.navegar).toHaveBeenCalledWith("/wms/contagem/abertura", { replace: true });
   });
 
@@ -141,6 +152,7 @@ describe("Estoque › Contagem, a page da entrada", () => {
   it("a sessão que falha: Tentar de novo, sem redirecionar", async () => {
     estado.sessao = { data: undefined, isLoading: false, isError: true, error: new Error("Falha no servidor") };
     await montar();
+    await esperar(() => naTela().includes("Não consegui carregar as contagens."), "a falha");
     expect(naTela()).toContain("Não consegui carregar as contagens.");
     expect(naTela()).toContain("Tentar de novo");
     expect(estado.navegar).not.toHaveBeenCalled();

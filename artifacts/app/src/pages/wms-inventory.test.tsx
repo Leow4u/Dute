@@ -58,6 +58,7 @@ const SESSAO_CONCLUIDA = { ...SESSAO_ABERTA, status: "completed", line_count: 24
 
 let raiz: Root | null = null;
 let container: HTMLDivElement;
+let cliente: QueryClient;
 
 const naTela = () => (document.body.textContent ?? "").replace(/\s+/g, " ");
 
@@ -76,7 +77,7 @@ async function montar() {
   await act(async () => {
     raiz!.render(
       <ProvedorDaConexao value={conexaoEm("conectado")}>
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always" } } })}>
+        <QueryClientProvider client={cliente}>
           <Anunciador />
           <WmsInventoryPage />
         </QueryClientProvider>
@@ -91,6 +92,7 @@ beforeEach(() => {
   estado.navegar.mockReset();
   estado.sessao = SESSAO_ABERTA;
   estado.falhaDaSessao = false;
+  cliente = new QueryClient({ defaultOptions: { queries: { retry: false, networkMode: "always" } } });
   container = document.createElement("div");
   document.body.appendChild(container);
 });
@@ -98,6 +100,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => raiz?.unmount());
   raiz = null;
+  cliente.clear();
   container.remove();
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
@@ -116,6 +119,19 @@ describe("a tela da abertura e da cíclica", () => {
     await montar();
     await esperar(() => Boolean(document.querySelector('[role="tablist"]')) && naTela().includes("sessão em andamento"), "as abas com a sessão lida");
     expect(estado.navegar).not.toHaveBeenCalled();
+  });
+
+  it("a sessão que conclui com a tela aberta (o encerramento): a releitura leva à entrada", async () => {
+    await montar();
+    await esperar(() => naTela().includes("sessão em andamento"), "a sessão lida");
+    expect(estado.navegar).not.toHaveBeenCalled();
+    // O que o sucesso de "Confirmar encerramento" faz (inventory.tsx, completeSession.onSuccess): invalida a sessão.
+    estado.sessao = SESSAO_CONCLUIDA;
+    await act(async () => {
+      await cliente.invalidateQueries({ queryKey: ["opening-inventory-session"] });
+    });
+    await esperar(() => estado.navegar.mock.calls.length > 0, "o redirecionamento depois da releitura");
+    expect(estado.navegar).toHaveBeenCalledWith("/wms/contagem", { replace: true });
   });
 
   it("a sessão que falha: a falha com Tentar de novo, sem redirecionar", async () => {

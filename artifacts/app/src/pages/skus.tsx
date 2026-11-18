@@ -25,6 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useOpeningInventorySession } from "@/features/warehouse-ops/opening-inventory-status";
+import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import { atributosDoProblema, problemaDoNomeNoCadastro, seguirSugestao } from "@/features/warehouse-ops/product-identity";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -637,7 +638,7 @@ export function SkuModal({ sku, trigger }: { sku?: any; trigger?: ReactNode }) {
             <div className={cn("mt-4 grid gap-2", openingAvailable && "sm:grid-cols-2")}>
               {openingAvailable ? (
                 <Button asChild type="button" variant="outline" className="h-auto min-h-16 justify-between gap-3 bg-card px-4 py-3 text-left">
-                  <Link href="/wms/contagem" onClick={() => setOpen(false)}>
+                  <Link href={ROTA_DA_ABERTURA} onClick={() => setOpen(false)}>
                     <span className="flex min-w-0 items-center gap-3">
                       <ClipboardCheck className="h-4 w-4 shrink-0 text-info-soft-foreground" />
                       <span className="min-w-0">

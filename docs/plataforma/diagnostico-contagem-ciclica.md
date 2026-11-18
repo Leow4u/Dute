@@ -96,7 +96,10 @@ As ressalvas:
    da sessão). A aba da abertura e a cíclica saíram da Contagem da BTG: a
    tela de hoje, com as abas, passou para `/wms/contagem/abertura`, para o
    cliente com a abertura pendente ou em curso, e volta à entrada quando a
-   sessão conclui. "Iniciar contagem", o fim da contagem e as anteriores
+   sessão conclui. O "Contar este item" da ficha do item vai à bancada da
+   prateleira do item, ou à rodada quando ele está em várias (F10, em
+   parte); os três links da abertura (Estoque › Itens, Pedidos e o SKU) vão
+   à tela da abertura. "Iniciar contagem", o fim da contagem e as anteriores
    além da abertura esperam a coleção da rodada (seção 6, item 4).
 2. **A abertura continua existindo para outro cliente** que entre com
    estoque já no galpão: cada cliente tem a própria sessão e o próprio

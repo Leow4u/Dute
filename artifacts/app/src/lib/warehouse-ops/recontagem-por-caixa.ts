@@ -1,4 +1,4 @@
-import { nomeComTamanho } from "@workspace/dominio";
+import { areaDePassagem, nomeComTamanho } from "@workspace/dominio";
 
 import { belongsToCustomer } from "@/lib/active-customer";
 import { boxNeedsRelabel, type WarehouseBox } from "@/lib/warehouse-boxes";
@@ -1020,6 +1020,17 @@ export function acaoDaPrateleira(prateleira: Pick<PrateleiraDaRodada, "estado">)
 /** O endereço da bancada de uma prateleira. */
 export function hrefDaPrateleira(posicao: string): string {
   return `${ROTA_DA_PRATELEIRA}?posicao=${encodeURIComponent(chave(posicao))}`;
+}
+
+/**
+ * "Contar este item", na ficha do item (18/11/2026): o item guardado numa
+ * prateleira só vai à bancada dela; em várias, ou em nenhuma (só áreas de
+ * passagem, ou saldo zero), vai à rodada, onde se escolhe a prateleira.
+ */
+export function contarOItem(locais: ReadonlyArray<{ id: string; qty: number }>): { href: string; rotulo: string } {
+  const prateleiras = [...new Set(locais.filter((local) => local.qty > 0 && areaDePassagem(local.id) === null).map((local) => chave(local.id)))];
+  if (prateleiras.length === 1) return { href: hrefDaPrateleira(prateleiras[0]!), rotulo: `Contar em ${prateleiras[0]}` };
+  return { href: ROTA_DA_RODADA, rotulo: "Contagem por caixa" };
 }
 
 /** A prateleira da busca (`?posicao=a-03`), em maiúsculas; sem ela, null. */
