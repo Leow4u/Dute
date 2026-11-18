@@ -593,7 +593,7 @@ Feita em 23/10/2026. O layout está em `artifacts/app/src/components/layout/wms-
 - **Para a equipe.** Toda rota do WMS abre no shell v3, como o Comercial, a Operação e o Financeiro.
   - Na barra preta ficam o logo, o seletor de módulo, o cliente ativo logo abaixo e as telas do WMS, com a conta no rodapé.
   - O Estoque é um grupo. O nome abre e fecha as telas de dentro (Itens, Receber, Contagem, Mapa, Posições), e o grupo da tela aberta abre sozinho.
-  - Dentro do grupo, uma tela só fica marcada: a do endereço mais longo que casa, ou a do `tambem`, que casa pelo caminho inteiro (`telaAtual`, em `lib/modules.ts`). Em `/estoque/mapa`, o Mapa, sem os Itens junto. Até 17/11/2026, os Itens (`/estoque`) acendiam com o Mapa e com as Posições. A mesma regra vale no "Mais" do celular e no menu do portal.
+  - Dentro do grupo, uma tela só fica marcada na barra: a do endereço mais longo que casa, ou a do `tambem`, que casa pelo caminho inteiro (`telaMarcada`, em `shell-do-modulo.tsx`). Em `/estoque/mapa`, o Mapa, sem os Itens junto. Até 17/11/2026, os Itens (`/estoque`) acendiam com o Mapa e com as Posições.
   - Cada item tem o contador, tirado do "Precisa de você" do Início do WMS (`useInicioDoWms`). O grupo soma as telas dele.
   - No celular, o cabeçalho preto traz o seletor e a conta, com o cliente ativo numa linha abaixo. A barra de baixo tem três telas e "Mais", como nos outros módulos.
 - **Tela a tela.** A barra, o cabeçalho e a barra do celular já são v3. O conteúdo de cada tela só entra no `.v3` quando ela está em `TELAS_DO_WMS_NA_V3`, uma por PR (4.7b a 4.7e e depois as demais). Até lá, cada tela segue o `docs/sistema-visual.md`.

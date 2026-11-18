@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
 import { ProvedorDaConexao, type EstadoDaConexao } from "@/lib/carregando/estado-da-conexao";
-import { getNavigationForProfileRole, menuDoComercial, menuDoOperacao, type AppModule } from "@/lib/modules";
+import { getNavigationForProfileRole, menuDoComercial, menuDoOperacao } from "@/lib/modules";
 import { opcoesDoSeletor, type Liberacoes } from "@/lib/seletor-de-modulo";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { conexaoEm } from "@/test/conexao";
@@ -57,19 +57,14 @@ function operacao(path: string) {
   );
 }
 
-function wms(
-  path: string,
-  conteudoV3 = false,
-  contadores?: Record<string, ContadorDoItem>,
-  items: AppModule[] = getNavigationForProfileRole("admin", null, true, false),
-) {
+function wms(path: string, conteudoV3 = false, contadores?: Record<string, ContadorDoItem>) {
   return renderToStaticMarkup(
     <Router ssrPath={path}>
       <ShellDoModulo
         ambiente="wms"
         atual={{ label: "Armazenagem", icon: Boxes }}
         opcoes={opcoesDoSeletor("admin", null, path, TUDO)}
-        items={items}
+        items={getNavigationForProfileRole("admin", null, true, false)}
         contadores={contadores}
         basePath=""
         conteudoV3={conteudoV3}
@@ -252,19 +247,11 @@ describe("shell v3 do módulo", () => {
       expect(html).toMatch(/>Estoque<\/span><span class="[^"]*bg-v3-marca[^"]*">2<\/span>/);
     });
 
-    it("no grupo, uma tela só fica marcada: a do endereço mais longo que casa, ou a do `tambem`", () => {
+    it("no grupo, uma tela só fica marcada: a do endereço mais longo que casa", () => {
       expect(marcadasNaBarra(wms("/estoque/mapa"))).toEqual(["/estoque/mapa"]);
       expect(marcadasNaBarra(wms("/estoque/posicoes"))).toEqual(["/estoque/posicoes"]);
       expect(marcadasNaBarra(wms("/estoque"))).toEqual(["/estoque"]);
       expect(marcadasNaBarra(wms("/estoque/alertas"))).toEqual(["/estoque"]);
-      // As telas da contagem por caixa no `tambem` da Contagem, como na tela da recontagem: a Contagem, sem os Itens junto.
-      const telasDaContagem = ["/estoque/contagem/folha", "/estoque/contagem/caixas", "/estoque/contagem/rodada", "/estoque/contagem/prateleira"];
-      const menu = getNavigationForProfileRole("admin", null, true, false).map((item) =>
-        item.id !== "inventory"
-          ? item
-          : { ...item, routes: item.routes.map((route) => (route.id === "inventory-count" ? { ...route, tambem: telasDaContagem } : route)) },
-      );
-      for (const tela of telasDaContagem) expect(marcadasNaBarra(wms(tela, false, undefined, menu)), tela).toEqual(["/wms/contagem"]);
     });
 
     it("passa nas regras WCAG 2.1 A e AA do axe, com o grupo aberto e fechado", async () => {

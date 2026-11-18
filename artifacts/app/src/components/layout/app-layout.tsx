@@ -22,7 +22,7 @@ import {
   isAccountPath,
   isModuleEnabled,
   isModuleGroup,
-  telaAtual,
+  isNavRouteActive,
   type AppModule,
   type ModuleRoute,
 } from "@/lib/modules";
@@ -85,8 +85,6 @@ function CollapsedModuleItem({
   const Icon = module.icon;
   const enabled = isModuleEnabled(module);
   const hasSubroutes = isModuleGroup(module);
-  // Uma tela só do grupo fica marcada, a mais específica (lib/modules.ts, telaAtual).
-  const marcada = telaAtual(location, module.routes);
   const triggerClassName = cn(
     "flex h-11 w-11 items-center justify-center rounded-xl transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
     active
@@ -144,7 +142,9 @@ function CollapsedModuleItem({
           <RouteDropdownItem
             key={route.id}
             route={route}
-            active={route === marcada}
+            active={Boolean(
+              isNavRouteActive(location, route),
+            )}
           />
         ))}
       </DropdownMenuContent>
@@ -168,8 +168,6 @@ function ExpandedModuleItem({
   const Icon = module.icon;
   const enabled = isModuleEnabled(module);
   const hasSubroutes = isModuleGroup(module);
-  // Uma tela só do grupo fica marcada, a mais específica (lib/modules.ts, telaAtual).
-  const marcada = telaAtual(location, module.routes);
   const itemClassName = cn(
     "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-foco",
     active
@@ -225,7 +223,9 @@ function ExpandedModuleItem({
         <div className="ml-4 space-y-1 border-l border-sidebar-border/80 pl-3">
           {module.routes.map((route) => {
             const RouteIcon = route.icon;
-            const routeActive = route === marcada;
+            const routeActive = Boolean(
+              isNavRouteActive(location, route),
+            );
             const className = cn(
               "flex min-h-9 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-[background-color,color] duration-200",
               routeActive

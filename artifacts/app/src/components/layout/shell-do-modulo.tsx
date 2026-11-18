@@ -10,7 +10,7 @@ import { Esqueleto } from "@/components/ui/esqueleto";
 import { useRotaEsperando } from "@/lib/carregando/espera-da-rota";
 import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { isModuleGroup, isNavRouteActive, telaAtual, type AppModule } from "@/lib/modules";
+import { isModuleGroup, isNavRouteActive, normalizePath, type AppModule, type ModuleRoute } from "@/lib/modules";
 import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 import type { OpcaoDeModulo } from "@/lib/seletor-de-modulo";
@@ -56,6 +56,23 @@ export function MarcaDoAtual() {
   return <span aria-hidden="true" className="absolute inset-y-3.5 left-0 w-0.75 rounded-full bg-v3-marca" />;
 }
 
+/**
+ * A tela marcada no grupo: das que acendem (`isNavRouteActive`), uma só, a
+ * mais específica. A do `tambem` casa pelo caminho inteiro; as outras valem
+ * pelo tamanho do endereço. Em /estoque/mapa, o Mapa, sem os Itens (/estoque)
+ * junto. No empate, a primeira; sem nenhuma, null. O grupo aberto não muda.
+ */
+function telaMarcada(location: string, telas: readonly ModuleRoute[]): ModuleRoute | null {
+  const caminho = normalizePath(location);
+  const peso = (route: ModuleRoute) =>
+    (route.tambem ?? []).some((href) => normalizePath(href) === caminho) ? caminho.length : normalizePath(route.href ?? "").length;
+  let marcada: ModuleRoute | null = null;
+  for (const route of telas) {
+    if (isNavRouteActive(location, route) && (marcada === null || peso(route) > peso(marcada))) marcada = route;
+  }
+  return marcada;
+}
+
 /** O grupo do menu (o Estoque do WMS): o nome abre e fecha as telas de dentro. */
 function GrupoDoMenu({
   item,
@@ -72,8 +89,7 @@ function GrupoDoMenu({
 }) {
   const Icone = item.icon;
   const telas = item.routes.filter((route) => route.href);
-  // Uma tela só fica marcada: em /estoque/mapa, o Mapa, sem os Itens (/estoque) junto.
-  const marcada = telaAtual(location, telas);
+  const marcada = telaMarcada(location, telas);
   const atualNoGrupo = marcada !== null;
   const idDasTelas = `menu-${item.id}`;
   return (

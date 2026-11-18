@@ -14,7 +14,7 @@ import {
   MOBILE_BAR_SLOTS_DO_MODULO,
   getMobileNavigation,
   isAccountPath,
-  telaAtual,
+  isNavRouteActive,
   type AppModule,
 } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -103,12 +103,12 @@ export function MobileTabBar({ activeModuleId, modules, variante = "padrao" }: M
             <SheetDescription className="sr-only">Outras telas do sistema.</SheetDescription>
           </SheetHeader>
           <ul className="safe-bottom py-2">
-            {more.map(({ module, routes }) => {
-              // Uma tela só por módulo, contando a que está na barra (lib/modules.ts, telaAtual).
-              const marcada = telaAtual(location, module.routes);
-              return routes.map((route) => {
+            {more.map(({ module, routes }) =>
+              routes.map((route) => {
                 const Icon = route.icon;
-                const active = route === marcada;
+                const active = Boolean(
+                  isNavRouteActive(location, route),
+                );
                 // "Estoque · Receber": a tela secundária diz de que destino é.
                 const label =
                   route.label === module.label ? route.label : `${module.label} · ${route.label}`;
@@ -128,8 +128,8 @@ export function MobileTabBar({ activeModuleId, modules, variante = "padrao" }: M
                     </Link>
                   </li>
                 );
-              });
-            })}
+              }),
+            )}
             <li className="mt-2 border-t border-border pt-2">
               <Link
                 href="/configuracoes"
