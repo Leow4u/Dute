@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { textoDoComeco, unidadesComSinal, type RodadaDaContagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import { periodoDaRodada } from "@/lib/warehouse-ops/rodadas-da-contagem";
 
 const numero = new Intl.NumberFormat("pt-BR");
 
@@ -43,7 +44,12 @@ export function CartaoDaRodada({
           <Titulo id={id} className="text-base font-extrabold text-foreground">
             {rodada.titulo}
           </Titulo>
-          {rodada.comeco ? <p className="text-sm text-muted-foreground">{textoDoComeco(rodada.comeco, agora)}</p> : null}
+          {rodada.concluida ? (
+            // A rodada concluída (o "Ver" das anteriores): o período e quem concluiu, no lugar do começo.
+            <p className="text-sm text-muted-foreground">{periodoDaRodada({ inicio: rodada.comeco, fim: rodada.concluida })}</p>
+          ) : rodada.comeco ? (
+            <p className="text-sm text-muted-foreground">{textoDoComeco(rodada.comeco, agora)}</p>
+          ) : null}
         </div>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:ml-auto">
           {numeros.map((item) => (

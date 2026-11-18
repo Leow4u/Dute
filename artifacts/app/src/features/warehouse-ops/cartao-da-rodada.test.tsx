@@ -54,6 +54,12 @@ describe("o cartão da rodada", () => {
     expect(html).not.toContain("data-acoes-da-rodada");
   });
 
+  it("a rodada concluída: o período e quem concluiu no lugar do começo", () => {
+    const html = renderToStaticMarkup(<CartaoDaRodada rodada={{ ...RODADA, concluida: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } }} agora={AGORA} />);
+    expect(textosForaDaLista(html, [...TEXTOS, "17/11 a 21/11 · Guilherme Dantas"])).toEqual([]);
+    expect(html).not.toContain("começou");
+  });
+
   it("na entrada: h3 com o id dado e a fila de ações entre os números e a barra", () => {
     const html = renderToStaticMarkup(
       <CartaoDaRodada rodada={RODADA} agora={AGORA} titulo="h3" id="contagem-em-andamento" acoes={<a href="#">Continuar B-10</a>} />,

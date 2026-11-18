@@ -11,7 +11,7 @@ import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
 
-import { EstoqueContagemRodadaView, SEM_PRATELEIRAS_COM_CAIXA, type EstadoDaRodada } from "./estoque-contagem-rodada-view";
+import { EstoqueContagemRodadaView, SEM_PRATELEIRAS_COM_CAIXA, SEM_RODADA_ABERTA, type EstadoDaRodada } from "./estoque-contagem-rodada-view";
 
 /**
  * Estoque › Contagem por caixa, a rodada (diagnóstico da Contagem cíclica,
@@ -170,6 +170,28 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
     expect(textos).toContain(SEM_PRATELEIRAS_COM_CAIXA);
     expect(textos).not.toContain("começou");
     expect(textos.some((texto) => texto.startsWith("Continuar"))).toBe(false);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("sem rodada aberta: a frase e Iniciar contagem para a entrada, nada de prateleiras (decisão 2 de 18/11/2026)", async () => {
+    const html = render("sem_rodada");
+    expect(textosDaTela(html)).toEqual(["Contagem", "Contagem por caixa", "Caixas × saldo", "Imprimir folha", SEM_RODADA_ABERTA, "Iniciar contagem"]);
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    expect(dom.window.document.querySelector('a[href="/wms/contagem"]:not(:first-child)')?.textContent).toBe("Iniciar contagem");
+    dom.window.close();
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("a rodada concluída, só leitura: o período no cartão, sem Continuar e sem ação nas prateleiras", async () => {
+    const concluida = { ...RODADA_DO_DIA, concluida: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } };
+    const html = render("pronto", { rodada: concluida, somenteLeitura: true });
+    const textos = textosDaTela(html);
+    expect(textos).toContain("17/11 a 21/11 · Guilherme Dantas");
+    expect(textos).not.toContain("começou 08:10 · Guilherme Dantas");
+    expect(textos.some((texto) => texto.startsWith("Continuar"))).toBe(false);
+    expect(textos).not.toContain("Ver");
+    expect(textos).not.toContain("Contar");
+    expect(textos).toContain("contada 08:22 · 1 diferença · −3 un.");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
