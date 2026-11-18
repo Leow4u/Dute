@@ -9,7 +9,10 @@ import { entradaDaRecontagem, recountWarehouseBoxTransaction } from "./box-recou
 import {
   LEGACY_ROUND_ID,
   LEGACY_ROUND_TITLE,
+  ROUND_CLOSED_EVENT_TYPE,
   ROUND_STARTED_EVENT_TYPE,
+  completeCountRoundTransaction,
+  entradaDaConclusao,
   entradaDoInicio,
   startCountRoundTransaction,
   type EscopoDaRodada,
@@ -99,8 +102,27 @@ function chave(prefixo = "rodada") {
 }
 
 type Inicio = Record<string, unknown> & { round_id: string; title: string; status: string; started_at: string };
+type Conclusao = Record<string, unknown> & {
+  round_id: string;
+  title: string;
+  status: string;
+  started_at: string;
+  closed_at: string;
+  shelves_total: number;
+  shelves_counted: number;
+  boxes_total: number;
+  boxes_counted: number;
+  boxes_with_difference: number;
+  difference_units: number;
+  recount_count: number;
+};
+
 function iniciar(alcance: { scope: EscopoDaRodada; aisle?: string; sku_code?: string }, opcoes: { chave?: string; ator?: OperationalActor; cliente?: string } = {}) {
   return startCountRoundTransaction(db, entradaDoInicio({ customer_code: opcoes.cliente ?? BTG, idempotency_key: opcoes.chave ?? chave(), ...alcance }), opcoes.ator ?? guilherme) as Promise<Inicio>;
+}
+
+function concluir(roundId: string, opcoes: { chave?: string; ator?: OperationalActor; cliente?: string } = {}) {
+  return completeCountRoundTransaction(db, entradaDaConclusao({ customer_code: opcoes.cliente ?? BTG, round_id: roundId, idempotency_key: opcoes.chave ?? chave("concluir") }), opcoes.ator ?? guilherme) as Promise<Conclusao>;
 }
 
 function recontar(entrada: Record<string, unknown>, ator: OperationalActor = guilherme) {
@@ -192,5 +214,73 @@ describe("Iniciar a rodada", () => {
     assert.equal(erro.message, `A ${LEGACY_ROUND_TITLE} está em andamento: conclua-a antes de iniciar outra.`);
     // De outro cliente, a recontagem geral da BTG não impede.
     await iniciar({ scope: "general" }, { cliente: OUTRO });
+  });
+});
+
+describe("Concluir a rodada", () => {
+  it("fecha com os números das recontagens da rodada, o recibo e o evento; repetir a chave devolve o mesmo", async () => {
+    const aberta = await iniciar({ scope: "general" });
+    await recontar({ box_code: "CX-000010", location_id: "A-03", lines: [{ sku_code: POLO_P, counted_qty: 57 }], round_id: aberta.round_id });
+    const concluida = await concluir(aberta.round_id, { chave: "concluir-fixa-000001" });
+    assert.equal(concluida.status, "closed");
+    assert.equal(concluida.title, aberta.title);
+    assert.deepEqual(
+      [concluida.shelves_total, concluida.shelves_counted, concluida.boxes_total, concluida.boxes_counted, concluida.boxes_with_difference, concluida.difference_units, concluida.recount_count],
+      [2, 1, 2, 1, 1, -3, 1],
+    );
+    const doc = await rodada(aberta.round_id);
+    assert.equal(doc.status, "closed");
+    assert.equal(doc.closed_at, concluida.closed_at);
+    assert.equal((doc.closed_by as { name?: string }).name, "Guilherme Dantas");
+    assert.equal(doc.started_at, aberta.started_at);
+    assert.equal(doc.difference_units, -3);
+    const [evento] = await eventos(ROUND_CLOSED_EVENT_TYPE);
+    assert.equal(evento?.title, "Contagem concluída");
+    assert.equal(evento?.description, "1 de 2 prateleiras · 1 de 2 caixas · 1 com diferença · −3 un.");
+    // O aviso na caixa antiga é da recontagem com diferença; o fim da rodada não abre outro.
+    assert.equal((await todos("ai_agent_inbox")).filter((aviso) => aviso.event_id === evento?.id).length, 0);
+    assert.deepEqual(await concluir(aberta.round_id, { chave: "concluir-fixa-000001" }), concluida);
+    assert.equal((await eventos(ROUND_CLOSED_EVENT_TYPE)).length, 1);
+    assert.equal((await todos("operational_operations")).filter((recibo) => recibo.kind === "inventory.count_round.complete").length, 1);
+  });
+
+  it("concluída, não conclui de novo; de outro cliente, permission-denied; inexistente, not-found", async () => {
+    const aberta = await iniciar({ scope: "general" });
+    await concluir(aberta.round_id);
+    const deNovo = await recusa(concluir(aberta.round_id));
+    assert.equal(deNovo.code, "failed-precondition");
+    assert.equal(codigoDa(deNovo), "COUNT_ROUND_NOT_OPEN");
+    assert.equal(deNovo.message, `A contagem «${aberta.title}» já foi concluída.`);
+    const outra = await iniciar({ scope: "general" }, { cliente: OUTRO });
+    assert.equal((await recusa(concluir(outra.round_id))).code, "permission-denied");
+    const inexistente = await recusa(concluir("cr_000000000000000000000000"));
+    assert.equal(inexistente.code, "not-found");
+    assert.equal(codigoDa(inexistente), "COUNT_ROUND_NOT_FOUND");
+    // Concluída, outra pode começar.
+    await iniciar({ scope: "aisle", aisle: "B" });
+  });
+
+  it("a recontagem geral de 17/11, sem documento: concluir cria o documento concluído com o começo da primeira recontagem", async () => {
+    await recontar({ box_code: "CX-000010", location_id: "A-03", lines: [{ sku_code: POLO_P, counted_qty: 60 }], round_id: LEGACY_ROUND_ID }, rafael);
+    await recontar({ box_code: "CX-000014", location_id: "B-01", lines: [{ sku_code: POLO_P, counted_qty: 48 }], round_id: LEGACY_ROUND_ID });
+    const concluida = await concluir(LEGACY_ROUND_ID);
+    assert.equal(concluida.title, LEGACY_ROUND_TITLE);
+    assert.deepEqual([concluida.shelves_total, concluida.shelves_counted, concluida.boxes_total, concluida.boxes_counted, concluida.boxes_with_difference, concluida.difference_units, concluida.recount_count], [2, 2, 2, 2, 1, -2, 2]);
+    const doc = await rodada(LEGACY_ROUND_ID);
+    assert.equal(doc.scope, "general");
+    assert.equal(doc.status, "closed");
+    assert.equal(doc.customer_code, BTG);
+    assert.equal((doc.started_by as { name?: string }).name, "Rafael");
+    const primeira = (await todos("cycle_counts")).map((linha) => String(linha.occurred_at)).sort()[0];
+    assert.equal(doc.started_at, primeira);
+    // Concluída, a recontagem geral deixa de valer como rodada: iniciar outra passa.
+    await iniciar({ scope: "general" });
+  });
+
+  it("a recontagem geral sem recontagem nenhuma não é rodada: not-found", async () => {
+    const erro = await recusa(concluir(LEGACY_ROUND_ID));
+    assert.equal(erro.code, "not-found");
+    assert.equal(codigoDa(erro), "COUNT_ROUND_NOT_FOUND");
+    assert.equal((await todos("count_rounds")).length, 0);
   });
 });

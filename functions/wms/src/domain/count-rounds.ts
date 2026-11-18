@@ -7,6 +7,7 @@ import { z } from "genkit";
 import { recordOwner } from "./customer-scope.js";
 import { nomeComTamanho } from "./nome-do-produto.js";
 import { createEvent, readRows, resolveCatalogAggregateTargets, type OperationalActor, type OperationalEventSummary } from "./operations.js";
+import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
 import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
 
 /**
@@ -413,6 +414,187 @@ export async function startCountRoundTransaction(db: Firestore, input: EntradaDo
     transaction.create(opRef, {
       id: opRef.id,
       kind: "inventory.count_round.start",
+      target_id: roundId,
+      customer_code: customerCode,
+      input_hash: inputHash,
+      status: "completed",
+      actor: by,
+      result: semIndefinidos(result),
+      created_at: FieldValue.serverTimestamp(),
+      completed_at: FieldValue.serverTimestamp(),
+    });
+    return result;
+  });
+}
+
+// ----------------------------------------------------------------- concluir
+
+export type ResultadoDaConclusao = NumerosDaRodada & {
+  ok: true;
+  round_id: string;
+  title: string;
+  scope: EscopoDaRodada;
+  aisle?: string;
+  sku_code?: string;
+  status: "closed";
+  started_at: string;
+  closed_at: string;
+  events: OperationalEventSummary[];
+};
+
+const unidades = new Intl.NumberFormat("pt-BR");
+
+function comSinal(qty: number): string {
+  if (qty > 0) return `+${unidades.format(qty)}`;
+  if (qty < 0) return `−${unidades.format(-qty)}`;
+  return "0";
+}
+
+function plural(qty: number, singular: string, varios: string): string {
+  return `${unidades.format(qty)} ${qty === 1 ? singular : varios}`;
+}
+
+/**
+ * "5 prateleiras · 6 caixas · 1 com diferença · −3 un."; com prateleira por
+ * contar, "1 de 2 prateleiras · 1 de 2 caixas · …"; sem caixa com diferença,
+ * "sem diferença". A mesma frase da tela (rodadas-da-contagem.ts).
+ */
+export function resumoDoFechamento(numeros: NumerosDaRodada): string {
+  const contadas = (feitas: number, total: number, singular: string, varios: string) => (feitas === total ? plural(total, singular, varios) : `${unidades.format(feitas)} de ${plural(total, singular, varios)}`);
+  const diferenca = numeros.boxes_with_difference ? `${unidades.format(numeros.boxes_with_difference)} com diferença · ${comSinal(numeros.difference_units)} un.` : "sem diferença";
+  return [contadas(numeros.shelves_counted, numeros.shelves_total, "prateleira", "prateleiras"), contadas(numeros.boxes_counted, numeros.boxes_total, "caixa", "caixas"), diferenca].join(" · ");
+}
+
+/** O alcance gravado no documento da rodada. */
+export function alcanceDoDocumento(data: Data): AlcanceDaRodada {
+  const scope = text(data.scope);
+  if (scope === "aisle") return { scope: "aisle", aisle: text(data.aisle).toUpperCase() };
+  if (scope === "item") return { scope: "item", sku_code: text(data.sku_code).toUpperCase() };
+  return { scope: "general" };
+}
+
+/** Uma linha de `cycle_counts` como o fechamento a lê; null fora da recontagem por caixa. */
+function linhaDaRodada(data: Data): LinhaDaRodada | null {
+  const recontagem = text(data.box_recount_id);
+  if (!recontagem) return null;
+  const actor = data.actor && typeof data.actor === "object" ? (data.actor as Data) : {};
+  return {
+    box_recount_id: recontagem,
+    box_code: text(data.box_code).toUpperCase(),
+    location_id: text(data.location_id).toUpperCase(),
+    occurred_at: text(data.occurred_at),
+    adjustment_delta: Number(data.adjustment_delta ?? 0) || 0,
+    round_id: text(data.round_id),
+    actor: clean({ uid: text(actor.uid) || undefined, role: text(actor.role) || undefined, email: text(actor.email) || undefined, name: text(actor.name) || undefined }),
+  };
+}
+
+/** Uma caixa de `warehouse_boxes` como o fechamento a lê. */
+export function caixaDaRodada(id: string, data: Data): CaixaDaRodada {
+  return {
+    code: text(data.code).toUpperCase() || id,
+    status: text(data.status),
+    location_id: text(data.location_id).toUpperCase(),
+    sku_codes: Array.isArray(data.sku_codes) ? data.sku_codes.map((sku) => text(sku).toUpperCase()).filter(Boolean) : [],
+    last_recount_round_id: text(data.last_recount_round_id) || null,
+  };
+}
+
+/**
+ * Conclui a rodada do cliente com os números das recontagens dela: a mesma
+ * conta da tela, feita aqui, na transação. A rodada concluída não aceita
+ * mais recontagem (box-recount.ts). A recontagem geral de 17/11, sem
+ * documento, vira documento concluído aqui, com o começo da primeira
+ * recontagem; sem recontagem nenhuma, não é rodada.
+ */
+export async function completeCountRoundTransaction(db: Firestore, input: EntradaDaConclusao, actor: OperationalActor): Promise<ResultadoDaConclusao> {
+  const customerCode = text(input.customer_code);
+  const roundId = text(input.round_id);
+  const operationId = `op_count_round_complete_${digest({ customer: customerCode, round: roundId, nonce: input.idempotency_key })}`;
+  const inputHash = digest(input, 64);
+  const opRef = db.collection(OPERATIONS_COLLECTION).doc(operationId);
+  const roundRef = db.collection(COUNT_ROUNDS_COLLECTION).doc(roundId);
+  const by = actorFields(actor);
+  const naoExiste = () => recusa("not-found", "A contagem não existe: abra a Contagem e inicie uma.", "COUNT_ROUND_NOT_FOUND", { round_id: roundId });
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await transaction.get(opRef);
+    if (previous.exists) {
+      if (previous.get("input_hash") !== inputHash) {
+        throw new HttpsError("already-exists", "A chave de idempotência já foi usada com outro conteúdo.");
+      }
+      return previous.get("result") as ResultadoDaConclusao;
+    }
+    const closedAt = new Date().toISOString();
+
+    const snapshot = await transaction.get(roundRef);
+    const existente = snapshot.exists ? (snapshot.data() ?? {}) : null;
+    if (existente) {
+      if (text(existente.customer_code) !== customerCode) throw new HttpsError("permission-denied", "A contagem é de outro cliente.");
+      if (text(existente.status) !== "open") recusa("failed-precondition", `A contagem «${text(existente.title)}» já foi concluída.`, "COUNT_ROUND_NOT_OPEN", { round_id: roundId });
+    } else if (roundId !== LEGACY_ROUND_ID) {
+      naoExiste();
+    }
+    const alcance: AlcanceDaRodada = existente ? alcanceDoDocumento(existente) : { scope: "general" };
+    const [linhas, caixas] = await Promise.all([
+      readRows(transaction, db.collection(CYCLE_COUNTS_COLLECTION).where("customer_code", "==", customerCode).where("round_id", "==", roundId)),
+      readRows(transaction, db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode)),
+    ]);
+    const { primeira, ...numeros } = numerosDaRodada(
+      linhas.flatMap((row) => linhaDaRodada(row.data) ?? []),
+      caixas.map((row) => caixaDaRodada(row.id, row.data)),
+      alcance,
+      roundId,
+    );
+    // A recontagem geral sem documento só é rodada com recontagem gravada.
+    if (!existente && !primeira) naoExiste();
+    const startedAt = existente ? text(existente.started_at) : primeira!.occurred_at;
+    const startedBy = existente ? existente.started_by : (primeira!.actor ?? {});
+    const title = existente ? text(existente.title) : LEGACY_ROUND_TITLE;
+    const aisle = alcance.scope === "aisle" ? alcance.aisle : undefined;
+    const skuCode = alcance.scope === "item" ? alcance.sku_code : undefined;
+
+    const fechamento = { status: "closed" as const, closed_at: closedAt, closed_by: by, ...numeros, updated_at: FieldValue.serverTimestamp() };
+    if (existente) {
+      transaction.update(roundRef, fechamento);
+    } else {
+      transaction.create(roundRef, {
+        id: roundId,
+        customer_code: customerCode,
+        title,
+        scope: "general",
+        started_at: startedAt,
+        started_by: startedBy,
+        created_at: FieldValue.serverTimestamp(),
+        ...fechamento,
+      });
+    }
+    const resumo = resumoDoFechamento(numeros);
+    const events: OperationalEventSummary[] = [
+      createEvent(
+        transaction,
+        db,
+        `evt_${digest({ operationId, suffix: "round_closed" })}`,
+        {
+          type: ROUND_CLOSED_EVENT_TYPE,
+          title: "Contagem concluída",
+          description: resumo,
+          severity: "info",
+          inbox: false,
+          entity_type: "count_round",
+          entity_id: roundId,
+          customer_code: customerCode,
+          occurred_at: closedAt,
+          source: EVENT_SOURCE,
+          payload: clean({ round_id: roundId, title, scope: alcance.scope, aisle, sku_code: skuCode, started_at: startedAt, ...numeros }),
+        },
+        actor,
+      ),
+    ];
+    const result = clean({ ok: true as const, round_id: roundId, title, scope: alcance.scope, aisle, sku_code: skuCode, status: "closed" as const, started_at: startedAt, closed_at: closedAt, ...numeros, events });
+    transaction.create(opRef, {
+      id: opRef.id,
+      kind: "inventory.count_round.complete",
       target_id: roundId,
       customer_code: customerCode,
       input_hash: inputHash,
