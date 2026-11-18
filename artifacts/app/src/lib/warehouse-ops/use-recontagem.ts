@@ -205,13 +205,17 @@ export function useBancadaDaPrateleira(cliente: string | null, posicao: string |
     },
     ...faltaDaConsulta(consultaFalhou ?? posicoesNaTela),
   });
+  const carregando = ligado && (consultas.some((consulta) => consulta.isLoading) || aoVivo.some((lida) => lida.itens === null && !lida.erro));
+  const falhou = Boolean(consultaFalhou) || aoVivo.some((lida) => lida.erro && lida.itens === null);
   return {
-    bancada,
+    // Sem todas as leituras de que a bancada depende, não há bancada: nem a prateleira vazia antes de ler (a caixa
+    // que ainda não chegou), nem a lista sem as travas (a reserva separada e a guarda aberta que não vieram).
+    bancada: carregando || falhou ? null : bancada,
     gravadas,
     produtos,
     catalogo,
-    carregando: ligado && (consultas.some((consulta) => consulta.isLoading) || aoVivo.some((lida) => lida.itens === null && !lida.erro)),
-    falhou: Boolean(consultaFalhou) || aoVivo.some((lida) => lida.erro && lida.itens === null),
+    carregando,
+    falhou,
     catalogoFalhou: catalogoNaTela.isError && catalogoNaTela.data === undefined,
     leitura,
   };

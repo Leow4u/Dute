@@ -130,13 +130,14 @@ export default function PaginaPrateleiraDaContagem() {
     },
   };
 
+  // A prateleira sem caixa do cliente diz isso, e só depois de ler tudo: nunca a lista vazia antes da leitura.
   const estado: EstadoDaPrateleira = !posicao
     ? "nao_encontrada"
-    : clienteCarregando || (leitura.carregando && !leitura.bancada)
+    : clienteCarregando || leitura.carregando
       ? "carregando"
-      : leitura.falhou && !leitura.bancada
+      : leitura.falhou
         ? "erro"
-        : !bancada
+        : !bancada?.caixas.length
           ? "nao_encontrada"
           : "pronto";
 

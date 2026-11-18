@@ -286,4 +286,27 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
     expect(contar("CX-000010")?.textContent).toBe("Contar de novo");
     expect(container.textContent).toContain("1 de 3 caixas");
   });
+
+  it("enquanto uma leitura ao vivo não chega, a prateleira espera: nem a lista vazia nem a lista sem as travas", async () => {
+    // As caixas ainda não chegaram.
+    delete estado.consultas[`warehouse_boxes:${BTG}:A-03`];
+    await montar();
+    expect(container.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
+    expect(container.textContent).not.toContain("caixas confirmadas");
+    expect(container.textContent).not.toContain("Nenhuma caixa");
+    // As caixas chegaram, mas as reservas separadas (a trava da caixa) ainda não.
+    act(() => raiz?.unmount());
+    semear();
+    delete estado.consultas[`stock_reservations:${BTG}:A-03:picked`];
+    await montar();
+    expect(container.querySelector("[data-carregando-na-regiao]")).not.toBeNull();
+    expect(contar("CX-000010")).toBeNull();
+  });
+
+  it("a prateleira sem caixa do cliente diz isso, depois de ler", async () => {
+    estado.consultas[`warehouse_boxes:${BTG}:A-03`] = [];
+    await montar();
+    expect(container.textContent).toContain("Nenhuma caixa do cliente nesta prateleira.");
+    expect(container.querySelector('ul[aria-label="Caixas"]')).toBeNull();
+  });
 });
