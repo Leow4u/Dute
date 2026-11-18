@@ -31,6 +31,9 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   // Contagem por caixa (seção 6, item 4): a rodada e a bancada da prateleira, telas novas já na v3.
   "/estoque/contagem/rodada",
   "/estoque/contagem/prateleira",
+  // A entrada da Contagem (18/11/2026): em andamento e anteriores. A tela de hoje, com as abas da abertura e da
+  // cíclica, segue em /wms/contagem/abertura, fora da v3.
+  "/wms/contagem",
 ];
 
 /**
