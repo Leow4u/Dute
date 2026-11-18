@@ -87,7 +87,7 @@ As ressalvas:
    abertura e "Imprimir etiquetas"). Quem for recontar pode achar que corrige
    ali; toda correção vai para a aba cíclica, que não sabe de caixa (seção 3).
    A lista das linhas da abertura, com caixa e endereço, ajuda a comparar.
-   *No código desde 18/11/2026 (PR N):* com a sessão concluída,
+   *No código desde 18/11/2026 (PR 630):* com a sessão concluída,
    `/wms/contagem` é a entrada das contagens, na v3 (desenho em
    `docs/superpowers/specs/2026-11-18-abertura-concluida-na-contagem-design.md`,
    fotos em `docs/mockups/contagem-entrada/`): "Em andamento" com o cartão
@@ -980,7 +980,7 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    o estado "em contagem" da prateleira (decididos para o PR da coleção, na
    seção 7).
 
-   *A entrada da Contagem no código desde 18/11/2026 (PR N; o cartão
+   *A entrada da Contagem no código desde 18/11/2026 (PR 630; o cartão
    "Rodada" e "Anteriores", em parte):* `/wms/contagem` passou a ser a
    entrada das contagens, na v3: "Em andamento" com o cartão da recontagem
    geral (o mesmo cabeçalho da rodada, agora o componente `CartaoDaRodada`),
