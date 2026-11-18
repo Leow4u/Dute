@@ -354,7 +354,7 @@ describe("menu do Comercial", () => {
     expect(acesos(ROTA_MEDICOES)).toEqual(["Medições"]);
   });
 
-  it("o menu (lateral, suspenso e do celular) acende pelo item, com as telas dele", () => {
+  it("o menu (lateral, suspenso e do celular) acende pelo item, com as telas dele, e marca uma tela só do grupo", () => {
     for (const arquivo of [
       "../../components/layout/app-layout.tsx",
       "../../components/layout/mobile-tab-bar.tsx",
@@ -362,7 +362,9 @@ describe("menu do Comercial", () => {
     ]) {
       const fonte = readFileSync(new URL(arquivo, import.meta.url), "utf8");
       expect(fonte, arquivo).not.toMatch(/isRouteActive\(location, route\.href, route\.exact\)/);
-      expect(fonte, arquivo).toMatch(/isNavRouteActive\(location, route\)/);
+      // A tela marcada sai da regra única (telaAtual, sobre o isNavRouteActive com o `tambem`), nunca tela a tela.
+      expect(fonte, arquivo).toMatch(/telaAtual\(location, /);
+      expect(fonte, arquivo).not.toMatch(/=\s*(\{\s*)?(Boolean\(\s*)?isNavRouteActive\(location, route\)/);
     }
   });
 

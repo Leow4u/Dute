@@ -14,7 +14,10 @@ import {
   inicioDoPortal,
   INTERNAL_ROLES,
   isAccountPath,
+  isNavRouteActive,
   portalModuleForPath,
+  telaAtual,
+  type ModuleRoute,
   type ProfileRole,
 } from "./modules";
 import { portalModulesFor, resolveOperationProfile } from "./operations";
@@ -307,6 +310,40 @@ describe("telas da conta", () => {
     expect(isAccountPath("/configuracoes/pessoas")).toBe(true);
     expect(isAccountPath("/configuracoesx")).toBe(false);
     expect(isAccountPath("/dashboard")).toBe(false);
+  });
+});
+
+describe("tela atual do grupo", () => {
+  const estoque = getNavigationForProfileRole("admin").find((module) => module.id === "inventory")!;
+  const marcada = (path: string, routes: readonly ModuleRoute[] = estoque.routes) => telaAtual(path, routes)?.label ?? null;
+
+  it.each([
+    ["/estoque", "Itens"],
+    ["/estoque/alertas", "Itens"],
+    ["/estoque/etiquetas", "Itens"],
+    ["/estoque/mapa", "Mapa"],
+    ["/estoque/mapa?zona=A", "Mapa"],
+    ["/estoque/posicoes", "Posições"],
+    ["/wms/receber", "Receber"],
+    ["/wms/contagem", "Contagem"],
+    ["/pedidos", null],
+  ])("%s marca %s", (path, label) => {
+    expect(marcada(path)).toBe(label);
+  });
+
+  it("a tela do `tambem` casa pelo caminho inteiro e vence o prefixo de outra tela", () => {
+    const routes = estoque.routes.map((route) => (route.id === "inventory-count" ? { ...route, tambem: ["/estoque/contagem/rodada"] } : route));
+    expect(marcada("/estoque/contagem/rodada", routes)).toBe("Contagem");
+    expect(marcada("/estoque/contagem/rodada/2026-11-17", routes)).toBe("Itens");
+  });
+
+  it("marca uma das telas que acendem, e só quando alguma acende", () => {
+    for (const path of ["/estoque", "/estoque/mapa", "/estoque/posicoes", "/estoque/alertas", "/wms/receber", "/wms/contagem", "/dashboard"]) {
+      const acesas = estoque.routes.filter((route) => isNavRouteActive(path, route));
+      const tela = telaAtual(path, estoque.routes);
+      expect(tela === null, path).toBe(acesas.length === 0);
+      if (tela) expect(acesas, path).toContain(tela);
+    }
   });
 });
 

@@ -10,7 +10,7 @@ import { Esqueleto } from "@/components/ui/esqueleto";
 import { useRotaEsperando } from "@/lib/carregando/espera-da-rota";
 import { useConexao } from "@/lib/carregando/estado-da-conexao";
 import { useEspera } from "@/lib/carregando/use-espera";
-import { isModuleGroup, isNavRouteActive, type AppModule } from "@/lib/modules";
+import { isModuleGroup, isNavRouteActive, telaAtual, type AppModule } from "@/lib/modules";
 import { NaV3 } from "@/lib/na-v3";
 import type { ContadorDoItem } from "@/lib/resumo-do-modulo";
 import type { OpcaoDeModulo } from "@/lib/seletor-de-modulo";
@@ -72,7 +72,9 @@ function GrupoDoMenu({
 }) {
   const Icone = item.icon;
   const telas = item.routes.filter((route) => route.href);
-  const atualNoGrupo = telas.some((route) => isNavRouteActive(location, route));
+  // Uma tela só fica marcada: em /estoque/mapa, o Mapa, sem os Itens (/estoque) junto.
+  const marcada = telaAtual(location, telas);
+  const atualNoGrupo = marcada !== null;
   const idDasTelas = `menu-${item.id}`;
   return (
     <div className="flex shrink-0 flex-col">
@@ -93,7 +95,7 @@ function GrupoDoMenu({
         <ul id={idDasTelas} className="ml-6 mt-1 flex flex-col gap-0.5 border-l border-v3-header-foreground/15 pl-2.5">
           {telas.map((route) => {
             const IconeDaTela = route.icon;
-            const atual = isNavRouteActive(location, route);
+            const atual = route === marcada;
             return (
               <li key={route.id}>
                 <Link

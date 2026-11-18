@@ -1388,6 +1388,42 @@ export function isNavRouteActive(
   );
 }
 
+/** O tamanho do endereço da tela que casa com o caminho (o dela ou um do `tambem`); -1 quando nenhum casa. */
+function tamanhoDoQueCasou(
+  currentPath: string,
+  route: Pick<ModuleRoute, "href" | "exact" | "tambem">,
+): number {
+  if (!route.href) return -1;
+  const casaram = [
+    ...(isRouteActive(currentPath, route.href, route.exact) ? [route.href] : []),
+    ...(route.tambem ?? []).filter((href) => isRouteActive(currentPath, href, true)),
+  ];
+  return Math.max(-1, ...casaram.map((href) => normalizePath(href).length));
+}
+
+/**
+ * A tela marcada entre as telas de um grupo do menu: das que acendem
+ * (`isNavRouteActive`), uma só, a do endereço mais longo que casou. A do
+ * `tambem` casa pelo caminho inteiro e vence o prefixo de outra tela. Em
+ * /estoque/mapa, o Mapa, sem os Itens (/estoque) junto. No empate, a primeira
+ * da lista; sem nenhuma, null. O módulo aberto não muda (getActiveModule).
+ */
+export function telaAtual<Rota extends Pick<ModuleRoute, "href" | "exact" | "tambem">>(
+  currentPath: string,
+  routes: readonly Rota[],
+): Rota | null {
+  let marcada: Rota | null = null;
+  let maior = -1;
+  for (const route of routes) {
+    const tamanho = tamanhoDoQueCasou(currentPath, route);
+    if (tamanho > maior) {
+      marcada = route;
+      maior = tamanho;
+    }
+  }
+  return marcada;
+}
+
 /** Telas fora do menu que pertencem a um item dele. */
 const ACTIVE_ALIASES: Record<string, string> = {
   "/orders": "/pedidos",
