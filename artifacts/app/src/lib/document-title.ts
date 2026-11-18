@@ -28,6 +28,7 @@ const EXTRA_RULES: TitleRule[] = [
   { path: "/estoque/contagem/caixas", label: "Caixas × saldo" },
   { path: "/estoque/contagem/rodada", label: "Contagem por caixa" },
   { path: "/estoque/contagem/prateleira", label: "Contagem da prateleira" },
+  { path: "/wms/contagem/abertura", label: "Inventário de abertura" },
   { path: "/pedidos/lista", label: "Lista de separação" },
   { path: "/pedidos/separar", label: "Separar" },
   { path: "/pedidos/romaneio", label: "Romaneio" },

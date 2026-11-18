@@ -30,6 +30,7 @@ describe("telas do WMS na v3", () => {
       "/estoque/contagem/caixas",
       "/estoque/contagem/rodada",
       "/estoque/contagem/prateleira",
+      "/wms/contagem",
     ]);
   });
 
