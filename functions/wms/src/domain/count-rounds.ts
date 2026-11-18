@@ -1,7 +1,13 @@
+import { createHash } from "node:crypto";
+
+import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
+import { recordOwner } from "./customer-scope.js";
 import { nomeComTamanho } from "./nome-do-produto.js";
+import { createEvent, readRows, resolveCatalogAggregateTargets, type OperationalActor, type OperationalEventSummary } from "./operations.js";
+import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
 
 /**
  * A rodada da contagem (docs/superpowers/specs/2026-11-18-registro-da-rodada-design.md;
@@ -23,6 +29,10 @@ export const LEGACY_ROUND_ID = "recontagem-geral-2026-11-17";
 export const LEGACY_ROUND_TITLE = "Recontagem geral · 17/11/2026";
 export const ROUND_STARTED_EVENT_TYPE = "inventory.round_started";
 export const ROUND_CLOSED_EVENT_TYPE = "inventory.round_closed";
+
+const OPERATIONS_COLLECTION = "operational_operations";
+const CYCLE_COUNTS_COLLECTION = "cycle_counts";
+const EVENT_SOURCE = "functions_wms";
 
 export type EscopoDaRodada = "general" | "aisle" | "item";
 
@@ -226,4 +236,192 @@ export function numerosDaRodada(linhas: readonly LinhaDaRodada[], caixas: readon
     }
   }
   return { ...numeros, primeira };
+}
+
+// ------------------------------------------------------------------- apoio
+
+type Data = Record<string, unknown>;
+
+function text(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  return value == null ? "" : String(value).trim();
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Data)
+        .filter(([, entry]) => entry !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonical(entry)]),
+    );
+  }
+  return value;
+}
+
+function digest(value: unknown, length = 32) {
+  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex").slice(0, length);
+}
+
+function clean<T extends Data>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+/** Sem undefined em nível nenhum: o Firestore não grava undefined. */
+function semIndefinidos(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(semIndefinidos);
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(value as Data)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, semIndefinidos(entry)]),
+    );
+  }
+  return value;
+}
+
+function actorFields(actor: OperationalActor) {
+  return clean({ uid: actor.uid, role: actor.role, email: actor.email, name: actor.name });
+}
+
+function recusa(code: "failed-precondition" | "not-found" | "permission-denied", message: string, detail: string, extra: Data = {}): never {
+  throw new HttpsError(code, message, { code: detail, ...extra });
+}
+
+/** O item do alcance por item: tem de existir e ser do cliente; o nome vai ao título e ao documento. */
+async function lerItem(transaction: Transaction, db: Firestore, customerCode: string, skuCode: string): Promise<NomeDoItem> {
+  const alvo = await resolveCatalogAggregateTargets(transaction, db, skuCode);
+  const snapshot = alvo.skuRef ? await transaction.get(alvo.skuRef) : undefined;
+  if (!alvo.skuRef || !snapshot?.exists) {
+    recusa("failed-precondition", `O produto ${skuCode} não está no cadastro de ${customerCode}: confira o código.`, "COUNT_ROUND_PRODUCT_NOT_FOUND", { sku_code: skuCode });
+  }
+  const sku = snapshot.data() ?? {};
+  if (recordOwner(sku) !== customerCode) {
+    recusa("failed-precondition", `O produto ${skuCode} é do cadastro de ${recordOwner(sku)}, não de ${customerCode}: confira o cliente ativo.`, "CATALOG_OWNED_BY_OTHER_CUSTOMER", { owner: recordOwner(sku) });
+  }
+  return clean({
+    client_item_code: text(sku.cod_cliente || sku.client_item_code) || undefined,
+    product_name: text(sku.produto || sku.product_name) || undefined,
+    size: text(sku.tamanho || sku.size) || undefined,
+  });
+}
+
+// ------------------------------------------------------------------ iniciar
+
+export type ResultadoDoInicio = {
+  ok: true;
+  round_id: string;
+  title: string;
+  scope: EscopoDaRodada;
+  aisle?: string;
+  sku_code?: string;
+  status: "open";
+  started_at: string;
+  events: OperationalEventSummary[];
+};
+
+/**
+ * Inicia a rodada do cliente: uma aberta por cliente de cada vez (a
+ * recontagem geral de 17/11 sem documento conta como aberta), com o alvo do
+ * alcance conferido (a rua em Posições, o item no cadastro do cliente), o
+ * título do servidor, o recibo e o evento. Não é escrita de saldo: não
+ * confere o congelamento do estoque.
+ */
+export async function startCountRoundTransaction(db: Firestore, input: EntradaDoInicio, actor: OperationalActor): Promise<ResultadoDoInicio> {
+  const customerCode = text(input.customer_code);
+  const alcance = alcanceDaEntrada(input);
+  const operationId = `op_count_round_start_${digest({ customer: customerCode, nonce: input.idempotency_key })}`;
+  const inputHash = digest(input, 64);
+  const opRef = db.collection(OPERATIONS_COLLECTION).doc(operationId);
+  const roundId = `cr_${digest({ customer: customerCode, nonce: input.idempotency_key }, 24)}`;
+  const roundRef = db.collection(COUNT_ROUNDS_COLLECTION).doc(roundId);
+  const by = actorFields(actor);
+
+  return db.runTransaction(async (transaction) => {
+    const previous = await transaction.get(opRef);
+    if (previous.exists) {
+      if (previous.get("input_hash") !== inputHash) {
+        throw new HttpsError("already-exists", "A chave de idempotência já foi usada com outro conteúdo.");
+      }
+      return previous.get("result") as ResultadoDoInicio;
+    }
+    const startedAt = new Date().toISOString();
+
+    const abertas = await readRows(transaction, db.collection(COUNT_ROUNDS_COLLECTION).where("customer_code", "==", customerCode).where("status", "==", "open"));
+    if (abertas.length) {
+      const aberta = abertas[0]!;
+      recusa("failed-precondition", `A contagem «${text(aberta.data.title)}» está em andamento: conclua-a antes de iniciar outra.`, "COUNT_ROUND_ALREADY_OPEN", { round_id: aberta.id });
+    }
+    // A recontagem geral de 17/11 sem documento: as recontagens com o id fixo valem como a rodada aberta.
+    const legada = await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(LEGACY_ROUND_ID));
+    if (!legada.exists) {
+      const recontagens = await readRows(transaction, db.collection(CYCLE_COUNTS_COLLECTION).where("customer_code", "==", customerCode).where("round_id", "==", LEGACY_ROUND_ID).limit(1));
+      if (recontagens.length) {
+        recusa("failed-precondition", `A ${LEGACY_ROUND_TITLE} está em andamento: conclua-a antes de iniciar outra.`, "COUNT_ROUND_LEGACY_OPEN", { round_id: LEGACY_ROUND_ID });
+      }
+    }
+    let item: NomeDoItem | undefined;
+    if (alcance.scope === "aisle") {
+      const posicoes = await readRows(transaction, db.collection(WAREHOUSE_POSITIONS_COLLECTION).where("aisle", "==", alcance.aisle).limit(1));
+      if (!posicoes.length) recusa("failed-precondition", `A rua ${alcance.aisle} não está no cadastro de Posições.`, "COUNT_ROUND_AISLE_NOT_FOUND", { aisle: alcance.aisle });
+    }
+    if (alcance.scope === "item") item = await lerItem(transaction, db, customerCode, alcance.sku_code);
+    const title = tituloDaRodada(alcance, item, startedAt);
+    const aisle = alcance.scope === "aisle" ? alcance.aisle : undefined;
+    const skuCode = alcance.scope === "item" ? alcance.sku_code : undefined;
+
+    transaction.create(
+      roundRef,
+      clean({
+        id: roundId,
+        customer_code: customerCode,
+        title,
+        scope: alcance.scope,
+        aisle,
+        sku_code: skuCode,
+        item: item && Object.keys(item).length ? item : undefined,
+        status: "open",
+        started_at: startedAt,
+        started_by: by,
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
+      }),
+    );
+    const events: OperationalEventSummary[] = [
+      createEvent(
+        transaction,
+        db,
+        `evt_${digest({ operationId, suffix: "round_started" })}`,
+        {
+          type: ROUND_STARTED_EVENT_TYPE,
+          title: "Contagem iniciada",
+          description: title,
+          severity: "info",
+          inbox: false,
+          entity_type: "count_round",
+          entity_id: roundId,
+          customer_code: customerCode,
+          occurred_at: startedAt,
+          source: EVENT_SOURCE,
+          payload: clean({ round_id: roundId, title, scope: alcance.scope, aisle, sku_code: skuCode }),
+        },
+        actor,
+      ),
+    ];
+    const result = clean({ ok: true as const, round_id: roundId, title, scope: alcance.scope, aisle, sku_code: skuCode, status: "open" as const, started_at: startedAt, events });
+    transaction.create(opRef, {
+      id: opRef.id,
+      kind: "inventory.count_round.start",
+      target_id: roundId,
+      customer_code: customerCode,
+      input_hash: inputHash,
+      status: "completed",
+      actor: by,
+      result: semIndefinidos(result),
+      created_at: FieldValue.serverTimestamp(),
+      completed_at: FieldValue.serverTimestamp(),
+    });
+    return result;
+  });
 }
