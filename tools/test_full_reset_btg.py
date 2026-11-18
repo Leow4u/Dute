@@ -86,6 +86,7 @@ APAGADAS_DE_PROPOSITO = {
     "stock_balances": "saldos do estoque",
     "ai_stock_age": "dias parado, que saem do estoque",
     "ai_stock_alerts": "alerta do item parado, que sai do estoque",
+    "count_rounds": "rodadas da contagem, que saem com o estoque",
     "agent_conversations": "conversas do Agent Dute",
     "agent_messages": "conversas do Agent Dute",
     "agent_usage": "uso do Agent Dute",
@@ -408,6 +409,12 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(soltas, {})
         for pai in SUBCOLECOES.values():
             self.assertIn(pai, full_reset_btg.COMERCIAL_COLLECTIONS)
+
+    def test_count_rounds_go_with_the_stock(self) -> None:
+        # As rodadas da contagem (count_rounds, WMS) são do estoque, como cycle_counts: apagadas na zeragem.
+        self.assertIn("count_rounds", APAGADAS_DE_PROPOSITO)
+        for include_setup in (False, True):
+            self.assertNotIn("count_rounds", full_reset_btg.preserved_collections(include_setup=include_setup))
 
     def test_stock_age_goes_with_the_stock(self) -> None:
         for name in ("ai_stock_age", "ai_stock_alerts"):
