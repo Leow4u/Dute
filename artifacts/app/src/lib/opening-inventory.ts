@@ -10,6 +10,13 @@
 
 export type CountMode = "opening" | "cycle";
 
+/**
+ * A tela da abertura e da cíclica (as abas), desde 18/11/2026: a entrada da
+ * Contagem (/wms/contagem) manda para cá com a abertura pendente ou em curso,
+ * e ela volta para a entrada quando a sessão conclui.
+ */
+export const ROTA_DA_ABERTURA = "/wms/contagem/abertura";
+
 export type OpeningInventorySummary = {
   status?: "not_started" | "open" | "completed" | string;
   line_count?: number;

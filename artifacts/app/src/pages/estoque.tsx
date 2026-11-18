@@ -33,6 +33,7 @@ import {
   OpeningInventoryNotice,
   useOpeningInventorySession,
 } from "@/features/warehouse-ops/opening-inventory-status";
+import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
@@ -336,7 +337,7 @@ export default function Estoque() {
         actions={
           warehouseWriter ? (
             <Button asChild variant="outline" size="sm">
-              <Link href="/wms/contagem">
+              <Link href={ROTA_DA_ABERTURA}>
                 <ClipboardCheck className="size-4" />
                 {openingSession.data?.status === "open"
                   ? "Continuar contagem"

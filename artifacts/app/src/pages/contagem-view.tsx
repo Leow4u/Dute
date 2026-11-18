@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { CartaoDaRodada } from "@/features/warehouse-ops/cartao-da-rodada";
 import type { FalhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
 import type { RegistroDaAberturaConcluida } from "@/lib/opening-inventory";
+export { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import { ROTA_DO_RELATORIO_CAIXAS_SALDO } from "@/lib/warehouse-ops/contagem-por-caixa";
 import { ROTA_DA_RODADA, hrefDaPrateleira, type RodadaDaContagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
 
@@ -27,8 +28,6 @@ import { ROTA_DA_RODADA, hrefDaPrateleira, type RodadaDaContagem } from "@/lib/w
 
 export type EstadoDaEntrada = "carregando" | "erro" | "pronto";
 
-/** A tela de hoje (as abas, a abertura e a cíclica), para o cliente com a abertura pendente ou em curso. */
-export const ROTA_DA_ABERTURA = "/wms/contagem/abertura";
 const MENSAGEM_DA_FALHA = "Não consegui carregar as contagens.";
 const ID_DA_LINHA = "contagem-linha-de-estado";
 const ID_DO_EM_ANDAMENTO = "contagem-em-andamento";
