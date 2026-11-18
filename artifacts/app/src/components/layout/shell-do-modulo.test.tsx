@@ -84,6 +84,15 @@ function linkAtual(html: string, href: string) {
   });
 }
 
+/** Os endereços das telas marcadas na barra lateral (a barra do celular marca o módulo, não a tela). */
+function marcadasNaBarra(html: string) {
+  const barra = html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+  return [...barra.matchAll(/<a\b[^>]*>/g)]
+    .map(([tag]) => tag)
+    .filter((tag) => tag.includes('aria-current="page"'))
+    .map((tag) => /href="([^"]*)"/.exec(tag)?.[1]);
+}
+
 const TELAS_DO_COMERCIAL = ["Início", "Orçamentos", "Clientes", "Contratos", "Autorizações", "Medições"];
 
 describe("shell v3 do módulo", () => {
@@ -242,6 +251,13 @@ describe("shell v3 do módulo", () => {
       const html = wms("/dashboard", false, { home: { n: 3 }, inventory: { n: 2, alerta: true } });
       expect(html).toMatch(/>Início<\/span><span class="[^"]*bg-v3-header-foreground\/15[^"]*">3<\/span>/);
       expect(html).toMatch(/>Estoque<\/span><span class="[^"]*bg-v3-marca[^"]*">2<\/span>/);
+    });
+
+    it("no grupo, uma tela só fica marcada: a do endereço mais longo que casa", () => {
+      expect(marcadasNaBarra(wms("/estoque/mapa"))).toEqual(["/estoque/mapa"]);
+      expect(marcadasNaBarra(wms("/estoque/posicoes"))).toEqual(["/estoque/posicoes"]);
+      expect(marcadasNaBarra(wms("/estoque"))).toEqual(["/estoque"]);
+      expect(marcadasNaBarra(wms("/estoque/alertas"))).toEqual(["/estoque"]);
     });
 
     it("passa nas regras WCAG 2.1 A e AA do axe, com o grupo aberto e fechado", async () => {
