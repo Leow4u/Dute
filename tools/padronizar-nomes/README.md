@@ -127,7 +127,7 @@ mostra o nome da família, igual em todos os tamanhos. A tela recusa antes o
 nome que traz o próprio tamanho (`problemaDoNome`), e a Contagem sugere o nome,
 os campos e as fotos da família quando o código é de um tamanho novo.
 
-## Passo 3: aplicar os renomes, sem planilha
+## Passo 3: aplicar os renomes, sem planilha (gravado na produção em 18/11/2026)
 
 O passo 3 grava o padrão nos produtos já cadastrados. Ele não lê o CSV: monta
 o mesmo relatório do passo 1 na hora e grava o Nome proposto e o Tamanho
@@ -172,6 +172,17 @@ gravar:
 cd C:\DEV\Dute
 node tools/padronizar-nomes/aplicar.mjs --projeto dute-prod --aplicar --confirmo "PADRONIZAR NOMES dute-prod"
 ```
+
+### Gravado na produção em 18/11/2026
+
+Com o OK do Leonardo, pedido pela recontagem das caixas da BTG: as etiquetas
+das caixas do acerto saíam com "ARPOARDOR" e "AROPOADOR" na família
+`A.02.0809.002`. O teste antes de gravar leu 223 SKUs, com 5 arquivados fora:
+mudam 201, 14 com as escolhas de 06/11, 17 já no padrão e nenhum de fora. A
+gravação deu 201 renomeados, 0 já aplicados, 0 de fora e 0 com erro, e o teste
+seguinte deu os 218 ativos no padrão, sem nada a mudar. A família
+`A.02.0809.002` passou a "Polo Feminino Piquet Arpoador", e a `A.01.0809.002`,
+a "Polo Masculino Piquet Arpoador".
 
 ## Testes
 
