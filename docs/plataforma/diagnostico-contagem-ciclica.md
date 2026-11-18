@@ -731,6 +731,21 @@ acerto, não pela tela (`tools/acerto-btg-2026-10/README.md`, quinta rodada).
 10. O fechamento é a folha regerada: caixas × saldo sem diferença em cada
     prateleira, e a lista das divergências por caixa para a Cristiane.
 
+*Com a bancada da contagem por caixa (PR 625; decisões do Leonardo de
+17/11/2026, seção 7):* a recontagem grava pela tela
+(`/estoque/contagem/rodada`, botão "Contagem por caixa" na Contagem), caixa a
+caixa, e não pela aba cíclica: as regras 2 (a soma por SKU), 6 e 7 ficam para
+quem ainda conta pela aba. O plano do acerto fica para o que a bancada não
+aceita (a caixa sem registro e o tamanho trocado; a peça achada noutra
+prateleira entra como fora da lista, e a prateleira de onde ela faltou se
+acerta quando for contada). As guardas da prateleira se concluem antes de
+contá-la, e as prateleiras com pedido em separação ficam para o fim, com a
+separação parada naquela rua, ou o pedido é entregue antes. Uma pessoa por
+rua, com a separação parada na rua em contagem, até a rodada ter o estado "em
+contagem" (PR da coleção da rodada). A recontagem geral é uma rodada só, de
+vários dias: a prateleira começada num dia continua no outro sem perder o que
+foi confirmado.
+
 ## 6. Oportunidades de melhoria, em ordem
 
 A ordem é a da dor da recontagem: primeiro o que não muda o sistema, depois o
@@ -898,6 +913,46 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    revisão: desfazer a separação numa caixa recontada apagava o `balance_at`
    dela no WMS, e a caixa voltava para "Etiquetas para trocar"; corrigido no
    PR 620.
+
+   *A tela no código desde 17/11/2026 (PR 625, nas pranchas aprovadas):* a
+   rodada em `/estoque/contagem/rodada`, aberta por "Contagem por caixa" na
+   Contagem, e a bancada da prateleira em
+   `/estoque/contagem/prateleira?posicao=A-03`, que é também a do celular,
+   as duas na v3 (`TELAS_DO_WMS_NA_V3`), sem legenda, com a lista dos
+   textos e o `axe`. A bancada lista as caixas guardadas da prateleira com o
+   esperado de cada item (o saldo da caixa pela regra do domínio, a mesma
+   conta da folha e do servidor: a lista só com o esperado maior que zero) e
+   a reserva com o pedido antes de digitar; uma caixa por vez se conta, com a
+   diferença antes de gravar, "Caixa vazia", "Item fora da lista" (a busca no
+   catálogo do cliente, o arquivado também) e "Confirmar caixa" ("Confirmar
+   caixa vazia" com tudo em zero); a confirmada fica numa linha, com "Contar
+   de novo" e o que mudou, com a origem de cada peça a mais que a resposta
+   devolve ("1 do saldo sem caixa", "2 de CX-000014", "entrada de 2 em
+   A-03"), e a próxima por contar abre com o foco no primeiro campo. A guarda
+   aberta e a caixa a caminho da prateleira e o pedido separado esperando a
+   entrega aparecem antes de contar e travam o "Contar"; a linha já separada
+   de um pedido em separação só aparece na recusa do servidor. A gravação é
+   a `recountWarehouseBox`, com a lista inteira da caixa, o fora da lista, a
+   chave da tentativa (a repetição depois do resultado incerto leva a mesma)
+   e o `round_id` da rodada, sem campo vazio. A rodada, enquanto a coleção
+   dela não existe, é a da recontagem geral, com o `round_id` fixo
+   `recontagem-geral-2026-11-17` ("Recontagem geral · 17/11/2026"; decisão
+   do Leonardo em 17/11/2026, seção 7): a recontagem leva vários dias, o
+   progresso sai de todas as recontagens gravadas com esse `round_id`, lidas
+   ao vivo, e não volta a "por contar" na virada do dia, e a caixa recontada
+   nela, em qualquer dia, não cede peça ao fora da lista de outra caixa. A
+   tela da rodada mostra as prateleiras com caixa por rua, com o estado na
+   recontagem geral (por contar, em contagem, contada; a hora de outro dia
+   sai com o dia, "contada 17/11 08:41"), os números da recontagem inteira,
+   "Continuar" na prateleira em contagem (ou na primeira por contar livre) e
+   o "Caixas × saldo" ao lado. Conferido no emulador: a A-03 com três
+   caixas, uma contada com −3 e outra com 2 peças fora da lista vindas do
+   saldo sem caixa, recontada pela tela, e o "Caixas × saldo" passou de −2 a
+   zero nela. Ficam: a coleção da rodada (o motivo, o alcance, quem grava, o
+   cartão "Rodada" e "Anteriores"), a fila de revisão do admin, "Cadastrar
+   caixa" (a caixa física sem registro), a linha separada antes de contar e
+   o estado "em contagem" da prateleira (decididos para o PR da coleção, na
+   seção 7).
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
@@ -987,6 +1042,28 @@ caixa que cede a última peça fica guardada com saldo zero até alguém contá-
 vazia; as travas da separação continuam na recontagem por caixa; e a falta
 que deixaria a prateleira negativa é recusada, com a prateleira mandada ao
 acerto pelo "Caixas × saldo".
+
+*Decidido pelo Leonardo em 17/11/2026, nas respostas às perguntas do PR 625
+(a tela da contagem por caixa):* (1) a recontagem grava pela tela daqui em
+diante, e o plano do acerto fica só para o que a tela não aceita (a caixa sem
+registro, a peça em outra prateleira, o tamanho trocado; a peça achada noutra
+prateleira também entra pela bancada, como fora da lista, e a prateleira de
+onde ela faltou se acerta quando for contada, como decidido antes; o plano só
+é preciso quando aquela prateleira não vai ser recontada); (3) as guardas se
+concluem antes de contar a prateleira, e as prateleiras com pedido em
+separação ficam para o fim, com a separação parada naquela rua, ou o pedido é
+entregue antes, com as travas da tela como estão; (8) a tela do PR 625 fica
+como está, e no PR da coleção da rodada a rodada passa a ser a própria
+Contagem na v3, com a aba cíclica e a abertura como entradas secundárias, e a
+aba cíclica sai para a BTG, porque não mexe nas caixas; (9) a prateleira em
+contagem é um estado da rodada, não o "em verificação" de Posições, com a
+separação e a guarda respeitando-o, no PR da coleção, e até lá vale a regra
+de campo da seção 5.5; e (a pergunta nova) a rodada deixa de ser o dia: até a
+coleção da rodada, toda recontagem leva o `round_id` fixo da recontagem geral
+(`recontagem-geral-2026-11-17`), porque a recontagem leva vários dias, o
+progresso não pode voltar a "por contar" na virada do dia e a caixa já
+recontada não pode ceder peça ao fora da lista de outro dia; a tela da rodada
+mostra o progresso da recontagem geral inteira.
 
 ## 8. Como este levantamento foi feito
 

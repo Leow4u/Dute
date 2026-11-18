@@ -352,6 +352,8 @@ export const APP_MODULES: AppModule[] = [
         href: "/wms/contagem",
         icon: ClipboardCheck,
         roles: WMS_OPERATOR_ROLES,
+        // As telas da contagem por caixa, abertas pela Contagem: a folha, o Caixas × saldo, a rodada e a bancada.
+        tambem: ["/estoque/contagem/folha", "/estoque/contagem/caixas", "/estoque/contagem/rodada", "/estoque/contagem/prateleira"],
       }),
       // Mapa do armazém: prateleiras, ocupação e caixas por zona (só leitura).
       navRoute({
@@ -930,6 +932,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   // A folha de contagem por rua e o relatório "Caixas × saldo", só leitura, abertos pela Contagem.
   { path: "/estoque/contagem/folha", roles: WMS_ROLES },
   { path: "/estoque/contagem/caixas", roles: WMS_ROLES },
+  // A recontagem caixa a caixa, aberta pela Contagem: a rodada e a bancada da prateleira; o suporte só consulta.
+  { path: "/estoque/contagem/rodada", roles: WMS_ROLES },
+  { path: "/estoque/contagem/prateleira", roles: WMS_ROLES },
   // A lista de separação do pedido para imprimir, aberta por "Imprimir lista" em Pedidos.
   { path: "/pedidos/lista", roles: WMS_ROLES },
   // A bancada do pedido, aberta por "Separar" e "Continuar" em Pedidos; o suporte só consulta.

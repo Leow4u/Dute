@@ -28,6 +28,8 @@ describe("telas do WMS na v3", () => {
       "/pedidos/romaneio",
       "/estoque/contagem/folha",
       "/estoque/contagem/caixas",
+      "/estoque/contagem/rodada",
+      "/estoque/contagem/prateleira",
     ]);
   });
 

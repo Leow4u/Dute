@@ -37,6 +37,8 @@ describe("título da aba do navegador", () => {
     ["/estoque/etiquetas", "Dutelog | Etiquetas"],
     ["/estoque/contagem/folha", "Dutelog | Folha de contagem"],
     ["/estoque/contagem/caixas", "Dutelog | Caixas × saldo"],
+    ["/estoque/contagem/rodada", "Dutelog | Contagem por caixa"],
+    ["/estoque/contagem/prateleira", "Dutelog | Contagem da prateleira"],
     ["/wms/receber", "Dutelog | Receber"],
     ["/wms/contagem", "Dutelog | Contagem"],
     ["/wms/qualidade", "Dutelog | Qualidade"],
