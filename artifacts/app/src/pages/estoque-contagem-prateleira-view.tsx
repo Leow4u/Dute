@@ -433,7 +433,7 @@ function CaixaEmContagem({
                   <Button
                     type="button"
                     variant="link"
-                    className="h-auto px-0 text-sm max-md:min-h-11"
+                    className="h-auto px-0 text-sm text-foreground underline max-md:min-h-11"
                     aria-label={`Remover ${linha.nome} da caixa ${caixa.code}`}
                     disabled={gravando}
                     onClick={() => acoes.onRemoverForaDaLista(linha.sku)}
@@ -553,7 +553,7 @@ function CaixaEmContagem({
             Caixa vazia
           </Button>
           {!buscando && !cheia ? (
-            <Button type="button" variant="link" data-fora-da-lista="" className="flex-1 max-md:min-h-12 md:flex-none" disabled={gravando} onClick={() => setBuscando(true)}>
+            <Button type="button" variant="link" data-fora-da-lista="" className="flex-1 text-foreground underline max-md:min-h-12 md:flex-none" disabled={gravando} onClick={() => setBuscando(true)}>
               Item fora da lista
             </Button>
           ) : null}

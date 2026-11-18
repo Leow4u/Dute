@@ -352,6 +352,8 @@ export const APP_MODULES: AppModule[] = [
         href: "/wms/contagem",
         icon: ClipboardCheck,
         roles: WMS_OPERATOR_ROLES,
+        // As telas da contagem por caixa, abertas pela Contagem: a folha, o Caixas × saldo, a rodada e a bancada.
+        tambem: ["/estoque/contagem/folha", "/estoque/contagem/caixas", "/estoque/contagem/rodada", "/estoque/contagem/prateleira"],
       }),
       // Mapa do armazém: prateleiras, ocupação e caixas por zona (só leitura).
       navRoute({

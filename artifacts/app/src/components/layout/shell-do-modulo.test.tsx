@@ -224,6 +224,12 @@ describe("shell v3 do módulo", () => {
       expect(linkAtual(aberto, "/estoque")).toBe(false);
     });
 
+    it("as telas da contagem por caixa, abertas pela Contagem, acendem a Contagem", () => {
+      for (const tela of ["/estoque/contagem/rodada", "/estoque/contagem/prateleira", "/estoque/contagem/caixas", "/estoque/contagem/folha"]) {
+        expect(linkAtual(wms(tela), "/wms/contagem"), tela).toBe(true);
+      }
+    });
+
     it("o cliente ativo fica abaixo do seletor, na barra e numa linha sob o cabeçalho do celular", () => {
       const html = wms("/dashboard");
       expect(html.indexOf(">Cliente ativo BTG<")).toBeGreaterThan(html.indexOf(">Armazenagem<"));
