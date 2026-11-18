@@ -92,9 +92,10 @@ describe("Estoque na v3", () => {
 
   it("quem só consulta (o suporte) não vê a Contagem, Registrar movimentação nem as ações da ficha", () => {
     const fonte = readFileSync(new URL("./estoque.tsx", import.meta.url), "utf8");
-    expect(fonte.match(/href="\/wms\/contagem"/g)).toHaveLength(3);
+    // "Contar este item" e a ação do histórico vão à entrada da Contagem; o aviso da abertura, à tela da abertura (18/11/2026).
+    expect(fonte.match(/href="\/wms\/contagem"/g)).toHaveLength(2);
     expect(fonte).toMatch(/\{warehouseWriter \? \(\s*<Button asChild variant="outline">\s*<Link href="\/wms\/contagem">/);
-    expect(fonte).toMatch(/warehouseWriter \? \(\s*<Button asChild variant="outline" size="sm">\s*<Link href="\/wms\/contagem">/);
+    expect(fonte).toMatch(/warehouseWriter \? \(\s*<Button asChild variant="outline" size="sm">\s*<Link href=\{ROTA_DA_ABERTURA\}>/);
     expect(fonte).toMatch(/\{warehouseWriter \? \(\s*<div className="mt-auto flex/);
     expect(fonte).toContain('{tab === "history" && warehouseWriter ? (');
   });
