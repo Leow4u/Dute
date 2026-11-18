@@ -99,6 +99,13 @@ export type WarehouseBox = {
   emptied_whole?: boolean;
   /** Na caixa que saiu inteira e virou volume ("Levar a caixa"): o número do volume. */
   emptied_volume_number?: number | null;
+  /**
+   * A última recontagem da caixa (`recountWarehouseBox`, contagem por caixa):
+   * o id, quando e a rodada; null na caixa nunca recontada.
+   */
+  last_recount_id?: string | null;
+  last_recounted_at?: string | null;
+  last_recount_round_id?: string | null;
   suggestion: {
     position: string | null;
     reason: string | null;
@@ -351,6 +358,9 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     emptied_order_number: text(record.emptied_order_number) || null,
     emptied_whole: record.emptied_whole === true,
     emptied_volume_number: Number(record.emptied_volume_number) > 0 ? Number(record.emptied_volume_number) : null,
+    last_recount_id: text(record.last_recount_id) || null,
+    last_recounted_at: text(record.last_recounted_at) || null,
+    last_recount_round_id: text(record.last_recount_round_id) || null,
     suggestion: suggestion
       ? {
           position: text(suggestion.position) || null,

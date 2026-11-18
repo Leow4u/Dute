@@ -28,6 +28,9 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   // Contagem por caixa (diagnóstico da Contagem cíclica, seção 6, item 1): a folha por rua e o relatório "Caixas × saldo", telas novas já na v3.
   "/estoque/contagem/folha",
   "/estoque/contagem/caixas",
+  // Contagem por caixa (seção 6, item 4): a rodada e a bancada da prateleira, telas novas já na v3.
+  "/estoque/contagem/rodada",
+  "/estoque/contagem/prateleira",
 ];
 
 /**

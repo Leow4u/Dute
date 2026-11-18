@@ -62,6 +62,9 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   // A folha de contagem e o relatório "Caixas × saldo", só leitura: os mesmos papéis da Contagem.
   ["/estoque/contagem/folha", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/estoque/contagem/caixas", ["owner", "admin", "interno", "wms", "suporte"]],
+  // A recontagem caixa a caixa: os mesmos papéis da Contagem; quem grava é a callable (o suporte só consulta).
+  ["/estoque/contagem/rodada", ["owner", "admin", "interno", "wms", "suporte"]],
+  ["/estoque/contagem/prateleira", ["owner", "admin", "interno", "wms", "suporte"]],
   // O alerta do item parado: só a coordenação decide (parte 5.4e).
   ["/estoque/alertas", ["owner", "admin", "interno"]],
   ["/estoque/mapa", ["owner", "admin", "interno", "wms", "suporte"]],
@@ -286,6 +289,8 @@ describe("grupo ativo", () => {
     ["/estoque/etiquetas", "Estoque"],
     ["/estoque/contagem/folha", "Estoque"],
     ["/estoque/contagem/caixas", "Estoque"],
+    ["/estoque/contagem/rodada", "Estoque"],
+    ["/estoque/contagem/prateleira", "Estoque"],
     ["/estoque/alertas", "Estoque"],
     ["/estoque/mapa", "Estoque"],
     ["/catalogo/mapa", "Estoque"],
