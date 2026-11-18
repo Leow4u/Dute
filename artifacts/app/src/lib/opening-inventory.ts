@@ -20,6 +20,9 @@ export type OpeningInventorySummary = {
    * (backend antigo), vale como obrigatória, como sempre foi.
    */
   opening_required?: boolean;
+  /** Quando e quem concluiu, gravados pela conclusão (completeOpeningInventory); ausentes antes dela. */
+  completed_at?: string;
+  completed_by?: { name?: string; email?: string };
 };
 
 /**
@@ -78,4 +81,37 @@ export function openingInventoryNotice(
     };
   }
   return null;
+}
+
+export type RegistroDaAberturaConcluida = {
+  /** "Inventário de abertura" */
+  titulo: string;
+  /** "20/10/2026 às 18:40 · Leonardo"; só a data sem quem; só quem sem data válida; "" sem os dois. */
+  quando: string;
+  /** "249 lançamentos · 7.314 unidades", com o singular em 1. */
+  numeros: string;
+};
+
+const DIA_DA_CONCLUSAO = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
+const HORA_DA_CONCLUSAO = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/**
+ * A linha da abertura concluída em "Anteriores" da Contagem (desenho de
+ * 18/11/2026): quando e quem concluiu, no fuso do armazém, e os lançamentos
+ * e unidades publicados. Sem valor nem caixas, de propósito: preço só para
+ * quem vê preço, e a contagem de caixas exigiria ler todas as caixas do
+ * cliente só para um número. Fora da sessão concluída, nada.
+ */
+export function registroDaAberturaConcluida(
+  session: OpeningInventorySummary | undefined,
+): RegistroDaAberturaConcluida | null {
+  if (session?.status !== "completed") return null;
+  const instante = Date.parse(session.completed_at ?? "");
+  const data = Number.isFinite(instante) ? `${DIA_DA_CONCLUSAO.format(instante)} às ${HORA_DA_CONCLUSAO.format(instante)}` : "";
+  const quem = session.completed_by?.name || session.completed_by?.email || "";
+  return {
+    titulo: "Inventário de abertura",
+    quando: [data, quem].filter(Boolean).join(" · "),
+    numeros: `${count(session.line_count, "lançamento", "lançamentos")} · ${count(session.unit_count, "unidade", "unidades")}`,
+  };
 }
