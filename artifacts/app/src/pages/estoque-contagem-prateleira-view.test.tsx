@@ -78,6 +78,8 @@ const BANCADA = bancadaDaPrateleira({
     caixa("CX-000011", {
       last_recount_id: "brc_011",
       last_recount_round_id: RODADA,
+      // A recontagem com diferença muda o saldo da caixa: a etiqueta dela fica para trocar até a impressão.
+      balance_at: "2026-11-17T12:11:00.000Z",
       count_adjustments: [
         { recount_id: "brc_011", sku_code: M.sku_code, qty: -5 },
         { recount_id: "brc_011", ...GG, qty: 2 },
@@ -169,6 +171,7 @@ describe("Estoque › Contagem por caixa › a prateleira", () => {
       "2 itens",
       "60 esperadas",
       "confirmada 09:11 · 57 · −3",
+      "Imprimir etiqueta",
       "Polo Masculino Piquet Preto · M",
       "−5",
       "Polo Masculino Piquet Preto · GG",
@@ -208,6 +211,45 @@ describe("Estoque › Contagem por caixa › a prateleira", () => {
     expect(textos).toContain("confirmada 17/11 09:02 · 60 · sem diferença");
     expect(textos).toContain("confirmada 17/11 09:11 · 57 · −3");
     expect(textos).toContain("2 de 4 caixas");
+  });
+
+  it("a caixa confirmada com diferença e a etiqueta para trocar ganha \"Imprimir etiqueta\", que abre a etiqueta dela", async () => {
+    const html = render("pronto", { emContagem: null });
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const imprimir = [...dom.window.document.querySelectorAll("a")].filter((link) => link.textContent === "Imprimir etiqueta");
+    // Só a CX-000011 (−3, com a etiqueta para trocar); a CX-000010, confirmada sem diferença, não.
+    expect(imprimir.map((link) => link.getAttribute("href"))).toEqual(["/estoque/etiquetas?caixas=CX-000011"]);
+    expect(dom.window.document.getElementById(imprimir[0].getAttribute("aria-describedby")!)?.textContent).toBe("CX-000011");
+    dom.window.close();
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("com duas caixas ou mais para trocar, \"Etiquetas para trocar\" no topo imprime as da prateleira juntas", async () => {
+    const duas = {
+      ...BANCADA,
+      caixas: BANCADA.caixas.map((item) =>
+        item.code === "CX-000013"
+          ? { ...item, estado: "confirmada" as const, recontagem: { ...BANCADA.caixas[1].recontagem!, caixa: "CX-000013", id: "brc_013" }, etiquetaParaTrocar: true }
+          : item,
+      ),
+    };
+    const html = render("pronto", { bancada: duas, emContagem: null });
+    const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+    const topo = [...dom.window.document.querySelectorAll("a")].find((link) => link.textContent === "Etiquetas para trocar · 2");
+    expect(topo?.getAttribute("href")).toBe("/estoque/etiquetas?caixas=CX-000011%2CCX-000013");
+    dom.window.close();
+    // Com uma só, o botão da caixa basta.
+    expect(textosDaTela(render("pronto", { emContagem: null }))).not.toContain("Etiquetas para trocar · 1");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("depois da impressão registrada, o botão some; quem só consulta não o tem", () => {
+    const impressa = {
+      ...BANCADA,
+      caixas: BANCADA.caixas.map((item) => (item.code === "CX-000011" ? { ...item, etiquetaParaTrocar: false } : item)),
+    };
+    expect(textosDaTela(render("pronto", { bancada: impressa, emContagem: null }))).not.toContain("Imprimir etiqueta");
+    expect(textosDaTela(render("pronto", { operador: false }))).not.toContain("Imprimir etiqueta");
   });
 
   it("o campo do contado diz o item e a caixa, e o fora da lista diz que é fora da lista", () => {

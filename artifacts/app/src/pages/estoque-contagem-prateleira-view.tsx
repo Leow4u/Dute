@@ -12,16 +12,20 @@ import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { labelsUrl } from "@/lib/warehouse-labels";
 import { textoDaDiferenca } from "@/lib/warehouse-ops/contagem-por-caixa";
 import {
   FORA_DA_LISTA_MAXIMO,
   ROTA_DA_RODADA,
   buscarProdutos,
+  caixasComEtiquetaNova,
   contagemCompleta,
   contagemVazia,
   dataCurta,
   diferencaDigitada,
   itensComDiferenca,
+  pedeEtiquetaNova,
+  temDiferenca,
   problemaDaQuantidade,
   resumoDaBancada,
   seloDaRecontagem,
@@ -187,6 +191,7 @@ export function EstoqueContagemPrateleiraView({
           {leitura ? <FaixaAoVivo leitura={leitura} objeto="prateleira" /> : null}
           {leitura?.falta === "conexao" && leitura.lidaEm == null ? <BlocoSemConexao tentando={leitura.tentando} onTentar={() => leitura.tentar()} /> : null}
           <Progresso bancada={bancada} />
+          {operador ? <EtiquetasParaTrocar bancada={bancada} /> : null}
           {catalogoFalhou ? (
             <FalhaNaSecao
               mensagem={SEM_CATALOGO}
@@ -269,6 +274,20 @@ function Progresso({ bancada }: { bancada: BancadaDaPrateleira }) {
   );
 }
 
+/** As etiquetas para trocar da prateleira, numa impressão só: com duas caixas ou mais (com uma, o botão dela basta). */
+function EtiquetasParaTrocar({ bancada }: { bancada: BancadaDaPrateleira }) {
+  const codigos = caixasComEtiquetaNova(bancada);
+  if (codigos.length < 2) return null;
+  return (
+    <Button asChild variant="outline" className="w-fit max-md:min-h-11">
+      <Link href={labelsUrl({ boxes: codigos })}>
+        <Printer className="size-4" aria-hidden="true" />
+        {`Etiquetas para trocar · ${codigos.length}`}
+      </Link>
+    </Button>
+  );
+}
+
 /** O selo da caixa confirmada: verde sem diferença, âmbar com ela. */
 function SeloDaConfirmada({ caixa, agora }: { caixa: CaixaDaBancada; agora: Date }) {
   if (!caixa.recontagem) return null;
@@ -277,7 +296,7 @@ function SeloDaConfirmada({ caixa, agora }: { caixa: CaixaDaBancada; agora: Date
       variant="outline"
       className={cn(
         "text-sm font-bold",
-        caixa.recontagem.diferenca === 0 ? "border-success-soft-border bg-success-soft text-success-soft-foreground" : "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
+        !temDiferenca(caixa.recontagem) ? "border-success-soft-border bg-success-soft text-success-soft-foreground" : "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
       )}
     >
       {seloDaRecontagem(caixa.recontagem, agora)}
@@ -330,6 +349,15 @@ function CaixaFechada({
           </Badge>
         ) : null}
         <SeloDaConfirmada caixa={caixa} agora={agora} />
+        {/* A recontagem com diferença muda o saldo da caixa: a etiqueta nova sai daqui, e o botão some quando a impressão é registrada. */}
+        {operador && pedeEtiquetaNova(caixa) ? (
+          <Button asChild variant="outline" className="max-md:min-h-11">
+            <Link href={labelsUrl({ boxes: [caixa.code] })} aria-describedby={ids.titulo}>
+              <Printer className="size-4" aria-hidden="true" />
+              Imprimir etiqueta
+            </Link>
+          </Button>
+        ) : null}
         {podeContar && caixa.estado !== "vazia" ? (
           <Button
             id={ids.contar}

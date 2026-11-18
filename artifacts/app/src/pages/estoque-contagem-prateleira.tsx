@@ -19,6 +19,7 @@ import {
   proximaPorContar,
   recontagemDaResposta,
   soAlgarismos,
+  temDiferenca,
   unidadesComSinal,
   type CaixaDaBancada,
   type ContagemDigitada,
@@ -92,7 +93,12 @@ export default function PaginaPrateleiraDaContagem() {
       const outraPessoa = anterior?.recount_id && anterior.recount_id !== antes ? `Contada antes por ${anterior.by_name || "outra pessoa"}${anterior.at ? ` às ${horaEmTexto(anterior.at)}` : ""}.` : "";
       toast({
         title: recontagem.vazia ? `${recontagem.caixa} vazia` : `${recontagem.caixa} confirmada`,
-        description: [recontagem.diferenca === 0 ? "Sem diferença." : `Diferença ${unidadesComSinal(recontagem.diferenca)}`, outraPessoa].filter(Boolean).join(" "),
+        description: [
+          !temDiferenca(recontagem) ? "Sem diferença." : recontagem.diferenca === 0 ? "Com diferença nos itens." : `Diferença ${unidadesComSinal(recontagem.diferenca)}`,
+          outraPessoa,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
       // A próxima caixa por contar abre, com o foco no primeiro campo; sem ela, o foco vai ao "Contar de novo".
       const proxima = bancada ? proximaPorContar(bancada, alvo.code) : null;
