@@ -69,8 +69,8 @@ const guardaLida = (id: string, data: AnyRecord): GuardaLida => ({
   box_code: data.box_code,
 });
 
-/** O catálogo, a mesma chave do Estoque, do Mapa e da folha: o nome dos produtos e o item fora da lista. */
-function useCatalogo(ligado: boolean) {
+/** O catálogo, a mesma chave do Estoque, do Mapa e da folha: o nome dos produtos, o item fora da lista e o item da rodada. */
+export function useCatalogoDoCliente(ligado: boolean) {
   return useQuery({
     queryKey: ["estoque", "skus"],
     enabled: ligado,
@@ -94,10 +94,10 @@ function useGuardasAbertas(cliente: string | null) {
   return { planejadas, emAndamento };
 }
 
-/** As recontagens da rodada do cliente (`cycle_counts` com o `round_id` dela), ao vivo. */
-function useRecontagensDaRodada(cliente: string | null, rodada: string, catalogo: ReadonlyMap<string, NomeDoSku>) {
+/** As recontagens da rodada do cliente (`cycle_counts` com o `round_id` dela), ao vivo; sem rodada, nada é lido. */
+function useRecontagensDaRodada(cliente: string | null, rodada: string | null, catalogo: ReadonlyMap<string, NomeDoSku>) {
   const linhas = useLeitura<LinhaRecontada>(
-    cliente ? `cycle_counts:${cliente}:${rodada}` : null,
+    cliente && rodada ? `cycle_counts:${cliente}:${rodada}` : null,
     (db) => query(collection(db, "cycle_counts"), where("customer_code", "==", cliente), where("round_id", "==", rodada)),
     (id, data) => linhaRecontada(id, data),
   );
@@ -135,7 +135,7 @@ export type LeituraDaBancada = {
  * reservas dela, as guardas abertas e as recontagens da rodada, ao vivo.
  * Sem o cliente confirmado ou sem a prateleira, nada é lido.
  */
-export function useBancadaDaPrateleira(cliente: string | null, posicao: string | null, rodada: string): LeituraDaBancada {
+export function useBancadaDaPrateleira(cliente: string | null, posicao: string | null, rodada: string | null): LeituraDaBancada {
   const codigo = texto(cliente);
   const alvo = texto(posicao).toUpperCase();
   const ligado = Boolean(codigo && alvo);
@@ -143,7 +143,7 @@ export function useBancadaDaPrateleira(cliente: string | null, posicao: string |
 
   const posicoes = usePosicoesDoArmazem(ligado);
   const abertura = useEntradaDaAbertura(doCliente);
-  const catalogoLido = useCatalogo(ligado);
+  const catalogoLido = useCatalogoDoCliente(ligado);
   const posicoesNaTela = useLeituraComFalha(posicoes);
   const aberturaNaTela = useLeituraComFalha(abertura);
   const catalogoNaTela = useLeituraComFalha(catalogoLido);
@@ -185,7 +185,7 @@ export function useBancadaDaPrateleira(cliente: string | null, posicao: string |
             reservas: [...(reservadas.itens ?? []), ...(separadas.itens ?? [])],
             guardas: [...(guardas.planejadas.itens ?? []), ...(guardas.emAndamento.itens ?? [])],
             recontagens,
-            rodada,
+            rodada: rodada ?? "",
             catalogo,
           })
         : null,
@@ -195,7 +195,8 @@ export function useBancadaDaPrateleira(cliente: string | null, posicao: string |
   const gravadas = useMemo(() => new Set(recontagens.map((recontagem) => recontagem.id)), [recontagens]);
 
   const queryClient = useQueryClient();
-  const aoVivo = [caixas, saldos, reservadas, separadas, guardas.planejadas, guardas.emAndamento, linhas];
+  // Sem rodada, as recontagens não são lidas: a leitura delas não entra na espera.
+  const aoVivo = [caixas, saldos, reservadas, separadas, guardas.planejadas, guardas.emAndamento, ...(rodada ? [linhas] : [])];
   const consultas = [posicoesNaTela, aberturaNaTela];
   const consultaFalhou = consultas.find((consulta) => consulta.isError && consulta.data === undefined);
   const leitura = juntarTentativas(novaTentativaDe(aoVivo), {
@@ -236,7 +237,7 @@ export type LeituraDaRodada = {
  * rodada, as guardas abertas e as reservas separadas esperando a entrega do
  * cliente, ao vivo.
  */
-export function useLeiturasDaRodada(cliente: string | null, rodada: string, catalogo: ReadonlyMap<string, NomeDoSku>): LeituraDaRodada {
+export function useLeiturasDaRodada(cliente: string | null, rodada: string | null, catalogo: ReadonlyMap<string, NomeDoSku>): LeituraDaRodada {
   const codigo = texto(cliente);
   const doCliente = codigo || null;
   const guardas = useGuardasAbertas(doCliente);
@@ -246,7 +247,7 @@ export function useLeiturasDaRodada(cliente: string | null, rodada: string, cata
     reservaLida,
   );
   const { linhas, recontagens } = useRecontagensDaRodada(doCliente, rodada, catalogo);
-  const aoVivo = [linhas, guardas.planejadas, guardas.emAndamento, separadas];
+  const aoVivo = [...(rodada ? [linhas] : []), guardas.planejadas, guardas.emAndamento, separadas];
   return {
     recontagens,
     guardas: [...(guardas.planejadas.itens ?? []), ...(guardas.emAndamento.itens ?? [])],
