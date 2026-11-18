@@ -5,6 +5,7 @@ import { Router } from "wouter";
 
 import type { RegistroDaAberturaConcluida } from "@/lib/opening-inventory";
 import type { RodadaDaContagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import type { RodadaRegistrada } from "@/lib/warehouse-ops/rodadas-da-contagem";
 import { telaDoWmsNaV3 } from "@/lib/wms-v3";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosDaTela } from "@/test/textos";
@@ -13,10 +14,12 @@ import { ContagemView, ROTA_DA_ABERTURA, type EstadoDaEntrada } from "./contagem
 
 /**
  * Estoque › Contagem, a entrada (desenho de 18/11/2026,
- * docs/mockups/contagem-entrada/01-em-andamento.png): a contagem em andamento,
- * com o cartão da rodada e "Continuar", e "Anteriores" com a linha do
- * inventário de abertura. As prateleiras ficam dentro da Contagem por caixa.
- * Dados sintéticos.
+ * docs/mockups/contagem-entrada/01-em-andamento.png e 02-iniciar-contagem.png):
+ * a contagem em andamento, com o cartão da rodada, "Continuar" e "Concluir
+ * contagem"; sem rodada aberta, "Iniciar contagem" no cabeçalho; e
+ * "Anteriores" com as rodadas concluídas e a linha do inventário de
+ * abertura. As prateleiras ficam dentro da Contagem por caixa. Dados
+ * sintéticos.
  */
 
 const AGORA = new Date("2026-11-18T14:30:00.000Z");
@@ -35,12 +38,26 @@ const RODADA: RodadaDaContagem = {
   alcance: { tipo: "geral" },
   concluida: null,
 };
+const CONCLUIDA: RodadaRegistrada = {
+  id: "recontagem-geral-2026-11-17",
+  cliente: "BTG Pactual",
+  titulo: "Recontagem geral · 17/11/2026",
+  alcance: { tipo: "geral" },
+  status: "concluida",
+  inicio: { quando: "2026-11-17T11:10:00.000Z", quem: "Guilherme Dantas" },
+  fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" },
+  numeros: { prateleiras: 5, prateleirasContadas: 5, caixas: 6, caixasConfirmadas: 6, caixasComDiferenca: 1, diferenca: -3 },
+};
 const ABERTURA: RegistroDaAberturaConcluida = {
   titulo: "Inventário de abertura",
   quando: "20/10/2026 às 18:40 · Leonardo",
   numeros: "249 lançamentos · 7.314 unidades",
 };
+const noop = () => undefined;
+const INICIAR = { aberto: false, estado: "repouso" as const, ruas: ["A", "B"], produtos: [], catalogoFalhou: false, onAbrir: noop, onFechar: noop, onIniciar: noop };
+const CONCLUIR = { aberto: false, estado: "repouso" as const, onAbrir: noop, onFechar: noop, onConcluir: noop };
 const CABECALHO = ["Contagem · BTG", "Folha de contagem", "Caixas × saldo"];
+const CABECALHO_SEM_RODADA = ["Contagem · BTG", "Iniciar contagem", "Folha de contagem", "Caixas × saldo"];
 const CARTAO = [
   "Em andamento",
   "Recontagem geral · 17/11/2026",
@@ -56,7 +73,9 @@ const CARTAO = [
   "diferença líquida",
   "−3 un.",
 ];
+const ACOES = ["Continuar A-02", "Ver prateleiras", "Concluir contagem"];
 const ANTERIORES = ["Anteriores", "Inventário de abertura", "20/10/2026 às 18:40 · Leonardo", "249 lançamentos · 7.314 unidades"];
+const RODADA_ANTERIOR = ["Recontagem geral · 17/11/2026", "17/11 a 21/11 · Guilherme Dantas", "5 prateleiras · 6 caixas · 1 com diferença · −3 un.", "Ver"];
 
 function render(estado: EstadoDaEntrada = "pronto", extra: Partial<Parameters<typeof ContagemView>[0]> = {}) {
   return renderToStaticMarkup(
@@ -66,6 +85,7 @@ function render(estado: EstadoDaEntrada = "pronto", extra: Partial<Parameters<ty
         cliente="BTG"
         abertura={estado === "pronto" ? ABERTURA : null}
         rodada={estado === "pronto" ? RODADA : null}
+        concluir={estado === "pronto" ? CONCLUIR : null}
         hrefDaFolha="/estoque/contagem/folha?rua=A"
         agora={AGORA}
         {...extra}
@@ -81,43 +101,55 @@ describe("Estoque › Contagem, a entrada", () => {
     expect(ROTA_DA_ABERTURA).toBe("/wms/contagem/abertura");
   });
 
-  it("só rótulos, dados e ações: o cartão em andamento com Continuar e Ver prateleiras, e a abertura em Anteriores", () => {
-    expect(textosDaTela(render())).toEqual([...CABECALHO, ...CARTAO, "Continuar A-02", "Ver prateleiras", ...ANTERIORES]);
+  it("só rótulos, dados e ações: o cartão em andamento com Continuar, Ver prateleiras e Concluir contagem, e a abertura em Anteriores", () => {
+    expect(textosDaTela(render())).toEqual([...CABECALHO, ...CARTAO, ...ACOES, ...ANTERIORES]);
   });
 
-  it("os links: Continuar leva à bancada, Ver prateleiras à Contagem por caixa, a folha e o Caixas × saldo às deles", () => {
-    const dom = new JSDOM(`<!doctype html><body>${render()}</body>`);
+  it("sem rodada aberta: Iniciar contagem no cabeçalho, e Anteriores com a recontagem geral concluída antes da abertura", async () => {
+    const html = render("pronto", { rodada: null, concluir: null, iniciar: INICIAR, anteriores: [CONCLUIDA] });
+    expect(textosDaTela(html)).toEqual([...CABECALHO_SEM_RODADA, "Anteriores", ...RODADA_ANTERIOR, ...ANTERIORES.slice(1)]);
+    expect(html).toMatch(/<button[^>]*>[^<]*<svg[^>]*>.*?<\/svg>Iniciar contagem<\/button>/);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("os links: Continuar leva à bancada, Ver prateleiras à Contagem por caixa, Ver à rodada concluída, a folha e o Caixas × saldo às deles", () => {
+    const dom = new JSDOM(`<!doctype html><body>${render("pronto", { anteriores: [CONCLUIDA] })}</body>`);
     const links = [...dom.window.document.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]);
     expect(links).toEqual([
       ["Folha de contagem", "/estoque/contagem/folha?rua=A"],
       ["Caixas × saldo", "/estoque/contagem/caixas"],
       ["Continuar A-02", "/estoque/contagem/prateleira?posicao=A-02"],
       ["Ver prateleiras", "/estoque/contagem/rodada"],
+      ["Ver", "/estoque/contagem/rodada?rodada=recontagem-geral-2026-11-17"],
     ]);
+    expect(dom.window.document.querySelector('a[href="/estoque/contagem/rodada?rodada=recontagem-geral-2026-11-17"]')?.getAttribute("aria-label")).toBe("Ver Recontagem geral · 17/11/2026");
     dom.window.close();
   });
 
-  it("tudo contado: o cartão sem Continuar, só Ver prateleiras", () => {
+  it("tudo contado: o cartão sem Continuar, com Ver prateleiras e Concluir contagem", () => {
     const textos = textosDaTela(render("pronto", { rodada: { ...RODADA, continuar: null, prateleirasContadas: 5, caixasConfirmadas: 6 } }));
     expect(textos.some((texto) => texto.startsWith("Continuar"))).toBe(false);
     expect(textos).toContain("Ver prateleiras");
+    expect(textos).toContain("Concluir contagem");
   });
 
-  it("sem prateleira com caixa, nada em andamento; sem abertura registrada, nada em Anteriores", () => {
+  it("sem prateleira com caixa, nada em andamento; sem abertura registrada nem rodada anterior, nada em Anteriores", () => {
     const semCaixas = textosDaTela(render("pronto", { rodada: { ...RODADA, prateleiras: 0, prateleirasContadas: 0, caixas: 0, caixasConfirmadas: 0, caixasComDiferenca: 0, diferenca: 0, continuar: null } }));
     expect(semCaixas).toEqual([...CABECALHO, ...ANTERIORES]);
     const semAbertura = textosDaTela(render("pronto", { abertura: null }));
-    expect(semAbertura).toEqual([...CABECALHO, ...CARTAO, "Continuar A-02", "Ver prateleiras"]);
+    expect(semAbertura).toEqual([...CABECALHO, ...CARTAO, ...ACOES]);
+    const semNada = textosDaTela(render("pronto", { abertura: null, rodada: null, concluir: null, iniciar: INICIAR, anteriores: [] }));
+    expect(semNada).toEqual(CABECALHO_SEM_RODADA);
   });
 
-  it("carregando: a forma final com o esqueleto, e nenhum número antes de ler", async () => {
+  it("carregando: a forma final com o esqueleto, e nenhum número, Iniciar ou Anteriores antes de ler", async () => {
     const html = render("carregando");
     expect(textosDaTela(html)).toEqual(CABECALHO);
     expect(html).toContain("data-esqueleto");
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("a falha nunca vira o vazio: o aviso com Tentar de novo", async () => {
+  it("a falha nunca vira o vazio: o aviso com Tentar de novo, sem Iniciar contagem", async () => {
     const erro = new Error("falhou");
     const daLeitura = render("erro", { falha: { erro, leitura: { error: erro, refetch: async () => undefined } as never } });
     expect(textosDaTela(daLeitura)).toEqual([...CABECALHO, "Não consegui carregar as contagens.", "Tentar de novo"]);
@@ -127,7 +159,7 @@ describe("Estoque › Contagem, a entrada", () => {
   });
 
   it("passa nas regras WCAG 2.1 A e AA do axe, e não leva valor", async () => {
-    const html = render();
+    const html = render("pronto", { anteriores: [CONCLUIDA] });
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     expect(html).not.toMatch(/R\$|custo|preço|valor/i);
   });
