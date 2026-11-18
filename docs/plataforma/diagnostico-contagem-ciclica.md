@@ -735,10 +735,18 @@ acerto, não pela tela (`tools/acerto-btg-2026-10/README.md`, quinta rodada).
 17/11/2026, seção 7):* a recontagem grava pela tela
 (`/estoque/contagem/rodada`, botão "Contagem por caixa" na Contagem), caixa a
 caixa, e não pela aba cíclica: as regras 2 (a soma por SKU), 6 e 7 ficam para
-quem ainda conta pela aba. O plano do acerto fica para o que a bancada não
-aceita (a caixa sem registro e o tamanho trocado; a peça achada noutra
-prateleira entra como fora da lista, e a prateleira de onde ela faltou se
-acerta quando for contada). As guardas da prateleira se concluem antes de
+quem ainda conta pela aba. O plano do acerto fica para a caixa sem registro;
+a peça achada noutra prateleira entra como fora da lista, e a prateleira de
+onde ela faltou se acerta quando for contada. A caixa com tamanho trocado
+também se acerta pela bancada (decisão de 18/11/2026, seção 7): o tamanho
+registrado recebe o que existe dele de fato (zero, se todas as peças são do
+outro tamanho) e o tamanho certo entra por "Item fora da lista"; a prateleira
+se conta inteira, porque o fora da lista pode puxar por um momento de outra
+caixa ainda não contada, e a contagem dela acerta a diferença. Só três casos
+vão para a ferramenta de correção (`tools/corrigir-codigo-do-produto`, rodada
+da máquina do Leonardo): o tamanho certo fora do cadastro, a recusa por
+reserva de pedido no tamanho errado e a recusa da prateleira que precisa de
+acerto (`BOX_RECOUNT_SHELF_SHORT`). As guardas da prateleira se concluem antes de
 contá-la, e as prateleiras com pedido em separação ficam para o fim, com a
 separação parada naquela rua, ou o pedido é entregue antes. Uma pessoa por
 rua, com a separação parada na rua em contagem, até a rodada ter o estado "em
@@ -948,7 +956,11 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    o "Caixas × saldo" ao lado. Conferido no emulador: a A-03 com três
    caixas, uma contada com −3 e outra com 2 peças fora da lista vindas do
    saldo sem caixa, recontada pela tela, e o "Caixas × saldo" passou de −2 a
-   zero nela. Ficam: a coleção da rodada (o motivo, o alcance, quem grava, o
+   zero nela. Desde o PR 627 (18/11/2026), a caixa confirmada com diferença
+   ganha "Imprimir etiqueta" na bancada (e, com duas ou mais, "Etiquetas para
+   trocar" no topo), até a impressão ser registrada; e "com diferença" passa
+   a ser pelos itens, e não pelo total (M −2 e GG +2 também mudam a caixa).
+   Ficam: a coleção da rodada (o motivo, o alcance, quem grava, o
    cartão "Rodada" e "Anteriores"), a fila de revisão do admin, "Cadastrar
    caixa" (a caixa física sem registro), a linha separada antes de contar e
    o estado "em contagem" da prateleira (decididos para o PR da coleção, na
@@ -1046,10 +1058,11 @@ acerto pelo "Caixas × saldo".
 *Decidido pelo Leonardo em 17/11/2026, nas respostas às perguntas do PR 625
 (a tela da contagem por caixa):* (1) a recontagem grava pela tela daqui em
 diante, e o plano do acerto fica só para o que a tela não aceita (a caixa sem
-registro, a peça em outra prateleira, o tamanho trocado; a peça achada noutra
-prateleira também entra pela bancada, como fora da lista, e a prateleira de
-onde ela faltou se acerta quando for contada, como decidido antes; o plano só
-é preciso quando aquela prateleira não vai ser recontada); (3) as guardas se
+registro e a peça em outra prateleira; a peça achada noutra prateleira também
+entra pela bancada, como fora da lista, e a prateleira de onde ela faltou se
+acerta quando for contada, como decidido antes; o plano só é preciso quando
+aquela prateleira não vai ser recontada; o tamanho trocado, que estava nesta
+lista, passou para a bancada em 18/11/2026, abaixo); (3) as guardas se
 concluem antes de contar a prateleira, e as prateleiras com pedido em
 separação ficam para o fim, com a separação parada naquela rua, ou o pedido é
 entregue antes, com as travas da tela como estão; (8) a tela do PR 625 fica
@@ -1064,6 +1077,19 @@ coleção da rodada, toda recontagem leva o `round_id` fixo da recontagem geral
 progresso não pode voltar a "por contar" na virada do dia e a caixa já
 recontada não pode ceder peça ao fora da lista de outro dia; a tela da rodada
 mostra o progresso da recontagem geral inteira.
+
+*Decidido pelo Leonardo em 18/11/2026 (o tamanho trocado), no lugar do plano
+do acerto combinado na resposta à pergunta 1:* a caixa com tamanho trocado se
+acerta pela bancada. O tamanho registrado recebe o que existe dele de fato
+(zero, se todas as peças são do outro tamanho), e o tamanho certo entra por
+"Item fora da lista". A prateleira é contada inteira, porque o fora da lista
+pode puxar por um momento de outra caixa ainda não contada, e a contagem dela
+acerta a diferença. Vão para a ferramenta de correção
+(`tools/corrigir-codigo-do-produto`), rodada da máquina do Leonardo, só três
+casos: o tamanho certo fora do cadastro (a bancada recusa com
+`BOX_RECOUNT_PRODUCT_NOT_FOUND`), a recusa por reserva de pedido no tamanho
+errado (`BOX_RECOUNT_BELOW_RESERVED`) e a recusa da prateleira que precisa de
+acerto (`BOX_RECOUNT_SHELF_SHORT`).
 
 ## 8. Como este levantamento foi feito
 

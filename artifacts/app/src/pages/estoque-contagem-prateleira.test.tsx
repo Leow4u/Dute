@@ -234,11 +234,13 @@ describe("a bancada da prateleira grava a caixa pela callable", () => {
     expect(JSON.stringify(enviado, (_chave, valor) => (valor === undefined ? "INDEFINIDO" : valor))).not.toMatch(/INDEFINIDO|null/);
 
     // A caixa sai confirmada na hora, com a origem da peça a mais; a próxima por contar abre, com o foco nela.
-    expect(container.textContent).toContain("confirmada 09:30 · 50 · sem diferença");
+    expect(container.textContent).toContain("confirmada 09:30 · 50 · com diferença");
     expect(container.textContent).toContain("+2 · fora da lista · entrada de 2 em A-03");
     expect(container.textContent).toContain("1 de 3 caixas");
     expect(document.activeElement?.id).toBe("contado-CX-000013-0");
-    expect(estado.toast.at(-1)).toMatchObject({ title: "CX-000012 confirmada", description: "Sem diferença." });
+    expect(estado.toast.at(-1)).toMatchObject({ title: "CX-000012 confirmada", description: "Com diferença nos itens." });
+    // A caixa mudou: a etiqueta dela fica para trocar, e o botão já aparece na linha dela.
+    expect(container.querySelector('a[href="/estoque/etiquetas?caixas=CX-000012"]')?.textContent).toBe("Imprimir etiqueta");
   });
 
   it("\"Caixa vazia\" zera a lista e o confirmar diz que a caixa sai vazia; a recusa do servidor deixa a caixa aberta, com o motivo", async () => {

@@ -1,7 +1,7 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
 import { belongsToCustomer } from "@/lib/active-customer";
-import type { WarehouseBox } from "@/lib/warehouse-boxes";
+import { boxNeedsRelabel, type WarehouseBox } from "@/lib/warehouse-boxes";
 
 import type { LinhaDeEntrada } from "./caixas-da-separacao";
 import {
@@ -404,6 +404,12 @@ export type CaixaDaBancada = {
   recontagem: Recontagem | null;
   /** A última recontagem gravada na caixa, de qualquer rodada: a tela confere se outra pessoa contou no meio. */
   ultimaRecontagem: string | null;
+  /**
+   * A caixa aberta cuja etiqueta não é a do saldo de agora (`boxNeedsRelabel`,
+   * "Etiquetas para trocar"): a recontagem com diferença deixa a caixa assim
+   * até a etiqueta nova ser impressa e registrada.
+   */
+  etiquetaParaTrocar: boolean;
 };
 
 export type BancadaDaPrateleira = {
@@ -500,6 +506,7 @@ export function bancadaDaPrateleira(dados: DadosDaBancada): BancadaDaPrateleira 
       esperado: itens.reduce((soma, item) => soma + item.esperado, 0),
       recontagem,
       ultimaRecontagem: registro?.last_recount_id ?? null,
+      etiquetaParaTrocar: !caixa.aCaminho && Boolean(registro && boxNeedsRelabel(registro)),
     };
   });
   for (const caixa of vazias) {
@@ -511,6 +518,8 @@ export function bancadaDaPrateleira(dados: DadosDaBancada): BancadaDaPrateleira 
       esperado: 0,
       recontagem: daRodada.get(caixa.code) ?? null,
       ultimaRecontagem: caixa.last_recount_id ?? null,
+      // A caixa vazia sai da prateleira: não leva etiqueta.
+      etiquetaParaTrocar: false,
     });
   }
   caixas.sort((esquerda, direita) => esquerda.code.localeCompare(direita.code, "pt-BR", { numeric: true }));
@@ -556,7 +565,10 @@ export function comRecontagensLocais(bancada: BancadaDaPrateleira | null, locais
   const caixas = bancada.caixas.map((caixa): CaixaDaBancada => {
     const local = pendentes.get(caixa.code);
     if (!local || caixa.estado === "a_caminho") return caixa;
-    return local.vazia ? { ...caixa, estado: "vazia", itens: [], esperado: 0, recontagem: local, ultimaRecontagem: local.id } : { ...caixa, estado: "confirmada", recontagem: local, ultimaRecontagem: local.id };
+    // A recontagem com diferença muda o saldo da caixa (o servidor grava o `balance_at`): a etiqueta fica para trocar.
+    return local.vazia
+      ? { ...caixa, estado: "vazia", itens: [], esperado: 0, recontagem: local, ultimaRecontagem: local.id, etiquetaParaTrocar: false }
+      : { ...caixa, estado: "confirmada", recontagem: local, ultimaRecontagem: local.id, etiquetaParaTrocar: caixa.etiquetaParaTrocar || temDiferenca(local) };
   });
   return { ...bancada, caixas, ...totaisDasCaixas(caixas) };
 }
@@ -569,6 +581,20 @@ export function proximaPorContar(bancada: Pick<BancadaDaPrateleira, "caixas">, d
 }
 
 /** Os pedidos separados esperando a entrega nos itens da caixa: o servidor recusa recontá-la até a entrega. */
+/**
+ * A caixa confirmada com diferença cuja etiqueta ainda não foi trocada: ganha
+ * "Imprimir etiqueta" (decisão do Leonardo em 18/11/2026). A confirmada sem
+ * diferença e a esvaziada não.
+ */
+export function pedeEtiquetaNova(caixa: Pick<CaixaDaBancada, "estado" | "recontagem" | "etiquetaParaTrocar">): boolean {
+  return caixa.estado === "confirmada" && Boolean(caixa.recontagem && temDiferenca(caixa.recontagem)) && caixa.etiquetaParaTrocar;
+}
+
+/** As caixas da prateleira que pedem etiqueta nova, por código: "Etiquetas para trocar" no topo da bancada. */
+export function caixasComEtiquetaNova(bancada: Pick<BancadaDaPrateleira, "caixas">): string[] {
+  return bancada.caixas.filter(pedeEtiquetaNova).map((caixa) => caixa.code);
+}
+
 export function separadosDaCaixa(caixa: Pick<CaixaDaBancada, "itens">): string[] {
   return [...new Set(caixa.itens.flatMap((item) => item.separados))];
 }
@@ -617,13 +643,23 @@ export function textoDaCaixaFechada(caixa: CaixaDaBancada): string {
 }
 
 /**
- * "confirmada 09:11 · 55 · −5", "confirmada 09:02 · 60 · sem diferença" ou,
- * na caixa esvaziada, "confirmada 09:15 · vazia · −60"; em outro dia que não
- * o de `agora`, com o dia: "confirmada 17/11 09:11 · 55 · −5".
+ * A recontagem mudou algum item da caixa: a diferença de um item, mesmo que
+ * outro a compense no total (M −2 e GG +2 somam zero, e a etiqueta da caixa
+ * fica velha do mesmo jeito).
  */
-export function seloDaRecontagem(recontagem: Pick<Recontagem, "quando" | "contado" | "diferenca" | "vazia">, agora: Date): string {
+export function temDiferenca(recontagem: Pick<Recontagem, "diferenca" | "itens">): boolean {
+  return recontagem.diferenca !== 0 || recontagem.itens.some((item) => item.diferenca !== 0);
+}
+
+/**
+ * "confirmada 09:11 · 55 · −5", "confirmada 09:02 · 60 · sem diferença" ou,
+ * na caixa esvaziada, "confirmada 09:15 · vazia · −60"; com itens trocados
+ * que somam zero, "com diferença"; em outro dia que não o de `agora`, com o
+ * dia: "confirmada 17/11 09:11 · 55 · −5".
+ */
+export function seloDaRecontagem(recontagem: Pick<Recontagem, "quando" | "contado" | "diferenca" | "vazia" | "itens">, agora: Date): string {
   const quanto = recontagem.vazia ? "vazia" : numero.format(recontagem.contado);
-  const diferenca = recontagem.diferenca === 0 ? "sem diferença" : textoDaDiferenca(recontagem.diferenca);
+  const diferenca = !temDiferenca(recontagem) ? "sem diferença" : recontagem.diferenca === 0 ? "com diferença" : textoDaDiferenca(recontagem.diferenca);
   return `confirmada ${quandoEmTexto(recontagem.quando, agora)} · ${quanto} · ${diferenca}`;
 }
 
@@ -906,7 +942,7 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
       total,
       confirmadas: confirmadas.length,
       ultima: ultima ? { quando: ultima.quando, quem: ultima.quem } : null,
-      comDiferenca: confirmadas.filter((recontagem) => recontagem.diferenca !== 0).length,
+      comDiferenca: confirmadas.filter(temDiferenca).length,
       diferenca: confirmadas.reduce((soma, recontagem) => soma + recontagem.diferenca, 0),
       vazias: vazias.length,
       contadaEm: estado === "contada_antes" ? dataCurta(antes) : null,

@@ -10,6 +10,7 @@ import {
   bancadaDaPrateleira,
   bloqueioDaPrateleira,
   buscarProdutos,
+  caixasComEtiquetaNova,
   comRecontagensLocais,
   contagemCompleta,
   contagemDaCaixaVazia,
@@ -18,6 +19,7 @@ import {
   hrefDaPrateleira,
   itensComDiferenca,
   linhaRecontada,
+  pedeEtiquetaNova,
   posicaoDaBusca,
   problemaDaQuantidade,
   produtosDoCliente,
@@ -174,6 +176,33 @@ describe("a bancada da prateleira", () => {
     expect(bancadaDaPrateleira(dados({ recontagens: RECONTAGEM_DA_011.map((item) => ({ ...item, posicao: "A-04" })) }))!.confirmadas).toBe(0);
   });
 
+  it("a caixa confirmada com diferença pede etiqueta nova até a impressão ser registrada; a sem diferença, não", () => {
+    const recontada = (extra: Record<string, unknown>) =>
+      bancadaDaPrateleira(
+        dados({
+          caixas: CAIXAS.map((item) =>
+            item.code === "CX-000011"
+              ? caixa("CX-000011", "A-03", { ...item, origin: { kind: "receipt", receipt_id: "rcv_1" }, lines: [{ ...M, counted_qty: 60 }], count_adjustments: [{ recount_id: "brc_011", sku_code: M.sku_code, qty: -5 }], ...extra })
+              : item,
+          ),
+          recontagens: RECONTAGEM_DA_011,
+        }),
+      )!;
+    const paraTrocar = recontada({ balance_at: "2026-11-17T12:11:00.000Z" });
+    const cx11 = paraTrocar.caixas.find((item) => item.code === "CX-000011")!;
+    expect(cx11.etiquetaParaTrocar).toBe(true);
+    expect(pedeEtiquetaNova(cx11)).toBe(true);
+    expect(caixasComEtiquetaNova(paraTrocar)).toEqual(["CX-000011"]);
+    // Impressa e registrada: o `balance_label_printed_for` é o `balance_at` de agora.
+    const impressa = recontada({ balance_at: "2026-11-17T12:11:00.000Z", balance_label_printed_for: "2026-11-17T12:11:00.000Z" });
+    expect(caixasComEtiquetaNova(impressa)).toEqual([]);
+    // Confirmada sem diferença, mesmo com a etiqueta para trocar (a separação abriu a caixa antes): nada muda.
+    const semDiferenca = { ...RECONTAGEM_DA_011[0], diferenca: 0, itens: RECONTAGEM_DA_011[0].itens.map((item) => ({ ...item, contado: item.esperado, diferenca: 0 })) };
+    expect(pedeEtiquetaNova({ estado: "confirmada", recontagem: semDiferenca, etiquetaParaTrocar: true })).toBe(false);
+    // A esvaziada não leva etiqueta.
+    expect(pedeEtiquetaNova({ estado: "vazia", recontagem: RECONTAGEM_DA_011[0], etiquetaParaTrocar: true })).toBe(false);
+  });
+
   it("a caixa a caminho fica fora do progresso e impede a prateleira; a guarda aberta também", () => {
     const comACaminho = bancadaDaPrateleira(dados({ caixas: [...CAIXAS, caixa("CX-000099", "A-03", { status: "committing", unit_count: 4 })] }))!;
     expect(comACaminho.caixas.find((item) => item.code === "CX-000099")?.estado).toBe("a_caminho");
@@ -278,7 +307,8 @@ describe("a recontagem gravada e a resposta", () => {
       ["Polo Masculino Piquet Preto · GG", true],
     ]);
     expect(itensComDiferenca(recontagens[0]).map((item) => item.texto)).toEqual(["−2", "+2 · fora da lista · 1 do saldo sem caixa · 1 de CX-000014"]);
-    expect(seloDaRecontagem(recontagens[0], AGORA)).toBe("confirmada 09:11 · 50 · sem diferença");
+    // M −2 e GG +2 somam zero, mas a caixa mudou: "com diferença", nunca "sem diferença".
+    expect(seloDaRecontagem(recontagens[0], AGORA)).toBe("confirmada 09:11 · 50 · com diferença");
   });
 
   it("as três origens da peça a mais", () => {
@@ -308,7 +338,7 @@ describe("a recontagem gravada e a resposta", () => {
 
     const bancada = bancadaDaPrateleira(dados())!;
     const comLocal = comRecontagensLocais(bancada, [recontagem], new Set())!;
-    expect(comLocal.caixas[2]).toMatchObject({ code: "CX-000012", estado: "confirmada", ultimaRecontagem: "brc_012" });
+    expect(comLocal.caixas[2]).toMatchObject({ code: "CX-000012", estado: "confirmada", ultimaRecontagem: "brc_012", etiquetaParaTrocar: true });
     expect(comLocal).toMatchObject({ confirmadas: 1, esperadasConfirmadas: 50, contadasConfirmadas: 50 });
     // Quando a leitura ao vivo traz a mesma recontagem, a local sai.
     expect(comRecontagensLocais(bancada, [recontagem], new Set(["brc_012"]))).toBe(bancada);
