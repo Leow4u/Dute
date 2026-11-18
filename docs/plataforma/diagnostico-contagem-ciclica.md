@@ -948,7 +948,11 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    o "Caixas × saldo" ao lado. Conferido no emulador: a A-03 com três
    caixas, uma contada com −3 e outra com 2 peças fora da lista vindas do
    saldo sem caixa, recontada pela tela, e o "Caixas × saldo" passou de −2 a
-   zero nela. Ficam: a coleção da rodada (o motivo, o alcance, quem grava, o
+   zero nela. Desde o PR 627 (18/11/2026), a caixa confirmada com diferença
+   ganha "Imprimir etiqueta" na bancada (e, com duas ou mais, "Etiquetas para
+   trocar" no topo), até a impressão ser registrada; e "com diferença" passa
+   a ser pelos itens, e não pelo total (M −2 e GG +2 também mudam a caixa).
+   Ficam: a coleção da rodada (o motivo, o alcance, quem grava, o
    cartão "Rodada" e "Anteriores"), a fila de revisão do admin, "Cadastrar
    caixa" (a caixa física sem registro), a linha separada antes de contar e
    o estado "em contagem" da prateleira (decididos para o PR da coleção, na
