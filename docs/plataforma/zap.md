@@ -23,10 +23,13 @@ A ingestão responde rápido, não chama a Meta e não fica no caminho da entreg
 ao agente. O relay entrega primeiro e só então registra aqui, com timeout
 curto. Se este POST falhar, a mensagem no WhatsApp já foi para o agente.
 
-O segredo **não está no repositório**. A lista `ZAP_PROJETOS_COM_SEGREDO`
-(`functions/zap/src/domain/liberacao.ts`) nasce vazia: a function publica sem
-segredo e a ingestão responde `503` com `sem_segredo`. Incluir o projeto na
-lista antes de o segredo existir derruba o `firebase deploy`.
+O segredo **não está no repositório**. `ZAP_PROJETOS_COM_SEGREDO`
+(`functions/zap/src/domain/liberacao.ts`) inclui o `dute-homolog`: a
+publicação de lá declara `ZAP_INGEST_SECRET` e a ingestão passa a exigir o
+cabeçalho. O `dute-prod` fica de fora até o segredo existir na produção e um
+PR o incluir. Incluir um projeto antes de o segredo existir derruba o
+`firebase deploy`. Sem o segredo declarado, a ingestão responde `503` com
+`sem_segredo`.
 
 ## Contrato da ingestão
 
@@ -170,14 +173,24 @@ A zeragem do WMS não apaga estas coleções (`docs/novo-go-live-zeragem-total.m
 ## Ligar o piloto do Jamil
 
 Nesta ordem. O segredo é criado por quem tem Owner; o valor não entra no git.
+Não rode de novo o `secrets:set` da homologação: o segredo já está na versão 1,
+e o comando criaria outra versão.
 
-1. Esperar este PR na `main`. A homologação publica a function e, porque o
-   commit mexe no painel, o Cloud Run `dute-zap`. A ingestão responde 503.
-2. No Firebase Auth do projeto, em Authentication → Settings → Authorized
-   domains, incluir o host `run.app` do `dute-zap` (o URL que o job imprime).
-   Sem isso o login diz que o endereço não está autorizado.
-3. Criar o segredo e dar à conta do CI a administração só dele, como em
-   `docs/deploy-functions-manual.md` ("Function com segredo"):
+1. Feito no PR #632, na `main`. A homologação publicou a function (ainda sem
+   segredo, ingestão em 503) e o Cloud Run `dute-zap`. O job conferiu
+   `https://dute-zap-u2iwz5xjyq-rj.a.run.app`. O deploy também imprimiu
+   `https://dute-zap-368642218894.southamerica-east1.run.app`.
+2. No Firebase Auth do `dute-homolog`, em Authentication → Settings →
+   Authorized domains, incluir os dois hosts `run.app` acima. Sem isso o
+   login diz que o endereço não está autorizado.
+3. O `ZAP_INGEST_SECRET` está no Secret Manager do `dute-homolog`, versão 1.
+   A conta `github-actions-functions@dute-homolog` precisa de
+   `roles/secretmanager.admin` só nesse segredo
+   (`docs/deploy-functions-manual.md`, "Function com segredo"). Quem confirma
+   o papel é a publicação das functions deste PR: o `firebase deploy` confere
+   a versão, dá `secretAccessor` à conta de runtime e falha se a conta do CI
+   não administra o segredo. A produção não declara o segredo, então o job
+   dela não prova esse acesso.
 
 ```powershell
 cd C:\DEV\Dute
@@ -186,14 +199,13 @@ firebase functions:secrets:set ZAP_INGEST_SECRET --project $p
 gcloud secrets add-iam-policy-binding ZAP_INGEST_SECRET --project $p --member="serviceAccount:github-actions-functions@$p.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
 ```
 
-4. Um PR seguinte põe `"dute-homolog"` em `ZAP_PROJETOS_COM_SEGREDO` e ajusta o
-   teste que trava a lista vazia. Só então o deploy passa o segredo para a
-   function.
+4. Este PR põe `"dute-homolog"` em `ZAP_PROJETOS_COM_SEGREDO`. O teste trava a
+   lista: homologação declara `ZAP_INGEST_SECRET`; produção e `dute-btg` não.
 5. O relay, depois de rotear pelo `phone_number_id`, faz o POST do webhook em
    paralelo, com timeout de uns 2 segundos, e não deixa este POST atrasar o
    `200` para a Meta. O wrapper do Jamil faz o POST de saída com o id que a
    Graph API devolveu. Os dois usam o mesmo cabeçalho. Repetir é seguro.
-6. Entrar no `run.app` do `dute-zap` com um owner ou admin. A linha do Jamil
+6. Entrar num dos hosts do passo 1 com um owner ou admin. A linha do Jamil
    está marcada como piloto.
 
 Produção é o mesmo roteiro no `dute-prod`, no disparo manual do CI

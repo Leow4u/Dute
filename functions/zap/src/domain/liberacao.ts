@@ -4,9 +4,9 @@
  * "A operação primeiro"): a produção não apaga até o Leonardo pedir.
  *
  * O segredo da ingestão só entra no deploy quando o projeto está na lista.
- * A lista nasce vazia: a function publica sem o segredo e a ingestão responde
- * 503 até o segredo existir no Secret Manager e um PR incluir o projeto.
- * Declarar o segredo antes disso derruba a publicação (docs/deploy-functions-manual.md).
+ * O dute-homolog entra depois de o segredo existir lá. O dute-prod fica de
+ * fora até o segredo existir na produção e um PR o incluir. Declarar o
+ * segredo antes disso derruba a publicação (docs/deploy-functions-manual.md).
  */
 
 import { HttpsError } from "firebase-functions/https";
@@ -17,7 +17,7 @@ export const ZAP_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export const RETENCAO_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
 
-export const ZAP_PROJETOS_COM_SEGREDO: readonly string[] = [];
+export const ZAP_PROJETOS_COM_SEGREDO: readonly string[] = ["dute-homolog"];
 
 export function zapLiberado(projectId: string | null | undefined): boolean {
   return (ZAP_AMBIENTES_LIBERADOS as readonly string[]).includes(String(projectId ?? "").trim());
