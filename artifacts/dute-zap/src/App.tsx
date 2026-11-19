@@ -38,7 +38,7 @@ export function App() {
         <section className="cartao">
           <h1>Painel do Zap</h1>
           <p>Este painel é só da administração.</p>
-          <button type="button" onClick={() => firebaseAuth && void signOut(firebaseAuth)}>Sair</button>
+          <button className="primario" type="button" onClick={() => firebaseAuth && void signOut(firebaseAuth)}>Sair</button>
         </section>
       </main>
     );

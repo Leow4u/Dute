@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatarHorario, formatarTelefone, nomeDoContato, rotuloDoStatus, rotuloDoTipo } from "./formatar";
+import { contagemNaoLida, formatarHorario, formatarTelefone, horaDaLista, iniciais, mascararTelefone, nomeDoContato, rotuloDoDia, rotuloDoStatus, rotuloDoTipo } from "./formatar";
 import { podeVerZap } from "./papel";
 import { LINHA_PILOTO } from "./linhas";
 import { escreverRota, lerRota } from "./rota";
@@ -28,6 +28,14 @@ describe("textos da conversa", () => {
     expect(rotuloDoTipo("document")).toBe("Documento");
     expect(rotuloDoStatus("read")).toBe("Lida");
     expect(rotuloDoStatus(undefined)).toBeNull();
+    expect(mascararTelefone("5511987001001")).toBe("+55 11 9XXXX-1001");
+    expect(iniciais("Maria Souza")).toBe("MS");
+    expect(horaDaLista(new Date("2026-11-19T15:00:00.000Z"), new Date("2026-11-19T18:00:00.000Z"))).toContain("12:00");
+    expect(horaDaLista(new Date("2026-11-18T15:00:00.000Z"), new Date("2026-11-19T18:00:00.000Z"))).toBe("Ontem");
+    expect(rotuloDoDia(new Date("2026-11-19T15:00:00.000Z"), new Date("2026-11-19T18:00:00.000Z"))).toBe("Hoje");
+    expect(contagemNaoLida("in", 20, 10)).toBe(1);
+    expect(contagemNaoLida("out", 20, 10)).toBe(0);
+    expect(contagemNaoLida("in", 20, 10, [{ direction: "in", em: 15 }, { direction: "out", em: 18 }, { direction: "in", em: 5 }])).toBe(1);
   });
 });
 

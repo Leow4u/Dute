@@ -61,7 +61,7 @@ export function Entrar() {
         <label htmlFor="senha">Senha</label>
         <input id="senha" name="senha" type="password" autoComplete="current-password" value={estado.senha} onChange={(evento) => setEstado((atual) => ({ ...atual, senha: evento.target.value }))} required />
         {estado.erro ? <p className="aviso" role="alert">{estado.erro}</p> : null}
-        <button type="submit" disabled={estado.enviando} aria-busy={estado.enviando}>{estado.enviando ? "Entrando…" : "Entrar"}</button>
+        <button className="primario" type="submit" disabled={estado.enviando} aria-busy={estado.enviando}>{estado.enviando ? "Entrando…" : "Entrar"}</button>
         <button type="button" className="secundario" onClick={() => void recuperar()}>Esqueci a senha</button>
       </form>
     </main>
