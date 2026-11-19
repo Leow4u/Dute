@@ -235,6 +235,43 @@ describe("a bancada da prateleira", () => {
     expect(bancada).toMatchObject({ total: 4, confirmadas: 1 });
   });
 
+  // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
+  // (decisão de 17/11/2026). A recontagem dela vai com a lista vazia e não grava linha em cycle_counts (não há item): o
+  // registro fica na própria caixa (box-recount.ts). Antes, ela aparecia vazia e sem recontagem, fora das confirmadas,
+  // e a prateleira não tinha como fechar (a A-01 e a A-02 da recontagem geral de 17/11, na produção).
+  it("a caixa que cedeu a última peça e foi contada vazia nesta rodada sai confirmada, sem diferença, mesmo sem linha", () => {
+    const contadaVazia = caixa("CX-000013", "A-03", {
+      status: "emptied",
+      last_recount_id: "brc_013",
+      last_recounted_at: "2026-11-17T12:15:00.000Z",
+      last_recounted_by: { uid: "u2", role: "wms", name: "Rafael" },
+      last_recount_round_id: RODADA,
+      emptied_recount_id: "brc_013",
+    });
+    const bancada = bancadaDaPrateleira(dados({ caixas: [...CAIXAS, contadaVazia], recontagens: RECONTAGEM_DA_011 }))!;
+    const cx13 = bancada.caixas.find((item) => item.code === "CX-000013")!;
+    expect(cx13).toMatchObject({ estado: "vazia", itens: [], esperado: 0 });
+    expect(cx13.recontagem).toMatchObject({ id: "brc_013", caixa: "CX-000013", posicao: "A-03", quem: "Rafael", esperado: 0, contado: 0, diferenca: 0, vazia: true, itens: [] });
+    expect(seloDaRecontagem(cx13.recontagem!, AGORA)).toBe("confirmada 09:15 · vazia · sem diferença");
+    expect(bancada).toMatchObject({ total: 4, confirmadas: 2, esperadasConfirmadas: 60, contadasConfirmadas: 55, diferencaConfirmadas: -5 });
+  });
+
+  it("a caixa que o desfazer da separação devolveu à prateleira depois de contada vazia volta a ser por contar", () => {
+    // Guardada de novo com o que a separação devolveu: a recontagem vazia ficou para trás.
+    const devolvida = caixa("CX-000013", "A-03", {
+      unit_count: 4,
+      origin: { kind: "receipt", receipt_id: "rcv_2" },
+      lines: [{ ...GG, counted_qty: 4 }],
+      last_recount_id: "brc_013",
+      last_recounted_at: "2026-11-17T12:15:00.000Z",
+      last_recounted_by: { uid: "u2", name: "Rafael" },
+      last_recount_round_id: RODADA,
+    });
+    const bancada = bancadaDaPrateleira(dados({ caixas: [...CAIXAS, devolvida] }))!;
+    expect(bancada.caixas.find((item) => item.code === "CX-000013")).toMatchObject({ estado: "por_contar", esperado: 4, recontagem: null });
+    expect(bancada).toMatchObject({ total: 4, confirmadas: 0 });
+  });
+
   it("sem o cliente, ou sem nada do cliente na prateleira, não há bancada", () => {
     expect(bancadaDaPrateleira(dados({ cliente: "" }))).toBeNull();
     expect(bancadaDaPrateleira(dados({ posicao: "Z-99" }))).toBeNull();
@@ -479,6 +516,33 @@ describe("a rodada por prateleira", () => {
     expect(seloDaPrateleira(rodada.ruas[0].prateleiras[0], DIA_SEGUINTE)).toBe("contada 17/11 08:42 · 1 diferença · −3 un.");
     expect(textoDoComeco(rodada.comeco!, DIA_SEGUINTE)).toBe("começou 17/11 08:40 · Guilherme Dantas");
     expect(textoDoComeco(rodada.comeco!, AGORA)).toBe("começou 08:40 · Guilherme Dantas");
+  });
+
+  it("a prateleira com a caixa que cedeu a última peça, contada vazia sem linha, está contada: a caixa vazia saiu", () => {
+    // A A-03 com as três caixas confirmadas sem diferença e a CX-000013, que cedeu a última peça e foi contada vazia por
+    // último (o registro dela, sem linha em cycle_counts). Antes: "em contagem · Guilherme Dantas · 3 de 4 caixas".
+    const contadaVazia = caixa("CX-000013", "A-03", {
+      status: "emptied",
+      last_recount_id: "brc_013",
+      last_recounted_at: "2026-11-17T11:50:00.000Z",
+      last_recounted_by: { uid: "u2", name: "Rafael" },
+      last_recount_round_id: RODADA,
+      emptied_recount_id: "brc_013",
+    });
+    const rodada = rodadaDaContagem({
+      cliente: BTG,
+      prateleiras: PRATELEIRAS,
+      caixas: [...CAIXAS, contadaVazia, caixa("CX-000020", "A-04", { unit_count: 30 }), caixa("CX-000030", "B-09", { unit_count: 16 })],
+      recontagens: ["CX-000010", "CX-000011", "CX-000012"].map((code, indice) => recontada(code, "A-03", `2026-11-17T11:4${indice}:00.000Z`)),
+      guardas: [],
+      reservas: [],
+      rodada: RODADA_DA_RECONTAGEM_GERAL,
+      agora: AGORA,
+    });
+    const a03 = rodada.ruas[0].prateleiras[0];
+    expect(a03).toMatchObject({ posicao: "A-03", estado: "contada", total: 4, confirmadas: 4, vazias: 1, comDiferenca: 0, ultima: { quando: "2026-11-17T11:50:00.000Z", quem: "Rafael" } });
+    expect(seloDaPrateleira(a03, AGORA)).toBe("contada 08:50 · 1 caixa vazia saiu");
+    expect(rodada).toMatchObject({ prateleiras: 3, prateleirasContadas: 1, caixas: 6, caixasConfirmadas: 4, caixasComDiferenca: 0, diferenca: 0, continuar: "A-04" });
   });
 
   it("a recontagem de outra rodada não conta nesta", () => {

@@ -319,6 +319,29 @@ export function recontagemDaResposta(
   };
 }
 
+/**
+ * A recontagem da caixa contada vazia, pelo registro da caixa. A caixa sem
+ * nada na lista (o saldo zero em todos os itens: a que cede a última peça ao
+ * fora da lista de outra fica guardada assim até alguém contá-la vazia,
+ * decisão de 17/11/2026) se reconta com a lista vazia, e o servidor não grava
+ * linha em `cycle_counts`, porque não há item: o registro fica na caixa,
+ * esvaziada com o id, quando e quem da recontagem (functions/wms,
+ * box-recount.ts). Na rodada, ela vale a recontagem vazia, sem diferença. Só
+ * a caixa que a rodada esvaziou e cuja última recontagem não tem linha em
+ * `lidas`; a guardada de novo (o desfazer da separação a devolve) espera
+ * outra contagem. A mesma regra do fechamento (count-rounds.ts,
+ * linhasDasCaixasContadasVazias).
+ */
+export function recontagensDasCaixasContadasVazias(caixas: readonly WarehouseBox[], lidas: readonly Recontagem[], rodada: string): Recontagem[] {
+  const comLinha = new Set(lidas.map((recontagem) => recontagem.id));
+  return caixas.flatMap((caixa): Recontagem[] => {
+    const id = texto(caixa.last_recount_id);
+    const quando = texto(caixa.last_recounted_at);
+    if (!esvaziadaNaRodada(caixa, rodada) || !id || !quando || comLinha.has(id)) return [];
+    return [{ id, caixa: chave(caixa.code), posicao: chave(caixa.location_id), rodada, quando, quem: texto(caixa.last_recounted_by) || "—", esperado: 0, contado: 0, diferenca: 0, vazia: true, itens: [] }];
+  });
+}
+
 /** A última recontagem de cada caixa. */
 export function ultimaDeCadaCaixa(recontagens: readonly Recontagem[]): Map<string, Recontagem> {
   const ultima = new Map<string, Recontagem>();
@@ -507,7 +530,9 @@ export function bancadaDaPrateleira(dados: DadosDaBancada): BancadaDaPrateleira 
   if (!prateleira && !vazias.length) return null;
 
   const pedidos = pedidosDaPrateleira(dados.reservas, alvo);
-  const daRodada = ultimaDeCadaCaixa(dados.recontagens.filter((recontagem) => recontagem.posicao === alvo));
+  // A caixa contada vazia não tem linha: a recontagem dela vem do registro da caixa.
+  const recontagens = [...dados.recontagens, ...recontagensDasCaixasContadasVazias(daPrateleira, dados.recontagens, dados.rodada)];
+  const daRodada = ultimaDeCadaCaixa(recontagens.filter((recontagem) => recontagem.posicao === alvo));
   const porCodigo = new Map(daPrateleira.map((caixa) => [caixa.code, caixa]));
 
   const caixas: CaixaDaBancada[] = (prateleira?.caixas ?? []).map((caixa) => {
@@ -937,7 +962,9 @@ function separacaoDaPrateleira(reservas: readonly ReservaLida[], posicao: string
 export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   const dono = texto(dados.cliente);
   const doCliente = dados.caixas.filter((caixa) => Boolean(dono) && belongsToCustomer(caixa, dono));
-  const recontagens = dados.recontagens.filter((recontagem) => recontagem.rodada === dados.rodada.id);
+  const lidas = dados.recontagens.filter((recontagem) => recontagem.rodada === dados.rodada.id);
+  // A caixa contada vazia não tem linha: a recontagem dela vem do registro da caixa.
+  const recontagens = [...lidas, ...recontagensDasCaixasContadasVazias(doCliente, lidas, dados.rodada.id)];
   const ultimas = ultimaDeCadaCaixa(recontagens);
   const vaziasPorLocal = new Map<string, WarehouseBox[]>();
   for (const caixa of doCliente) {

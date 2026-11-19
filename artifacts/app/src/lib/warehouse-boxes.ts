@@ -101,10 +101,13 @@ export type WarehouseBox = {
   emptied_volume_number?: number | null;
   /**
    * A última recontagem da caixa (`recountWarehouseBox`, contagem por caixa):
-   * o id, quando e a rodada; null na caixa nunca recontada.
+   * o id, quando, quem (o nome, ou o e-mail) e a rodada; null na caixa nunca
+   * recontada. A caixa contada vazia com a lista vazia só tem este registro:
+   * a recontagem dela não grava linha em `cycle_counts`.
    */
   last_recount_id?: string | null;
   last_recounted_at?: string | null;
+  last_recounted_by?: string | null;
   last_recount_round_id?: string | null;
   /**
    * O último mover da caixa (`moveWarehouseBox`, Mover caixa, 19/11/2026):
@@ -182,6 +185,13 @@ function nullableNumber(value: unknown) {
 
 function text(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+/** Quem gravou, como a caixa guarda (`{ uid, name, email }`): o nome, ou o e-mail; null sem nenhum. */
+function quemGravou(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const ator = value as AnyRecord;
+  return text(ator.name).trim() || text(ator.email).trim() || null;
 }
 
 /** "50" e "50,5" (centímetros) viram 0,5 e 0,505 (metros); vazio, zero ou lixo viram null. */
@@ -381,6 +391,7 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     emptied_volume_number: Number(record.emptied_volume_number) > 0 ? Number(record.emptied_volume_number) : null,
     last_recount_id: text(record.last_recount_id) || null,
     last_recounted_at: text(record.last_recounted_at) || null,
+    last_recounted_by: quemGravou(record.last_recounted_by),
     last_recount_round_id: text(record.last_recount_round_id) || null,
     moved_at: text(record.moved_at) || null,
     moved_from_location_id: text(record.moved_from_location_id).toUpperCase() || null,
