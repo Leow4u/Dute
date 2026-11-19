@@ -275,6 +275,39 @@ describe("Concluir a rodada", () => {
     assert.equal((await todos("operational_operations")).filter((recibo) => recibo.kind === "inventory.count_round.complete").length, 1);
   });
 
+  // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
+  // (decisão de 17/11/2026), como a da abertura que perdeu as linhas. Contada vazia, ela não grava linha em
+  // `cycle_counts` (não há item), e antes ficava fora das confirmadas: a prateleira nunca fechava (a A-01 e a A-02 da
+  // recontagem geral de 17/11, na produção, com caixas da abertura sem linhas).
+  it("a caixa que cedeu a última peça e foi contada vazia conta como confirmada no fechamento, sem diferença", async () => {
+    // A A-03 ganha a CX-000011 (recebimento, 5 bonés), guardada depois da CX-000010.
+    await Promise.all([
+      caixa("CX-000011", "A-03", "2026-11-06T15:00:00.000Z", 5, { kind: "receipt", receipt_id: "inb_2", invoice_number: "48.400" }, {
+        sku_codes: [BONE],
+        lines: [{ inbound_item_id: "ini_2", line_number: 1, sku_code: BONE, client_item_code: "C.0900.001.U", product_name: "Boné Preto", size: "U", counted_qty: 5 }],
+      }),
+      db.collection("stock_balances").doc(`bal_${BONE}_A-03`).set({ id: `bal_${BONE}_A-03`, customer_code: BTG, sku_code: BONE, client_item_code: "C.0900.001.U", product_name: "Boné Preto", size: "U", location_id: "A-03", qty_on_hand: 5, qty_reserved: 0, qty_available: 5, status: "available" }),
+    ]);
+    const aberta = await iniciar({ scope: "general" });
+    // Os 60 polos da CX-000010 estavam na CX-000011: o fora da lista os tira da CX-000010, que fica guardada sem nada.
+    await recontar({ box_code: "CX-000011", location_id: "A-03", lines: [{ sku_code: BONE, counted_qty: 5 }], extra_lines: [{ sku_code: POLO_P, counted_qty: 60 }], round_id: aberta.round_id });
+    assert.equal((await db.collection("warehouse_boxes").doc("CX-000010").get()).get("status"), "stored");
+    // Contada vazia, com a lista vazia: a caixa sai da prateleira, e nenhuma linha nasce.
+    const vazia = (await recontar({ box_code: "CX-000010", location_id: "A-03", lines: [], round_id: aberta.round_id })) as Record<string, unknown>;
+    assert.deepEqual([vazia.status, vazia.difference_units, vazia.cycle_count_ids], ["emptied", 0, []]);
+    await recontar({ box_code: "CX-000014", location_id: "B-01", lines: [{ sku_code: POLO_P, counted_qty: 50 }], round_id: aberta.round_id }, rafael);
+    assert.equal((await todos("cycle_counts")).filter((linha) => linha.box_code === "CX-000010").length, 0);
+
+    const concluida = await concluir(aberta.round_id);
+    // As duas prateleiras contadas, com as três caixas confirmadas; a única diferença é a da CX-000011 (+60, as peças que
+    // vieram da CX-000010), e a CX-000010 entra sem diferença.
+    assert.deepEqual(
+      [concluida.shelves_total, concluida.shelves_counted, concluida.boxes_total, concluida.boxes_counted, concluida.boxes_with_difference, concluida.difference_units, concluida.recount_count],
+      [2, 2, 3, 3, 1, 60, 3],
+    );
+    assert.equal((await eventos(ROUND_CLOSED_EVENT_TYPE))[0]?.description, "2 prateleiras · 3 caixas · 1 com diferença · +60 un.");
+  });
+
   it("concluída, não conclui de novo; de outro cliente, permission-denied; inexistente, not-found", async () => {
     const aberta = await iniciar({ scope: "general" });
     await concluir(aberta.round_id);

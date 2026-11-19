@@ -135,8 +135,21 @@ export function ruaDaPosicao(locationId: string): string {
   return resto !== undefined && rua ? rua : "";
 }
 
-/** Uma caixa do cliente, no que a rodada confere: guardada, ou esvaziada por esta rodada. */
-export type CaixaDaRodada = { code: string; status: string; location_id: string; sku_codes: string[]; last_recount_round_id: string | null };
+/**
+ * Uma caixa do cliente, no que a rodada confere: guardada, ou esvaziada por
+ * esta rodada; e a última recontagem gravada nela (box-recount.ts: o id,
+ * quando e quem), o único registro da caixa contada vazia.
+ */
+export type CaixaDaRodada = {
+  code: string;
+  status: string;
+  location_id: string;
+  sku_codes: string[];
+  last_recount_round_id: string | null;
+  last_recount_id?: string | null;
+  last_recounted_at?: string | null;
+  last_recounted_by?: LinhaDaRodada["actor"] | null;
+};
 
 /** A caixa que conta na rodada: a guardada e a que a própria rodada esvaziou. */
 function contaNaRodada(caixa: CaixaDaRodada, roundId: string): boolean {
@@ -201,11 +214,46 @@ export type NumerosDaRodada = {
 type Recontagem = { id: string; box: string; location: string; at: string; deltas: number[] };
 
 /**
+ * A recontagem da caixa contada vazia, como uma linha da rodada. A caixa
+ * guardada sem nada na lista (o saldo zero em todos os itens: a que cede a
+ * última peça ao fora da lista de outra, que fica guardada assim até alguém
+ * contá-la vazia, decisão de 17/11/2026, ou a da abertura que perdeu as
+ * linhas no "Remover para corrigir" ou no acerto) se reconta com a lista
+ * vazia, e a recontagem não grava linha em `cycle_counts`, porque não há
+ * item: o registro fica na caixa, esvaziada com o id, quando e quem da
+ * recontagem (box-recount.ts). Na rodada, ela vale uma linha sem diferença
+ * (esperado zero, contado zero). Só a caixa que a rodada esvaziou e cuja
+ * última recontagem não tem linha; a guardada de novo (o desfazer da
+ * separação a devolve) espera outra contagem. A mesma regra da tela
+ * (recontagem-por-caixa.ts, recontagensDasCaixasContadasVazias).
+ */
+export function linhasDasCaixasContadasVazias(caixas: readonly CaixaDaRodada[], linhas: readonly LinhaDaRodada[], roundId: string): LinhaDaRodada[] {
+  const comLinha = new Set(linhas.filter((linha) => linha.round_id === roundId).map((linha) => linha.box_recount_id));
+  return caixas.flatMap((caixa): LinhaDaRodada[] => {
+    const recontagem = text(caixa.last_recount_id);
+    const quando = text(caixa.last_recounted_at);
+    if (caixa.status !== "emptied" || !roundId || caixa.last_recount_round_id !== roundId || !recontagem || !quando || comLinha.has(recontagem)) return [];
+    return [
+      clean({
+        box_recount_id: recontagem,
+        box_code: chave(caixa.code),
+        location_id: chave(caixa.location_id),
+        occurred_at: quando,
+        adjustment_delta: 0,
+        round_id: roundId,
+        actor: caixa.last_recounted_by ?? undefined,
+      }),
+    ];
+  });
+}
+
+/**
  * Os números do fechamento, a mesma conta da tela (recontagem-por-caixa.ts,
- * rodadaDaContagem): a última recontagem de cada caixa vale; a prateleira
- * está contada com todas as caixas confirmadas; a caixa tem diferença pelos
- * itens (M −2 e GG +2 somam zero e mudam a caixa). `primeira` é a linha mais
- * antiga da rodada: o começo da recontagem geral sem documento.
+ * rodadaDaContagem): a última recontagem de cada caixa vale (a da caixa
+ * contada vazia, sem linha, sai do registro dela); a prateleira está contada
+ * com todas as caixas confirmadas; a caixa tem diferença pelos itens (M −2 e
+ * GG +2 somam zero e mudam a caixa). `primeira` é a recontagem mais antiga
+ * da rodada: o começo da recontagem geral sem documento.
  */
 export function numerosDaRodada(linhas: readonly LinhaDaRodada[], caixas: readonly CaixaDaRodada[], alcance: AlcanceDaRodada, roundId: string): NumerosDaRodada & { primeira: LinhaDaRodada | null } {
   const porLocal = new Map<string, CaixaDaRodada[]>();
@@ -218,7 +266,7 @@ export function numerosDaRodada(linhas: readonly LinhaDaRodada[], caixas: readon
 
   const recontagens = new Map<string, Recontagem>();
   let primeira: LinhaDaRodada | null = null;
-  for (const linha of linhas) {
+  for (const linha of [...linhas, ...linhasDasCaixasContadasVazias(caixas, linhas, roundId)]) {
     if (linha.round_id !== roundId) continue;
     if (!primeira || linha.occurred_at < primeira.occurred_at) primeira = linha;
     const atual = recontagens.get(linha.box_recount_id);
@@ -501,11 +549,16 @@ export function alcanceDoDocumento(data: Data): AlcanceDaRodada {
   return { scope: "general" };
 }
 
+/** Quem gravou (a linha de `cycle_counts` ou a última recontagem da caixa), sem campo vazio. */
+function atorLido(value: unknown): NonNullable<LinhaDaRodada["actor"]> {
+  const actor = value && typeof value === "object" ? (value as Data) : {};
+  return clean({ uid: text(actor.uid) || undefined, role: text(actor.role) || undefined, email: text(actor.email) || undefined, name: text(actor.name) || undefined });
+}
+
 /** Uma linha de `cycle_counts` como o fechamento a lê; null fora da recontagem por caixa. */
 function linhaDaRodada(data: Data): LinhaDaRodada | null {
   const recontagem = text(data.box_recount_id);
   if (!recontagem) return null;
-  const actor = data.actor && typeof data.actor === "object" ? (data.actor as Data) : {};
   return {
     box_recount_id: recontagem,
     box_code: text(data.box_code).toUpperCase(),
@@ -513,7 +566,7 @@ function linhaDaRodada(data: Data): LinhaDaRodada | null {
     occurred_at: text(data.occurred_at),
     adjustment_delta: Number(data.adjustment_delta ?? 0) || 0,
     round_id: text(data.round_id),
-    actor: clean({ uid: text(actor.uid) || undefined, role: text(actor.role) || undefined, email: text(actor.email) || undefined, name: text(actor.name) || undefined }),
+    actor: atorLido(data.actor),
   };
 }
 
@@ -525,6 +578,9 @@ export function caixaDaRodada(id: string, data: Data): CaixaDaRodada {
     location_id: text(data.location_id).toUpperCase(),
     sku_codes: Array.isArray(data.sku_codes) ? data.sku_codes.map((sku) => text(sku).toUpperCase()).filter(Boolean) : [],
     last_recount_round_id: text(data.last_recount_round_id) || null,
+    last_recount_id: text(data.last_recount_id) || null,
+    last_recounted_at: text(data.last_recounted_at) || null,
+    last_recounted_by: data.last_recounted_by && typeof data.last_recounted_by === "object" ? atorLido(data.last_recounted_by) : null,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   LEGACY_ROUND_ID,
   LEGACY_ROUND_TITLE,
   alcanceTemCaixa,
+  caixaDaRodada,
   conferirRodadaDaRecontagem,
   entradaDaConclusao,
   entradaDoInicio,
@@ -107,7 +108,7 @@ function linha(recontagem: string, box: string, location: string, at: string, sk
 }
 
 // CX-1 recontada duas vezes (−3 e depois +3 de volta: a última vale); CX-2 com M −2 e GG +2 (zero no total, mas com
-// diferença); CX-4 contada vazia sem diferença (a caixa que já tinha cedido a última peça); CX-3 sem recontagem.
+// diferença); CX-4 contada vazia nesta rodada, com a linha do item; CX-3 sem recontagem.
 const LINHAS = [
   linha("rec1", "CX-1", "A-03", "2026-11-19T11:00:00.000Z", P, -3),
   linha("rec2", "CX-1", "A-03", "2026-11-19T12:00:00.000Z", P, 3),
@@ -139,6 +140,54 @@ describe("os números do fechamento", () => {
     const outras = [...LINHAS, linha("rec5", "CX-3", "AB-01", "2026-11-19T14:00:00.000Z", P, -1, "outra"), linha("rec6", "CX-3", "A-04", "2026-11-19T15:00:00.000Z", P, -1)];
     const numeros = numerosDaRodada(outras, CAIXAS, { scope: "general" }, "r1");
     assert.deepEqual([numeros.boxes_counted, numeros.difference_units, numeros.recount_count], [3, 3, 5]);
+  });
+
+  // A caixa guardada sem nada na lista (a que cede a última peça ao fora da lista de outra, decisão de 17/11/2026, ou a
+  // da abertura que perdeu as linhas) se reconta com a lista vazia, e a recontagem não grava linha em `cycle_counts`
+  // (não há item): o registro fica na própria caixa (box-recount.ts). Antes, ela entrava no total da prateleira e nunca
+  // como confirmada: a A-01 e a A-02 da recontagem geral de 17/11 ficaram "em contagem" com todas as caixas contadas.
+  it("a caixa que a rodada esvaziou com a lista vazia, sem linha, conta como confirmada e sem diferença, pelo registro dela", () => {
+    const vazia = caixaDaRodada("CX-6", {
+      code: "CX-6",
+      status: "emptied",
+      location_id: "C-01",
+      sku_codes: [P],
+      last_recount_id: "rec6",
+      last_recounted_at: "2026-11-19T14:00:00.000Z",
+      last_recounted_by: { uid: "u2", role: "wms", name: "Rafael" },
+      last_recount_round_id: "r1",
+      emptied_recount_id: "rec6",
+    });
+    const linhas = [linha("rec7", "CX-7", "C-01", "2026-11-19T13:30:00.000Z", P, -1)];
+    assert.deepEqual(numerosDaRodada(linhas, [vazia, caixa("CX-7", "C-01", [P])], { scope: "general" }, "r1"), {
+      shelves_total: 1,
+      shelves_counted: 1,
+      boxes_total: 2,
+      boxes_counted: 2,
+      boxes_with_difference: 1,
+      difference_units: -1,
+      recount_count: 2,
+      primeira: linhas[0],
+    });
+  });
+
+  it("o registro da caixa não conta duas vezes nem confirma o que não foi contado vazio nesta rodada", () => {
+    const registro = (code: string, status: string, rodada: string, extra: Record<string, unknown> = {}) =>
+      caixaDaRodada(code, { code, status, location_id: "C-01", sku_codes: [P], last_recount_id: `rec-${code}`, last_recounted_at: "2026-11-19T14:00:00.000Z", last_recount_round_id: rodada, ...extra });
+    // Esvaziada pela recontagem com a linha do item: a linha já diz tudo, e a recontagem conta uma vez.
+    const comLinha = registro("CX-8", "emptied", "r1", { emptied_recount_id: "rec-CX-8" });
+    // Esvaziada pela separação depois da recontagem desta rodada: vale a linha daquela recontagem, com a diferença dela.
+    const separada = registro("CX-9", "emptied", "r1");
+    // A que o desfazer da separação devolveu à prateleira depois de a recontagem a dar por vazia: guardada, por contar.
+    const devolvida = registro("CX-10", "stored", "r1");
+    // A que outra rodada esvaziou não é desta.
+    const deOutra = registro("CX-11", "emptied", "outra", { emptied_recount_id: "rec-CX-11" });
+    const linhas = [linha("rec-CX-8", "CX-8", "C-01", "2026-11-19T14:00:00.000Z", P, -2), linha("rec-CX-9", "CX-9", "C-01", "2026-11-19T13:00:00.000Z", P, -1)];
+    const numeros = numerosDaRodada(linhas, [comLinha, separada, devolvida, deOutra], { scope: "general" }, "r1");
+    assert.deepEqual(
+      [numeros.shelves_total, numeros.shelves_counted, numeros.boxes_total, numeros.boxes_counted, numeros.boxes_with_difference, numeros.difference_units, numeros.recount_count],
+      [1, 0, 3, 2, 2, -3, 2],
+    );
   });
 
   it("sem recontagem: zeros e a primeira null", () => {
