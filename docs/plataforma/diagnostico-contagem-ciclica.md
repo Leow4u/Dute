@@ -996,9 +996,69 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    cíclica saiu da Contagem, como decidido em 17/11/2026. Fotos aprovadas em
    `docs/mockups/contagem-entrada/`; desenho em
    `docs/superpowers/specs/2026-11-18-abertura-concluida-na-contagem-design.md`.
-   Ficam para a coleção da rodada: "Iniciar contagem" (geral, por rua ou por
-   item), o fim da contagem e as anteriores além da abertura (a segunda
-   foto).
+   "Iniciar contagem", o fim da contagem e as anteriores além da abertura (a
+   segunda foto) entraram com o registro da rodada, abaixo.
+
+   *O registro da rodada no código desde 19/11/2026 (PR 631; desenho em
+   `docs/superpowers/specs/2026-11-18-registro-da-rodada-design.md`, as
+   decisões na seção 7):* a rodada é um documento de `count_rounds`
+   (`functions/wms/src/domain/count-rounds.ts`): o cliente, o título que o
+   servidor dá ("Contagem geral · 19/11/2026", "Contagem da rua A · …",
+   "Contagem de Polo Masculino Piquet Preto · P · …"), o alcance (`general`,
+   `aisle` com a rua ou `item` com o SKU e o nome), `open` ou `closed`, quem
+   e quando iniciou e concluiu e os sete números do fechamento (prateleiras
+   e caixas do alcance, as contadas, as com diferença, a diferença líquida e
+   as recontagens). `startCountRound` inicia (uma aberta por cliente; a rua
+   tem de existir em Posições e o item tem de ser do cliente) e
+   `completeCountRound` conclui, as duas de quem opera o armazém, com recibo
+   em `operational_operations` e os eventos `inventory.round_started` e
+   `inventory.round_closed` (sem aviso na caixa do agente). Os números do
+   fechamento saem no servidor, das recontagens da rodada (`cycle_counts`
+   com o `round_id`) e das caixas do cliente, pela mesma conta da tela: a
+   última recontagem de cada caixa vale, a prateleira está contada com
+   todas as caixas confirmadas, a caixa tem diferença pelos itens; concluir
+   com prateleira por contar conclui mesmo assim (decisão 1 de 18/11/2026).
+   `recountWarehouseBox` só grava na rodada aberta do cliente e na
+   prateleira do alcance dela: a concluída (`BOX_RECOUNT_ROUND_CLOSED`), a
+   que não existe (`BOX_RECOUNT_ROUND_NOT_FOUND`), a de outro cliente e a
+   prateleira fora do alcance (`BOX_RECOUNT_OUT_OF_SCOPE`; a rua é o que vem
+   antes do hífen, e por item a prateleira precisa de caixa guardada com o
+   item, contada inteira) recusam; sem `round_id`, segue como antes. **A
+   recontagem geral de 17/11 vira documento ao concluir:** enquanto o
+   documento não existe, as recontagens com o id fixo valem como a rodada
+   aberta (a entrada, a rodada e a bancada a tratam assim; o servidor
+   aceita o id fixo só até o documento existir, e `startCountRound` recusa
+   iniciar outra enquanto ela está assim); "Concluir contagem" nela cria o
+   documento já concluído, com o começo da primeira recontagem. No app, a
+   entrada lê as rodadas do cliente ao vivo (`lib/warehouse-ops/use-rodadas.ts`,
+   `rodadas-da-contagem.ts`): "Em andamento" com o cartão da rodada aberta
+   (o começo do registro), "Continuar", "Ver prateleiras" e "Concluir
+   contagem" (o diálogo com os números e o aviso de quantas prateleiras por
+   contar ficam fora); sem rodada aberta, "Iniciar contagem" no cabeçalho
+   (o diálogo do alcance: geral, por rua com as ruas com caixa, por item
+   com a busca no catálogo); "Anteriores" lista as concluídas, a mais
+   recente primeiro ("17/11 a 21/11 · Guilherme Dantas", "5 prateleiras · 6
+   caixas · 1 com diferença · −3 un.", "Ver"), e a abertura por último. A
+   Contagem por caixa usa a rodada aberta e, com `?rodada=<id>`, abre a
+   rodada concluída só leitura (o período no cartão, sem Continuar e sem a
+   ação das prateleiras); a bancada grava com o id da rodada aberta; sem
+   rodada aberta, as duas dizem "Nenhuma contagem em andamento." com
+   "Iniciar contagem" (decisão 2 de 18/11/2026). Por rua e por item, a
+   rodada conta só as prateleiras do alcance. `count_rounds` é lida pela
+   operação (`firestore.rules`, `canReadOperations`) e apagada na zeragem
+   com o estoque, como `cycle_counts` (`tools/test_full_reset_btg.py`);
+   nenhuma consulta nova pede índice composto (todas por igualdade,
+   conferidas com `tools/indices_das_consultas.py`). Travas:
+   `count-rounds.test.ts` e `count-rounds.integration.test.ts` (iniciar,
+   concluir e a recontagem geral sem documento), o describe "a rodada" em
+   `box-recount.integration.test.ts`, as linhas em `callables-papeis`, o
+   `firestore.rules.test.ts` e, no app, `rodadas-da-contagem.test.ts`,
+   `iniciar-contagem.test.tsx`, `concluir-contagem.test.tsx` e os testes das
+   três telas (a entrada, a rodada e a bancada). Ficam: a fila de revisão do
+   admin, com o limite da diferença (nada aqui depende dele); o estado "em
+   contagem" da prateleira respeitado pela separação e pela guarda;
+   "Cadastrar caixa"; a linha separada antes de contar; a bancada de uma
+   rodada concluída (o "Ver" das anteriores para na rodada).
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
@@ -1129,6 +1189,23 @@ de acerto (`BOX_RECOUNT_SHELF_SHORT`), que passa antes pelo plano do acerto. A
 ferramenta de correção (`tools/corrigir-codigo-do-produto`) segue para a caixa
 do Receber lançada com o código errado; a primeira versão desta decisão mandava
 os três casos para ela (corrigido em 18/11/2026).
+
+*Decidido pelo Leonardo em 18/11/2026, nas perguntas do registro da rodada (PR
+631), pela sessão que o abriu:* (1) concluir com prateleira por contar conclui
+mesmo assim, e o diálogo mostra os números e avisa quantas prateleiras por
+contar ficam fora (a recontagem geral pode nunca chegar a 100%, com
+prateleiras esperando a entrega de um pedido); (2) sem rodada aberta, a
+bancada e a Contagem por caixa não contam: dizem "Nenhuma contagem em
+andamento." com "Iniciar contagem" para a entrada (o progresso mora na
+rodada, e o alcance por item cobre contar um item só). As escolhas propostas
+ficaram aprovadas: a coleção `count_rounds`; `startCountRound` e
+`completeCountRound` de quem opera o armazém, com recibo e os eventos
+`inventory.round_*`; uma rodada aberta por cliente; o título pelo servidor; o
+alcance por rua e por item com a prateleira contada inteira; "Ver" nas
+anteriores abrindo a Contagem por caixa com `?rodada=<id>`, só leitura; a
+recontagem geral de 17/11 virando documento ao concluir, sem migração à mão;
+a zeragem apagando a coleção com o estoque, como `cycle_counts`; e o limite da
+diferença fora deste PR, para a fila de revisão.
 
 ## 8. Como este levantamento foi feito
 
