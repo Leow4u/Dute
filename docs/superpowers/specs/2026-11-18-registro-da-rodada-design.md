@@ -203,3 +203,27 @@ a prateleira).
   dia; "sem diferença" no lugar de "0 com diferença · 0 un.".
 - O esqueleto da entrada enquanto lê as rodadas e para onde vai o foco quando
   o diálogo fecha.
+
+## Ajustes da revisão final (19/11/2026)
+
+A revisão de contexto novo da branch apontou um crítico e três importantes, e
+um achado menor subiu para importante (o pedido diz "diálogo que grava, não
+fecha no meio"). Corrigidos com o teste que falha antes:
+
+- O teste de integração de `count_rounds` entrou na lista fixa do
+  `test:integration` (sem ela, o CI não o rodava).
+- `startCountRound` recusa o alcance sem caixa guardada do cliente
+  (`COUNT_ROUND_EMPTY_SCOPE`: "Nenhuma caixa guardada do cliente na rua C.",
+  "Nenhuma caixa guardada com Boné Preto.", "Nenhuma caixa guardada do
+  cliente: não há prateleira para contar."), e a entrada mostra o cartão da
+  rodada aberta mesmo sem prateleira no alcance (o PR 630 escondia a seção
+  com 0 prateleiras; com o registro, esconder deixaria a rodada sem saída).
+- A recontagem geral de 17/11 (o id fixo sem documento) vale só para o
+  cliente legado, a BTG (`LEGACY_CUSTOMER_CODE`), no servidor e no app:
+  outro cliente com recontagem nesse id não fica preso nela, e aquelas
+  recontagens ficam como histórico.
+- O "Ver" da rodada concluída mostra os números gravados no fechamento, e
+  não os recalculados com as caixas de hoje.
+- Os diálogos de iniciar e de concluir ficam até a resposta, mesmo quando a
+  leitura ao vivo traz a rodada nova (ou tira a concluída) antes dela.
+

@@ -262,7 +262,7 @@ documentação de produto e operação está em `docs/`.
   desde 19/11/2026 com o registro da rodada: `count_rounds`, `startCountRound`
   e `completeCountRound` no WMS, uma rodada aberta por cliente, geral, por rua
   ou por item, a bancada gravando só na rodada aberta e dentro do alcance
-  dela, e a recontagem geral de 17/11, com o `round_id` fixo, virando
+  dela, e a recontagem geral da BTG de 17/11, com o `round_id` fixo, virando
   documento ao concluir); a
   abertura e a cíclica, as abas de antes, ficam em `/wms/contagem/abertura`,
   no visual antigo, só para o cliente com a abertura pendente ou em curso. As que não estão na lista seguem

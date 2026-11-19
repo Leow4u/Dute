@@ -1009,7 +1009,8 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    e quando iniciou e concluiu e os sete números do fechamento (prateleiras
    e caixas do alcance, as contadas, as com diferença, a diferença líquida e
    as recontagens). `startCountRound` inicia (uma aberta por cliente; a rua
-   tem de existir em Posições e o item tem de ser do cliente) e
+   tem de existir em Posições, o item tem de ser do cliente e o alcance
+   precisa de caixa guardada do cliente, senão `COUNT_ROUND_EMPTY_SCOPE`) e
    `completeCountRound` conclui, as duas de quem opera o armazém, com recibo
    em `operational_operations` e os eventos `inventory.round_started` e
    `inventory.round_closed` (sem aviso na caixa do agente). Os números do
@@ -1026,22 +1027,29 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    item, contada inteira) recusam; sem `round_id`, segue como antes. **A
    recontagem geral de 17/11 vira documento ao concluir:** enquanto o
    documento não existe, as recontagens com o id fixo valem como a rodada
-   aberta (a entrada, a rodada e a bancada a tratam assim; o servidor
-   aceita o id fixo só até o documento existir, e `startCountRound` recusa
-   iniciar outra enquanto ela está assim); "Concluir contagem" nela cria o
-   documento já concluído, com o começo da primeira recontagem. No app, a
+   aberta do cliente legado, a BTG (`LEGACY_CUSTOMER_CODE`; a entrada, a
+   rodada e a bancada a tratam assim; o servidor aceita o id fixo só até o
+   documento existir, e `startCountRound` recusa iniciar outra enquanto ela
+   está assim); "Concluir contagem" nela cria o documento já concluído, com
+   o começo da primeira recontagem. Outro cliente com recontagem no id fixo
+   não a vê como rodada nem fica preso nela: inicia a dele, e aquelas
+   recontagens ficam como histórico (o razão e as caixas não mudam). No app, a
    entrada lê as rodadas do cliente ao vivo (`lib/warehouse-ops/use-rodadas.ts`,
    `rodadas-da-contagem.ts`): "Em andamento" com o cartão da rodada aberta
    (o começo do registro), "Continuar", "Ver prateleiras" e "Concluir
    contagem" (o diálogo com os números e o aviso de quantas prateleiras por
-   contar ficam fora); sem rodada aberta, "Iniciar contagem" no cabeçalho
+   contar ficam fora; o cartão aparece até sem prateleira no alcance, para a
+   rodada nunca ficar sem saída, e os dois diálogos ficam até a resposta,
+   mesmo quando a leitura ao vivo traz a rodada antes dela); sem rodada
+   aberta, "Iniciar contagem" no cabeçalho
    (o diálogo do alcance: geral, por rua com as ruas com caixa, por item
    com a busca no catálogo); "Anteriores" lista as concluídas, a mais
    recente primeiro ("17/11 a 21/11 · Guilherme Dantas", "5 prateleiras · 6
    caixas · 1 com diferença · −3 un.", "Ver"), e a abertura por último. A
    Contagem por caixa usa a rodada aberta e, com `?rodada=<id>`, abre a
-   rodada concluída só leitura (o período no cartão, sem Continuar e sem a
-   ação das prateleiras); a bancada grava com o id da rodada aberta; sem
+   rodada concluída só leitura (o período e os números gravados no
+   fechamento no cartão, os mesmos da linha de "Anteriores", sem Continuar e
+   sem a ação das prateleiras); a bancada grava com o id da rodada aberta; sem
    rodada aberta, as duas dizem "Nenhuma contagem em andamento." com
    "Iniciar contagem" (decisão 2 de 18/11/2026). Por rua e por item, a
    rodada conta só as prateleiras do alcance. `count_rounds` é lida pela
@@ -1058,7 +1066,15 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    admin, com o limite da diferença (nada aqui depende dele); o estado "em
    contagem" da prateleira respeitado pela separação e pela guarda;
    "Cadastrar caixa"; a linha separada antes de contar; a bancada de uma
-   rodada concluída (o "Ver" das anteriores para na rodada).
+   rodada concluída (o "Ver" das anteriores para na rodada). Achados menores
+   da revisão final, deixados para depois: `?rodada=` de uma rodada que não
+   existe diz "Nenhuma contagem em andamento." em vez de "não encontrada"; a
+   bancada de uma prateleira fora do alcance só recusa no "Confirmar caixa"
+   (por URL ou "Contar este item", com rodada por rua ou por item); os
+   diálogos não mostram o "Não iniciada"/"Não concluída" do `BotaoDeAcao` nem
+   o "Tentar de novo" depois do resultado incerto (a chave da tentativa já
+   repete certo); a tela conta a prateleira só com caixa a caminho e o
+   servidor não.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
