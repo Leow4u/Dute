@@ -33,6 +33,7 @@ describe("título da aba do navegador", () => {
   it.each([
     ["/estoque", "Dutelog | Estoque"],
     ["/estoque/mapa", "Dutelog | Mapa"],
+    ["/estoque/mapa/mover", "Dutelog | Mover caixa"],
     ["/estoque/posicoes", "Dutelog | Posições"],
     ["/estoque/etiquetas", "Dutelog | Etiquetas"],
     ["/estoque/contagem/folha", "Dutelog | Folha de contagem"],

@@ -78,6 +78,8 @@ const WarehousePositionsPage = telaSobDemanda("pages/warehouse-positions", () =>
 const WarehouseLabelsPage = telaSobDemanda("pages/warehouse-labels", () => import("./pages/warehouse-labels"));
 const EstoqueAlertas = telaSobDemanda("pages/estoque-alertas", () => import("./pages/estoque-alertas"));
 const WarehouseMapPage = telaSobDemanda("pages/warehouse-map", () => import("./pages/warehouse-map"));
+// Mover caixa entre prateleiras, aberto pelo Mapa (docs/superpowers/specs/2026-11-19-mover-caixa-design.md).
+const EstoqueMapaMover = telaSobDemanda("pages/estoque-mapa-mover", () => import("./pages/estoque-mapa-mover"));
 const Pedidos = telaSobDemanda("pages/pedidos", () => import("./pages/pedidos"));
 const PedidosLista = telaSobDemanda("pages/pedidos-lista", () => import("./pages/pedidos-lista"));
 const PedidosRomaneio = telaSobDemanda("pages/pedidos-romaneio", () => import("./pages/pedidos-romaneio"));
@@ -401,6 +403,7 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   // O alerta do item parado (parte 5.4e) só existe onde a memória roda: fora
   // dela a tela diria "Nenhum alerta" sem a rotina que propõe os alertas.
   ...(MEMORIA_LIBERADA ? [protectedRoute("/estoque/alertas", EstoqueAlertas)] : []),
+  protectedRoute("/estoque/mapa/mover", EstoqueMapaMover),
   protectedRoute("/estoque/mapa", WarehouseMapPage),
   protectedRoute("/estoque", Estoque),
   protectedRoute("/catalogo", Catalog),

@@ -255,6 +255,8 @@ describe("shell v3 do módulo", () => {
 
     it("no grupo, uma tela só fica marcada: a do endereço mais longo que casa", () => {
       expect(marcadasNaBarra(wms("/estoque/mapa"))).toEqual(["/estoque/mapa"]);
+      // Mover caixa, aberto pelo Mapa, marca o Mapa.
+      expect(marcadasNaBarra(wms("/estoque/mapa/mover"))).toEqual(["/estoque/mapa"]);
       expect(marcadasNaBarra(wms("/estoque/posicoes"))).toEqual(["/estoque/posicoes"]);
       expect(marcadasNaBarra(wms("/estoque"))).toEqual(["/estoque"]);
       expect(marcadasNaBarra(wms("/estoque/alertas"))).toEqual(["/estoque"]);

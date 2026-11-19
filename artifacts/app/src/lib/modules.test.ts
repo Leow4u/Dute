@@ -70,6 +70,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   // O alerta do item parado: só a coordenação decide (parte 5.4e).
   ["/estoque/alertas", ["owner", "admin", "interno"]],
   ["/estoque/mapa", ["owner", "admin", "interno", "wms", "suporte"]],
+  // Mover caixa, aberto pelo Mapa: só quem opera o armazém (as duas callables pedem o papel de escrita).
+  ["/estoque/mapa/mover", ["owner", "admin", "interno", "wms"]],
   ["/estoque/posicoes", ["owner", "admin", "interno", "wms", "suporte"]],
   ["/movements", ["owner", "admin", "interno", "suporte"]],
   ["/pedidos", ["owner", "admin", "interno", "wms", "suporte"]],
@@ -296,6 +298,7 @@ describe("grupo ativo", () => {
     ["/estoque/contagem/prateleira", "Estoque"],
     ["/estoque/alertas", "Estoque"],
     ["/estoque/mapa", "Estoque"],
+    ["/estoque/mapa/mover", "Estoque"],
     ["/catalogo/mapa", "Estoque"],
     ["/wms/qualidade", "Estoque"],
     ["/catalogo/saldos", "Estoque"],
