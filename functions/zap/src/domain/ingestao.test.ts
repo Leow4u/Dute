@@ -54,8 +54,11 @@ describe("ingestão", () => {
     assert.equal(segredoConfere(SEGREDO, "outro-segredo-de-teste-32chars"), false);
     assert.equal(segredoConfere(SEGREDO, undefined), false);
     const estado = memoria();
-    const resposta = await tratarIngestao(pedido({ headerSecret: "errado" }), { segredo: SEGREDO, agora: AGORA, gravar: estado.gravar });
-    assert.equal(resposta.status, 401);
+    for (const headerSecret of ["errado", undefined]) {
+      const resposta = await tratarIngestao(pedido({ headerSecret }), { segredo: SEGREDO, agora: AGORA, gravar: estado.gravar });
+      assert.equal(resposta.status, 401);
+      assert.equal(resposta.body.erro, "segredo_recusado");
+    }
     assert.equal(estado.mensagens.size, 0);
   });
 
