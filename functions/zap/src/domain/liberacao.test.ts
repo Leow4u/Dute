@@ -19,10 +19,10 @@ describe("liberação do Zap", () => {
     assert.equal(retencaoLiberada("dute-prod"), false);
   });
 
-  it("o segredo não entra no deploy até um projeto ser incluído de propósito", () => {
-    assert.deepEqual(ZAP_PROJETOS_COM_SEGREDO, []);
-    assert.deepEqual(segredosDoZap("dute-homolog"), []);
+  it("o segredo entra só na homologação", () => {
+    assert.deepEqual(ZAP_PROJETOS_COM_SEGREDO, ["dute-homolog"]);
+    assert.deepEqual(segredosDoZap("dute-homolog"), [NOME_DO_SEGREDO]);
     assert.deepEqual(segredosDoZap("dute-prod"), []);
-    assert.deepEqual(segredosDoZap("dute-homolog", ["dute-homolog"]), [NOME_DO_SEGREDO]);
+    assert.deepEqual(segredosDoZap("dute-btg"), []);
   });
 });
