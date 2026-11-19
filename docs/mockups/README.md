@@ -774,6 +774,25 @@ CX-000014", "entrada de 2 em A-03"); as duas pranchas da bancada perderam o
 | Armazenagem · Contagem, a rodada nova em andamento (emulador) | `contagem-entrada/03-rodada-nova-em-andamento.png` | Foto da tela real no emulador, 19/11/2026 (PR 631): "Contagem geral · 19/11/2026" iniciada pelo diálogo, com a A-01 contada pela bancada (1 de 4 prateleiras, 2 de 5 caixas, 1 com diferença, −2 un.), "Continuar A-02", "Ver prateleiras" e "Concluir contagem"; em "Anteriores", a recontagem geral de 17/11, que virou documento ao concluir. |
 | Armazenagem · Contagem, as anteriores com as rodadas (emulador) | `contagem-entrada/04-anteriores-com-as-rodadas.png` | Foto da tela real no emulador, 19/11/2026 (PR 631): sem rodada aberta, "Iniciar contagem" no cabeçalho e "Anteriores" com a contagem geral de 19/11 concluída (período, quem, os números e "Ver"), a recontagem geral de 17/11 e a abertura. |
 
+### Armazenagem · Mover caixa (19/11/2026)
+
+Uma caixa por vez, de uma prateleira para outra, depois da recontagem geral
+da BTG. Render dos componentes reais com dados de exemplo, aprovado pelo
+Leonardo em 19/11/2026, com as decisões do mesmo dia: movem a coordenação e
+quem opera; o sistema sugere a prateleira com o mesmo produto e depois a mais
+vazia, e a pessoa pode trocar à mão; o "Mover" fica no Mapa e abre uma página
+v3 de uma caixa. Desenho em
+`docs/superpowers/specs/2026-11-19-mover-caixa-design.md`.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Estoque › Mapa com o Mover | `mover-caixa/01-mapa.png` | O Mapa de hoje (fora da v3) com "Mover caixa" no cabeçalho e, na ficha da prateleira, "Etiqueta" e "Mover" no rodapé do cartão de cada caixa (os botões novos com contorno). |
+| Mover caixa · a sugestão | `mover-caixa/02-sugestao.png` | `/estoque/mapa/mover?caixa=CX-000121`: o campo "Caixa", o cartão da caixa (situação, "em A-01", unidades, itens com o código do cliente, origem, data e medidas) e "Mover para" com a sugestão B-09, o motivo, a frente livre, os selos e "Mover para B-09". |
+| Mover caixa · escolher à mão | `mover-caixa/03-escolher.png` | "Escolher prateleira": as prateleiras onde a caixa cabe, as com o mesmo produto primeiro e depois as mais vazias, "Ver as 31 prateleiras", "Não cabe: …" e "Mover para C-02". |
+| Mover caixa · movida | `mover-caixa/04-movida.png` | "CX-000121 em B-09", de onde saiu, unidades, hora e quem, "Imprimir etiqueta" e "Mover outra caixa"; "Etiquetas para trocar · 3" no cabeçalho com as caixas movidas sem etiqueta nova. |
+| Mover caixa · a recusa | `mover-caixa/05-recusa.png` | A frase do servidor no lugar do "Mover para": o item reservado na prateleira de origem para um pedido. |
+| Mover caixa no celular | `mover-caixa/06-celular.png` | Abrir pelo código da caixa, a sugestão, a escolha à mão e a caixa movida, com o botão de 48 px. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
