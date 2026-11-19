@@ -54,6 +54,7 @@ import {
   guardarSaida,
   impressoesParaRegistrar,
   labelPages,
+  lotesDoRegistro,
   saldosParaRegistrar,
   labelsUrl,
   type ImpressaoParaRegistrar,
@@ -273,8 +274,8 @@ export default function WarehouseLabelsPage() {
     window.print();
     const impressoes = impressoesParaRegistrar(boxes);
     if (impressoes.length) registrar.mutate(impressoes);
-    const saldos = saldosParaRegistrar(boxes);
-    if (saldos.length) registrarSaldo.mutate(saldos);
+    // Em lotes do tamanho que o servidor aceita: a folha com mais caixas movidas que o limite não é recusada inteira.
+    for (const lote of lotesDoRegistro(saldosParaRegistrar(boxes))) registrarSaldo.mutate(lote);
   };
 
   return (

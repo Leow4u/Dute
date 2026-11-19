@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { Router } from "wouter";
 
 import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
 import { buildShelves, skuIndexFromRows } from "@/lib/warehouse-map";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { textosForaDaLista } from "@/test/textos";
-import { BoxCard, SaidasDaPrateleira, SaldoSemCaixa } from "./warehouse-map";
+import { AcoesDoCabecalho, BoxCard, SaidasDaPrateleira, SaldoSemCaixa } from "./warehouse-map";
 
 const [b02] = buildShelves(
   [
@@ -203,5 +204,78 @@ describe("Mapa › a prateleira depois do pedido", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
     // Sem saída, a ficha não ganha a seção.
     expect(renderToStaticMarkup(<SaidasDaPrateleira shelf={{ saidas: [] }} />)).toBe("");
+  });
+});
+
+/** O Mover no Mapa (mover caixa, 19/11/2026; mockup docs/mockups/mover-caixa/01-mapa.png). */
+describe("Mapa › o Mover", () => {
+  const caixa = (extra: Record<string, unknown>) =>
+    warehouseBoxFromRecord({
+      code: "CX-000225",
+      customer_code: "BTG Pactual",
+      location_id: "B-09",
+      length_m: 0.4,
+      width_m: 0.6,
+      height_m: 0.35,
+      gross_weight_kg: 10,
+      origin: { kind: "receipt", receipt_number: "AVL-7C21A9F0", invoice_number: "48.377" },
+      lines: [
+        { sku_code: "BTG-000112", client_item_code: "A.01.0713.005.G", product_name: "Polo Masculino Piquet Preto", size: "G", counted_qty: 12 },
+        { sku_code: "BTG-000113", client_item_code: "A.01.0713.005.GG", product_name: "Polo Masculino Piquet Preto", size: "GG", counted_qty: 7 },
+      ],
+      ...extra,
+    });
+  const guardada = caixa({ status: "stored", unit_count: 19, stored_at: "2026-11-06T18:02:00.000Z" });
+  const ORIGEM = "Recebimento · NF 48.377 · 06/11/2026 · 40 × 60 × 35 cm · 10 kg · 0,084 m³";
+
+  it("o cartão da caixa guardada leva Etiqueta e Mover no rodapé", async () => {
+    const movidas: string[] = [];
+    const html = renderToStaticMarkup(<BoxCard box={guardada} lines={[]} skuIndex={index} onLabels={() => undefined} onMover={(code) => movidas.push(code)} />);
+    expect(
+      textosForaDaLista(html, [
+        "CX-000225 · guardada",
+        "19 un.",
+        "12 × Polo Masculino Piquet Preto · G · A.01.0713.005.G",
+        "7 × Polo Masculino Piquet Preto · GG · A.01.0713.005.GG",
+        ORIGEM,
+        "Etiqueta",
+        "Mover",
+      ]),
+    ).toEqual([]);
+    // No rodapé, depois da origem: no cabeçalho do cartão não cabem os dois.
+    expect(html.indexOf(">Etiqueta<")).toBeGreaterThan(html.indexOf(ORIGEM));
+    expect(html.indexOf(">Mover<")).toBeGreaterThan(html.indexOf(">Etiqueta<"));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("sem quem mova, o cartão fica como hoje: a Etiqueta no cabeçalho e nada de Mover", () => {
+    const html = renderToStaticMarkup(<BoxCard box={guardada} lines={[]} skuIndex={index} onLabels={() => undefined} />);
+    expect(html).not.toContain(">Mover<");
+    expect(html.indexOf(">Etiqueta<")).toBeLessThan(html.indexOf(ORIGEM));
+  });
+
+  it("a reservada (a caminho da prateleira) nunca leva Mover", () => {
+    const html = renderToStaticMarkup(
+      <BoxCard box={caixa({ status: "committing", unit_count: 0, draft_unit_count: 19 })} lines={[]} skuIndex={index} reserved onLabels={() => undefined} onMover={() => undefined} />,
+    );
+    expect(html).not.toContain(">Mover<");
+    expect(html).toContain(">Etiqueta<");
+  });
+
+  it("o cabeçalho do Mapa leva Mover caixa para quem move, entre as etiquetas e o cadastro", async () => {
+    const acoes = (podeMover: boolean) =>
+      renderToStaticMarkup(
+        <Router ssrPath="/estoque/mapa">
+          <AcoesDoCabecalho podeMover={podeMover} semPosicoes={false} onEtiquetas={() => undefined} />
+        </Router>,
+      );
+    const html = acoes(true);
+    expect(textosForaDaLista(html, ["Etiquetas de posição", "Mover caixa", "Cadastro de posições"])).toEqual([]);
+    expect(html).toContain('href="/estoque/mapa/mover"');
+    expect(html.indexOf("Mover caixa")).toBeGreaterThan(html.indexOf("Etiquetas de posição"));
+    expect(html.indexOf("Mover caixa")).toBeLessThan(html.indexOf("Cadastro de posições"));
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+    // O suporte só consulta: sem o Mover caixa.
+    expect(acoes(false)).not.toContain("Mover caixa");
   });
 });

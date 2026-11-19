@@ -1,4 +1,5 @@
 import type { StockItem } from "./stock-items";
+import { ROTULO_DO_MOVER, movimentoDoMover } from "./warehouse-ops/mover-caixa";
 
 /**
  * Relatórios: cada um vira linhas prontas para a prévia e para a planilha.
@@ -214,6 +215,10 @@ export type MovementKind = "Entrada" | "Saída" | "Ajuste" | "Transferência";
 /** O que gerou a movimentação, pelo vínculo que o backend grava nela. */
 export function classifyMovement(movement: AnyRecord): { kind: MovementKind; origin: string } {
   const inbound = text(movement.tipo_mov).toUpperCase() === "ENTRADA" || num(movement.sign ?? movement.sinal) > 0;
+  // O mover caixa (19/11/2026): a caixa muda de prateleira, como a guarda, sem entrar nos totais nem nos ajustes.
+  if (movimentoDoMover(movement)) {
+    return { kind: "Transferência", origin: `${ROTULO_DO_MOVER} ${text(movement.from_location_id)} → ${text(movement.to_location_id)}` };
+  }
   if (movement.putaway_task_id) {
     return { kind: "Transferência", origin: `Guarda ${text(movement.origem)} → ${text(movement.destino)}`.trim() };
   }

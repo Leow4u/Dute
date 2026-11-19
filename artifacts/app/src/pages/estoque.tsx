@@ -35,6 +35,7 @@ import {
 } from "@/features/warehouse-ops/opening-inventory-status";
 import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import { contarOItem } from "@/lib/warehouse-ops/recontagem-por-caixa";
+import { ROTULO_DO_MOVER, movimentoDoMover } from "@/lib/warehouse-ops/mover-caixa";
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
@@ -689,6 +690,8 @@ export function ItemList({
 type MovementRow = {
   id?: string | number;
   tipo_mov?: string;
+  /** O mover caixa grava box_move_out na origem e box_move_in no destino. */
+  movement_kind?: string;
   qtde?: number | string;
   sinal?: number;
   data?: unknown;
@@ -696,6 +699,42 @@ type MovementRow = {
   motivo?: string | null;
   responsavel?: string | null;
 };
+
+/**
+ * Uma linha de "Últimos movimentos": o tipo, o documento, quem e quando, e a
+ * quantidade com o sinal. O mover caixa diz "Mudança de prateleira" nas duas
+ * linhas (a saída da origem e a entrada do destino), sem caixa nem prateleira.
+ */
+export function LinhaDoMovimento({ row }: { row: MovementRow }) {
+  const quantity = Number(row.qtde ?? 0);
+  const positive = /ENTRADA|DEVOLUCAO/i.test(String(row.tipo_mov ?? "")) || Number(row.sinal) > 0;
+  const who = row.responsavel;
+  return (
+    <div className="flex items-center gap-3 py-1.5 text-sm">
+      <span
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-lg",
+          positive ? "bg-success-soft text-success-soft-foreground" : "bg-destructive-soft text-destructive-soft-foreground",
+        )}
+      >
+        {positive ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        {movimentoDoMover(row) ? (
+          <span>{ROTULO_DO_MOVER}</span>
+        ) : (
+          <span className="capitalize">{String(row.tipo_mov ?? "").toLowerCase().replace(/_/g, " ")}</span>
+        )}
+        {row.doc_nf ? ` · ${row.doc_nf}` : ""}
+        <span className="block text-xs text-foreground/50">{[who, movementDate(row.data)].filter(Boolean).join(" · ")}</span>
+      </span>
+      <span className={cn("font-semibold tabular-nums", positive ? "text-foreground" : "text-destructive-soft-foreground")}>
+        {positive ? "+" : "−"}
+        {numberFormatter.format(Math.abs(quantity))}
+      </span>
+    </div>
+  );
+}
 
 function movementDate(value: unknown) {
   if (!value) return "";
@@ -1012,34 +1051,7 @@ export function ItemCard({
             // A nova tentativa que dá certo tira o aviso: o foco vai ao título da seção, nunca ao body.
             <FalhaNaLeitura leitura={movements} erro={movimentos.error} mensagem="Não consegui carregar os movimentos." focoAoSair={idDosMovimentos} />
           ) : rows.length ? (
-            rows.map((row, index) => {
-              const quantity = Number(row.qtde ?? 0);
-              const positive = /ENTRADA|DEVOLUCAO/i.test(String(row.tipo_mov ?? "")) || Number(row.sinal) > 0;
-              const who = row.responsavel;
-              return (
-                <div key={String(row.id ?? index)} className="flex items-center gap-3 py-1.5 text-sm">
-                  <span
-                    className={cn(
-                      "flex size-7 shrink-0 items-center justify-center rounded-lg",
-                      positive ? "bg-success-soft text-success-soft-foreground" : "bg-destructive-soft text-destructive-soft-foreground",
-                    )}
-                  >
-                    {positive ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="capitalize">{String(row.tipo_mov ?? "").toLowerCase().replace(/_/g, " ")}</span>
-                    {row.doc_nf ? ` · ${row.doc_nf}` : ""}
-                    <span className="block text-xs text-foreground/50">
-                      {[who, movementDate(row.data)].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                  <span className={cn("font-semibold tabular-nums", positive ? "text-foreground" : "text-destructive-soft-foreground")}>
-                    {positive ? "+" : "−"}
-                    {numberFormatter.format(Math.abs(quantity))}
-                  </span>
-                </div>
-              );
-            })
+            rows.map((row, index) => <LinhaDoMovimento key={String(row.id ?? index)} row={row} />)
           ) : (
             <p className="text-sm text-muted-foreground">Nenhum movimento registrado.</p>
           )}

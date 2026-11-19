@@ -106,6 +106,14 @@ export type WarehouseBox = {
   last_recount_id?: string | null;
   last_recounted_at?: string | null;
   last_recount_round_id?: string | null;
+  /**
+   * O último mover da caixa (`moveWarehouseBox`, Mover caixa, 19/11/2026):
+   * quando e de onde; null na caixa que nunca mudou de prateleira.
+   */
+  moved_at?: string | null;
+  moved_from_location_id?: string | null;
+  /** O `moved_at` da última etiqueta impressa depois do mover; null sem ela. */
+  location_label_printed_for?: string | null;
   suggestion: {
     position: string | null;
     reason: string | null;
@@ -288,11 +296,24 @@ export function boxIsOpen(box: Pick<WarehouseBox, "status" | "taken_units" | "co
 }
 
 /**
- * A caixa aberta cuja etiqueta não é a do saldo de agora: entra em "Etiquetas
- * para trocar" até a impressão ser registrada (separação com caixas, parte 3d).
+ * A caixa movida cuja etiqueta ainda diz a prateleira antiga (Mover caixa,
+ * 19/11/2026): guardada, com `moved_at` e sem a impressão registrada depois
+ * do mover. A regra é a do servidor (functions/wms, box-relabel.ts).
  */
-export function boxNeedsRelabel(box: Pick<WarehouseBox, "status" | "taken_units" | "count_adjustments" | "balance_at" | "balance_label_printed_for">) {
-  return boxIsOpen(box) && (box.balance_label_printed_for ?? "") !== (box.balance_at ?? "");
+export function boxMovedWithoutLabel(box: Pick<WarehouseBox, "status" | "moved_at" | "location_label_printed_for">) {
+  return box.status === "stored" && Boolean(box.moved_at) && (box.location_label_printed_for ?? "") !== (box.moved_at ?? "");
+}
+
+/**
+ * A caixa cuja etiqueta não vale mais: a aberta, sem a etiqueta do saldo de
+ * agora (separação com caixas, parte 3d), e a movida, sem a etiqueta da
+ * prateleira nova. Entra em "Etiquetas para trocar" até a impressão ser
+ * registrada.
+ */
+export function boxNeedsRelabel(
+  box: Pick<WarehouseBox, "status" | "taken_units" | "count_adjustments" | "balance_at" | "balance_label_printed_for" | "moved_at" | "location_label_printed_for">,
+) {
+  return (boxIsOpen(box) && (box.balance_label_printed_for ?? "") !== (box.balance_at ?? "")) || boxMovedWithoutLabel(box);
 }
 
 /** As unidades que a caixa tem agora: a entrada menos o que as separações tiraram mais o que as recontagens acertaram. */
@@ -361,6 +382,9 @@ export function warehouseBoxFromRecord(record: AnyRecord): WarehouseBox {
     last_recount_id: text(record.last_recount_id) || null,
     last_recounted_at: text(record.last_recounted_at) || null,
     last_recount_round_id: text(record.last_recount_round_id) || null,
+    moved_at: text(record.moved_at) || null,
+    moved_from_location_id: text(record.moved_from_location_id).toUpperCase() || null,
+    location_label_printed_for: text(record.location_label_printed_for) || null,
     suggestion: suggestion
       ? {
           position: text(suggestion.position) || null,

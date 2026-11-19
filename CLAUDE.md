@@ -390,7 +390,7 @@ documentação de produto e operação está em `docs/`.
   Rascunhos não são estoque; fechamento/reabertura são persistidos.
   Correção de caixa preserva cadastro e saldo global; não usar estorno para
   trocar só o vínculo. Ver `docs/wms-abertura-correcoes.md`.
-  **Mover caixa (19/11/2026, servidor):** `previewWarehouseBoxMove` e
+  **Mover caixa (19/11/2026):** `previewWarehouseBoxMove` e
   `moveWarehouseBox` (`domain/box-move.ts`) mudam a caixa guardada de
   prateleira numa transação, com o saldo das duas prateleiras, o razão
   (`functions_box_move`, fora da cobrança) e as linhas da abertura dela;
@@ -398,8 +398,13 @@ documentação de produto e operação está em `docs/`.
   a guarda); recusam reserva na origem ou no destino, prateleira em contagem
   aberta e caixa com outra em cima; a ENTRADA leva o dia FIFO da caixa e a
   origem (`fifo_from_location_id`), e a caixa movida pede etiqueta nova.
-  Desenho em `docs/superpowers/specs/2026-11-19-mover-caixa-design.md`; a
-  tela vem no PR seguinte.
+  Desenho em `docs/superpowers/specs/2026-11-19-mover-caixa-design.md`. A
+  tela é a página `/estoque/mapa/mover` (v3, `pages/estoque-mapa-mover*.tsx`),
+  aberta pelo "Mover caixa" do cabeçalho do Mapa e pelo "Mover" do cartão de
+  cada caixa guardada, só para quem opera. A tela manda o encaixe que mostrou;
+  os movimentos do mover dizem "Mudança de prateleira" (`ROTULO_DO_MOVER`) e
+  contam como transferência no relatório. Conferido no emulador em 19/11/2026
+  (`docs/plataforma/diagnostico-contagem-ciclica.md`, seção 6, item 5).
 - **Recebimento por caixa (fase 1 do mapa, em partes):** desenho, decisões
   e telas em `docs/plataforma/recebimento-com-caixas.md`. A chegada guarda o
   modo (`conference_mode`, `per_line` ou `per_box`; sem o campo, por linha).

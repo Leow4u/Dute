@@ -1105,8 +1105,33 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    aberta, nenhuma caixa da BTG se move), a abertura em andamento, a
    prateleira com menos que a caixa e o saldo duplicado. A caixa movida entra
    em "Etiquetas para trocar" até a impressão. A ordem da guarda
-   (`suggestPosition`) não mudou. A tela (a página e o Mapa) vem no PR
-   seguinte; o lançamento manual e o XGG continuam como estavam.
+   (`suggestPosition`) não mudou. **A tela entrou no PR seguinte**
+   (`claude/mover-caixa-tela`):
+   - a página `/estoque/mapa/mover`, na v3: o campo "Caixa", o cartão,
+     "Mover para" (com a sugestão ou a escolha à mão e a linha do encaixe,
+     que a tela manda e o servidor confere) e a caixa movida, com "Imprimir
+     etiqueta" e "Etiquetas para trocar · N";
+   - no Mapa, "Mover caixa" no cabeçalho e, no cartão de cada caixa
+     guardada, "Etiqueta" e "Mover" no rodapé, só para quem opera;
+   - os movimentos do mover dizem "Mudança de prateleira" no histórico do
+     item e no Histórico; no relatório de movimentações, contam como
+     transferência.
+
+   **Conferido no emulador em 19/11/2026** (fotos
+   `docs/mockups/mover-caixa/07-mapa-depois.png` e
+   `08-movida-emulador.png`). A CX-000121 foi de A-01 para B-09 pela
+   sugestão; a B-10, com o polo M reservado para o PED-0001, ficou em "Com
+   reserva". A CX-000140 foi de A-02 para C-02 pela escolha à mão. Depois:
+   - o Mapa mostra as caixas em B-09 e C-02;
+   - o Caixas × saldo dá as cinco prateleiras iguais;
+   - a lista de separação do PED-0002 (o polo G em B-09) acha a CX-000121
+     em B-09;
+   - as datas do item ficam em A-02 e B-09 desde 20/10 e em C-02 desde
+     06/11, e nada fica em A-01;
+   - os dias parados não mudaram;
+   - a etiqueta impressa diz B-09 e tira a caixa de "Etiquetas para trocar".
+
+   O lançamento manual e o XGG continuam como estavam.
 6. **Ensaio no emulador (F19).** O cenário com `taken_lines`, caixas
    `emptied` e as reservas do PED-0001; o `--conferir-caixas`; um roteiro que
    suba o app com o WMS e deixe gravar uma contagem antes da produção. Entra

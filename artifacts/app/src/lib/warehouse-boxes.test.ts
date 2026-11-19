@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   boxBalanceUnits,
   boxIsOpen,
+  boxMovedWithoutLabel,
   boxNeedsRelabel,
   boxDraftToPayload,
   boxOriginLabel,
@@ -211,5 +212,18 @@ describe("a caixa com os ajustes da recontagem", () => {
     // A recontagem sem diferença não grava ajuste: a caixa segue intacta.
     expect(boxIsOpen(warehouseBoxFromRecord(guardada))).toBe(false);
     expect(boxIsOpen({ ...recontada, status: "emptied" })).toBe(false);
+  });
+
+  // Mover caixa (19/11/2026): a etiqueta imprime a prateleira, e a caixa intacta movida também pede etiqueta nova.
+  it("a caixa movida pede a etiqueta nova até a impressão do mover ser registrada", () => {
+    const movidaEm = "2026-11-19T17:32:00.000Z";
+    const movida = warehouseBoxFromRecord({ ...guardada, location_id: "B-09", moved_at: movidaEm, moved_from_location_id: "A-01" });
+    expect([movida.moved_at, movida.moved_from_location_id, movida.location_label_printed_for]).toEqual([movidaEm, "A-01", null]);
+    expect(boxMovedWithoutLabel(movida)).toBe(true);
+    expect(boxNeedsRelabel(movida)).toBe(true);
+    const impressa = warehouseBoxFromRecord({ ...guardada, moved_at: movidaEm, location_label_printed_for: movidaEm });
+    expect([boxMovedWithoutLabel(impressa), boxNeedsRelabel(impressa)]).toEqual([false, false]);
+    expect(boxMovedWithoutLabel(warehouseBoxFromRecord(guardada))).toBe(false);
+    expect(boxMovedWithoutLabel({ ...movida, status: "emptied" })).toBe(false);
   });
 });

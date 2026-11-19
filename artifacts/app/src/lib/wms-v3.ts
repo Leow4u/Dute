@@ -34,6 +34,8 @@ export const TELAS_DO_WMS_NA_V3: readonly string[] = [
   // A entrada da Contagem (18/11/2026): em andamento e anteriores. A tela de hoje, com as abas da abertura e da
   // cíclica, segue em /wms/contagem/abertura, fora da v3.
   "/wms/contagem",
+  // Mover caixa entre prateleiras (19/11/2026), aberto pelo Mapa: tela nova já na v3.
+  "/estoque/mapa/mover",
 ];
 
 /**

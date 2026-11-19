@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { canOperateWarehouse } from "@/lib/permissions";
+import { ROTULO_DO_MOVER, movimentoDoMover } from "@/lib/warehouse-ops/mover-caixa";
 import { cn } from "@/lib/utils";
 import {
   StockFilterChip,
@@ -64,6 +65,11 @@ const MOVEMENT_LABELS: Record<string, string> = {
 
 function movementLabel(type: string | undefined) {
   return (type && MOVEMENT_LABELS[type]) || type || "—";
+}
+
+/** O tipo na linha: o mover caixa diz "Mudança de prateleira" na saída e na entrada (19/11/2026). */
+function rotuloDaLinha(mov: { tipo_mov?: string; movement_kind?: unknown }) {
+  return movimentoDoMover(mov) ? ROTULO_DO_MOVER : movementLabel(mov.tipo_mov);
 }
 
 /**
@@ -295,7 +301,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                         <td className="whitespace-nowrap px-3 py-3">
                           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                             <Arrow className="h-3.5 w-3.5" aria-hidden="true" />
-                            {movementLabel(mov.tipo_mov)}
+                            {rotuloDaLinha(mov)}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-primary-texto">
@@ -414,7 +420,7 @@ function MovementCard({ movement: mov }: { movement: Movement }) {
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
           <span className="whitespace-nowrap font-mono">{mov.cod_sku}</span>
-          <span>{movementLabel(mov.tipo_mov)}</span>
+          <span>{rotuloDaLinha(mov)}</span>
           <span className="whitespace-nowrap">{when}</span>
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">{details.join(" · ")}</div>

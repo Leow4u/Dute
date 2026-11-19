@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
+import { ArrowRight, LayoutGrid, PackageOpen, Printer, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,10 +27,12 @@ import { ShelfVolumeSummary } from "@/features/warehouse-ops/shelf-volume-summar
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { cn } from "@/lib/utils";
 import { useActiveCustomer } from "@/lib/active-customer-context";
+import { useAppUser } from "@/lib/auth";
 import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
 import { falhaDasLeituras } from "@/lib/carregando/falha-das-leituras";
 import { ehFaltaDeConexao } from "@/lib/conexao";
 import { openingInventoryNotice } from "@/lib/opening-inventory";
+import { canOperateWarehouse } from "@/lib/permissions";
 import { boxVolumeM3, formatVolumeM3 } from "@/lib/warehouse-volume";
 import { fetchWarehouseRows } from "@/lib/warehouse-rows";
 import { type WarehouseBox, boxBalanceUnits, boxOriginLabel, formatBoxDimensions, warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
@@ -56,6 +58,7 @@ import {
   zonesOf,
 } from "@/lib/warehouse-map";
 import { type AnyRecord, fetchJson, formatNumber } from "@/lib/warehouse-ops/model";
+import { ROTA_DO_MOVER, moverUrl } from "@/lib/warehouse-ops/mover-caixa";
 import { type WarehousePosition, REFERENCE_BOX, formatKilos, formatMeters } from "@/lib/warehouse-positions";
 
 type PositionsResponse = { items?: WarehousePosition[] };
@@ -158,6 +161,7 @@ export default function WarehouseMapPage() {
   // enquanto tenta de novo (as cópias): o aviso e o "Tentar de novo" não somem com o foco nele, e a falta de conexão
   // não vira o erro genérico na nova tentativa. Sem rede e sem nada lido, o "Sem conexão." ou o "Reconectando…" no
   // lugar do mapa; com o mapa lido, quem diz é a linha de estado (decisão 2 do celular).
+  const podeMover = canOperateWarehouse(useAppUser().user?.publicMetadata.role);
   const posicoes = useLeituraComFalha(positionsQuery);
   const caixas = useLeituraComFalha(boxesQuery);
   const saldos = useLeituraComFalha(balancesQuery);
@@ -195,6 +199,7 @@ export default function WarehouseMapPage() {
         skuIndex={skuIndex}
         onClose={noSheet ? undefined : () => setSelectedCode(null)}
         onLabels={(url) => navigate(url)}
+        onMover={podeMover ? (code) => navigate(moverUrl(code)) : undefined}
       />
     ) : null;
   const panel = painel(false);
@@ -206,23 +211,11 @@ export default function WarehouseMapPage() {
         description="Prateleiras, ocupação registrada e caixas por zona de cliente."
         estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leiturasDoMapa} objeto="prateleiras" />}
         actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => navigate(labelsUrl({ positions: visible.map((shelf) => shelf.code) }))}
-              disabled={visible.length === 0}
-              title="Etiquetas das posições em tela"
-            >
-              <Printer className="size-4" />
-              Etiquetas de posição
-            </Button>
-            <Button asChild>
-              <Link href="/estoque/posicoes">
-                <LayoutGrid className="size-4" />
-                Cadastro de posições
-              </Link>
-            </Button>
-          </>
+          <AcoesDoCabecalho
+            podeMover={podeMover}
+            semPosicoes={visible.length === 0}
+            onEtiquetas={() => navigate(labelsUrl({ positions: visible.map((shelf) => shelf.code) }))}
+          />
         }
       />
 
@@ -518,12 +511,43 @@ export function SaldoSemCaixa({ shelf, skuIndex }: { shelf: Shelf; skuIndex: Sku
 }
 
 /**
+ * As ações do cabeçalho do Mapa: as etiquetas das posições em tela, o "Mover
+ * caixa" (só para quem move; mover caixa, 19/11/2026) e o cadastro.
+ */
+export function AcoesDoCabecalho({ podeMover, semPosicoes, onEtiquetas }: { podeMover: boolean; semPosicoes: boolean; onEtiquetas: () => void }) {
+  return (
+    <>
+      <Button variant="outline" onClick={onEtiquetas} disabled={semPosicoes} title="Etiquetas das posições em tela">
+        <Printer className="size-4" />
+        Etiquetas de posição
+      </Button>
+      {podeMover ? (
+        <Button asChild variant="outline">
+          <Link href={ROTA_DO_MOVER}>
+            <ArrowRight className="size-4" />
+            Mover caixa
+          </Link>
+        </Button>
+      ) : null}
+      <Button asChild>
+        <Link href="/estoque/posicoes">
+          <LayoutGrid className="size-4" />
+          Cadastro de posições
+        </Link>
+      </Button>
+    </>
+  );
+}
+
+/**
  * Uma caixa da prateleira: código, conteúdo, origem e data, medidas e a
  * etiqueta (parte 6 do recebimento com caixas). A reservada é a caixa do
  * recebimento com o destino confirmado, ainda por guardar. A guardada diz se
  * está "aberta" (já saiu peça dela) ou "guardada", e a aberta mostra o saldo
  * e de quando ele é, sem o peso de entrada (separação com caixas, parte 3;
- * docs/mockups/WmsSepararMapa.dc.html).
+ * docs/mockups/WmsSepararMapa.dc.html). Com quem mova, a caixa guardada leva
+ * "Etiqueta" e "Mover" no rodapé (mover caixa, 19/11/2026: no cabeçalho do
+ * cartão não cabem os dois); a reservada nunca se move.
  */
 export function BoxCard({
   box,
@@ -531,16 +555,25 @@ export function BoxCard({
   skuIndex,
   reserved = false,
   onLabels,
+  onMover,
 }: {
   box: WarehouseBox;
   lines: BoxContentSource[];
   skuIndex: SkuIndex;
   reserved?: boolean;
   onLabels: (url: string) => void;
+  onMover?: (code: string) => void;
 }) {
   const contents = boxContents(box, lines, skuIndex);
   const units = reserved ? (box.draft_unit_count ?? 0) : boxBalanceUnits(box);
   const aberta = !reserved && estadoDaCaixa(box) === "aberta";
+  const mover = !reserved && box.status === "stored" ? onMover : undefined;
+  const etiqueta = (
+    <Button type="button" size="sm" variant="outline" onClick={() => onLabels(labelsUrl({ boxes: [box.code] }))}>
+      <Printer className="size-4" />
+      Etiqueta
+    </Button>
+  );
   return (
     <div className={cn("rounded-md border border-border bg-card p-3", reserved && "border-dashed")}>
       <div className="flex items-center justify-between gap-2">
@@ -554,10 +587,7 @@ export function BoxCard({
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-muted-foreground">{formatNumber(units)} un.</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => onLabels(labelsUrl({ boxes: [box.code] }))}>
-            <Printer className="size-4" />
-            Etiqueta
-          </Button>
+          {mover ? null : etiqueta}
         </span>
       </div>
       {contents.length ? (
@@ -586,6 +616,15 @@ export function BoxCard({
           .join(" · ")}
         {box.support_box_code ? ` · sobre ${box.support_box_code}` : ""}
       </div>
+      {mover ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {etiqueta}
+          <Button type="button" size="sm" variant="outline" onClick={() => mover(box.code)}>
+            <ArrowRight className="size-4" />
+            Mover
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -613,6 +652,7 @@ export function ShelfPanel({
   skuIndex,
   onClose,
   onLabels,
+  onMover,
 }: {
   shelf: Shelf;
   lines: BoxContentSource[];
@@ -620,6 +660,8 @@ export function ShelfPanel({
   /** O "Fechar" do painel ao lado da lista; no Sheet, sem ele (o X do Sheet fecha). */
   onClose?: () => void;
   onLabels: (url: string) => void;
+  /** Com quem mova: o "Mover" de cada caixa guardada abre Mover caixa com ela. */
+  onMover?: (code: string) => void;
 }) {
   const { position } = shelf;
   const [showAllBoxes, setShowAllBoxes] = useState(false);
@@ -684,7 +726,7 @@ export function ShelfPanel({
         ) : (
           <div className="space-y-2">
             {visibleBoxes.map((box) => (
-              <BoxCard key={box.code} box={box} lines={lines} skuIndex={skuIndex} onLabels={onLabels} />
+              <BoxCard key={box.code} box={box} lines={lines} skuIndex={skuIndex} onLabels={onLabels} onMover={onMover} />
             ))}
             {shelf.boxes.length > 3 ? (
               <Button type="button" variant="outline" className="w-full" onClick={() => setShowAllBoxes((current) => !current)}>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { warehouseBoxFromRecord } from "./warehouse-boxes";
 import {
+  lotesDoRegistro,
   BOXES_PER_SHEET,
   CONTINUATION_LABEL_LINES,
   FIRST_LABEL_LINES,
@@ -589,6 +590,17 @@ describe("etiqueta da caixa aberta (separação com caixas, parte 3)", () => {
     expect(saldosParaRegistrar([aberta, recebidaAberta, intacta, vazia])).toEqual(["CX-000028", "CX-000064"]);
   });
 
+  // Mover caixa (19/11/2026): a etiqueta imprime a prateleira; a caixa intacta movida também registra a impressão
+  // (a reimpressão conta, como a da caixa aberta).
+  it("a impressão registra também a caixa movida intacta", () => {
+    const movidaEm = "2026-11-19T17:32:00.000Z";
+    const movida = warehouseBoxFromRecord({ ...guardada, code: "CX-000031", location_id: "B-09", moved_at: movidaEm });
+    const impressa = warehouseBoxFromRecord({ ...guardada, code: "CX-000032", moved_at: movidaEm, location_label_printed_for: movidaEm });
+    const intacta = warehouseBoxFromRecord({ ...guardada, code: "CX-000030" });
+    const vazia = warehouseBoxFromRecord({ ...guardada, code: "CX-000033", status: "emptied", moved_at: movidaEm });
+    expect(saldosParaRegistrar([movida, impressa, intacta, vazia])).toEqual(["CX-000031", "CX-000032"]);
+  });
+
   it("o saldo ignora a saída de um produto que a caixa não tem e não fica negativo", () => {
     const conteudo = boxContent(entrada, "CX-000028");
     expect(balanceContent(conteudo, [])).toBe(conteudo);
@@ -656,5 +668,16 @@ describe("etiqueta da caixa recontada", () => {
       ["BTG-000084", 28],
       ["BTG-000085", 28],
     ]);
+  });
+});
+
+describe("o registro da impressão em lotes (o limite de 100 caixas por chamada)", () => {
+  it("divide em lotes de 100, na ordem, e não manda lote vazio", () => {
+    const codigos = Array.from({ length: 230 }, (_, indice) => `CX-${String(indice + 1).padStart(6, "0")}`);
+    const lotes = lotesDoRegistro(codigos);
+    expect(lotes.map((lote) => lote.length)).toEqual([100, 100, 30]);
+    expect(lotes.flat()).toEqual(codigos);
+    expect(lotesDoRegistro([])).toEqual([]);
+    expect(lotesDoRegistro(["CX-000001"])).toEqual([["CX-000001"]]);
   });
 });

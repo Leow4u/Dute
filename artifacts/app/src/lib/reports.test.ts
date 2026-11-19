@@ -112,6 +112,19 @@ describe("movimentações", () => {
     expect(classifyMovement({ tipo_mov: "SAIDA", putaway_task_id: "t", origem: "DOCA", destino: "A-01" }).kind).toBe("Transferência");
     expect(classifyMovement({ tipo_mov: "SAIDA", cycle_count_id: "c" })).toEqual({ kind: "Ajuste", origin: "Contagem" });
     expect(classifyMovement({ tipo_mov: "ENTRADA", reason: "Avaria", operational_operation_id: "op" }).origin).toBe("Ajuste: Avaria");
+    // O mover caixa (19/11/2026): a mudança de prateleira é transferência, não ajuste.
+    const mover = { reason: "Mudança de prateleira", operational_operation_id: "op", box_move_id: "bmv_1", from_location_id: "A-01", to_location_id: "B-09" };
+    expect(classifyMovement({ ...mover, tipo_mov: "SAIDA", movement_kind: "box_move_out" })).toEqual({ kind: "Transferência", origin: "Mudança de prateleira A-01 → B-09" });
+    expect(classifyMovement({ ...mover, tipo_mov: "ENTRADA", movement_kind: "box_move_in" })).toEqual({ kind: "Transferência", origin: "Mudança de prateleira A-01 → B-09" });
+  });
+
+  it("o mover caixa não entra nos totais nem nos ajustes", () => {
+    const mover = { data: "2026-11-19T17:32:00.000Z", quantity: 20, reason: "Mudança de prateleira", operational_operation_id: "op", box_move_id: "bmv_1", from_location_id: "A-01", to_location_id: "B-09" };
+    const report = movementsReport([
+      { ...mover, tipo_mov: "SAIDA", movement_kind: "box_move_out" },
+      { ...mover, tipo_mov: "ENTRADA", movement_kind: "box_move_in" },
+    ]);
+    expect(report.summary.map((linha) => linha.value)).toEqual(["+0 un.", "−0 un.", "0"]);
   });
 
   it("quantidade com sinal e totais sem contar transferência", () => {

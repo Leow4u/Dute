@@ -792,6 +792,8 @@ v3 de uma caixa. Desenho em
 | Mover caixa · movida | `mover-caixa/04-movida.png` | "CX-000121 em B-09", de onde saiu, unidades, hora e quem, "Imprimir etiqueta" e "Mover outra caixa"; "Etiquetas para trocar · 3" no cabeçalho com as caixas movidas sem etiqueta nova. |
 | Mover caixa · a recusa | `mover-caixa/05-recusa.png` | A frase do servidor no lugar do "Mover para": o item reservado na prateleira de origem para um pedido. |
 | Mover caixa no celular | `mover-caixa/06-celular.png` | Abrir pelo código da caixa, a sugestão, a escolha à mão e a caixa movida, com o botão de 48 px. |
+| O Mapa depois, no emulador | `mover-caixa/07-mapa-depois.png` | A tela de verdade contra o emulador (19/11/2026), depois de mover três caixas: a CX-000121 de A-01 para B-09 pela sugestão, e a CX-000140 e a CX-000141 de A-02 para C-02. Mostra "Mover caixa" no cabeçalho e, na ficha da B-09, as duas caixas com "Etiqueta" e "Mover" no rodapé. |
+| A caixa movida, no emulador | `mover-caixa/08-movida-emulador.png` | A tela de verdade contra o emulador: "CX-000141 em C-02", de onde saiu, as unidades, a hora e quem moveu, com "Etiquetas para trocar · 2" no topo (as caixas movidas ainda sem etiqueta nova). |
 
 ## Regras da v3
 
