@@ -48,4 +48,23 @@ describe("rota", () => {
     expect(lerRota(escreverRota(LINHA_PILOTO, conversa))).toEqual({ linha: LINHA_PILOTO, conversa, linhas: false });
     expect(lerRota(`#/linha/${LINHA_PILOTO}/conversa/outra_5511900000000`).conversa).toBeNull();
   });
+
+  it("abre os dados pelo endereço e volta à mesma conversa", () => {
+    const conversa = `${LINHA_PILOTO}_5511900000000`;
+    const endereco = `#/linha/${LINHA_PILOTO}/conversa/${conversa}`;
+    expect(escreverRota(LINHA_PILOTO, conversa, true)).toBe(`${endereco}/contato`);
+    const contato = lerRota(`${endereco}/contato`);
+    expect(contato).toEqual({ linha: LINHA_PILOTO, conversa, linhas: false, contato: true });
+    expect(escreverRota(contato.linha, contato.conversa)).toBe(endereco);
+    expect(escreverRota(LINHA_PILOTO, null, true)).toBe(`#/linha/${LINHA_PILOTO}`);
+  });
+
+  it("só abre os dados para uma conversa válida e o caminho de contato", () => {
+    const prefixo = `#/linha/${LINHA_PILOTO}/conversa/`;
+    const conversa = `${LINHA_PILOTO}_5511900000000`;
+    for (const id of ["outra_5511900000000", "%E0%A4", ""]) {
+      expect(lerRota(`${prefixo}${id}/contato`)).toEqual({ linha: LINHA_PILOTO, conversa: null, linhas: false });
+    }
+    expect(lerRota(`${prefixo}${conversa}/contato/outro`)).toEqual({ linha: LINHA_PILOTO, conversa, linhas: false });
+  });
 });
