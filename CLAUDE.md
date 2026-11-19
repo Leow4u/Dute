@@ -258,7 +258,12 @@ documentação de produto e operação está em `docs/`.
   `TELAS_DO_WMS_NA_V3` (`artifacts/app/src/lib/wms-v3.ts`): Início, Pedidos,
   Estoque e Receber até aqui, a tela nova Estoque › Alertas (parte 5.4e), as
   telas da contagem por caixa e, desde 18/11/2026, a Contagem, a entrada das
-  contagens (em andamento e anteriores, `docs/mockups/contagem-entrada/`); a
+  contagens (em andamento e anteriores, `docs/mockups/contagem-entrada/`;
+  desde 19/11/2026 com o registro da rodada: `count_rounds`, `startCountRound`
+  e `completeCountRound` no WMS, uma rodada aberta por cliente, geral, por rua
+  ou por item, a bancada gravando só na rodada aberta e dentro do alcance
+  dela, e a recontagem geral da BTG de 17/11, com o `round_id` fixo, virando
+  documento ao concluir); a
   abertura e a cíclica, as abas de antes, ficam em `/wms/contagem/abertura`,
   no visual antigo, só para o cliente com a abertura pendente ou em curso. As que não estão na lista seguem
   `docs/sistema-visual.md`. A Configuração tem a barra preta da v3 desde 11/11/2026, e o

@@ -26,6 +26,8 @@ const RODADA: RodadaDaContagem = {
   diferenca: -3,
   ruas: [],
   continuar: "B-10",
+  alcance: { tipo: "geral" },
+  concluida: null,
 };
 const TEXTOS = [
   "Recontagem geral · 17/11/2026",
@@ -50,6 +52,12 @@ describe("o cartão da rodada", () => {
     expect(html).toContain("width:50%");
     expect(textosForaDaLista(html, TEXTOS)).toEqual([]);
     expect(html).not.toContain("data-acoes-da-rodada");
+  });
+
+  it("a rodada concluída: o período e quem concluiu no lugar do começo", () => {
+    const html = renderToStaticMarkup(<CartaoDaRodada rodada={{ ...RODADA, concluida: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } }} agora={AGORA} />);
+    expect(textosForaDaLista(html, [...TEXTOS, "17/11 a 21/11 · Guilherme Dantas"])).toEqual([]);
+    expect(html).not.toContain("começou");
   });
 
   it("na entrada: h3 com o id dado e a fila de ações entre os números e a barra", () => {

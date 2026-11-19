@@ -38,12 +38,14 @@ import {
  * props (pages/estoque-contagem-rodada.tsx). Sem legenda.
  */
 
-export type EstadoDaRodada = "carregando" | "erro" | "pronto";
+export type EstadoDaRodada = "carregando" | "erro" | "sem_rodada" | "pronto";
 
 /** A volta: a Contagem, de onde a contagem por caixa se abre. */
 export const VOLTA_DA_RODADA = { href: "/wms/contagem", rotulo: "Contagem" } as const;
 /** O que a rodada diz sem nenhuma prateleira com caixa do cliente. */
 export const SEM_PRATELEIRAS_COM_CAIXA = "Nenhuma prateleira com caixa do cliente.";
+/** Sem rodada aberta, a tela não conta (decisão 2 de 18/11/2026): "Iniciar contagem" fica na entrada da Contagem. */
+export const SEM_RODADA_ABERTA = "Nenhuma contagem em andamento.";
 const MENSAGEM_DA_FALHA = "Não consegui carregar as prateleiras.";
 /** Quantas prateleiras que diferem o cartão "Caixas × saldo" mostra. */
 const DIFERENTES_A_VISTA = 6;
@@ -79,7 +81,7 @@ function Fantasmas() {
   );
 }
 
-function LinhaDaPrateleira({ prateleira, agora }: { prateleira: PrateleiraDaRodada; agora: Date }) {
+function LinhaDaPrateleira({ prateleira, agora, somenteLeitura }: { prateleira: PrateleiraDaRodada; agora: Date; somenteLeitura: boolean }) {
   const selo = seloDaPrateleira(prateleira, agora);
   const [caixas, ...resto] = prateleira.resumo.split(" · ");
   return (
@@ -91,11 +93,13 @@ function LinhaDaPrateleira({ prateleira, agora }: { prateleira: PrateleiraDaRoda
       </p>
       {selo ? <Selo className={corDoSelo(prateleira)}>{selo}</Selo> : null}
       {prateleira.bloqueio ? <Selo className="border-border bg-muted text-foreground">{prateleira.bloqueio}</Selo> : null}
-      <Button asChild variant="outline" className="max-md:min-h-11">
-        <Link href={hrefDaPrateleira(prateleira.posicao)} aria-label={`${acaoDaPrateleira(prateleira)} ${prateleira.posicao}`}>
-          {acaoDaPrateleira(prateleira)}
-        </Link>
-      </Button>
+      {somenteLeitura ? null : (
+        <Button asChild variant="outline" className="max-md:min-h-11">
+          <Link href={hrefDaPrateleira(prateleira.posicao)} aria-label={`${acaoDaPrateleira(prateleira)} ${prateleira.posicao}`}>
+            {acaoDaPrateleira(prateleira)}
+          </Link>
+        </Button>
+      )}
     </li>
   );
 }
@@ -140,6 +144,7 @@ function CaixasSaldo({ relatorio }: { relatorio: RelatorioCaixasSaldo }) {
 export function EstoqueContagemRodadaView({
   estado,
   rodada,
+  somenteLeitura = false,
   relatorio,
   leitura = [],
   aoVivo,
@@ -150,6 +155,8 @@ export function EstoqueContagemRodadaView({
 }: {
   estado: EstadoDaRodada;
   rodada: RodadaDaContagem | null;
+  /** A rodada concluída (o "Ver" das anteriores): sem Continuar e sem a ação das prateleiras. */
+  somenteLeitura?: boolean;
   relatorio: RelatorioCaixasSaldo | null;
   /** As leituras da folha (as posições, as caixas, a abertura e os saldos), para a linha de estado. */
   leitura?: readonly LeituraDaLista[];
@@ -188,7 +195,7 @@ export function EstoqueContagemRodadaView({
                 Imprimir folha
               </Link>
             </Button>
-            {estado === "pronto" && continuar ? (
+            {estado === "pronto" && continuar && !somenteLeitura ? (
               <Button asChild>
                 <Link href={hrefDaPrateleira(continuar)}>
                   <ChevronRight className="size-4" aria-hidden="true" />
@@ -213,6 +220,16 @@ export function EstoqueContagemRodadaView({
           mensagem={MENSAGEM_DA_FALHA}
           focoAoSair={ID_DA_LINHA}
         />
+      ) : estado === "sem_rodada" ? (
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card px-5 py-6">
+          <p className="text-sm font-semibold text-muted-foreground">{SEM_RODADA_ABERTA}</p>
+          <Button asChild>
+            <Link href={VOLTA_DA_RODADA.href}>
+              <ChevronRight className="size-4" aria-hidden="true" />
+              Iniciar contagem
+            </Link>
+          </Button>
+        </div>
       ) : rodada ? (
         <>
           {aoVivo?.falta === "conexao" && aoVivo.lidaEm == null ? <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} /> : null}
@@ -231,7 +248,7 @@ export function EstoqueContagemRodadaView({
                       </h2>
                       <ul className="rounded-xl border border-border bg-card">
                         {rua.prateleiras.map((prateleira) => (
-                          <LinhaDaPrateleira key={prateleira.posicao} prateleira={prateleira} agora={agora} />
+                          <LinhaDaPrateleira key={prateleira.posicao} prateleira={prateleira} agora={agora} somenteLeitura={somenteLeitura} />
                         ))}
                       </ul>
                     </section>

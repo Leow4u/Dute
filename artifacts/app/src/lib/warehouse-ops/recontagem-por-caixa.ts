@@ -64,15 +64,43 @@ function plural(quantos: number, singular: string, varios: string): string {
 const DIA_EM_SAO_PAULO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
 const DATA_CURTA = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
 
-/** Uma rodada de recontagem: o id que vai como `round_id` e o nome que a tela mostra. */
-export type RodadaDaRecontagem = { id: string; titulo: string };
+/** O alcance da rodada (decisão de 17/11/2026): toda prateleira com caixa, as de uma rua ou as com caixa que tem o item. */
+export type AlcanceDaRodada = { tipo: "geral" } | { tipo: "rua"; rua: string } | { tipo: "item"; sku: string; nome: string };
+
+/** Quando e quem: o começo e o fim da rodada, ou uma recontagem. */
+export type Momento = { quando: string; quem: string };
 
 /**
- * A recontagem geral das caixas da BTG, começada em 17/11/2026: a rodada de
- * toda recontagem por caixa até a coleção da rodada (PR seguinte), que dará
- * a cada rodada o id dela. Fixa: não muda na virada do dia.
+ * Uma rodada de recontagem: o id que vai como `round_id`, o nome que a tela
+ * mostra, o alcance e, no registro (`count_rounds`, rodadas-da-contagem.ts),
+ * o começo e o fim.
  */
-export const RODADA_DA_RECONTAGEM_GERAL: RodadaDaRecontagem = { id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026" };
+export type RodadaDaRecontagem = { id: string; titulo: string; alcance: AlcanceDaRodada; inicio: Momento | null; fim?: Momento | null };
+
+/**
+ * A recontagem geral das caixas da BTG, começada em 17/11/2026 antes do
+ * registro da rodada, com o id fixo: enquanto o documento dela não existe,
+ * as recontagens com esse id valem como a rodada aberta, e o começo é o da
+ * primeira recontagem; "Concluir contagem" cria o documento (functions/wms,
+ * count-rounds.ts).
+ */
+export const RODADA_DA_RECONTAGEM_GERAL: RodadaDaRecontagem = { id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026", alcance: { tipo: "geral" }, inicio: null };
+
+/**
+ * A prateleira está no alcance da rodada: por rua, é da rua; por item, alguma
+ * caixa dela (guardada, a caminho ou esvaziada nesta rodada) tem o item
+ * (`sku_codes`), e a prateleira se conta inteira (decisão de 18/11/2026).
+ * `caixas` pode ser a lista do cliente: a função separa as da prateleira.
+ */
+export function prateleiraNoAlcance(alcance: AlcanceDaRodada, posicao: string, rua: string, caixas: readonly WarehouseBox[], rodada: string): boolean {
+  if (alcance.tipo === "geral") return true;
+  if (alcance.tipo === "rua") return chave(rua) === chave(alcance.rua);
+  const alvo = chave(posicao);
+  const sku = chave(alcance.sku);
+  return caixas.some(
+    (caixa) => chave(caixa.location_id) === alvo && (caixa.status === "stored" || caixa.status === "committing" || esvaziadaNaRodada(caixa, rodada)) && caixa.sku_codes.some((code) => chave(code) === sku),
+  );
+}
 
 /** "17/11", no horário de São Paulo; "" sem instante válido. */
 export function dataCurta(instante: string | null | undefined): string {
@@ -874,6 +902,10 @@ export type RodadaDaContagem = {
   ruas: RuaDaRodada[];
   /** A prateleira em contagem mais recente, ou a primeira por contar. */
   continuar: string | null;
+  /** O alcance da rodada. */
+  alcance: AlcanceDaRodada;
+  /** A rodada concluída: quando e quem (o registro). */
+  concluida: Momento | null;
 };
 
 export type DadosDaRodada = {
@@ -924,6 +956,7 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   for (const prateleira of dados.prateleiras) {
     const vazias = vaziasPorLocal.get(prateleira.posicao) ?? [];
     if (!prateleira.guardadas && !prateleira.aCaminho && !vazias.length) continue;
+    if (!prateleiraNoAlcance(dados.rodada.alcance, prateleira.posicao, prateleira.rua, doCliente, dados.rodada.id)) continue;
     const guardadas = guardadasPorLocal.get(prateleira.posicao) ?? [];
     const daRodada = [...guardadas, ...vazias];
     const confirmadas = daRodada.flatMap((caixa) => {
@@ -963,7 +996,8 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   return {
     rodada: dados.rodada.id,
     titulo: dados.rodada.titulo,
-    comeco: comeco ? { quando: comeco.quando, quem: comeco.quem } : null,
+    // O começo é o do registro da rodada; a recontagem geral sem documento fica com o da primeira recontagem.
+    comeco: dados.rodada.inicio ?? (comeco ? { quando: comeco.quando, quem: comeco.quem } : null),
     prateleiras: linhas.length,
     prateleirasContadas: linhas.filter((linha) => linha.estado === "contada").length,
     caixas: linhas.reduce((soma, linha) => soma + linha.total, 0),
@@ -972,12 +1006,14 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
     diferenca: linhas.reduce((soma, linha) => soma + linha.diferenca, 0),
     ruas,
     continuar: emContagem[0]?.posicao ?? porContar?.posicao ?? null,
+    alcance: dados.rodada.alcance,
+    concluida: dados.rodada.fim ?? null,
   };
 }
 
 /** "começou 08:10 · Guilherme Dantas"; em outro dia que não o de `agora`, "começou 17/11 08:10 · Guilherme Dantas". */
 export function textoDoComeco(comeco: Pick<Recontagem, "quando" | "quem">, agora: Date): string {
-  return `começou ${quandoEmTexto(comeco.quando, agora)} · ${comeco.quem}`;
+  return [`começou ${quandoEmTexto(comeco.quando, agora)}`, comeco.quem].filter(Boolean).join(" · ");
 }
 
 /** "15 prateleiras · 2 contadas · 1 em contagem": o que a rua tem nesta rodada. */

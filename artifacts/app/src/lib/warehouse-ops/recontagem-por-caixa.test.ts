@@ -126,8 +126,8 @@ const RECONTAGEM_DA_011 = recontagensDasLinhas(
 );
 
 describe("a rodada da recontagem geral", () => {
-  it("é fixa até a coleção da rodada: o mesmo round_id em qualquer dia (decisão de 17/11/2026)", () => {
-    expect(RODADA_DA_RECONTAGEM_GERAL).toEqual({ id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026" });
+  it("tem o id fixo em qualquer dia (decisão de 17/11/2026), o alcance geral e o começo da primeira recontagem", () => {
+    expect(RODADA_DA_RECONTAGEM_GERAL).toEqual({ id: "recontagem-geral-2026-11-17", titulo: "Recontagem geral · 17/11/2026", alcance: { tipo: "geral" }, inicio: null });
   });
 
   it("a hora de hoje sai só com a hora; a de outro dia, com o dia, no horário de São Paulo", () => {
@@ -494,6 +494,40 @@ describe("a rodada por prateleira", () => {
     });
     expect(rodada.caixasConfirmadas).toBe(0);
     expect(rodada.comeco).toBeNull();
+  });
+  it("por rua, só as prateleiras da rua; por item, só as com caixa guardada que tem o item (contadas inteiras)", () => {
+    const caixas = [...CAIXAS, caixa("CX-000020", "A-04", { unit_count: 30, sku_codes: [GG.sku_code] }), caixa("CX-000030", "B-09", { unit_count: 16, sku_codes: [P.sku_code] })];
+    const base = { cliente: BTG, prateleiras: PRATELEIRAS, caixas, recontagens: [], guardas: [], reservas: [], agora: AGORA };
+    const porRua = rodadaDaContagem({ ...base, rodada: { id: "cr_b", titulo: "Contagem da rua B · 19/11/2026", alcance: { tipo: "rua", rua: "B" }, inicio: null } });
+    expect(porRua.ruas.map((rua) => [rua.rua, rua.prateleiras.map((prateleira) => prateleira.posicao)])).toEqual([["B", ["B-09"]]]);
+    expect([porRua.prateleiras, porRua.caixas, porRua.continuar, porRua.alcance]).toEqual([1, 1, "B-09", { tipo: "rua", rua: "B" }]);
+    const porItem = rodadaDaContagem({ ...base, rodada: { id: "cr_gg", titulo: "Contagem de Polo Masculino Piquet Preto · GG · 19/11/2026", alcance: { tipo: "item", sku: GG.sku_code, nome: "Polo Masculino Piquet Preto · GG" }, inicio: null } });
+    expect(porItem.ruas.map((rua) => rua.prateleiras.map((prateleira) => prateleira.posicao))).toEqual([["A-04"]]);
+    expect(porItem.continuar).toBe("A-04");
+  });
+
+  it("o começo vem do documento da rodada quando ele existe; sem recontagem, zeros e Continuar na primeira prateleira do alcance; a concluída leva o fim", () => {
+    const documento = { id: "cr_1", titulo: "Contagem geral · 19/11/2026", alcance: { tipo: "geral" as const }, inicio: { quando: "2026-11-19T11:10:00.000Z", quem: "Rafael" } };
+    const base = { cliente: BTG, prateleiras: PRATELEIRAS, caixas: [...CAIXAS, caixa("CX-000020", "A-04", { unit_count: 30 }), caixa("CX-000030", "B-09", { unit_count: 16 })], guardas: [], reservas: [], agora: AGORA };
+    const semRecontagem = rodadaDaContagem({ ...base, recontagens: [], rodada: documento });
+    expect(semRecontagem).toMatchObject({
+      rodada: "cr_1",
+      titulo: "Contagem geral · 19/11/2026",
+      comeco: { quando: "2026-11-19T11:10:00.000Z", quem: "Rafael" },
+      alcance: { tipo: "geral" },
+      concluida: null,
+      prateleiras: 3,
+      prateleirasContadas: 0,
+      caixas: 5,
+      caixasConfirmadas: 0,
+      caixasComDiferenca: 0,
+      diferenca: 0,
+      continuar: "A-03",
+    });
+    const comRecontagem = rodadaDaContagem({ ...base, recontagens: [{ ...recontada("CX-000010", "A-03", "2026-11-19T12:00:00.000Z"), rodada: "cr_1" }], rodada: documento });
+    expect(comRecontagem.comeco).toEqual({ quando: "2026-11-19T11:10:00.000Z", quem: "Rafael" });
+    const concluida = rodadaDaContagem({ ...base, recontagens: [], rodada: { ...documento, fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } } });
+    expect(concluida.concluida).toEqual({ quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" });
   });
 });
 

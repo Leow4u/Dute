@@ -1,12 +1,13 @@
 import { httpsCallable } from "firebase/functions";
 
-import { callableSemResposta, mensagemDaFalta } from "../conexao";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
-import { mensagemDoErro } from "../operacao/api";
 import type { EntradaDaRecontagem, RespostaDaRecontagem } from "../warehouse-ops/recontagem-por-caixa";
 
+import { erroDaCallable, type ErroDaCallable } from "./erro-da-callable";
 import { semCamposVazios } from "./separacao";
+
+export { detalheDaRecusa } from "./erro-da-callable";
 
 /**
  * Recontar uma caixa (contagem por caixa, diagnóstico da Contagem cíclica,
@@ -17,15 +18,11 @@ import { semCamposVazios } from "./separacao";
  *
  * O erro leva o código da callable (`failed-precondition`, para a tentativa
  * da escrita saber que nada foi gravado) e o motivo do servidor em
- * `detalhe` (`BOX_RECOUNT_LIST_CHANGED` e os outros de box-recount.ts).
+ * `detalhe` (`BOX_RECOUNT_LIST_CHANGED` e os outros de box-recount.ts):
+ * erro-da-callable.ts, o mesmo das chamadas da rodada.
  */
 
-export type ErroDaRecontagem = Error & { code?: string; detalhe?: string };
-
-/** O motivo da recusa que o servidor mandou em `details.code`; "" sem ele. */
-export function detalheDaRecusa(erro: unknown): string {
-  return String((erro as { detalhe?: unknown } | null)?.detalhe ?? "");
-}
+export type ErroDaRecontagem = ErroDaCallable;
 
 export async function recontarCaixa(entrada: EntradaDaRecontagem & { idempotency_key: string }): Promise<RespostaDaRecontagem> {
   if (!firebaseApp) throw new Error("Firebase não configurado.");
@@ -33,13 +30,6 @@ export async function recontarCaixa(entrada: EntradaDaRecontagem & { idempotency
   try {
     return (await callable(semCamposVazios({ ...entrada }))).data;
   } catch (error) {
-    const codigo = String((error as { code?: unknown } | null)?.code ?? "").replace(/^functions\//, "");
-    const detalhes = (error as { details?: unknown } | null)?.details;
-    const detalhe = detalhes && typeof detalhes === "object" ? String((detalhes as { code?: unknown }).code ?? "") : "";
-    const erro: ErroDaRecontagem = Object.assign(new Error(callableSemResposta(error) ? mensagemDaFalta() : mensagemDoErro(error)), {
-      ...(codigo ? { code: codigo } : {}),
-      ...(detalhe ? { detalhe } : {}),
-    });
-    throw erro;
+    throw erroDaCallable(error);
   }
 }

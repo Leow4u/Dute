@@ -75,6 +75,7 @@ import {
 } from "./domain/pick-progress.js";
 import { recordBoxBalanceLabelPrint as recordBoxBalanceLabelPrintFor } from "./domain/box-relabel.js";
 import { BOX_RECOUNT_EVENT_TYPE, entradaDaRecontagem, recountWarehouseBoxTransaction } from "./domain/box-recount.js";
+import { completeCountRoundTransaction, entradaDaConclusao, entradaDoInicio, startCountRoundTransaction } from "./domain/count-rounds.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
 import {
   CLIENT_ACCESS_COLLECTION,
@@ -6960,6 +6961,31 @@ export const recountWarehouseBox = onCall(async (request) => {
   const input = entradaDaRecontagem(request.data);
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return recountWarehouseBoxTransaction(db, { ...input, customer_code }, profile);
+});
+
+/**
+ * Iniciar a rodada da contagem (o registro da rodada, 18/11/2026): geral,
+ * por rua ou por item, uma aberta por cliente. Quem opera o armazém.
+ */
+export const startCountRound = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  // A entrada fora do formato recusa com a frase para quem opera; o ZodError cru viraria INTERNAL.
+  const input = entradaDoInicio(request.data);
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return startCountRoundTransaction(db, { ...input, customer_code }, profile);
+});
+
+/**
+ * Concluir a rodada da contagem: os números do fechamento saem das
+ * recontagens dela; a recontagem geral de 17/11 vira documento aqui.
+ */
+export const completeCountRound = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  const input = entradaDaConclusao(request.data);
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return completeCountRoundTransaction(db, { ...input, customer_code }, profile);
 });
 
 export const createReturnReceipt = onCall(async (request) => {

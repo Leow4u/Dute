@@ -327,6 +327,14 @@ describe("Estoque › Contagem por caixa › a prateleira", () => {
     expect(textosDaTela(render("pronto", { clienteFalhou: true }))).toEqual(["Contagem por caixa", "A-03", "Imprimir folha", "Voltar à rodada", "Não consegui carregar o cliente ativo.", "Tentar de novo"]);
   });
 
+  it("sem rodada aberta, a bancada não conta: a frase e Iniciar contagem para a entrada (decisão 2 de 18/11/2026)", async () => {
+    const html = render("sem_rodada");
+    expect(textosDaTela(html)).toEqual(["Contagem por caixa", "A-03", "Imprimir folha", "Voltar à rodada", "Nenhuma contagem em andamento.", "Iniciar contagem"]);
+    expect(html).toContain('href="/wms/contagem"');
+    expect(html).not.toContain("Contar");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
   it("passa nas regras WCAG 2.1 A e AA do axe, com e sem caixa em contagem, e não leva valor", async () => {
     const html = render();
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);

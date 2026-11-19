@@ -347,6 +347,21 @@ describe("ledger e mutações críticas", () => {
     await assertFails(deleteDoc(movement));
   });
 
+  it("rodadas da contagem: operação lê, ninguém grava pelo navegador, cliente não vê", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "count_rounds", "cr_a"), { customer_code: CUSTOMER_A, title: "Contagem geral · 19/11/2026", scope: "general", status: "open" });
+    });
+    const wms = testEnvironment.authenticatedContext("wms-a", { email: "wms-a@example.com" }).firestore();
+    await assertSucceeds(getDoc(doc(wms, "count_rounds", "cr_a")));
+    await assertFails(updateDoc(doc(wms, "count_rounds", "cr_a"), { status: "closed" }));
+    const admin = testEnvironment.authenticatedContext("admin-a", { email: "admin-a@example.com" }).firestore();
+    await assertSucceeds(getDoc(doc(admin, "count_rounds", "cr_a")));
+    await assertFails(setDoc(doc(admin, "count_rounds", "cr_b"), { customer_code: CUSTOMER_A, status: "open" }));
+    await assertFails(deleteDoc(doc(admin, "count_rounds", "cr_a")));
+    const client = testEnvironment.authenticatedContext("client-a", { email: "client-a@example.com" }).firestore();
+    await assertFails(getDoc(doc(client, "count_rounds", "cr_a")));
+  });
+
   it("posições do armazém: operação lê, ninguém grava pelo navegador, cliente não vê", async () => {
     const wms = testEnvironment
       .authenticatedContext("wms-a", { email: "wms-a@example.com" })

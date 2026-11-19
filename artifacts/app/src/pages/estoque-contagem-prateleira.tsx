@@ -9,9 +9,9 @@ import { avisoDoErroDaEscrita, useTentativaDaEscrita } from "@/lib/carregando/te
 import { relerDoZero } from "@/lib/carregando/reler-do-zero";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { horaEmTexto, hrefDaFolha } from "@/lib/warehouse-ops/contagem-por-caixa";
+import { juntarTentativas } from "@/lib/operacao/leitura";
 import {
   CONTAGEM_EM_BRANCO,
-  RODADA_DA_RECONTAGEM_GERAL,
   comRecontagensLocais,
   contagemDaCaixaVazia,
   entradaDaRecontagem,
@@ -26,6 +26,7 @@ import {
   type Recontagem,
 } from "@/lib/warehouse-ops/recontagem-por-caixa";
 import { useBancadaDaPrateleira } from "@/lib/warehouse-ops/use-recontagem";
+import { useRodadasDaContagem } from "@/lib/warehouse-ops/use-rodadas";
 import { recontarCaixa } from "@/lib/wms/recontagem";
 
 import { EstoqueContagemPrateleiraView, idsDaCaixa, type EstadoDaPrateleira } from "./estoque-contagem-prateleira-view";
@@ -35,8 +36,11 @@ import { EstoqueContagemPrateleiraView, idsDaCaixa, type EstadoDaPrateleira } fr
  * bancada da recontagem caixa a caixa (diagnóstico da Contagem cíclica,
  * seção 6, item 4). Cada "Confirmar caixa" grava a caixa e o saldo da
  * prateleira juntos, pela callable `recountWarehouseBox`, com o `round_id`
- * da recontagem geral; a resposta mostra na hora a caixa confirmada e a origem
- * da peça a mais, e a leitura ao vivo traz o que outra pessoa grava.
+ * da rodada aberta do cliente (lida de count_rounds; a recontagem geral de
+ * 17/11 sem documento vale como aberta); sem rodada aberta, a bancada não
+ * conta (decisão 2 de 18/11/2026). A resposta mostra na hora a caixa
+ * confirmada e a origem da peça a mais, e a leitura ao vivo traz o que outra
+ * pessoa grava.
  */
 
 type Pedido = { caixa: CaixaDaBancada; digitado: ContagemDigitada };
@@ -55,8 +59,9 @@ export default function PaginaPrateleiraDaContagem() {
   const operador = canOperateWarehouse(user?.publicMetadata.role);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // A rodada é a da recontagem geral, fixa até a coleção da rodada: a recontagem leva o `round_id` dela em qualquer dia.
-  const rodada = RODADA_DA_RECONTAGEM_GERAL.id;
+  // A rodada aberta do cliente: a recontagem leva o `round_id` dela; sem rodada, nada se conta.
+  const rodadas = useRodadasDaContagem(cliente);
+  const rodada = rodadas.aberta?.id ?? null;
   // O dia da tela, para a hora das recontagens: a de outro dia sai com o dia.
   const [agora] = useState(() => new Date());
   const leitura = useBancadaDaPrateleira(cliente, posicao, rodada);
@@ -82,7 +87,7 @@ export default function PaginaPrateleiraDaContagem() {
 
   const gravar = useMutation({
     mutationFn: ({ caixa: alvo, digitado: contado }: Pedido) => {
-      const entrada = cliente && posicao ? entradaDaRecontagem({ cliente, posicao, rodada }, alvo, contado) : null;
+      const entrada = cliente && posicao && rodada ? entradaDaRecontagem({ cliente, posicao, rodada }, alvo, contado) : null;
       if (!entrada) return Promise.reject(new Error("Conte todos os itens da caixa."));
       return tentativa.enviar({ caixa: alvo.code, itens: alvo.itens.map((item) => item.sku), digitado: contado }, () => entrada, (corpo) => recontarCaixa(corpo));
     },
@@ -138,16 +143,20 @@ export default function PaginaPrateleiraDaContagem() {
     },
   };
 
-  // A prateleira sem caixa do cliente diz isso, e só depois de ler tudo: nunca a lista vazia antes da leitura.
+  // A prateleira sem caixa do cliente diz isso, e só depois de ler tudo: nunca a lista vazia antes da leitura; sem rodada
+  // aberta, também só depois de ler as rodadas.
   const estado: EstadoDaPrateleira = !posicao
     ? "nao_encontrada"
-    : clienteCarregando || leitura.carregando
+    : clienteCarregando || rodadas.carregando || leitura.carregando
       ? "carregando"
-      : leitura.falhou
+      : rodadas.falhou || leitura.falhou
         ? "erro"
-        : !bancada?.caixas.length
-          ? "nao_encontrada"
-          : "pronto";
+        : !rodada
+          ? "sem_rodada"
+          : !bancada?.caixas.length
+            ? "nao_encontrada"
+            : "pronto";
+  const aoVivo = juntarTentativas(rodadas.leitura, leitura.leitura);
 
   return (
     <EstoqueContagemPrateleiraView
@@ -164,8 +173,8 @@ export default function PaginaPrateleiraDaContagem() {
       catalogoFalhou={leitura.catalogoFalhou}
       onTentarCatalogo={() => relerDoZero(queryClient, [["estoque", "skus"]])}
       hrefDaFolha={hrefDaFolha(bancada?.rua)}
-      leitura={leitura.leitura}
-      onTentar={() => leitura.leitura.tentar()}
+      leitura={aoVivo}
+      onTentar={() => aoVivo.tentar()}
       onContar={abrir}
       acoes={acoes}
     />

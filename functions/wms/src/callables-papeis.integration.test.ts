@@ -208,6 +208,9 @@ const MATRIZ: Record<string, Linha> = {
   receiveOrderReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recordCycleCount: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recountWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  // Iniciar e concluir a rodada da contagem (o registro da rodada, 18/11/2026): quem opera o armazém.
+  startCountRound: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  completeCountRound: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Os tipos que entram à mão estão em eventos-manuais.integration.test.ts.
   recordOperationalEvent: {
     passam: INTERNOS,
