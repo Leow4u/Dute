@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { collection, limit, onSnapshot, orderBy, query, where, type Timestamp } from "firebase/firestore";
 
 import { registrarAcesso } from "./acesso";
@@ -36,7 +36,8 @@ const ALTURAS = [8, 14, 22, 12, 26, 18, 10, 24, 28, 16, 9, 20, 26, 14, 8, 18, 24
 export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => void }) {
   const [rota, setRota] = useState(() => lerRota(window.location.hash));
   const [conversas, setConversas] = useState<Conversa[] | null>(null);
-  const [mensagens, setMensagens] = useState<Mensagem[] | null>(null);
+  const [historico, setHistorico] = useState<{ conversa: string; itens: Mensagem[] } | null>(null);
+  const mensagens = historico && historico.conversa === rota.conversa ? historico.itens : null;
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [buscaNaConversa, setBuscaNaConversa] = useState("");
@@ -46,6 +47,10 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
   const [noFim, setNoFim] = useState(true);
   const [vistos, setVistos] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState("");
+  const painel = useRef<HTMLDivElement>(null);
+  const lista = useRef<HTMLDivElement>(null);
+  const origemNaLista = useRef<{ posicao: number; botao: HTMLButtonElement } | null>(null);
+  const rotaAnterior = useRef(rota);
   const caixa = useRef<HTMLDivElement>(null);
   const abertoAntes = useRef<string | null>(null);
 
@@ -54,6 +59,54 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
     window.addEventListener("hashchange", aoMudar);
     return () => window.removeEventListener("hashchange", aoMudar);
   }, []);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const app = painel.current;
+    if (!viewport || !app) return;
+    // No Safari, o teclado reduz a área visível sem necessariamente alterar 100dvh.
+    let quadro = 0;
+    const agendarAjuste = () => {
+      cancelAnimationFrame(quadro);
+      quadro = requestAnimationFrame(() => {
+        if (document.activeElement instanceof HTMLInputElement && viewport.scale === 1) {
+          app.style.setProperty("--zap-viewport-height", `${viewport.height}px`);
+        } else {
+          app.style.removeProperty("--zap-viewport-height");
+        }
+      });
+    };
+    viewport.addEventListener("resize", agendarAjuste);
+    app.addEventListener("focusin", agendarAjuste);
+    app.addEventListener("focusout", agendarAjuste);
+    return () => {
+      cancelAnimationFrame(quadro);
+      viewport.removeEventListener("resize", agendarAjuste);
+      app.removeEventListener("focusin", agendarAjuste);
+      app.removeEventListener("focusout", agendarAjuste);
+      app.style.removeProperty("--zap-viewport-height");
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const antes = rotaAnterior.current;
+    rotaAnterior.current = rota;
+    const app = painel.current;
+    if (!app) return;
+    if (!rota.conversa && antes.conversa) {
+      const origem = origemNaLista.current;
+      if (origem && lista.current) lista.current.scrollTop = origem.posicao;
+      if (origem?.botao.isConnected) origem.botao.focus({ preventScroll: true });
+      else app.querySelector<HTMLHeadingElement>(".lh h1")?.focus({ preventScroll: true });
+      origemNaLista.current = null;
+    } else if (rota.contato && !antes.contato) {
+      app.querySelector<HTMLButtonElement>(".back-contact")?.focus({ preventScroll: true });
+    } else if (antes.contato && rota.conversa) {
+      app.querySelector<HTMLButtonElement>(".mobile-contact")?.focus({ preventScroll: true });
+    } else if (rota.conversa && !antes.conversa) {
+      app.querySelector<HTMLButtonElement>(".ch .back")?.focus({ preventScroll: true });
+    }
+  }, [rota]);
 
   useEffect(() => {
     registrarAcesso("entered");
@@ -73,17 +126,17 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
   }, []);
 
   useEffect(() => {
-    if (!firestore || !rota.conversa) {
-      setMensagens(null);
+    const id = rota.conversa;
+    if (!firestore || !id) {
+      setHistorico(null);
       return;
     }
-    setMensagens(null);
     setBuscaNaConversa("");
     setBuscando(false);
-    const consulta = query(collection(firestore, "zap_messages"), where("conversation_id", "==", rota.conversa), orderBy("occurred_at", "asc"), limit(300));
+    const consulta = query(collection(firestore, "zap_messages"), where("conversation_id", "==", id), orderBy("occurred_at", "asc"), limit(300));
     return onSnapshot(consulta, (snap) => {
       setErro(null);
-      setMensagens(snap.docs.map((documento) => mensagemDe(documento.id, documento.data())));
+      setHistorico({ conversa: id, itens: snap.docs.map((documento) => mensagemDe(documento.id, documento.data())) });
     }, () => setErro("Não foi possível ler a conversa."));
   }, [rota.conversa]);
 
@@ -96,21 +149,35 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
   }, [mensagens, vistoAberto]);
 
   useEffect(() => {
-    if (!rota.conversa || !mensagens || abertoAntes.current === rota.conversa) return;
-    abertoAntes.current = rota.conversa;
+    if (!rota.conversa) {
+      abertoAntes.current = null;
+      return;
+    }
+    if (!mensagens || abertoAntes.current === rota.conversa) return;
     const quadro = caixa.current;
-    if (!quadro) return;
+    if (!quadro || !quadro.clientHeight) return;
+    abertoAntes.current = rota.conversa;
     const marco = quadro.querySelector("[data-nao-lidas]");
     if (marco) marco.scrollIntoView({ block: "center" });
     else quadro.scrollTop = quadro.scrollHeight;
     setNoFim(quadro.scrollHeight - quadro.scrollTop - quadro.clientHeight < 80);
-  }, [mensagens, rota.conversa]);
+  }, [mensagens, rota.conversa, rota.contato]);
 
-  function irPara(conversa: Conversa | null) {
-    const linha = conversa?.phone_number_id ?? rota.linha;
-    const proxima = escreverRota(linha, conversa?.id ?? null);
-    window.location.hash = proxima;
-    setRota({ linha, conversa: conversa?.id ?? null, linhas: !conversa });
+  function abrir(hash: string, origem: "lista" | "conversa" | null) {
+    if (window.location.hash === hash) return;
+    window.history.pushState({ zapOrigem: origem }, "", hash);
+    setRota(lerRota(hash));
+  }
+
+  function voltar(para: "lista" | "conversa") {
+    if (window.history.state?.zapOrigem === para) {
+      window.history.back();
+      return;
+    }
+    // Um link direto também precisa de volta, mesmo sem histórico no painel.
+    const hash = escreverRota(rota.linha, para === "conversa" ? rota.conversa : null);
+    window.history.replaceState(null, "", hash);
+    setRota(lerRota(hash));
   }
 
   function visto(id: string) {
@@ -128,7 +195,7 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
 
   function aoRolar() {
     const quadro = caixa.current;
-    if (!quadro || !rota.conversa || !mensagens) return;
+    if (!quadro || !quadro.clientHeight || !rota.conversa || !mensagens) return;
     const fim = quadro.scrollHeight - quadro.scrollTop - quadro.clientHeight < 80;
     setNoFim(fim);
     if (!fim) return;
@@ -155,12 +222,13 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
     return digitos.length >= 3 && conversa.contact_wa_id.includes(digitos);
   });
   const totalNaoLidas = (conversas ?? []).filter((conversa) => quantidadeDa(conversa, mensagens, rota.conversa, visto(conversa.id)) > 0).length;
+  const filtroDeLinha = filtro === "todas" || filtro === "nao-lidas" ? "" : filtro;
   const textoDaBusca = buscaNaConversa.trim().toLowerCase();
   const mensagensVisiveis = (mensagens ?? []).filter((mensagem) => !textoDaBusca || mensagem.text.toLowerCase().includes(textoDaBusca) || rotuloDoTipo(mensagem.type).toLowerCase().includes(textoDaBusca));
   const tela = rota.conversa ? "conversa" : "lista";
 
   return (
-    <div className="app" data-tela={tela} data-dados={dadosAbertos && aberta ? "aberto" : "fechado"}>
+    <div ref={painel} className="app" data-tela={tela} data-contato={rota.contato && aberta ? "aberto" : "fechado"} data-dados={dadosAbertos && aberta ? "aberto" : "fechado"}>
       <nav className="rail" aria-label="Painel">
         <img src="/logo-d.png" alt="Dutelog" />
         <button type="button" className="it on" aria-current="page" aria-label="Conversas">
@@ -175,15 +243,19 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
       </nav>
 
       <section className="list" aria-label="Conversas">
+        <div className="mobile-brand">
+          <img src="/logo-d.png" alt="" /><strong>Dutelog</strong><span>Dute Zap</span>
+          <button type="button" className="sair" onClick={aoSair}>Sair</button>
+        </div>
         <div className="lh">
-          <h1>Conversas</h1>
+          <h1 tabIndex={-1}>Conversas</h1>
           <span className="live"><i />Ao vivo</span>
           <button type="button" className="sair" onClick={aoSair}>Sair</button>
         </div>
         <label className="search">
           <Icone nome="srch" />
           <span className="sr">Buscar nome, número ou mensagem</span>
-          <input value={busca} onChange={(evento) => setBusca(evento.target.value)} placeholder="Buscar nome, número ou mensagem" />
+          <input type="search" value={busca} onChange={(evento) => setBusca(evento.target.value)} placeholder="Buscar conversas" />
         </label>
         <div className="chips" role="toolbar" aria-label="Filtrar conversas">
           <button type="button" className={filtro === "todas" ? "chip on" : "chip"} aria-pressed={filtro === "todas"} onClick={() => setFiltro("todas")}>Todas</button>
@@ -191,13 +263,20 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
             Não lidas{totalNaoLidas > 0 ? <b>{totalNaoLidas}</b> : null}
           </button>
           {LINHAS_ZAP.map((linha) => (
-            <button key={linha.phone_number_id} type="button" className={filtro === linha.phone_number_id ? "chip on" : "chip"} aria-pressed={filtro === linha.phone_number_id} onClick={() => setFiltro(linha.phone_number_id)}>
+            <button key={linha.phone_number_id} type="button" className={filtro === linha.phone_number_id ? "chip chip-agent on" : "chip chip-agent"} aria-pressed={filtro === linha.phone_number_id} onClick={() => setFiltro(linha.phone_number_id)}>
               {rotuloDoChip(linha)}
             </button>
           ))}
+          <span className={filtroDeLinha ? "chip-line-wrap on" : "chip-line-wrap"}>
+            <select className={filtroDeLinha ? "chip chip-line on" : "chip chip-line"} aria-label="Filtrar por linha" value={filtroDeLinha} onChange={(evento) => setFiltro(evento.target.value || "todas")}>
+              <option value="">Linha</option>
+              {LINHAS_ZAP.map((linha) => <option key={linha.phone_number_id} value={linha.phone_number_id}>{rotuloDoChip(linha)}</option>)}
+            </select>
+            <Icone nome="bk" />
+          </span>
         </div>
         {erro ? <p className="faixa" role="alert">{erro}</p> : null}
-        <div className="rows">
+        <div className="rows" ref={lista}>
           {conversas === null ? <p className="vazio">Carregando…</p> : null}
           {conversas && visiveis.length === 0 ? <p className="vazio">Nenhuma conversa.</p> : null}
           {visiveis.map((conversa) => {
@@ -206,14 +285,17 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
             const quantidade = quantidadeDa(conversa, mensagens, rota.conversa, visto(conversa.id));
             const nomeContato = nomeDoContato(conversa.contact_name, conversa.contact_wa_id);
             return (
-              <button type="button" key={conversa.id} className={conversa.id === rota.conversa ? "row sel" : "row"} aria-current={conversa.id === rota.conversa ? "true" : undefined} onClick={() => irPara(conversa)}>
+              <button type="button" key={conversa.id} className={conversa.id === rota.conversa ? "row sel" : "row"} aria-current={conversa.id === rota.conversa ? "true" : undefined} onClick={(evento) => {
+                if (!rota.conversa) origemNaLista.current = { posicao: lista.current?.scrollTop ?? 0, botao: evento.currentTarget };
+                abrir(escreverRota(conversa.phone_number_id, conversa.id), rota.conversa ? null : "lista");
+              }}>
                 <span className="pic" style={{ background: corDoAvatar(nomeContato) }} aria-hidden="true">{iniciais(nomeContato)}</span>
                 <span className="rb">
                   <span className="r1">
                     <span className="nm">{nomeContato}</span>
                     {conversa.last_message_at ? <time className={quantidade > 0 ? "tm un" : "tm"} dateTime={conversa.last_message_at.toISOString()}>{horaDaLista(conversa.last_message_at)}</time> : null}
                   </span>
-                  <span className="bd" style={{ background: tom.fundo, color: tom.texto }}>{linha ? `${linha.nome} · ${linha.area}` : "Linha"}</span>
+                  <span className="bd" style={{ "--badge-bg": tom.fundo, "--badge-ink": tom.texto } as CSSProperties}>{linha ? `${linha.nome} · ${linha.area}` : "Linha"}</span>
                   <span className="r2">
                     <span className="pv">{previa(conversa)}</span>
                     {quantidade > 0 ? <span className="cnt">{quantidade}</span> : null}
@@ -233,13 +315,17 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
             dadosAbertos={dadosAbertos}
             buscando={buscando}
             busca={buscaNaConversa}
-            aoVoltar={() => irPara(null)}
+            aoVoltar={() => voltar("lista")}
+            aoContato={() => abrir(escreverRota(rota.linha, rota.conversa, true), "conversa")}
             aoDados={() => setDadosAbertos((atual) => !atual)}
             aoBuscar={() => setBuscando((atual) => !atual)}
             aoTexto={setBuscaNaConversa}
           />
         ) : (
-          <header className="ch"><div className="t"><b>Conversa</b><span>Selecione uma conversa.</span></div></header>
+          <header className="ch">
+            {rota.conversa ? <button type="button" className="ic back" onClick={() => voltar("lista")} aria-label="Voltar às conversas"><Icone nome="bk" /></button> : null}
+            <div className="t"><b>Conversa</b><span>{rota.conversa ? conversas === null ? "Carregando conversa…" : "Dados do contato indisponíveis." : "Selecione uma conversa."}</span></div>
+          </header>
         )}
         <div className="msgs" ref={caixa} onScroll={aoRolar}>
           {!rota.conversa ? <p className="vazio">Selecione uma conversa.</p> : null}
@@ -255,7 +341,7 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
         </div>
         <p className="sr" role="status">{aviso}</p>
         <footer className="ft">
-          <p className="n"><Icone nome="lock" /><span>Somente leitura — responder pelo painel em breve</span></p>
+          <p className="n"><Icone nome="lock" /><span>Somente leitura<span className="desktop-readonly"> — responder pelo painel em breve</span></span></p>
           <button type="button" className="btn" disabled aria-describedby="assumir-breve">
             <Icone nome="hand" />Assumir conversa<small id="assumir-breve">Em breve</small>
           </button>
@@ -264,7 +350,7 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
 
       {aberta ? (
         <aside className="info" aria-label="Dados do contato">
-          <div className="ih">Dados do contato</div>
+          <div className="ih"><button type="button" className="ic back-contact" aria-label="Voltar à conversa" onClick={() => voltar("conversa")}><Icone nome="bk" /></button>Dados do contato</div>
           <div className="ip">
             <span className="pic" style={{ background: corDoAvatar(nomeDoContato(aberta.contact_name, aberta.contact_wa_id)) }} aria-hidden="true">{iniciais(nomeDoContato(aberta.contact_name, aberta.contact_wa_id))}</span>
             <b>{nomeDoContato(aberta.contact_name, aberta.contact_wa_id)}</b>
@@ -288,25 +374,32 @@ export function Painel({ nome, aoSair }: { nome: string | null; aoSair: () => vo
   );
 }
 
-function Cabeca({ conversa, linha, dadosAbertos, buscando, busca, aoVoltar, aoDados, aoBuscar, aoTexto }: {
+function Cabeca({ conversa, linha, dadosAbertos, buscando, busca, aoVoltar, aoContato, aoDados, aoBuscar, aoTexto }: {
   conversa: Conversa;
   linha: LinhaZap | null;
   dadosAbertos: boolean;
   buscando: boolean;
   busca: string;
   aoVoltar: () => void;
+  aoContato: () => void;
   aoDados: () => void;
   aoBuscar: () => void;
   aoTexto: (valor: string) => void;
 }) {
   const nome = nomeDoContato(conversa.contact_name, conversa.contact_wa_id);
+  const linhaDoContato = linha ? `${linha.nome} · ${linha.area}` : "Linha";
   return (
     <header className="ch">
       <button type="button" className="ic back" onClick={aoVoltar} aria-label="Voltar às conversas"><Icone nome="bk" /></button>
-      <span className="pic" style={{ background: corDoAvatar(nome) }} aria-hidden="true">{iniciais(nome)}</span>
-      <div className="t">
+      <button type="button" className="mobile-contact" onClick={aoContato} aria-label={`Dados do contato: ${nome}`}>
+        <span className="pic" style={{ background: corDoAvatar(nome) }} aria-hidden="true">{iniciais(nome)}</span>
+        <span className="t"><b>{nome}</b><span>{linhaDoContato}</span></span>
+        <Icone nome="inf" />
+      </button>
+      <span className="pic desktop-contact" style={{ background: corDoAvatar(nome) }} aria-hidden="true">{iniciais(nome)}</span>
+      <div className="t desktop-contact">
         <b>{nome}</b>
-        <span>{mascararTelefone(conversa.contact_wa_id)} · {linha ? `${linha.nome} · ${linha.area}` : "Linha"}</span>
+        <span>{mascararTelefone(conversa.contact_wa_id)} · {linhaDoContato}</span>
       </div>
       <span className="ro"><Icone nome="eye" /><span>Somente leitura</span></span>
       <button type="button" className={buscando ? "ic on" : "ic"} aria-pressed={buscando} aria-label="Buscar nesta conversa" onClick={aoBuscar}><Icone nome="srch" /></button>
