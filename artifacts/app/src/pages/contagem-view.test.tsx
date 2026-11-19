@@ -133,9 +133,13 @@ describe("Estoque › Contagem, a entrada", () => {
     expect(textos).toContain("Concluir contagem");
   });
 
-  it("sem prateleira com caixa, nada em andamento; sem abertura registrada nem rodada anterior, nada em Anteriores", () => {
+  it("a rodada aberta sem prateleira no alcance aparece assim mesmo, com zeros e Concluir contagem, para nunca ficar sem saída; sem abertura nem rodada anterior, nada em Anteriores", () => {
     const semCaixas = textosDaTela(render("pronto", { rodada: { ...RODADA, prateleiras: 0, prateleirasContadas: 0, caixas: 0, caixasConfirmadas: 0, caixasComDiferenca: 0, diferenca: 0, continuar: null } }));
-    expect(semCaixas).toEqual([...CABECALHO, ...ANTERIORES]);
+    expect(semCaixas).toContain("Em andamento");
+    expect(semCaixas).toContain("Ver prateleiras");
+    expect(semCaixas).toContain("Concluir contagem");
+    expect(semCaixas.some((texto) => texto.startsWith("Continuar"))).toBe(false);
+    expect(semCaixas.slice(-ANTERIORES.length)).toEqual(ANTERIORES);
     const semAbertura = textosDaTela(render("pronto", { abertura: null }));
     expect(semAbertura).toEqual([...CABECALHO, ...CARTAO, ...ACOES]);
     const semNada = textosDaTela(render("pronto", { abertura: null, rodada: null, concluir: null, iniciar: INICIAR, anteriores: [] }));

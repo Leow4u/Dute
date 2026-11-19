@@ -81,7 +81,8 @@ export default function PaginaDaContagem() {
 
   // Iniciar e concluir: a chave da tentativa repete a mesma chave depois de um resultado incerto (nunca grava duas vezes).
   const [iniciarAberto, setIniciarAberto] = useState(false);
-  const [concluirAberto, setConcluirAberto] = useState(false);
+  // A rodada no diálogo de concluir: o id de quando ele abriu, que a leitura ao vivo não tira no meio da gravação.
+  const [concluindo, setConcluindo] = useState<string | null>(null);
   const tentativaDoInicio = useTentativaDaEscrita();
   const tentativaDaConclusao = useTentativaDaEscrita();
   const inicio = useMutation({
@@ -106,7 +107,7 @@ export default function PaginaDaContagem() {
     onSuccess: (resposta) => {
       const registrada = cliente ? rodadaRegistrada(resposta.round_id, { ...resposta, customer_code: cliente }) : null;
       toast({ title: "Contagem concluída", description: registrada?.numeros ? numerosDaRodadaConcluida(registrada.numeros) : resposta.title });
-      setConcluirAberto(false);
+      setConcluindo(null);
     },
     onError: (erro: Error) => {
       toast({ ...avisoDoErroDaEscrita(erro, "Contagem não concluída"), description: erro.message });
@@ -121,8 +122,10 @@ export default function PaginaDaContagem() {
         ? "erro"
         : "pronto";
 
+  // A ação de iniciar existe sem rodada aberta; com o diálogo aberto, fica até a resposta, mesmo que a rodada nova chegue
+  // antes pela leitura ao vivo (o diálogo que grava não fecha no meio).
   const iniciar: IniciarNaEntrada | null =
-    estado === "pronto" && !rodada
+    (estado === "pronto" && !rodada) || iniciarAberto
       ? {
           aberto: iniciarAberto,
           estado: inicio.isPending ? "andamento" : "repouso",
@@ -138,17 +141,20 @@ export default function PaginaDaContagem() {
           },
         }
       : null;
+  // A de concluir existe com a rodada aberta; com o diálogo aberto, fica até a resposta, mesmo que a rodada saia antes.
   const concluir: ConcluirNaEntrada | null =
-    estado === "pronto" && rodada
+    (estado === "pronto" && rodada) || concluindo
       ? {
-          aberto: concluirAberto,
+          aberto: concluindo !== null,
           estado: conclusao.isPending ? "andamento" : "repouso",
-          onAbrir: () => setConcluirAberto(true),
+          onAbrir: () => {
+            if (rodada) setConcluindo(rodada.id);
+          },
           onFechar: () => {
-            if (!conclusao.isPending) setConcluirAberto(false);
+            if (!conclusao.isPending) setConcluindo(null);
           },
           onConcluir: () => {
-            if (!conclusao.isPending) conclusao.mutate(rodada.id);
+            if (!conclusao.isPending && concluindo) conclusao.mutate(concluindo);
           },
         }
       : null;

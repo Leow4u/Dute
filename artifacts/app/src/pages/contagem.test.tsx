@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Anunciador } from "@/lib/carregando/anunciador";
 import { ProvedorDaConexao } from "@/lib/carregando/estado-da-conexao";
 import { conexaoEm } from "@/test/conexao";
-import { botaoPeloRotulo, rotuloDoBotao } from "@/test/botoes";
+import { botaoPeloRotulo, depoisDoToqueDuplo, rotuloDoBotao } from "@/test/botoes";
 
 /**
  * Estoque › Contagem, a page da entrada (desenho de 18/11/2026 e o registro
@@ -96,17 +96,31 @@ const naTela = () => {
   return (copia.textContent ?? "").replace(/\s+/g, " ");
 };
 
+let cliente: QueryClient;
+
+function arvore() {
+  return (
+    <ProvedorDaConexao value={conexaoEm("conectado")}>
+      <QueryClientProvider client={cliente}>
+        <Anunciador />
+        <PaginaDaContagem />
+      </QueryClientProvider>
+    </ProvedorDaConexao>
+  );
+}
+
 async function montar() {
+  cliente = new QueryClient();
   raiz = createRoot(container);
   await act(async () => {
-    raiz!.render(
-      <ProvedorDaConexao value={conexaoEm("conectado")}>
-        <QueryClientProvider client={new QueryClient()}>
-          <Anunciador />
-          <PaginaDaContagem />
-        </QueryClientProvider>
-      </ProvedorDaConexao>,
-    );
+    raiz!.render(arvore());
+  });
+}
+
+/** A leitura ao vivo trouxe outra coisa (o mock lê o estado de agora): a page renderiza de novo. */
+async function remontar() {
+  await act(async () => {
+    raiz!.render(arvore());
   });
 }
 
@@ -165,13 +179,44 @@ describe("Estoque › Contagem, a page da entrada", () => {
     expect(estado.navegar).not.toHaveBeenCalled();
   });
 
-  it("a recontagem geral sem documento é a rodada em andamento, com Concluir contagem e sem Iniciar", async () => {
+  it("a recontagem geral sem documento é a rodada em andamento: o cartão, mesmo sem prateleira no alcance, com Concluir contagem e sem Iniciar", async () => {
     estado.sessao = { data: CONCLUIDA, isLoading: false, isError: false, error: null };
     estado.rodadas = { ...estado.rodadas, aberta: RODADA_DA_RECONTAGEM_GERAL };
     await montar();
     await esperar(() => naTela().includes("Anteriores"), "a entrada pronta");
-    // Sem prateleira com caixa (as leituras vêm vazias), a seção "Em andamento" não aparece, mas Iniciar não entra: há rodada aberta.
+    // As leituras vêm sem prateleira: a rodada aberta aparece assim mesmo, para nunca ficar sem saída.
+    expect(naTela()).toContain("Em andamento");
+    expect(naTela()).toContain("Recontagem geral · 17/11/2026");
+    expect(botaoPeloRotulo(document.body, "Concluir contagem")).toBeDefined();
     expect(naTela()).not.toContain("Iniciar contagem");
+  });
+
+  it("Iniciar contagem: o diálogo fica até a resposta, mesmo com a rodada nova chegando antes pela leitura ao vivo", async () => {
+    estado.sessao = { data: CONCLUIDA, isLoading: false, isError: false, error: null };
+    let responder: (valor: unknown) => void = () => undefined;
+    iniciarContagem.mockImplementation(
+      () =>
+        new Promise((pronto) => {
+          responder = pronto;
+        }),
+    );
+    await montar();
+    await esperar(() => Boolean(botaoPeloRotulo(document.body, "Iniciar contagem")), "o Iniciar contagem");
+    await clicar("Iniciar contagem");
+    await esperar(() => naTela().includes("Alcance"), "o diálogo");
+    await clicar("Iniciar contagem");
+    await esperar(() => iniciarContagem.mock.calls.length > 0, "a chamada");
+    // A rodada nova chega pela leitura ao vivo antes da resposta da callable: o diálogo fica, e o cabeçalho não oferece outra.
+    estado.rodadas = { ...estado.rodadas, aberta: ABERTA, registradas: [ABERTA] };
+    await remontar();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector("header")?.textContent ?? "").not.toContain("Iniciar contagem");
+    await act(async () => {
+      responder({ ok: true, round_id: "cr_1", title: "Contagem geral · 19/11/2026", status: "open" });
+    });
+    await esperar(() => estado.toast.length > 0, "o aviso");
+    expect(estado.toast[0]).toEqual({ title: "Contagem iniciada", description: "Contagem geral · 19/11/2026" });
+    await esperar(() => document.querySelector('[role="dialog"]') === null, "o diálogo fechado");
   });
 
   it("Iniciar contagem: o diálogo manda o alcance pela callable, com a chave, e fecha no sucesso com o aviso", async () => {
@@ -193,14 +238,46 @@ describe("Estoque › Contagem, a page da entrada", () => {
     await esperar(() => !naTela().includes("Alcance"), "o diálogo fechado");
   });
 
-  it("Concluir contagem: o diálogo manda a rodada aberta pela callable; a recusa deixa o diálogo aberto, com o motivo", async () => {
+  it("Concluir contagem: manda a rodada aberta pela callable; a recusa deixa o diálogo aberto; com a rodada saindo pela leitura ao vivo antes da resposta, ele fica até ela", async () => {
     estado.sessao = { data: CONCLUIDA, isLoading: false, isError: false, error: null };
-    estado.rodadas = { ...estado.rodadas, aberta: ABERTA };
+    estado.rodadas = { ...estado.rodadas, aberta: ABERTA, registradas: [ABERTA] };
     concluirContagem.mockRejectedValueOnce(Object.assign(new Error("A contagem «Contagem geral · 19/11/2026» já foi concluída."), { code: "failed-precondition", detalhe: "COUNT_ROUND_NOT_OPEN" }));
     await montar();
-    await esperar(() => naTela().includes("Anteriores"), "a entrada pronta");
-    // Sem prateleira com caixa, o cartão não aparece: o Concluir vem com ele. As leituras vazias deixam a seção fora.
-    expect(botaoPeloRotulo(document.body, "Concluir contagem")).toBeUndefined();
+    await esperar(() => Boolean(botaoPeloRotulo(document.body, "Concluir contagem")), "o Concluir contagem do cartão");
+    await clicar("Concluir contagem");
+    await esperar(() => document.querySelector('[role="dialog"]') !== null, "o diálogo");
+    await clicar("Concluir contagem");
+    await esperar(() => concluirContagem.mock.calls.length === 1, "a chamada");
+    expect(concluirContagem.mock.calls[0]![0]).toMatchObject({ customer_code: "BTG Pactual", round_id: "cr_1" });
+    await esperar(() => estado.toast.length > 0, "o aviso da recusa");
+    expect(estado.toast[0]).toMatchObject({ title: "Contagem não concluída", variant: "destructive" });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // A segunda tentativa: a rodada sai pela leitura ao vivo antes da resposta; o diálogo fica até ela, com os números.
+    let responder: (valor: unknown) => void = () => undefined;
+    concluirContagem.mockImplementationOnce(
+      () =>
+        new Promise((pronto) => {
+          responder = pronto;
+        }),
+    );
+    const voltarOTempo = depoisDoToqueDuplo();
+    try {
+      await clicar("Concluir contagem");
+    } finally {
+      voltarOTempo();
+    }
+    await esperar(() => concluirContagem.mock.calls.length === 2, "a segunda chamada");
+    estado.rodadas = { ...estado.rodadas, aberta: null, registradas: [] };
+    await remontar();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent ?? "").toContain("Contagem geral · 19/11/2026");
+    await act(async () => {
+      responder({ ok: true, round_id: "cr_1", title: "Contagem geral · 19/11/2026", status: "closed" });
+    });
+    await esperar(() => estado.toast.length > 1, "o aviso da conclusão");
+    expect(estado.toast.at(-1)).toMatchObject({ title: "Contagem concluída" });
+    await esperar(() => document.querySelector('[role="dialog"]') === null, "o diálogo fechado");
   });
 
   it("a sessão aberta ou pendente: vai para a tela da abertura, uma vez", async () => {

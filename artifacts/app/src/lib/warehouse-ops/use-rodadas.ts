@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { collection, limit, query, where } from "firebase/firestore";
 
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
 import { novaTentativaDe, useLeitura, type NovaTentativa } from "@/lib/operacao/leitura";
 
 import { RODADA_DA_RECONTAGEM_GERAL, type RodadaDaRecontagem } from "./recontagem-por-caixa";
@@ -10,9 +11,10 @@ import { anterioresDaContagem, rodadaAberta, rodadaRegistrada, type RodadaRegist
  * As rodadas da contagem do cliente ativo, ao vivo (`count_rounds` por
  * cliente): a aberta, para a entrada, a Contagem por caixa e a bancada
  * gravarem nela, e as concluídas, para "Anteriores". A recontagem geral de
- * 17/11 sem documento vale como a aberta enquanto tem recontagem gravada
- * com o id fixo (uma basta). Toda consulta é por igualdade e pelo cliente
- * ativo: o `customer_code` é a fronteira.
+ * 17/11 sem documento vale como a aberta do cliente legado (a BTG)
+ * enquanto tem recontagem gravada com o id fixo (uma basta); os outros
+ * clientes nem a leem. Toda consulta é por igualdade e pelo cliente ativo:
+ * o `customer_code` é a fronteira.
  */
 
 export type LeituraDasRodadas = {
@@ -39,8 +41,10 @@ export function useRodadasDaContagem(cliente: string | null): LeituraDasRodadas 
     (db) => query(collection(db, "count_rounds"), where("customer_code", "==", codigo)),
     rodadaRegistrada,
   );
+  // A recontagem geral de 17/11 é do cliente legado: os outros nem leem as recontagens dela, e não esperam por elas.
+  const legado = doCliente === LEGACY_CUSTOMER_CODE;
   const legadas = useLeitura<string>(
-    doCliente ? `cycle_counts:${codigo}:${RODADA_DA_RECONTAGEM_GERAL.id}:uma` : null,
+    legado ? `cycle_counts:${codigo}:${RODADA_DA_RECONTAGEM_GERAL.id}:uma` : null,
     (db) => query(collection(db, "cycle_counts"), where("customer_code", "==", codigo), where("round_id", "==", RODADA_DA_RECONTAGEM_GERAL.id), limit(1)),
     (id) => id,
   );
@@ -48,7 +52,7 @@ export function useRodadasDaContagem(cliente: string | null): LeituraDasRodadas 
   const legadasLidas = legadas.itens ?? SEM_LEGADAS;
   const aberta = useMemo(() => rodadaAberta(registradas, doCliente, legadasLidas.length > 0), [registradas, doCliente, legadasLidas]);
   const anteriores = useMemo(() => anterioresDaContagem(registradas, doCliente), [registradas, doCliente]);
-  const aoVivo = [rodadas, legadas];
+  const aoVivo = legado ? [rodadas, legadas] : [rodadas];
   return {
     aberta,
     anteriores,

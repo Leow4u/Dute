@@ -107,6 +107,11 @@ describe("a rodada aberta e as anteriores", () => {
     expect(rodadaAberta([aberta], null, true)).toBeNull();
   });
 
+  it("a recontagem geral sem documento é só do cliente legado: outro cliente com recontagem no id fixo não fica preso nela", () => {
+    expect(rodadaAberta([], "Outro Cliente", true)).toBeNull();
+    expect(rodadaAberta([], BTG, true)).toEqual(RODADA_DA_RECONTAGEM_GERAL);
+  });
+
   it("as anteriores: as concluídas do cliente, a mais recente primeiro", () => {
     expect(anterioresDaContagem([aberta, concluida, outraConcluida, deOutro], BTG).map((rodada) => rodada.id)).toEqual(["cr_0", RODADA_DA_RECONTAGEM_GERAL.id]);
     expect(anterioresDaContagem([concluida], null)).toEqual([]);

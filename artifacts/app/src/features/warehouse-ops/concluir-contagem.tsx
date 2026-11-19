@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Dialog, DialogCancelar, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { unidadesComSinal, type RodadaDaContagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
@@ -71,15 +73,19 @@ export function ConcluirContagemDialog({
   onConcluir: () => void;
   focoAoFechar?: () => HTMLElement | null | undefined;
 }) {
+  // A rodada que sai pela leitura ao vivo antes da resposta: o diálogo fica com a de quando abriu, até a resposta.
+  const ultima = useRef(rodada);
+  if (rodada) ultima.current = rodada;
+  const naTela = rodada ?? ultima.current;
   // Concluindo, o diálogo não fecha: nem o Esc, nem o clique fora, nem o X, que fica aria-disabled.
   const ocupado = estado === "andamento" || estado === "sucesso";
   return (
-    <Dialog open={aberto && Boolean(rodada)} ocupado={ocupado} onOpenChange={(open) => (open ? undefined : onFechar())}>
+    <Dialog open={aberto && Boolean(naTela)} ocupado={ocupado} onOpenChange={(open) => (open ? undefined : onFechar())}>
       <DialogContent className="sm:max-w-xl" aria-describedby={undefined} focoAoFechar={focoAoFechar}>
         <DialogHeader>
           <DialogTitle>Concluir contagem</DialogTitle>
         </DialogHeader>
-        {aberto && rodada ? <ConcluirContagemConteudo rodada={rodada} estado={estado} onCancelar={onFechar} onConcluir={onConcluir} /> : null}
+        {aberto && naTela ? <ConcluirContagemConteudo rodada={naTela} estado={estado} onCancelar={onFechar} onConcluir={onConcluir} /> : null}
       </DialogContent>
     </Dialog>
   );

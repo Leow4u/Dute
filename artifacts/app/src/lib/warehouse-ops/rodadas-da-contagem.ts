@@ -1,5 +1,7 @@
 import { nomeComTamanho } from "@workspace/dominio";
 
+import { LEGACY_CUSTOMER_CODE } from "@/lib/active-customer";
+
 import {
   RODADA_DA_RECONTAGEM_GERAL,
   ROTA_DA_RODADA,
@@ -104,8 +106,10 @@ export function rodadaRegistrada(id: string, data: Record<string, unknown>): Rod
 
 /**
  * A rodada aberta do cliente: a registrada aberta de começo mais recente;
- * sem ela, a recontagem geral de 17/11 enquanto não tem documento e tem
- * recontagem gravada com o id fixo (`legadaTemRecontagem`); senão, nenhuma.
+ * sem ela, para o cliente legado (a BTG), a recontagem geral de 17/11
+ * enquanto não tem documento e tem recontagem gravada com o id fixo
+ * (`legadaTemRecontagem`); senão, nenhuma. Outro cliente com recontagem no
+ * id fixo não fica preso nela: inicia a dele (functions/wms, count-rounds.ts).
  */
 export function rodadaAberta(registradas: readonly RodadaRegistrada[], cliente: string | null | undefined, legadaTemRecontagem: boolean): RodadaDaRecontagem | null {
   const dono = texto(cliente);
@@ -113,7 +117,7 @@ export function rodadaAberta(registradas: readonly RodadaRegistrada[], cliente: 
   const doCliente = registradas.filter((rodada) => rodada.cliente === dono);
   const abertas = doCliente.filter((rodada) => rodada.status === "aberta").sort((esquerda, direita) => (direita.inicio?.quando ?? "").localeCompare(esquerda.inicio?.quando ?? ""));
   if (abertas[0]) return abertas[0];
-  if (legadaTemRecontagem && !doCliente.some((rodada) => rodada.id === RODADA_DA_RECONTAGEM_GERAL.id)) return RODADA_DA_RECONTAGEM_GERAL;
+  if (legadaTemRecontagem && dono === LEGACY_CUSTOMER_CODE && !doCliente.some((rodada) => rodada.id === RODADA_DA_RECONTAGEM_GERAL.id)) return RODADA_DA_RECONTAGEM_GERAL;
   return null;
 }
 
@@ -147,6 +151,16 @@ export function numerosDaRodadaConcluida(numeros: NumerosDaRodada): string {
   const contadas = (feitas: number, total: number, singular: string, varios: string) => (feitas === total ? plural(total, singular, varios) : `${numero.format(feitas)} de ${plural(total, singular, varios)}`);
   const diferenca = numeros.caixasComDiferenca ? `${numero.format(numeros.caixasComDiferenca)} com diferença · ${unidadesComSinal(numeros.diferenca)}` : "sem diferença";
   return [contadas(numeros.prateleirasContadas, numeros.prateleiras, "prateleira", "prateleiras"), contadas(numeros.caixasConfirmadas, numeros.caixas, "caixa", "caixas"), diferenca].join(" · ");
+}
+
+/**
+ * O cartão da rodada concluída (o "Ver" das anteriores) com os números
+ * gravados no fechamento, os mesmos da linha de "Anteriores": as caixas de
+ * hoje (movidas, novas, recontadas depois) não mudam o registro. Sem os
+ * números, como está.
+ */
+export function comNumerosGravados(rodada: RodadaDaContagem, numeros: NumerosDaRodada | null): RodadaDaContagem {
+  return numeros ? { ...rodada, ...numeros } : rodada;
 }
 
 /** "3 prateleiras por contar ficam fora." no "Concluir contagem"; null com tudo contado. */

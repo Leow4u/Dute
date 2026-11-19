@@ -5,7 +5,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { juntarTentativas } from "@/lib/operacao/leitura";
 import { hrefDaFolha, relatorioCaixasSaldo, ruasDaContagem } from "@/lib/warehouse-ops/contagem-por-caixa";
 import { rodadaDaContagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
-import { rodadaDaBusca } from "@/lib/warehouse-ops/rodadas-da-contagem";
+import { comNumerosGravados, rodadaDaBusca } from "@/lib/warehouse-ops/rodadas-da-contagem";
 import { useContagemPorCaixa } from "@/lib/warehouse-ops/use-contagem-por-caixa";
 import { useCaixasDoCliente } from "@/lib/warehouse-ops/use-lista-de-separacao";
 import { useLeiturasDaRodada } from "@/lib/warehouse-ops/use-recontagem";
@@ -35,7 +35,8 @@ export default function PaginaRodadaDaContagem() {
   const busca = rodadaDaBusca(useSearch());
   const rodadas = useRodadasDaContagem(cliente);
   // A rodada da busca (o "Ver" das anteriores) ou a aberta do cliente; a pedida que não é a aberta abre só leitura.
-  const pedida = busca ? (rodadas.registradas.find((registrada) => registrada.id === busca) ?? (rodadas.aberta?.id === busca ? rodadas.aberta : null)) : null;
+  const registrada = busca ? (rodadas.registradas.find((candidata) => candidata.id === busca) ?? null) : null;
+  const pedida = busca ? (registrada ?? (rodadas.aberta?.id === busca ? rodadas.aberta : null)) : null;
   const rodada = busca ? pedida : rodadas.aberta;
   const somenteLeitura = Boolean(busca) && pedida?.id !== rodadas.aberta?.id;
   const leitura = useContagemPorCaixa(cliente);
@@ -59,6 +60,9 @@ export default function PaginaRodadaDaContagem() {
         : null,
     [cliente, leitura.prateleiras, caixas.data, daRodada.recontagens, daRodada.guardas, daRodada.separadas, rodada, agora],
   );
+  // O "Ver" da rodada concluída: o cartão leva os números gravados no fechamento, os mesmos da linha de "Anteriores".
+  const gravados = registrada?.numeros ?? null;
+  const naTela = resumo && somenteLeitura ? comNumerosGravados(resumo, gravados) : resumo;
   const relatorio = useMemo(() => relatorioCaixasSaldo(leitura.prateleiras), [leitura.prateleiras]);
   const primeiraRua = ruasDaContagem(leitura.prateleiras)[0] ?? null;
 
@@ -74,7 +78,7 @@ export default function PaginaRodadaDaContagem() {
   return (
     <EstoqueContagemRodadaView
       estado={estado}
-      rodada={estado === "pronto" ? resumo : null}
+      rodada={estado === "pronto" ? naTela : null}
       somenteLeitura={somenteLeitura}
       agora={agora}
       relatorio={estado === "pronto" ? relatorio : null}

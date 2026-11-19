@@ -143,6 +143,9 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     await esperar(() => naTela().includes("Contagem da rua A · 17/11/2026"), "a rodada concluída");
     expect(naTela()).toContain("17/11 a 21/11 · Guilherme Dantas");
     expect(naTela()).not.toContain("começou");
+    // O cartão leva os números gravados no fechamento, os mesmos da linha de Anteriores (as leituras ao vivo vêm vazias).
+    expect(naTela()).toContain("prateleiras2de 2");
+    expect(naTela()).toContain("caixas3de 3");
     expect(naTela()).not.toContain("Contagem geral · 10/11/2026");
   });
 

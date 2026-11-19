@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { CheckCircle2, ChevronRight, Printer, Scale } from "lucide-react";
 import { Link } from "wouter";
 
@@ -131,6 +131,14 @@ export function ContagemView({
 }) {
   const continuar = rodada?.continuar ?? null;
   const linhas = estado === "pronto" ? linhasAnteriores(anteriores, abertura) : [];
+  // A page tira a ação quando a rodada chega ou sai pela leitura ao vivo; o diálogo fica montado com a última, e fecha
+  // pelo `aberto` (com o foco devolvido), nunca sumindo no meio da gravação.
+  const ultimoInicio = useRef(iniciar);
+  if (iniciar) ultimoInicio.current = iniciar;
+  const ultimaConclusao = useRef(concluir);
+  if (concluir) ultimaConclusao.current = concluir;
+  const dialogoDoInicio = iniciar ?? (ultimoInicio.current ? { ...ultimoInicio.current, aberto: false } : null);
+  const dialogoDaConclusao = concluir ?? (ultimaConclusao.current ? { ...ultimaConclusao.current, aberto: false } : null);
   return (
     <div className="flex flex-col gap-6 pb-24">
       <PageHeader
@@ -138,7 +146,7 @@ export function ContagemView({
         estado={<LinhaDeEstado id={ID_DA_LINHA} leitura={leitura} objeto="contagens" aoVivo={aoVivo ? [aoVivo] : undefined} />}
         actions={
           <>
-            {iniciar && estado === "pronto" ? (
+            {iniciar && estado === "pronto" && !rodada ? (
               <Button type="button" onClick={iniciar.onAbrir}>
                 <ChevronRight className="size-4" aria-hidden="true" />
                 Iniciar contagem
@@ -175,7 +183,8 @@ export function ContagemView({
       ) : (
         <>
           {aoVivo?.falta === "conexao" && aoVivo.lidaEm == null ? <BlocoSemConexao tentando={aoVivo.tentando} onTentar={() => aoVivo.tentar()} /> : null}
-          {rodada && rodada.prateleiras > 0 ? (
+          {/* A rodada aberta aparece sempre, até sem prateleira no alcance: sem o cartão, ela não teria como ser concluída. */}
+          {rodada ? (
             <Secao id="contagem-em-andamento-secao" titulo="Em andamento">
               <CartaoDaRodada
                 rodada={rodada}
@@ -230,19 +239,28 @@ export function ContagemView({
           ) : null}
         </>
       )}
-      {iniciar ? (
+      {dialogoDoInicio ? (
         <IniciarContagemDialog
-          aberto={iniciar.aberto}
-          ruas={iniciar.ruas}
-          produtos={iniciar.produtos}
-          catalogoFalhou={iniciar.catalogoFalhou}
-          estado={iniciar.estado}
-          onFechar={iniciar.onFechar}
-          onIniciar={iniciar.onIniciar}
+          aberto={dialogoDoInicio.aberto}
+          ruas={dialogoDoInicio.ruas}
+          produtos={dialogoDoInicio.produtos}
+          catalogoFalhou={dialogoDoInicio.catalogoFalhou}
+          estado={dialogoDoInicio.estado}
+          onFechar={dialogoDoInicio.onFechar}
+          onIniciar={dialogoDoInicio.onIniciar}
           focoAoFechar={focoNaLinha}
         />
       ) : null}
-      {concluir ? <ConcluirContagemDialog aberto={concluir.aberto} rodada={rodada} estado={concluir.estado} onFechar={concluir.onFechar} onConcluir={concluir.onConcluir} focoAoFechar={focoNaLinha} /> : null}
+      {dialogoDaConclusao ? (
+        <ConcluirContagemDialog
+          aberto={dialogoDaConclusao.aberto}
+          rodada={rodada}
+          estado={dialogoDaConclusao.estado}
+          onFechar={dialogoDaConclusao.onFechar}
+          onConcluir={dialogoDaConclusao.onConcluir}
+          focoAoFechar={focoNaLinha}
+        />
+      ) : null}
     </div>
   );
 }
