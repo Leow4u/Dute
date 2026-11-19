@@ -276,8 +276,9 @@ describe("Concluir a rodada", () => {
   });
 
   // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
-  // (decisão de 17/11/2026). Contada vazia, ela não grava linha em `cycle_counts` (não há item), e antes ficava fora
-  // das confirmadas: a prateleira nunca fechava (a A-01 e a A-02 da recontagem geral de 17/11, na produção).
+  // (decisão de 17/11/2026), como a da abertura que perdeu as linhas. Contada vazia, ela não grava linha em
+  // `cycle_counts` (não há item), e antes ficava fora das confirmadas: a prateleira nunca fechava (a A-01 e a A-02 da
+  // recontagem geral de 17/11, na produção, com caixas da abertura sem linhas).
   it("a caixa que cedeu a última peça e foi contada vazia conta como confirmada no fechamento, sem diferença", async () => {
     // A A-03 ganha a CX-000011 (recebimento, 5 bonés), guardada depois da CX-000010.
     await Promise.all([

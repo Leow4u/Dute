@@ -320,17 +320,18 @@ export function recontagemDaResposta(
 }
 
 /**
- * A recontagem da caixa contada vazia, pelo registro da caixa. A caixa sem
- * nada na lista (o saldo zero em todos os itens: a que cede a última peça ao
- * fora da lista de outra fica guardada assim até alguém contá-la vazia,
- * decisão de 17/11/2026) se reconta com a lista vazia, e o servidor não grava
- * linha em `cycle_counts`, porque não há item: o registro fica na caixa,
- * esvaziada com o id, quando e quem da recontagem (functions/wms,
- * box-recount.ts). Na rodada, ela vale a recontagem vazia, sem diferença. Só
- * a caixa que a rodada esvaziou e cuja última recontagem não tem linha em
- * `lidas`; a guardada de novo (o desfazer da separação a devolve) espera
- * outra contagem. A mesma regra do fechamento (count-rounds.ts,
- * linhasDasCaixasContadasVazias).
+ * A recontagem da caixa contada vazia, pelo registro da caixa. A caixa
+ * guardada sem nada na lista (o saldo zero em todos os itens: a que cede a
+ * última peça ao fora da lista de outra, que fica guardada assim até alguém
+ * contá-la vazia, decisão de 17/11/2026, ou a da abertura que perdeu as
+ * linhas no "Remover para corrigir" ou no acerto) se reconta com a lista
+ * vazia, e o servidor não grava linha em `cycle_counts`, porque não há item:
+ * o registro fica na caixa, esvaziada com o id, quando e quem da recontagem
+ * (functions/wms, box-recount.ts). Na rodada, ela vale a recontagem vazia,
+ * sem diferença. Só a caixa que a rodada esvaziou e cuja última recontagem
+ * não tem linha em `lidas`; a guardada de novo (o desfazer da separação a
+ * devolve) espera outra contagem. A mesma regra do fechamento
+ * (count-rounds.ts, linhasDasCaixasContadasVazias).
  */
 export function recontagensDasCaixasContadasVazias(caixas: readonly WarehouseBox[], lidas: readonly Recontagem[], rodada: string): Recontagem[] {
   const comLinha = new Set(lidas.map((recontagem) => recontagem.id));

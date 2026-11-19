@@ -1079,43 +1079,50 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    *A caixa contada vazia sem linha, no PR 637 (19/11/2026):* na recontagem
    geral de 17/11, na produção, a A-01 e a A-02 ficaram "em contagem · 6 de
    9" e "7 de 8 caixas" com as caixas contadas, e a rodada foi concluída
-   assim (25 de 28 prateleiras, 137 de 142 caixas). A causa, conferida no
-   código e no emulador (os dados da produção ainda não foram lidos): o
-   "Item fora da lista" de uma caixa tira peças das outras caixas da
-   prateleira (`movidasDe`), que só ganham `count_adjustments`, e a que cede
-   a última peça fica guardada com saldo zero até alguém contá-la vazia
-   (decisão de 17/11/2026). Sem nada na lista (`saldoDaCaixa` tira as linhas
-   zeradas), ela se reconta com `lines: []`: `recountWarehouseBox` a esvazia
-   e grava o registro só na caixa (`last_recount_id`, `last_recounted_at`,
-   `last_recounted_by`, `last_recount_round_id`, `emptied_recount_id`), sem
-   linha em `cycle_counts`, porque não há item. A tela e o fechamento só liam
+   assim (25 de 28 prateleiras, 137 de 142 caixas). A caixa guardada sem
+   nada na lista (`saldoDaCaixa` tira as linhas zeradas) se reconta com
+   `lines: []`: `recountWarehouseBox` a esvazia e grava o registro só na
+   caixa (`last_recount_id`, `last_recounted_at`, `last_recounted_by`,
+   `last_recount_round_id`, `emptied_recount_id`), sem linha em
+   `cycle_counts`, porque não há item. A tela e o fechamento só liam
    recontagem pelas linhas: a caixa entrava no total da prateleira e nunca
    nas confirmadas, e caixa vazia não se reconta, então a prateleira não
-   fechava. Agora a caixa que a rodada esvaziou e cuja última recontagem não
-   tem linha vale a recontagem vazia, tirada do registro dela: esperado zero,
-   contado zero, sem diferença, com o quando e o quem dela. A mesma regra no
-   fechamento (`linhasDasCaixasContadasVazias`, em `count-rounds.ts`) e na
-   tela (`recontagensDasCaixasContadasVazias`, em `recontagem-por-caixa.ts`,
-   na bancada e na rodada). A caixa que o desfazer da separação devolve à
+   fechava. Na produção (leitura só de leitura, com o OK do Leonardo, em
+   19/11/2026) eram três caixas da abertura sem linha nenhuma, contadas
+   vazias em 18/11: a CX-000006 (A-01) e a CX-000009 (A-02), que perderam as
+   linhas em 20 e 22/10 no "Corrigir caixa" e no "Remover para corrigir" da
+   abertura, e a CX-000005 (A-01), "esvaziada no registro" pelo acerto em
+   30/10. Essas portas zeram a caixa sem tirá-la da prateleira, e as três
+   ficaram guardadas. O "Item fora da lista" leva ao mesmo estado (a caixa
+   que cede a última peça fica guardada com saldo zero até alguém contá-la
+   vazia, decisão de 17/11/2026), e é o caminho do ensaio no emulador. Agora
+   a caixa que a rodada esvaziou e cuja última recontagem não tem linha vale
+   a recontagem vazia, tirada do registro dela: esperado zero, contado zero,
+   sem diferença, com o quando e o quem dela. A mesma regra no fechamento
+   (`linhasDasCaixasContadasVazias`, em `count-rounds.ts`) e na tela
+   (`recontagensDasCaixasContadasVazias`, em `recontagem-por-caixa.ts`, na
+   bancada e na rodada). A caixa que o desfazer da separação devolve à
    prateleira depois da recontagem vazia volta a ser por contar. O servidor
    não grava nada novo: nenhuma linha sem SKU em `cycle_counts`, que a tela e
    o "Caixas × saldo" descartam, e as caixas já contadas vazias passam a
-   contar sem migração. Os números gravados no fechamento da recontagem geral
-   de 17/11 não mudam com o código: no "Ver" dela, o cartão mostra os
-   gravados e as prateleiras saem pela conta nova. A caixa contada vazia
-   também não entra nas "contagens do dia" do "Caixas × saldo", que listam
-   por item. Travas: `count-rounds.test.ts` (a caixa sem linha e os guardas:
-   a com linha conta uma vez, a esvaziada pela separação vale a linha dela,
-   a devolvida à prateleira fica por contar, a de outra rodada fica fora),
-   `count-rounds.integration.test.ts` (o fora da lista deixa a CX-000010
-   guardada sem nada, contada vazia ela sai sem linha, e o fechamento conta
-   as três caixas) e, no app, `recontagem-por-caixa.test.ts` (a bancada e a
-   rodada). O teste de unidade do fechamento representava essa caixa com uma
-   linha que na prática não existe, e o defeito passou por isso. Ficam para
-   o Leonardo, no PR: a caixa que cede a última peça vira `emptied` na hora,
-   como na separação; a correção dos números gravados da recontagem geral,
-   por ferramenta em `tools/`, com dry-run; e a conferência, só de leitura,
-   das três prateleiras pendentes na produção.
+   contar sem migração. Com a regra nova, o fechamento de 19/11 teria dado 26
+   de 28 prateleiras e 140 de 142 caixas: ficaram sem recontagem a CX-000004
+   (A-01, 1 un.) e a CX-000224 (B-02, 2 un., a terceira prateleira), nunca
+   recontadas na rodada. A caixa contada vazia não entra nas "contagens do
+   dia" do "Caixas × saldo", que listam por item. Travas: `count-rounds.test.ts`
+   (a caixa sem linha e os guardas: a com linha conta uma vez, a esvaziada
+   pela separação vale a linha dela, a devolvida à prateleira fica por
+   contar, a de outra rodada fica fora), `count-rounds.integration.test.ts`
+   (o fora da lista deixa a CX-000010 guardada sem nada, contada vazia ela
+   sai sem linha, e o fechamento conta as três caixas) e, no app,
+   `recontagem-por-caixa.test.ts` (a bancada e a rodada). O teste de unidade
+   do fechamento representava a caixa contada vazia com uma linha que na
+   prática não existe, e o defeito passou por isso. As decisões do Leonardo
+   sobre o que fica estão na seção 7 (19/11/2026). Achado da leitura,
+   deixado para depois: o "Ver" da rodada concluída monta as prateleiras
+   pela posição de hoje das caixas, e as doze recontadas que o Mover levou
+   de prateleira depois do fechamento (19/11, das 19:36 às 19:55 UTC)
+   aparecem na A-09, na B-04, na B-05 e na B-09 sem recontagem.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
@@ -1315,6 +1322,15 @@ anteriores abrindo a Contagem por caixa com `?rodada=<id>`, só leitura; a
 recontagem geral de 17/11 virando documento ao concluir, sem migração à mão;
 a zeragem apagando a coleção com o estoque, como `cycle_counts`; e o limite da
 diferença fora deste PR, para a fila de revisão.
+
+*Decidido pelo Leonardo em 19/11/2026, nas perguntas do PR 637 (a caixa
+contada vazia sem linha):* (1) a conferência só de leitura das prateleiras
+pendentes da recontagem geral de 17/11 na produção foi autorizada e feita
+(seção 6, item 4); (2) os números gravados no fechamento dela (25 de 28
+prateleiras, 137 de 142 caixas) ficam como estão, sem ferramenta de
+correção; e (3) a caixa que cede a última peça ao "Item fora da lista" de
+outra continua guardada até alguém contá-la vazia, como decidido em
+17/11/2026: com o PR 637, contá-la vazia fecha a prateleira.
 
 ## 8. Como este levantamento foi feito
 

@@ -214,16 +214,18 @@ export type NumerosDaRodada = {
 type Recontagem = { id: string; box: string; location: string; at: string; deltas: number[] };
 
 /**
- * A recontagem da caixa contada vazia, como uma linha da rodada. A caixa sem
- * nada na lista (o saldo zero em todos os itens: a que cede a última peça ao
- * fora da lista de outra fica guardada assim até alguém contá-la vazia,
- * decisão de 17/11/2026) se reconta com a lista vazia, e a recontagem não
- * grava linha em `cycle_counts`, porque não há item: o registro fica na caixa,
- * esvaziada com o id, quando e quem da recontagem (box-recount.ts). Na
- * rodada, ela vale uma linha sem diferença (esperado zero, contado zero). Só
- * a caixa que a rodada esvaziou e cuja última recontagem não tem linha; a
- * guardada de novo (o desfazer da separação a devolve) espera outra contagem.
- * A mesma regra da tela (recontagem-por-caixa.ts, recontagensDasCaixasContadasVazias).
+ * A recontagem da caixa contada vazia, como uma linha da rodada. A caixa
+ * guardada sem nada na lista (o saldo zero em todos os itens: a que cede a
+ * última peça ao fora da lista de outra, que fica guardada assim até alguém
+ * contá-la vazia, decisão de 17/11/2026, ou a da abertura que perdeu as
+ * linhas no "Remover para corrigir" ou no acerto) se reconta com a lista
+ * vazia, e a recontagem não grava linha em `cycle_counts`, porque não há
+ * item: o registro fica na caixa, esvaziada com o id, quando e quem da
+ * recontagem (box-recount.ts). Na rodada, ela vale uma linha sem diferença
+ * (esperado zero, contado zero). Só a caixa que a rodada esvaziou e cuja
+ * última recontagem não tem linha; a guardada de novo (o desfazer da
+ * separação a devolve) espera outra contagem. A mesma regra da tela
+ * (recontagem-por-caixa.ts, recontagensDasCaixasContadasVazias).
  */
 export function linhasDasCaixasContadasVazias(caixas: readonly CaixaDaRodada[], linhas: readonly LinhaDaRodada[], roundId: string): LinhaDaRodada[] {
   const comLinha = new Set(linhas.filter((linha) => linha.round_id === roundId).map((linha) => linha.box_recount_id));

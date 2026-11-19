@@ -142,10 +142,10 @@ describe("os números do fechamento", () => {
     assert.deepEqual([numeros.boxes_counted, numeros.difference_units, numeros.recount_count], [3, 3, 5]);
   });
 
-  // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
-  // (decisão de 17/11/2026). A recontagem dela vai com a lista vazia e não grava linha em `cycle_counts` (não há item):
-  // o registro fica na própria caixa (box-recount.ts). Antes, ela entrava no total da prateleira e nunca como
-  // confirmada: a A-01 e a A-02 da recontagem geral de 17/11 ficaram "em contagem" com todas as caixas contadas.
+  // A caixa guardada sem nada na lista (a que cede a última peça ao fora da lista de outra, decisão de 17/11/2026, ou a
+  // da abertura que perdeu as linhas) se reconta com a lista vazia, e a recontagem não grava linha em `cycle_counts`
+  // (não há item): o registro fica na própria caixa (box-recount.ts). Antes, ela entrava no total da prateleira e nunca
+  // como confirmada: a A-01 e a A-02 da recontagem geral de 17/11 ficaram "em contagem" com todas as caixas contadas.
   it("a caixa que a rodada esvaziou com a lista vazia, sem linha, conta como confirmada e sem diferença, pelo registro dela", () => {
     const vazia = caixaDaRodada("CX-6", {
       code: "CX-6",

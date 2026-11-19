@@ -235,10 +235,10 @@ describe("a bancada da prateleira", () => {
     expect(bancada).toMatchObject({ total: 4, confirmadas: 1 });
   });
 
-  // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
-  // (decisão de 17/11/2026). A recontagem dela vai com a lista vazia e não grava linha em cycle_counts (não há item): o
-  // registro fica na própria caixa (box-recount.ts). Antes, ela aparecia vazia e sem recontagem, fora das confirmadas,
-  // e a prateleira não tinha como fechar (a A-01 e a A-02 da recontagem geral de 17/11, na produção).
+  // A caixa guardada sem nada na lista (a que cede a última peça ao fora da lista de outra, decisão de 17/11/2026, ou a
+  // da abertura que perdeu as linhas) se reconta com a lista vazia, e a recontagem não grava linha em cycle_counts (não
+  // há item): o registro fica na própria caixa (box-recount.ts). Antes, ela aparecia vazia e sem recontagem, fora das
+  // confirmadas, e a prateleira não tinha como fechar (a A-01 e a A-02 da recontagem geral de 17/11, na produção).
   it("a caixa que cedeu a última peça e foi contada vazia nesta rodada sai confirmada, sem diferença, mesmo sem linha", () => {
     const contadaVazia = caixa("CX-000013", "A-03", {
       status: "emptied",
