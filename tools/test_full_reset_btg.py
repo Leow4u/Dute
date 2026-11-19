@@ -75,6 +75,11 @@ SITE_BLOG = (
     "site_blog_slugs",
     "site_blog_meta",
 )
+ZAP = (
+    "zap_conversations",
+    "zap_messages",
+    "zap_access",
+)
 # O que as Functions dos módulos declaram e a zeragem apaga de propósito: o
 # estoque e o faturamento do WMS, que elas leem, e o Agent Dute, cujas
 # conversas e conhecimento recomeçam (docs/novo-go-live-zeragem-total.md).
@@ -100,13 +105,13 @@ FUNCTIONS = Path(__file__).resolve().parent.parent / "functions"
 
 
 def colecoes_dos_modulos() -> dict[str, str]:
-    """As coleções que as Functions do Comercial, da Operação, do Financeiro e do núcleo declaram, com o arquivo."""
+    """As coleções que as Functions do Comercial, da Operação, do Financeiro, do núcleo e do Zap declaram, com o arquivo."""
     padroes = (
         re.compile(r'\b[A-Z0-9_]*COLLECTION[A-Z0-9_]*\s*=\s*"([a-z_]+)"'),
         re.compile(r'\.collection\(\s*"([a-z_]+)"'),
     )
     achadas: dict[str, str] = {}
-    for modulo in ("comercial", "operacao", "financeiro", "core"):
+    for modulo in ("comercial", "operacao", "financeiro", "core", "zap"):
         pasta = FUNCTIONS / modulo / "src"
         for arquivo in sorted(pasta.rglob("*.ts")):
             if ".test." in arquivo.name:
@@ -339,7 +344,8 @@ class PlanTests(unittest.TestCase):
             | set(OPERACAO)
             | set(FINANCEIRO)
             | set(MEMORIA)
-            | set(SITE_BLOG),
+            | set(SITE_BLOG)
+            | set(ZAP),
         )
 
     def test_comercial_collections_are_always_preserved(self) -> None:
@@ -459,6 +465,20 @@ class PlanTests(unittest.TestCase):
                     )
                 self.assertIn("Blog", str(raised.exception))
 
+    def test_zap_is_always_preserved(self) -> None:
+        self.assertEqual(set(full_reset_btg.ZAP_COLLECTIONS), set(ZAP))
+        for include_setup in (False, True):
+            preserved = full_reset_btg.preserved_collections(include_setup=include_setup)
+            self.assertTrue(set(ZAP) <= preserved)
+        control = full_reset_btg.control_document_name(PROJECT, DATABASE)
+        with self.assertRaises(RuntimeError) as raised:
+            full_reset_btg.delete_writes(
+                {"products": [raw_document("zap_messages", "wamid")]},
+                ["products"],
+                control_name=control,
+            )
+        self.assertIn("Zap", str(raised.exception))
+
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
         # subcoleções, aditivos e revisões continuam fora do alcance.
@@ -540,7 +560,7 @@ class PlanTests(unittest.TestCase):
         preserved = full_reset_btg.preserved_collections(include_setup=True)
         self.assertEqual(
             preserved,
-            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA) | set(SITE_BLOG),
+            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA) | set(SITE_BLOG) | set(ZAP),
         )
 
     def test_keep_extends_preserved(self) -> None:
