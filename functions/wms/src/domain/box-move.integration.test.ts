@@ -481,6 +481,37 @@ describe("as recusas do mover", () => {
   });
 });
 
+/**
+ * O encaixe no destino (revisão do PR do servidor, 19/11/2026): o motor nunca
+ * troca em silêncio o piso, a orientação nem a caixa de apoio
+ * (warehouse-boxes.ts, placementFor). A tela manda o encaixe que mostrou; o
+ * mover confere esse encaixe e o devolve, no resultado e no evento.
+ */
+describe("o encaixe no destino", () => {
+  it("o mover grava o encaixe que a tela mostrou e o devolve, no resultado e no evento", async () => {
+    const previa = await previewBoxMoveTransaction(db, entradaDaPreviaDoMover({ customer_code: BTG, box_code: "CX-000121" }));
+    const destino = previa.prateleiras.find((prateleira) => prateleira.code === "C-02")!;
+    const resultado = await mover({ to_location_id: "C-02", orientation: destino.placement.orientation, support_box_code: destino.placement.support_box_code ?? null });
+    assert.deepEqual(resultado.placement, destino.placement);
+    const box = await caixa("CX-000121");
+    assert.deepEqual([box.orientation, box.front_m, box.depth_m, box.support_box_code], [destino.placement.orientation, destino.placement.front_m, destino.placement.depth_m, null]);
+    const [evento] = (await todos("events")).filter((item) => item.type === BOX_MOVED_EVENT_TYPE);
+    assert.deepEqual((evento!.payload as { placement?: unknown }).placement, destino.placement);
+  });
+
+  it("o encaixe que a tela viu e não cabe mais recusa, sem trocar por outro", async () => {
+    // C-02 com 1,30 m ocupados: 0,50 m livres. De frente (0,40) a caixa cabe; virada (0,60), não.
+    await db.collection("warehouse_boxes").doc("CX-000300").set({ code: "CX-000300", customer_code: BTG, status: "stored", location_id: "C-02", ...MEDIDAS, length_m: 1.3, front_m: 1.3 });
+    assert.equal(codigoDa(await recusa(mover({ to_location_id: "C-02", orientation: "width_length_height", support_box_code: null }))), "BOX_MOVE_DOES_NOT_FIT");
+    // A caixa de apoio que a tela viu não serve (esta caixa não empilha): recusa, sem ir para o piso.
+    assert.equal(codigoDa(await recusa(mover({ to_location_id: "C-02", orientation: "length_width_height", support_box_code: "CX-000300" }))), "BOX_MOVE_DOES_NOT_FIT");
+    assert.equal((await caixa("CX-000121")).location_id, "A-01");
+    // Sem o encaixe na entrada, o motor escolhe o que cabe (de frente) e o devolve.
+    const resultado = await mover({ to_location_id: "C-02" });
+    assert.deepEqual([resultado.placement.orientation, resultado.placement.front_m], ["length_width_height", 0.4]);
+  });
+});
+
 describe("a prévia do mover", () => {
   const previa = (box_code = "CX-000121") => previewBoxMoveTransaction(db, entradaDaPreviaDoMover({ customer_code: BTG, box_code }));
 

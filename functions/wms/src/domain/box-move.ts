@@ -23,6 +23,7 @@ import {
 } from "./operations.js";
 import { saldoDaCaixa, type LinhaDaCaixa } from "./saldo-da-caixa.js";
 import {
+  BOX_ORIENTATIONS,
   WAREHOUSE_BOXES_COLLECTION,
   asPosition,
   buildOccupancy,
@@ -33,6 +34,7 @@ import {
   requireDimensions,
   type BoxDimensions,
   type DestinoDoMover,
+  type Placement,
 } from "./warehouse-boxes.js";
 import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
 
@@ -77,6 +79,15 @@ export const MoveWarehouseBoxSchema = z
     to_location_id: Prateleira,
     /** A sugestão que a tela mostrou: o evento diz se a pessoa a seguiu. */
     suggestion: z.object({ position: Prateleira, alternatives: z.array(Prateleira).max(5) }).strict().optional(),
+    /**
+     * O encaixe que a tela mostrou para o destino (o `placement` da prévia):
+     * a orientação e a caixa de apoio, com null para o piso. O mover confere
+     * este encaixe e recusa se ele não cabe mais, sem trocar por outro (o
+     * motor nunca troca em silêncio, warehouse-boxes.ts). Sem eles, o motor
+     * escolhe e o resultado diz o que escolheu.
+     */
+    orientation: z.enum(BOX_ORIENTATIONS).optional(),
+    support_box_code: CodigoDaCaixa.nullable().optional(),
     idempotency_key: z.string().trim().min(8).max(200),
   })
   .strict();
@@ -306,6 +317,8 @@ export type ResultadoDoMover = {
   moved_by_name?: string;
   /** null sem a sugestão na entrada. */
   suggestion_followed: boolean | null;
+  /** Como a caixa ficou no destino: a frente, a profundidade, a altura, a orientação e o apoio. */
+  placement: Placement;
   movement_ids: string[];
   events: OperationalEventSummary[];
 };
@@ -383,7 +396,13 @@ export async function moveWarehouseBoxTransaction(db: Firestore, input: EntradaD
     // O encaixe estrito do motor, com as caixas guardadas e a caminho no destino.
     const medidas = requireDimensions(box as unknown as BoxDimensions);
     const ocupacao = buildOccupancy(noDestino.map((row) => row.data), []).get(destino) ?? emptyOccupancy();
-    const encaixe = placementFor(posicao, medidas, ocupacao, { allow_tilt: box.allow_tilt === true, allow_stacking: box.allow_stacking === true });
+    // O encaixe que a tela mostrou, exato: a orientação e o apoio (null é o piso) não trocam por outros.
+    const encaixe = placementFor(posicao, medidas, ocupacao, {
+      allow_tilt: box.allow_tilt === true,
+      allow_stacking: box.allow_stacking === true,
+      orientation: input.orientation,
+      support_box_code: input.support_box_code,
+    });
     if (!encaixe) recusar(RECUSAS_DO_MOVER.naoCabe(boxCode, destino));
 
     // O saldo de cada item nas duas prateleiras, a reserva e o que a prateleira tem.
@@ -559,6 +578,7 @@ export async function moveWarehouseBoxTransaction(db: Firestore, input: EntradaD
             units: caixa.units,
             items: caixa.itens,
             suggestion: input.suggestion ? { position: sugerida, alternatives: input.suggestion.alternatives.map(chave), followed: seguiu } : undefined,
+            placement: encaixe,
             movement_ids: movementIds,
           }),
         },
@@ -577,6 +597,7 @@ export async function moveWarehouseBoxTransaction(db: Firestore, input: EntradaD
       moved_at: movedAt,
       moved_by_name: actor.name || undefined,
       suggestion_followed: seguiu,
+      placement: encaixe,
       movement_ids: movementIds,
       events,
     }) as ResultadoDoMover;

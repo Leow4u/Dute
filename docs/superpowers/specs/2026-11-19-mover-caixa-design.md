@@ -146,9 +146,15 @@ frase para quem opera, o cliente por `requireCustomerScope`):
   (só os códigos).
 - **O mover (escrita):** `customer_code`, `box_code`, `from_location_id`
   (a prateleira que a tela viu), `to_location_id`, a sugestão que a tela
-  mostrou (para o evento dizer se foi seguida) e `idempotency_key`. Recibo
-  em `operational_operations` (`warehouse.box.move`), com o mesmo resultado
-  na repetição e a recusa da chave usada com outro conteúdo.
+  mostrou (para o evento dizer se foi seguida), o encaixe que a tela mostrou
+  para o destino (`orientation` e `support_box_code`, null para o piso: o
+  `placement` da prévia) e `idempotency_key`. O mover confere esse encaixe
+  exato e recusa com `BOX_MOVE_DOES_NOT_FIT` se ele não cabe mais, sem
+  trocar a orientação nem o apoio em silêncio (a regra do motor,
+  `placementFor`); o resultado e o evento dizem o encaixe gravado (revisão
+  do PR do servidor, 19/11/2026). Recibo em `operational_operations`
+  (`warehouse.box.move`), com o mesmo resultado na repetição e a recusa da
+  chave usada com outro conteúdo.
 
 ### A transação do mover
 
