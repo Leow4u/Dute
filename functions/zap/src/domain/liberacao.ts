@@ -3,10 +3,8 @@
  * A retenção tem lista própria e começa só na homologação (docs/plataforma/lgpd.md,
  * "A operação primeiro"): a produção não apaga até o Leonardo pedir.
  *
- * O segredo da ingestão só entra no deploy quando o projeto está na lista.
- * O dute-homolog entra depois de o segredo existir lá. O dute-prod fica de
- * fora até o segredo existir na produção e um PR o incluir. Declarar o
- * segredo antes disso derruba a publicação (docs/deploy-functions-manual.md).
+ * Cada projeto da lista precisa ter o próprio segredo da ingestão no
+ * Secret Manager antes do deploy (docs/deploy-functions-manual.md).
  */
 
 import { HttpsError } from "firebase-functions/https";
@@ -17,7 +15,7 @@ export const ZAP_AMBIENTES_LIBERADOS = ["dute-homolog", "dute-prod"] as const;
 
 export const RETENCAO_AMBIENTES_LIBERADOS = ["dute-homolog"] as const;
 
-export const ZAP_PROJETOS_COM_SEGREDO: readonly string[] = ["dute-homolog"];
+export const ZAP_PROJETOS_COM_SEGREDO: readonly string[] = ["dute-homolog", "dute-prod"];
 
 export function zapLiberado(projectId: string | null | undefined): boolean {
   return (ZAP_AMBIENTES_LIBERADOS as readonly string[]).includes(String(projectId ?? "").trim());

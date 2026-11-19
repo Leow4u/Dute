@@ -19,10 +19,10 @@ describe("liberação do Zap", () => {
     assert.equal(retencaoLiberada("dute-prod"), false);
   });
 
-  it("o segredo entra só na homologação", () => {
-    assert.deepEqual(ZAP_PROJETOS_COM_SEGREDO, ["dute-homolog"]);
+  it("a ingestão declara o segredo em homologação e produção", () => {
+    assert.deepEqual(ZAP_PROJETOS_COM_SEGREDO, ["dute-homolog", "dute-prod"]);
     assert.deepEqual(segredosDoZap("dute-homolog"), [NOME_DO_SEGREDO]);
-    assert.deepEqual(segredosDoZap("dute-prod"), []);
+    assert.deepEqual(segredosDoZap("dute-prod"), [NOME_DO_SEGREDO]);
     assert.deepEqual(segredosDoZap("dute-btg"), []);
   });
 });
