@@ -556,6 +556,100 @@ export function suggestPosition(
   };
 }
 
+// ------------------------------------------------------------------ o mover
+
+/** Um destino do mover: a prateleira, o nível, o motivo e a frente livre antes da caixa. */
+export type DestinoDoMover = {
+  code: string;
+  /** 1: já tem algum item da caixa em saldo; 2: as outras, a mais vazia primeiro. */
+  tier: 1 | 2;
+  reason: string;
+  /** A frente livre antes da caixa, em metros, três casas. */
+  free_front_m: number;
+  /** As caixas guardadas ou a caminho na prateleira. */
+  box_count: number;
+  sequence: number;
+  placement: Placement;
+};
+
+export type DestinosDoMover = { prateleiras: DestinoDoMover[]; nao_cabem: string[]; rejected: string | null };
+
+const METROS_DO_MOVER = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * As prateleiras para onde a caixa guardada pode ir, na ordem do mover
+ * (docs/superpowers/specs/2026-11-19-mover-caixa-design.md, decisão do
+ * Leonardo em 19/11/2026): primeiro as que já têm algum item da caixa em
+ * saldo, depois as outras; em cada nível, a de mais frente livre primeiro e,
+ * no empate, a caminhada. Só as ativas da zona do cliente, fora da origem e
+ * de `fora` (a reserva e a contagem aberta, que quem chama confere), onde a
+ * caixa cabe pelo encaixe estrito. A guarda continua com a ordem de
+ * suggestPosition. Determinístico.
+ */
+export function destinosDoMover(
+  caixa: BoxDimensions & Pick<BoxPlacementOptions, "allow_tilt" | "allow_stacking"> & { customer_code: string; sku_codes: readonly string[] },
+  positions: readonly SlottingPosition[],
+  occupancy: ReadonlyMap<string, PositionOccupancy>,
+  options: { origem: string; fora?: ReadonlySet<string>; nomeDoItem?: (sku: string) => string },
+): DestinosDoMover {
+  const customer = caixa.customer_code.trim();
+  const zone = positions.filter((position) => String(position.customer_code ?? "").trim() === customer);
+  if (!zone.length) {
+    return {
+      prateleiras: [],
+      nao_cabem: [],
+      rejected: `Nenhuma prateleira está na zona de ${customer}. Atribua uma rua a esse cliente em Estoque › Posições.`,
+    };
+  }
+  const origem = options.origem.trim().toUpperCase();
+  const fora = new Set([...(options.fora ?? [])].map((code) => code.trim().toUpperCase()));
+  const nomeDoItem = options.nomeDoItem ?? ((sku: string) => sku);
+  const skus = caixa.sku_codes.map((sku) => sku.trim()).filter(Boolean);
+  const sequenceOf = (position: SlottingPosition) => Number(position.sequence ?? Number.MAX_SAFE_INTEGER);
+  const cabem: DestinoDoMover[] = [];
+  const naoCabem: SlottingPosition[] = [];
+  for (const position of zone) {
+    const code = position.code.trim().toUpperCase();
+    if ((position.status ?? "active") !== "active" || code === origem || fora.has(code)) continue;
+    const current = occupancy.get(position.code) ?? emptyOccupancy();
+    const placement = placementFor(position, caixa, current, { allow_tilt: caixa.allow_tilt, allow_stacking: caixa.allow_stacking });
+    if (!placement) {
+      naoCabem.push(position);
+      continue;
+    }
+    const comOItem = skus.find((sku) => current.sku_codes.has(sku));
+    cabem.push({
+      code: position.code,
+      tier: comOItem ? 1 : 2,
+      reason: comOItem ? `Já tem ${nomeDoItem(comOItem)} e ainda cabe.` : "",
+      free_front_m: round(Math.max(0, position.length_m - current.front_used_m), 3),
+      box_count: current.box_count,
+      sequence: sequenceOf(position),
+      placement,
+    });
+  }
+  cabem.sort(
+    (left, right) =>
+      left.tier - right.tier ||
+      right.free_front_m - left.free_front_m ||
+      left.sequence - right.sequence ||
+      left.code.localeCompare(right.code),
+  );
+  // A primeira do nível 2 é a mais vazia da zona; as seguintes dizem só a frente livre.
+  let maisVazia = true;
+  for (const destino of cabem) {
+    if (destino.tier !== 2) continue;
+    const livre = `${METROS_DO_MOVER.format(destino.free_front_m)} m livres de frente.`;
+    destino.reason = maisVazia ? `A mais vazia da zona: ${livre}` : livre;
+    maisVazia = false;
+  }
+  return {
+    prateleiras: cabem,
+    nao_cabem: naoCabem.sort((left, right) => sequenceOf(left) - sequenceOf(right) || left.code.localeCompare(right.code)).map((position) => position.code),
+    rejected: cabem.length ? null : `Nenhuma outra prateleira da zona de ${customer} recebe esta caixa agora.`,
+  };
+}
+
 // ----------------------------------------------------------- leitura Firestore
 
 type Row = Record<string, unknown>;
