@@ -12,7 +12,7 @@ import type { LocalComDatas } from "@/lib/datas-de-entrada";
 import { functionRoute } from "@/lib/functions-api";
 import { textosDaTela, textosForaDaLista } from "@/test/textos";
 
-import { ItemList, SecaoDoGiro, SecaoOndeEsta, buscarDatasDaFicha } from "./estoque";
+import { ItemList, LinhaDoMovimento, SecaoDoGiro, SecaoOndeEsta, buscarDatasDaFicha } from "./estoque";
 import { payloadDaMovimentacao } from "./movements";
 
 /**
@@ -345,5 +345,28 @@ describe("Estoque sem conexão", () => {
     // Sem nada lido (com ou sem rede), a FalhaNaLeitura no lugar da lista; na primeira leitura, nada (a linha de estado diz).
     expect(fonte.indexOf("{falhaDaLista ? (")).toBeLessThan(fonte.indexOf("Não consegui carregar o estoque."));
     expect(fonte.indexOf("Não consegui carregar o estoque.")).toBeLessThan(fonte.indexOf(") : aindaLendo ? null : ("));
+  });
+});
+
+/** O mover no histórico do item (mover caixa, 19/11/2026): o rótulo dele, sem caixa nem prateleira. */
+describe("o mover nos Últimos movimentos do item", () => {
+  it("o mover diz Mudança de prateleira, na saída e na entrada", async () => {
+    const html = renderToStaticMarkup(
+      <div>
+        <LinhaDoMovimento row={{ id: "m1", tipo_mov: "SAIDA", movement_kind: "box_move_out", qtde: 20, sinal: -1, data: "2026-11-19T17:32:00.000Z" }} />
+        <LinhaDoMovimento row={{ id: "m2", tipo_mov: "ENTRADA", movement_kind: "box_move_in", qtde: 20, sinal: 1, data: "2026-11-19T17:32:00.000Z" }} />
+      </div>,
+    );
+    expect((html.match(/Mudança de prateleira/g) ?? []).length).toBe(2);
+    expect(html).not.toMatch(/>saida<|>entrada</);
+    expect(html).not.toMatch(/CX-|A-01|B-09/);
+    expect(textosForaDaLista(html, ["Mudança de prateleira", /^[+−]\s?20$/, /^\d\d\/\d\d\/\d{4}/])).toEqual([]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("os outros movimentos seguem com o tipo", () => {
+    const html = renderToStaticMarkup(<LinhaDoMovimento row={{ id: "m3", tipo_mov: "AJUSTE_ENTRADA", qtde: 3, sinal: 1 }} />);
+    expect(html).toContain("ajuste entrada");
+    expect(html).not.toContain("Mudança de prateleira");
   });
 });

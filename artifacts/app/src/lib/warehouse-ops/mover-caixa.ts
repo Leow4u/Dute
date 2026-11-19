@@ -86,6 +86,14 @@ export type ResultadoDoMover = {
   movement_ids: string[];
 };
 
+/** O rótulo dos movimentos do mover (a SAÍDA da origem e a ENTRADA do destino) no histórico, sem caixa nem prateleira. */
+export const ROTULO_DO_MOVER = "Mudança de prateleira";
+
+/** O movimento é do mover: o servidor grava `movement_kind` box_move_out na origem e box_move_in no destino. */
+export function movimentoDoMover(movimento: { movement_kind?: unknown }): boolean {
+  return movimento.movement_kind === "box_move_out" || movimento.movement_kind === "box_move_in";
+}
+
 const numero = new Intl.NumberFormat("pt-BR");
 const metros = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const DIA = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });

@@ -104,3 +104,25 @@ describe("o produto do movimento", () => {
     expect(container!.textContent).not.toContain("piquet preto - XG");
   });
 });
+
+/** O mover no Histórico (mover caixa, 19/11/2026): o rótulo dele no lugar de Saída e Entrada. */
+describe("o movimento do mover no Histórico", () => {
+  it("a tabela e a lista do celular dizem Mudança de prateleira", async () => {
+    const comum = { data: "2026-11-19T17:32:00.000Z", cod_sku: "BTG-000112", produto: "Polo Masculino Piquet Preto", qtde: 20, cod_cliente: "BTG Pactual" };
+    estado.itens = [
+      { ...comum, id: 1, tipo_mov: "ENTRADA", sinal: 1, movement_kind: "box_move_in" },
+      { ...comum, id: 2, tipo_mov: "SAIDA", sinal: -1, movement_kind: "box_move_out" },
+    ];
+    await act(async () =>
+      raiz!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Movements embedded />
+        </QueryClientProvider>,
+      ),
+    );
+    const linhas = [...container!.querySelectorAll("tbody tr"), ...container!.querySelectorAll("li")].map((linha) => linha.textContent ?? "");
+    // Duas linhas na tabela e duas na lista do celular, nenhuma com Saída ou Entrada.
+    expect(linhas.filter((linha) => linha.includes("Mudança de prateleira"))).toHaveLength(4);
+    expect(linhas.filter((linha) => /Saída|Entrada/.test(linha))).toEqual([]);
+  });
+});
