@@ -37,7 +37,7 @@ button:disabled { cursor: progress; opacity: 0.7; }
   border: 1px solid #cfc9c2;
 }
 
-.entrada {
+main.entrada {
   min-height: 100vh;
   display: grid;
   place-items: center;
