@@ -190,3 +190,68 @@ describe("datas do saldo: nunca lança erro", () => {
     }
   });
 });
+
+/**
+ * O mover de caixa (docs/superpowers/specs/2026-11-19-mover-caixa-design.md):
+ * a ENTRADA do mover diz de onde a caixa veio (`fifo_from_location_id`), e a
+ * conta tira da origem as peças do dia da caixa. Sem isso, a origem ficaria
+ * com o dia da caixa que saiu quando ela era a mais nova.
+ */
+describe("o mover de caixa", () => {
+  const entrada = (local: string, quantity: number, extra: Record<string, unknown> = {}) => ({ tipo_mov: "ENTRADA", location_id: local, quantity, created_at: "2026-10-20T13:00:00.000Z", ...extra });
+  const novembro = { created_at: "2026-11-10T13:00:00.000Z" };
+  const movida = (local: string, quantity: number, de: string, extra: Record<string, unknown> = {}) =>
+    entrada(local, quantity, { created_at: "2026-11-19T17:32:00.000Z", fifo_from_location_id: de, ...extra });
+
+  it("a caixa mais nova sai e a origem fica com o dia das que ficaram", () => {
+    const porLocal = entradasDoRazao([entrada("A-01", 100), entrada("A-01", 30, novembro), movida("B-09", 30, "A-01", { fifo_day: "2026-11-10" })]);
+    assert.deepEqual(porLocal.get("A-01"), [{ dia: "2026-10-20", quantidade: 100 }]);
+    assert.deepEqual(porLocal.get("B-09"), [{ dia: "2026-11-10", quantidade: 30 }]);
+    assert.deepEqual(datasDoSaldo({ qty_on_hand: 100 }, porLocal.get("A-01")).fisicas, [{ dia: "2026-10-20", quantidade: 100 }]);
+  });
+
+  it("o dia que a origem não tem não tira nada", () => {
+    const porLocal = entradasDoRazao([entrada("A-01", 100), entrada("A-01", 30, novembro), movida("B-09", 30, "A-01", { fifo_day: "2026-09-01" })]);
+    assert.deepEqual(porLocal.get("A-01"), [
+      { dia: "2026-10-20", quantidade: 100 },
+      { dia: "2026-11-10", quantidade: 30 },
+    ]);
+  });
+
+  it("nunca abaixo de zero", () => {
+    const porLocal = entradasDoRazao([entrada("A-01", 100), entrada("A-01", 30, novembro), movida("B-09", 50, "A-01", { fifo_day: "2026-11-10" })]);
+    assert.deepEqual(porLocal.get("A-01"), [{ dia: "2026-10-20", quantidade: 100 }]);
+    assert.deepEqual(porLocal.get("B-09"), [{ dia: "2026-11-10", quantidade: 50 }]);
+  });
+
+  it("a caixa da abertura vale o dia da sessão nos dois lados", () => {
+    const sessao = "opening_BTG_Pactual";
+    const porLocal = entradasDoRazao(
+      [
+        entrada("A-01", 80, { created_at: "2026-10-22T15:00:00.000Z", opening_inventory_session_id: sessao }),
+        entrada("A-01", 20, { created_at: "2026-11-06T18:02:00.000Z" }),
+        movida("B-09", 20, "A-01", { fifo_opening_session_id: sessao }),
+      ],
+      { id: sessao, started_at: "2026-10-20T11:00:00.000Z" },
+    );
+    assert.deepEqual(porLocal.get("A-01"), [
+      { dia: "2026-10-20", quantidade: 60 },
+      { dia: "2026-11-06", quantidade: 20 },
+    ]);
+    assert.deepEqual(porLocal.get("B-09"), [{ dia: "2026-10-20", quantidade: 20 }]);
+  });
+
+  it("ida e volta", () => {
+    const porLocal = entradasDoRazao([
+      entrada("A-01", 100),
+      entrada("A-01", 30, novembro),
+      movida("B-09", 30, "A-01", { fifo_day: "2026-11-10" }),
+      movida("A-01", 30, "B-09", { fifo_day: "2026-11-10", created_at: "2026-11-19T18:00:00.000Z" }),
+    ]);
+    assert.deepEqual(datasDoSaldo({ qty_on_hand: 130 }, porLocal.get("A-01")).fisicas, [
+      { dia: "2026-10-20", quantidade: 100 },
+      { dia: "2026-11-10", quantidade: 30 },
+    ]);
+    assert.deepEqual(porLocal.get("B-09") ?? [], []);
+  });
+});
