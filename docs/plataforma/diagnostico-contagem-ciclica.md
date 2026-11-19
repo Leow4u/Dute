@@ -1075,6 +1075,47 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    o "Tentar de novo" depois do resultado incerto (a chave da tentativa já
    repete certo); a tela conta a prateleira só com caixa a caminho e o
    servidor não.
+
+   *A caixa contada vazia sem linha, no PR 637 (19/11/2026):* na recontagem
+   geral de 17/11, na produção, a A-01 e a A-02 ficaram "em contagem · 6 de
+   9" e "7 de 8 caixas" com as caixas contadas, e a rodada foi concluída
+   assim (25 de 28 prateleiras, 137 de 142 caixas). A causa, conferida no
+   código e no emulador (os dados da produção ainda não foram lidos): o
+   "Item fora da lista" de uma caixa tira peças das outras caixas da
+   prateleira (`movidasDe`), que só ganham `count_adjustments`, e a que cede
+   a última peça fica guardada com saldo zero até alguém contá-la vazia
+   (decisão de 17/11/2026). Sem nada na lista (`saldoDaCaixa` tira as linhas
+   zeradas), ela se reconta com `lines: []`: `recountWarehouseBox` a esvazia
+   e grava o registro só na caixa (`last_recount_id`, `last_recounted_at`,
+   `last_recounted_by`, `last_recount_round_id`, `emptied_recount_id`), sem
+   linha em `cycle_counts`, porque não há item. A tela e o fechamento só liam
+   recontagem pelas linhas: a caixa entrava no total da prateleira e nunca
+   nas confirmadas, e caixa vazia não se reconta, então a prateleira não
+   fechava. Agora a caixa que a rodada esvaziou e cuja última recontagem não
+   tem linha vale a recontagem vazia, tirada do registro dela: esperado zero,
+   contado zero, sem diferença, com o quando e o quem dela. A mesma regra no
+   fechamento (`linhasDasCaixasContadasVazias`, em `count-rounds.ts`) e na
+   tela (`recontagensDasCaixasContadasVazias`, em `recontagem-por-caixa.ts`,
+   na bancada e na rodada). A caixa que o desfazer da separação devolve à
+   prateleira depois da recontagem vazia volta a ser por contar. O servidor
+   não grava nada novo: nenhuma linha sem SKU em `cycle_counts`, que a tela e
+   o "Caixas × saldo" descartam, e as caixas já contadas vazias passam a
+   contar sem migração. Os números gravados no fechamento da recontagem geral
+   de 17/11 não mudam com o código: no "Ver" dela, o cartão mostra os
+   gravados e as prateleiras saem pela conta nova. A caixa contada vazia
+   também não entra nas "contagens do dia" do "Caixas × saldo", que listam
+   por item. Travas: `count-rounds.test.ts` (a caixa sem linha e os guardas:
+   a com linha conta uma vez, a esvaziada pela separação vale a linha dela,
+   a devolvida à prateleira fica por contar, a de outra rodada fica fora),
+   `count-rounds.integration.test.ts` (o fora da lista deixa a CX-000010
+   guardada sem nada, contada vazia ela sai sem linha, e o fechamento conta
+   as três caixas) e, no app, `recontagem-por-caixa.test.ts` (a bancada e a
+   rodada). O teste de unidade do fechamento representava essa caixa com uma
+   linha que na prática não existe, e o defeito passou por isso. Ficam para
+   o Leonardo, no PR: a caixa que cede a última peça vira `emptied` na hora,
+   como na separação; a correção dos números gravados da recontagem geral,
+   por ferramenta em `tools/`, com dry-run; e a conferência, só de leitura,
+   das três prateleiras pendentes na produção.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
