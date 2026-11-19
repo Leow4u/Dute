@@ -78,6 +78,13 @@ só lê e nunca dá erro.
   nas outras, o dia do `stored_at`, gravado em `fifo_day` (decisões do
   Leonardo de 17/11/2026, `docs/plataforma/diagnostico-contagem-ciclica.md`,
   seções 6, item 4, e 7).
+- A caixa que muda de prateleira (Mover caixa, 19/11/2026,
+  `docs/superpowers/specs/2026-11-19-mover-caixa-design.md`) leva o dia
+  dela: a ENTRADA no destino vale o dia da caixa, como a da recontagem, e
+  diz de onde a caixa veio (`fifo_from_location_id`). A conta tira essas
+  peças, daquele dia, das entradas da prateleira de origem: sem isso, a
+  origem ficaria com o dia da caixa que saiu quando ela era a mais nova, e
+  o portal contaria a caixa duas vezes.
 - O que as entradas não cobrirem fica "sem data", e o total sempre fecha com
   o saldo.
 - O local é o `location_id` como o alocador o compara, só sem o espaço das

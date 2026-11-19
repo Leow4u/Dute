@@ -1080,6 +1080,33 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    recusando o que está separado; o lançamento manual sem os literais
    `ESTOQUE_BTG`, `FORNECEDOR` e `CLIENTE` e com a posição escolhida na lista.
    *Pronto quando* o XGG que era XG se corrige pela tela, sem script.
+   **A caixa inteira entre prateleiras ("Mover caixa"), servidor no código
+   desde 19/11/2026** (desenho e decisões em
+   `docs/superpowers/specs/2026-11-19-mover-caixa-design.md`, mockup aprovado
+   em `docs/mockups/mover-caixa/`). Decisões do Leonardo de 19/11/2026: movem
+   a coordenação e quem opera (owner, admin, interno e wms); o sistema sugere
+   a prateleira com o mesmo produto e depois a mais vazia, e a pessoa pode
+   trocar à mão; uma caixa por vez, sem lista impressa; o "Mover" fica em
+   cada caixa da ficha da prateleira no Mapa e no topo do Mapa, abrindo uma
+   página v3; a caixa não vai para uma prateleira com algum item dela
+   reservado. No WMS, `previewWarehouseBoxMove` (só lê) e `moveWarehouseBox`
+   (`functions/wms/src/domain/box-move.ts`): numa transação, a caixa (a
+   prateleira, o encaixe estrito do motor no destino; o `stored_at` não
+   muda), as linhas da abertura dela (a primeira prateleira em
+   `opening_location_id`), o saldo de cada item nas duas prateleiras, a SAÍDA
+   e a ENTRADA no razão (`functions_box_move`, fora da cobrança e do relógio
+   dos parados; a ENTRADA com o dia FIFO da caixa e `fifo_from_location_id`,
+   que `entradasDoRazao` usa para tirar o dia da origem), o evento
+   `warehouse.box_moved` e o recibo. Recusa a caixa que não está guardada ou
+   saiu de onde a tela viu, o destino fora de Posições, de passagem, igual,
+   bloqueado, de outra zona ou sem espaço, a caixa com outra em cima, o item
+   reservado na origem ou no destino, a prateleira da contagem aberta (a
+   origem como está, o destino como ficaria: com a recontagem geral de 17/11
+   aberta, nenhuma caixa da BTG se move), a abertura em andamento, a
+   prateleira com menos que a caixa e o saldo duplicado. A caixa movida entra
+   em "Etiquetas para trocar" até a impressão. A ordem da guarda
+   (`suggestPosition`) não mudou. A tela (a página e o Mapa) vem no PR
+   seguinte; o lançamento manual e o XGG continuam como estavam.
 6. **Ensaio no emulador (F19).** O cenário com `taken_lines`, caixas
    `emptied` e as reservas do PED-0001; o `--conferir-caixas`; um roteiro que
    suba o app com o WMS e deixe gravar uma contagem antes da produção. Entra

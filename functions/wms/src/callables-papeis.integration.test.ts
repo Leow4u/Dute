@@ -208,6 +208,9 @@ const MATRIZ: Record<string, Linha> = {
   receiveOrderReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recordCycleCount: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   recountWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  // Mover caixa entre prateleiras (decisões de 19/11/2026): a prévia e o mover, de quem opera o armazém.
+  previewWarehouseBoxMove: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  moveWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   // Iniciar e concluir a rodada da contagem (o registro da rodada, 18/11/2026): quem opera o armazém.
   startCountRound: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   completeCountRound: { passam: ARMAZEM, recusa: SO_ARMAZEM },

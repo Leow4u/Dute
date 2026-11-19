@@ -136,4 +136,21 @@ describe("Etiquetas para trocar (separação com caixas, parte 3d)", () => {
     assert.equal((await recusa(recordBoxBalanceLabelPrint(db, { box_codes: [], idempotency_key: "etiqueta-vazia-0001" }, guilherme))).code, "invalid-argument");
     assert.equal((await recusa(recordBoxBalanceLabelPrint(db, { box_codes: ["CX-000027"], idempotency_key: "curta" }, guilherme))).code, "invalid-argument");
   });
+
+  // Mover caixa (19/11/2026): a etiqueta imprime a prateleira, e a caixa intacta movida também pede etiqueta nova.
+  it("a caixa intacta movida registra a impressão e sai da lista", async () => {
+    const movidaEm = "2026-11-19T17:32:00.000Z";
+    await db.collection("warehouse_boxes").doc("CX-000028").update({ location_id: "B-09", moved_at: movidaEm, moved_from_location_id: "A-05" });
+    assert.equal(etiquetaParaTrocar(await caixa("CX-000028")), true);
+
+    const resultado = await registrar(["CX-000028"]);
+    assert.deepEqual([resultado.printed, resultado.skipped], [["CX-000028"], []]);
+    const movida = await caixa("CX-000028");
+    assert.deepEqual(
+      [movida.location_label_printed_for, movida.balance_label_print_count, movida.balance_label_printed_for, etiquetaParaTrocar(movida)],
+      [movidaEm, 1, undefined, false],
+    );
+    const [evento] = await eventos();
+    assert.deepEqual([evento.title, evento.description], ["Etiqueta da caixa CX-000028 trocada · B-09", "Etiqueta com o saldo de 42 un."]);
+  });
 });

@@ -6,11 +6,13 @@ import {
   CreateWarehouseBoxSchema,
   SuggestWarehousePositionSchema,
   buildOccupancy,
+  destinosDoMover,
   emptyOccupancy,
   formatBoxCode,
   placementFor,
   resolveOpeningPlacement,
   suggestPosition,
+  type PositionOccupancy,
   type SlottingPosition,
 } from "./warehouse-boxes.js";
 
@@ -401,5 +403,78 @@ describe("prévia de prateleira cadastrada", () => {
     for (const location_id of ["", "  ", "A-01/caixa", "A".repeat(13)]) {
       assert.equal(SuggestWarehousePositionSchema.safeParse({ ...box, location_id }).success, false);
     }
+  });
+});
+
+/** Mover caixa (docs/superpowers/specs/2026-11-19-mover-caixa-design.md): o mesmo produto, depois a mais vazia. */
+describe("a ordem do mover", () => {
+  const caixa = { customer_code: BTG, length_m: 0.4, width_m: 0.6, height_m: 0.35, gross_weight_kg: 10, sku_codes: ["BTG-000112"] };
+  const nomeDoItem = () => "Polo Masculino Piquet Preto · M";
+  const ocupada = (frente: number, skus: string[] = [], caixas = 1): PositionOccupancy => ({ ...emptyOccupancy(), front_used_m: frente, box_count: caixas, sku_codes: new Set(skus) });
+
+  it("o mesmo produto vem antes da mais vazia", () => {
+    const destinos = destinosDoMover(
+      caixa,
+      [shelf("A-01", 1), shelf("B-09", 9), shelf("C-02", 12)],
+      new Map([
+        ["A-01", ocupada(1.2, ["BTG-000112"], 3)],
+        ["B-09", ocupada(0.38, ["BTG-000112"], 1)],
+      ]),
+      { origem: "A-01", nomeDoItem },
+    );
+    assert.deepEqual(destinos.prateleiras.map((p) => p.code), ["B-09", "C-02"]);
+    assert.deepEqual(destinos.prateleiras.map((p) => p.tier), [1, 2]);
+    assert.deepEqual(destinos.prateleiras.map((p) => p.reason), ["Já tem Polo Masculino Piquet Preto · M e ainda cabe.", "A mais vazia da zona: 1,80 m livres de frente."]);
+    assert.deepEqual(destinos.prateleiras.map((p) => [p.free_front_m, p.box_count]), [[1.42, 1], [1.8, 0]]);
+    assert.deepEqual(destinos.nao_cabem, []);
+    assert.equal(destinos.rejected, null);
+  });
+
+  it("no mesmo nível, a de mais frente livre primeiro e, no empate, a caminhada", () => {
+    const destinos = destinosDoMover(
+      caixa,
+      [shelf("A-01", 1), shelf("D-05", 5), shelf("D-04", 4), shelf("D-03", 3)],
+      new Map([
+        ["D-05", ocupada(0.82)],
+        ["D-04", ocupada(0.42)],
+        ["D-03", ocupada(0.42)],
+      ]),
+      { origem: "A-01", nomeDoItem },
+    );
+    assert.deepEqual(destinos.prateleiras.map((p) => p.code), ["D-03", "D-04", "D-05"]);
+    assert.deepEqual(destinos.prateleiras.map((p) => p.reason), ["A mais vazia da zona: 1,38 m livres de frente.", "1,38 m livres de frente.", "0,98 m livres de frente."]);
+  });
+
+  it("a origem, a inativa, a de outra zona e a de fora não entram", () => {
+    const destinos = destinosDoMover(
+      caixa,
+      [shelf("A-01", 1), shelf("B-01", 2, { status: "blocked" }), shelf("B-02", 3, { status: "review" }), shelf("I-01", 4, { customer_code: "Itaú" }), shelf("B-10", 5), shelf("C-02", 6)],
+      new Map(),
+      { origem: "A-01", fora: new Set(["B-10"]), nomeDoItem },
+    );
+    assert.deepEqual(destinos.prateleiras.map((p) => p.code), ["C-02"]);
+    assert.deepEqual(destinos.nao_cabem, []);
+  });
+
+  it("a que não cabe vai para nao_cabem, na caminhada", () => {
+    const destinos = destinosDoMover(
+      caixa,
+      [shelf("A-01", 1), shelf("E-07", 7), shelf("E-06", 6), shelf("C-02", 12)],
+      new Map([
+        ["E-07", ocupada(1.6)],
+        ["E-06", ocupada(1.6)],
+      ]),
+      { origem: "A-01", nomeDoItem },
+    );
+    assert.deepEqual(destinos.prateleiras.map((p) => p.code), ["C-02"]);
+    assert.deepEqual(destinos.nao_cabem, ["E-06", "E-07"]);
+  });
+
+  it("sem nenhuma, a frase", () => {
+    const soAOrigem = destinosDoMover(caixa, [shelf("A-01", 1)], new Map(), { origem: "A-01", nomeDoItem });
+    assert.deepEqual(soAOrigem.prateleiras, []);
+    assert.equal(soAOrigem.rejected, "Nenhuma outra prateleira da zona de BTG Pactual recebe esta caixa agora.");
+    const semZona = destinosDoMover(caixa, [shelf("I-01", 1, { customer_code: "Itaú" })], new Map(), { origem: "A-01", nomeDoItem });
+    assert.equal(semZona.rejected, "Nenhuma prateleira está na zona de BTG Pactual. Atribua uma rua a esse cliente em Estoque › Posições.");
   });
 });

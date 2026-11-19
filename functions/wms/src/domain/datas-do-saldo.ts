@@ -19,8 +19,12 @@
  * só por cliente, o do started_at da sessão dele. A ENTRADA da recontagem da
  * caixa vale o dia que o FIFO já dá ao conteúdo da caixa (a peça achada a
  * mais sempre esteve nela): o da sessão na caixa da abertura, o da guarda
- * (fifo_day) na do recebimento. O local é o location_id como
- * o alocador o compara, só sem o espaço das pontas (chaveDoLocal).
+ * (fifo_day) na do recebimento. A ENTRADA do mover de caixa (Mover caixa,
+ * 19/11/2026) também vale o dia da caixa e diz de onde ela veio
+ * (fifo_from_location_id): as mesmas peças, do mesmo dia, saem das entradas
+ * da prateleira de origem, que não fica com o dia da caixa que saiu. O local
+ * é o location_id como o alocador o compara, só sem o espaço das pontas
+ * (chaveDoLocal).
  *
  * A ordem do pedido: primeiro o local com data livre, do dia livre mais antigo
  * ao mais novo; depois o local sem data livre; no empate, o location_id, como
@@ -221,13 +225,17 @@ export function skusQuePrecisamDasDatas(itens: readonly ItemDoPedido[], saldosPo
  * o movimento leva a sessão dela (fifo_opening_session_id) e vale o dia da
  * sessão, como o conteúdo de entrada; nas outras, o dia da guarda, que o
  * servidor grava em fifo_day ("AAAA-MM-DD"). Sem a sessão lida, vale o
- * fifo_day; o fifo_day que não é dia de calendário cai no created_at. O que
- * não é ENTRADA, ou não tem local ou quantidade, fica de fora.
+ * fifo_day; o fifo_day que não é dia de calendário cai no created_at. A
+ * ENTRADA do mover de caixa, com `fifo_from_location_id`, entra no local dela
+ * e tira as mesmas peças, do mesmo dia, das entradas da origem, depois de
+ * juntar todas, nunca abaixo de zero (a entrada zerada sai). O que não é
+ * ENTRADA, ou não tem local ou quantidade, fica de fora.
  */
 export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertura = {}): Map<string, Entrada[]> {
   const sessao = texto(abertura?.id);
   const diaDaAbertura = sessao ? diaDeSaoPaulo(abertura?.started_at) : null;
   const porLocal = new Map<string, Entrada[]>();
+  const retiradas: Array<{ local: string; dia: Dia; quantidade: number }> = [];
   for (const valor of lista(movimentos)) {
     if (!valor || typeof valor !== "object") continue;
     const movimento = valor as Record<string, unknown>;
@@ -238,9 +246,29 @@ export function entradasDoRazao(movimentos: readonly unknown[], abertura: Abertu
     const daAbertura =
       diaDaAbertura !== null && (texto(movimento.opening_inventory_session_id) === sessao || texto(movimento.fifo_opening_session_id) === sessao);
     const diaDaCaixa = typeof movimento.fifo_day === "string" ? diaValido(movimento.fifo_day.trim()) : null;
+    const dia = daAbertura ? diaDaAbertura : diaDaCaixa ?? diaDeSaoPaulo(movimento.created_at);
     const doLocal = porLocal.get(local) ?? [];
-    doLocal.push({ dia: daAbertura ? diaDaAbertura : diaDaCaixa ?? diaDeSaoPaulo(movimento.created_at), quantidade: pecas });
+    doLocal.push({ dia, quantidade: pecas });
     porLocal.set(local, doLocal);
+    // O mover de caixa: as peças saem da origem no dia da caixa.
+    const origem = chaveDoLocal(movimento.fifo_from_location_id);
+    if (origem && origem !== local) retiradas.push({ local: origem, dia, quantidade: pecas });
+  }
+  for (const retirada of retiradas) {
+    const daOrigem = porLocal.get(retirada.local);
+    if (!daOrigem || retirada.dia === null) continue;
+    let falta = retirada.quantidade;
+    for (const entrada of daOrigem) {
+      if (falta <= 0) break;
+      if (entrada.dia !== retirada.dia) continue;
+      const tirada = Math.min(falta, entrada.quantidade);
+      entrada.quantidade -= tirada;
+      falta -= tirada;
+    }
+    porLocal.set(
+      retirada.local,
+      daOrigem.filter((entrada) => entrada.quantidade > 0),
+    );
   }
   return porLocal;
 }
