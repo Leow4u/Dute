@@ -313,11 +313,16 @@ export function impressoesParaRegistrar(
 
 /**
  * As caixas abertas da folha, para registrar a impressão da etiqueta com o
- * saldo (separação com caixas, parte 3d): a caixa sai de "Etiquetas para
- * trocar". Vale para a caixa de qualquer origem.
+ * saldo (separação com caixas, parte 3d), e as movidas, que a etiqueta nova
+ * leva para a prateleira de agora (Mover caixa, 19/11/2026): a caixa sai de
+ * "Etiquetas para trocar". Vale para a caixa de qualquer origem; a
+ * reimpressão também registra.
  */
-export function saldosParaRegistrar(boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units" | "count_adjustments">>): string[] {
-  return boxes.filter((box) => boxIsOpen(box) && boxLabelAvailability(box).ready).map((box) => box.code);
+export function saldosParaRegistrar(
+  boxes: Array<Pick<WarehouseBox, "code" | "status" | "location_id" | "origin" | "taken_units" | "count_adjustments" | "moved_at">>,
+): string[] {
+  const movida = (box: Pick<WarehouseBox, "status" | "moved_at">) => box.status === "stored" && Boolean(box.moved_at);
+  return boxes.filter((box) => (boxIsOpen(box) || movida(box)) && boxLabelAvailability(box).ready).map((box) => box.code);
 }
 
 export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };
