@@ -7,7 +7,16 @@ import { HttpsError } from "firebase-functions/https";
 
 import { billingMovementDirection } from "./billing-scope.js";
 import { lerCaixasDaPrateleira } from "./box-balance.js";
-import { BOX_MOVED_EVENT_TYPE, BOX_MOVE_SOURCE, MOTIVO_DO_MOVER, entradaDoMover, moveWarehouseBoxTransaction, type ResultadoDoMover } from "./box-move.js";
+import {
+  BOX_MOVED_EVENT_TYPE,
+  BOX_MOVE_SOURCE,
+  MOTIVO_DO_MOVER,
+  entradaDaPreviaDoMover,
+  entradaDoMover,
+  moveWarehouseBoxTransaction,
+  previewBoxMoveTransaction,
+  type ResultadoDoMover,
+} from "./box-move.js";
 import { LEGACY_ROUND_ID, LEGACY_ROUND_TITLE } from "./count-rounds.js";
 import { lerDatasDoEstoque } from "./datas-do-estoque.js";
 import { clientScopedInventoryId, type OperationalActor } from "./operations.js";
@@ -469,6 +478,77 @@ describe("as recusas do mover", () => {
     await db.collection("system_controls").doc("inventory").set({ movements_frozen: true, reconciliation_id: "rec-1" });
     await recusaCom("INVENTORY_RECONCILIATION_IN_PROGRESS", mover({ to_location_id: "C-02" }));
     await nadaMudou();
+  });
+});
+
+describe("a prévia do mover", () => {
+  const previa = (box_code = "CX-000121") => previewBoxMoveTransaction(db, entradaDaPreviaDoMover({ customer_code: BTG, box_code }));
+
+  it("a caixa, a sugestão e a lista", async () => {
+    // B-10 tem polo M reservado para um pedido: sai da lista (decisão 5).
+    await saldoNaPrateleira(POLO_M, "B-10", 2, { qty_reserved: 2, qty_available: 0 });
+    const resultado = await previa();
+    assert.equal(resultado.bloqueio, null);
+    assert.deepEqual(
+      [resultado.box.code, resultado.box.status, resultado.box.location_id, resultado.box.units, resultado.box.origin_kind, resultado.box.stored_at, resultado.box.length_m],
+      ["CX-000121", "stored", "A-01", 20, "opening_inventory", "2026-10-22T13:00:00.000Z", 0.4],
+    );
+    assert.deepEqual(
+      resultado.box.items.map((item) => [item.sku_code, item.qty, item.product_name, item.size, item.client_item_code]),
+      [
+        [POLO_M, 12, "Polo Masculino Piquet Preto", "M", "A.01.0713.005.M"],
+        [POLO_G, 8, "Polo Masculino Piquet Preto", "G", "A.01.0713.005.G"],
+      ],
+    );
+    // O mesmo produto primeiro (B-09 tem o M, A-02 tem o G), a de mais frente livre antes; depois a mais vazia.
+    assert.deepEqual(
+      resultado.prateleiras.map((destino) => [destino.code, destino.tier, destino.reason, destino.free_front_m, destino.box_count]),
+      [
+        ["B-09", 1, "Já tem Polo Masculino Piquet Preto · M e ainda cabe.", 1.4, 1],
+        ["A-02", 1, "Já tem Polo Masculino Piquet Preto · G e ainda cabe.", 1, 2],
+        ["C-02", 2, "A mais vazia da zona: 1,80 m livres de frente.", 1.8, 0],
+      ],
+    );
+    assert.deepEqual([resultado.com_reserva, resultado.em_contagem, resultado.nao_cabem, resultado.rejected], [["B-10"], [], [], null]);
+  });
+
+  it("a reserva na origem bloqueia com a frase do mover", async () => {
+    await db.collection("stock_balances").doc(`bal_${POLO_M}_A-01`).update({ qty_reserved: 2, qty_available: 10 });
+    await db.collection("stock_reservations").doc("res_1").set({ customer_code: BTG, sku_code: POLO_M, location_id: "A-01", status: "reserved", order_number: "PED-0042", quantity: 2 });
+    const resultado = await previa();
+    const erro = await recusa(mover({ to_location_id: "C-02" }));
+    assert.deepEqual(resultado.bloqueio, { code: "BOX_MOVE_RESERVED", message: erro.message });
+    assert.equal(erro.message, "Polo Masculino Piquet Preto · M está reservado em A-01 para o pedido PED-0042: mova a caixa depois da entrega.");
+    assert.deepEqual([resultado.prateleiras, resultado.com_reserva, resultado.em_contagem, resultado.nao_cabem], [[], [], [], []]);
+  });
+
+  it("a caixa de cima, a abertura e a contagem na origem também bloqueiam", async () => {
+    await db.collection("count_rounds").doc("cr_rua_a").set({ id: "cr_rua_a", customer_code: BTG, title: "Contagem da rua A · 19/11/2026", scope: "aisle", aisle: "A", status: "open" });
+    assert.deepEqual((await previa()).bloqueio, { code: "BOX_MOVE_COUNT_ROUND_OPEN", message: "A-01 está na contagem «Contagem da rua A · 19/11/2026»: conclua a contagem antes de mover." });
+    await db.collection("warehouse_boxes").doc("CX-000150").set({ code: "CX-000150", customer_code: BTG, status: "stored", location_id: "A-01", ...MEDIDAS, support_box_code: "CX-000121" });
+    assert.equal((await previa()).bloqueio?.code, "BOX_MOVE_SUPPORTS_ANOTHER");
+    await db.collection("opening_inventory_sessions").doc(SESSAO).update({ status: "open" });
+    assert.equal((await previa()).bloqueio?.code, "BOX_MOVE_OPENING_OPEN");
+    await db.collection("warehouse_boxes").doc("CX-000121").update({ status: "committing" });
+    assert.equal((await previa()).bloqueio?.code, "BOX_MOVE_BOX_NOT_STORED");
+  });
+
+  it("a contagem por rua tira a rua da lista", async () => {
+    await db.collection("count_rounds").doc("cr_rua_c").set({ id: "cr_rua_c", customer_code: BTG, title: "Contagem da rua C · 19/11/2026", scope: "aisle", aisle: "C", status: "open" });
+    const resultado = await previa();
+    assert.equal(resultado.bloqueio, null);
+    assert.deepEqual(resultado.em_contagem, ["C-02"]);
+    assert.deepEqual(resultado.prateleiras.map((destino) => destino.code), ["B-09", "A-02", "B-10"]);
+  });
+
+  it("a prévia não grava e recusa a caixa de outro cliente", async () => {
+    const contar = async () => Promise.all(["operational_operations", "events", "movements", "warehouse_boxes", "stock_balances"].map(async (colecao) => (await db.collection(colecao).get()).size));
+    const antes = await contar();
+    await previa();
+    assert.deepEqual(await contar(), antes);
+    await db.collection("warehouse_boxes").doc("CX-000500").set({ code: "CX-000500", customer_code: "Itaú", status: "stored", location_id: "Z-01", ...MEDIDAS });
+    assert.equal((await recusa(previa("CX-000500"))).code, "permission-denied");
+    assert.equal(codigoDa(await recusa(previa("CX-000999"))), "BOX_MOVE_BOX_NOT_FOUND");
   });
 });
 

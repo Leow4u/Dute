@@ -22,7 +22,18 @@ import {
   type Row,
 } from "./operations.js";
 import { saldoDaCaixa, type LinhaDaCaixa } from "./saldo-da-caixa.js";
-import { WAREHOUSE_BOXES_COLLECTION, asPosition, buildOccupancy, emptyOccupancy, openingSessionDocId, placementFor, requireDimensions, type BoxDimensions } from "./warehouse-boxes.js";
+import {
+  WAREHOUSE_BOXES_COLLECTION,
+  asPosition,
+  buildOccupancy,
+  destinosDoMover,
+  emptyOccupancy,
+  openingSessionDocId,
+  placementFor,
+  requireDimensions,
+  type BoxDimensions,
+  type DestinoDoMover,
+} from "./warehouse-boxes.js";
 import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
 
 /**
@@ -582,5 +593,138 @@ export async function moveWarehouseBoxTransaction(db: Firestore, input: EntradaD
       completed_at: FieldValue.serverTimestamp(),
     });
     return result;
+  });
+}
+
+// ----------------------------------------------------------------- a prévia
+
+/** A caixa como a página do mover a mostra. */
+export type CaixaDaPrevia = {
+  code: string;
+  status: string;
+  location_id: string;
+  units: number;
+  items: ItemMovido[];
+  origin_kind: "opening_inventory" | "receipt" | "manual";
+  invoice_number?: string;
+  stored_at?: string;
+  length_m: number;
+  width_m: number;
+  height_m: number;
+  gross_weight_kg: number | null;
+};
+
+export type PreviaDoMover = {
+  ok: true;
+  box: CaixaDaPrevia;
+  /** A recusa que já se sabe, com o código e a frase do mover; null quando a caixa pode sair. */
+  bloqueio: { code: string; message: string } | null;
+  /** Na ordem do mover: a primeira é a sugestão; a segunda e a terceira, as alternativas. Vazia com o bloqueio. */
+  prateleiras: DestinoDoMover[];
+  nao_cabem: string[];
+  com_reserva: string[];
+  em_contagem: string[];
+  rejected: string | null;
+};
+
+function caixaDaPrevia(boxCode: string, caixa: CaixaLida): CaixaDaPrevia {
+  const box = caixa.data;
+  const origem = box.origin && typeof box.origin === "object" ? (box.origin as Data) : {};
+  const tipo = text(origem.kind);
+  const peso = box.gross_weight_kg == null ? null : number(box.gross_weight_kg);
+  return clean({
+    code: boxCode,
+    status: text(box.status),
+    location_id: chave(box.location_id),
+    units: caixa.units,
+    items: caixa.itens,
+    origin_kind: tipo === "receipt" ? "receipt" : tipo === "opening_inventory" || text(origem.session_id) ? "opening_inventory" : "manual",
+    invoice_number: text(origem.invoice_number) || undefined,
+    stored_at: text(box.stored_at) || undefined,
+    length_m: number(box.length_m),
+    width_m: number(box.width_m),
+    height_m: number(box.height_m),
+    gross_weight_kg: peso,
+  }) as CaixaDaPrevia;
+}
+
+/**
+ * O que a página do mover mostra antes de mover (só lê): a caixa, a recusa
+ * que já se sabe (na ordem: não guardada, abertura em andamento, caixa com
+ * outra em cima, item reservado na origem, origem na contagem aberta), a
+ * sugestão e a lista das prateleiras na ordem do mover (destinosDoMover), e
+ * as que ficam de fora: as que não cabem, as com reserva de algum item da
+ * caixa (decisão 5) e as da contagem aberta. As frases são as do mover.
+ */
+export async function previewBoxMoveTransaction(db: Firestore, input: EntradaDaPreviaDoMover): Promise<PreviaDoMover> {
+  const customerCode = text(input.customer_code);
+  const boxCode = chave(input.box_code);
+  return db.runTransaction(async (transaction) => {
+    const caixa = await lerCaixa(transaction, db, customerCode, boxCode);
+    const box = caixa.data;
+    const origem = chave(box.location_id);
+    const [posicoes, caixas, saldos, sessao, rodada, emCima] = await Promise.all([
+      readRows(transaction, db.collection(WAREHOUSE_POSITIONS_COLLECTION).where("customer_code", "==", customerCode)),
+      readRows(transaction, db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode)),
+      readRows(transaction, db.collection(STOCK_BALANCES_COLLECTION).where("customer_code", "==", customerCode)),
+      transaction.get(db.collection(OPENING_SESSIONS_COLLECTION).doc(openingSessionDocId(customerCode))),
+      lerRodadaAberta(transaction, db, customerCode),
+      readRows(transaction, db.collection(WAREHOUSE_BOXES_COLLECTION).where("support_box_code", "==", boxCode)),
+    ]);
+    const previa = caixaDaPrevia(boxCode, caixa);
+    const semLista = { prateleiras: [], nao_cabem: [], com_reserva: [], em_contagem: [], rejected: null };
+    const bloqueada = (recusaDoMover: RecusaDoMover): PreviaDoMover => ({ ok: true, box: previa, bloqueio: { code: recusaDoMover.code, message: recusaDoMover.message }, ...semLista });
+
+    if (text(box.status) !== BOX_STATUS_STORED) return bloqueada(RECUSAS_DO_MOVER.caixaNaoGuardada(boxCode));
+    if (sessao.exists && text(sessao.get("status")) === "open" && text(sessao.get("customer_code")) === customerCode) return bloqueada(RECUSAS_DO_MOVER.aberturaAberta(customerCode));
+    const deCima = emCima.find((row) => ["stored", "committing"].includes(text(row.data.status)));
+    if (deCima) return bloqueada(RECUSAS_DO_MOVER.outraEmCima(boxCode, chave(deCima.data.code) || deCima.id));
+    // A reserva por item e prateleira: a do cliente, lida uma vez.
+    const reservados = new Map<string, Set<string>>();
+    for (const row of saldos) {
+      if (number(row.data.qty_reserved) <= 0) continue;
+      const local = text(row.data.location_id);
+      reservados.set(local, new Set([...(reservados.get(local) ?? []), chave(row.data.sku_code)]));
+    }
+    const itemReservadoNaOrigem = caixa.itens.find((item) => reservados.get(origem)?.has(item.sku_code));
+    if (itemReservadoNaOrigem) {
+      const pedido = await pedidoDaReserva(transaction, db, customerCode, itemReservadoNaOrigem.sku_code, origem);
+      return bloqueada(RECUSAS_DO_MOVER.reservadoNaOrigem(nomeDoItem(itemReservadoNaOrigem, itemReservadoNaOrigem.sku_code), origem, pedido));
+    }
+    const caixasDaRodada = caixas.map((row) => caixaDaRodada(row.id, row.data));
+    if (rodada && prateleirasNaContagem(rodada, caixasDaRodada, { box_code: boxCode, origem, destino: origem }).origem) {
+      return bloqueada(RECUSAS_DO_MOVER.naContagem(origem, rodada.title, rodada.id));
+    }
+
+    // As prateleiras da zona que ficam de fora antes do encaixe: a com reserva de algum item e a da contagem.
+    const zona = posicoes
+      .map((row) => asPosition(row.data))
+      .filter((posicao) => (posicao.status ?? "active") === "active" && chave(posicao.code) !== origem)
+      .sort((left, right) => Number(left.sequence ?? Number.MAX_SAFE_INTEGER) - Number(right.sequence ?? Number.MAX_SAFE_INTEGER) || left.code.localeCompare(right.code));
+    const comReserva = zona.filter((posicao) => caixa.itens.some((item) => reservados.get(posicao.code)?.has(item.sku_code))).map((posicao) => posicao.code);
+    const emContagem = rodada
+      ? zona.filter((posicao) => prateleirasNaContagem(rodada, caixasDaRodada, { box_code: boxCode, origem, destino: posicao.code }).destino).map((posicao) => posicao.code)
+      : [];
+    const ocupacao = buildOccupancy(
+      caixas.filter((row) => ["stored", "committing"].includes(text(row.data.status))).map((row) => row.data),
+      saldos.map((row) => row.data),
+    );
+    const porSku = new Map(caixa.itens.map((item) => [item.sku_code, item] as const));
+    const destinos = destinosDoMover(
+      { ...requireDimensions(box as unknown as BoxDimensions), allow_tilt: box.allow_tilt === true, allow_stacking: box.allow_stacking === true, customer_code: customerCode, sku_codes: caixa.itens.map((item) => item.sku_code) },
+      posicoes.map((row) => asPosition(row.data)),
+      ocupacao,
+      { origem, fora: new Set([...comReserva, ...emContagem]), nomeDoItem: (sku) => nomeDoItem(porSku.get(sku), sku) },
+    );
+    return {
+      ok: true,
+      box: previa,
+      bloqueio: null,
+      prateleiras: destinos.prateleiras,
+      nao_cabem: destinos.nao_cabem,
+      com_reserva: comReserva,
+      em_contagem: emContagem,
+      rejected: destinos.rejected,
+    };
   });
 }
