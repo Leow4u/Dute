@@ -21,6 +21,11 @@ import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
  * o `balance_at` daquele momento). Quando o saldo muda de novo, a etiqueta
  * impressa deixa de valer e a caixa volta à lista. Não é escrita de saldo:
  * não confere o congelamento do estoque.
+ *
+ * A etiqueta imprime a prateleira: a caixa que mudou de lugar (Mover caixa,
+ * 19/11/2026) também entra na lista, intacta ou aberta, até a impressão
+ * registrada depois do mover (`location_label_printed_for`, o `moved_at`
+ * daquele momento).
  */
 
 const OPERATIONS_COLLECTION = "operational_operations";
@@ -64,9 +69,19 @@ export function caixaAberta(box: Row): boolean {
   return text(box.status) === BOX_STATUS_STORED && (quantity(box.taken_units) > 0 || ajustesDaCaixa(box).length > 0);
 }
 
-/** A etiqueta que está na caixa não é a do saldo de agora. */
+/** A caixa guardada que mudou de prateleira (`moved_at`). */
+function caixaMovida(box: Row): boolean {
+  return text(box.status) === BOX_STATUS_STORED && text(box.moved_at) !== "";
+}
+
+/** A caixa movida cuja etiqueta ainda diz a prateleira antiga: sem a impressão registrada depois do mover. */
+export function caixaMovidaSemEtiqueta(box: Row): boolean {
+  return caixaMovida(box) && text(box.location_label_printed_for) !== text(box.moved_at);
+}
+
+/** A etiqueta que está na caixa não é a do saldo de agora, ou ainda diz a prateleira de antes do mover. */
 export function etiquetaParaTrocar(box: Row): boolean {
-  return caixaAberta(box) && text(box.balance_label_printed_for) !== text(box.balance_at);
+  return (caixaAberta(box) && text(box.balance_label_printed_for) !== text(box.balance_at)) || caixaMovidaSemEtiqueta(box);
 }
 
 /**
@@ -102,7 +117,9 @@ export async function recordBoxBalanceLabelPrint(db: Firestore, raw: unknown, ac
       const code = codes[index]!;
       if (!snapshot.exists) throw new HttpsError("not-found", `Caixa ${code} não encontrada.`);
       const box = snapshot.data() ?? {};
-      if (!caixaAberta(box)) {
+      const aberta = caixaAberta(box);
+      const movida = caixaMovida(box);
+      if (!aberta && !movida) {
         skipped.push(code);
         return;
       }
@@ -112,9 +129,11 @@ export async function recordBoxBalanceLabelPrint(db: Firestore, raw: unknown, ac
       const location = text(box.location_id);
       transaction.update(snapshot.ref, {
         balance_label_printed_at: occurredAt,
-        balance_label_printed_for: balanceAt,
         balance_label_printed_by: by,
         balance_label_print_count: count,
+        // A aberta registra o saldo da etiqueta; a movida, a prateleira dela.
+        ...(aberta ? { balance_label_printed_for: balanceAt } : {}),
+        ...(movida ? { location_label_printed_for: text(box.moved_at) } : {}),
         updated_at: FieldValue.serverTimestamp(),
       });
       printed.push(code);
