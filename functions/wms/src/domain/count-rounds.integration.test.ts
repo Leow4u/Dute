@@ -34,6 +34,7 @@ const BTG = "BTG Pactual";
 const OUTRO = "Outro Cliente";
 const POLO_P = "BTG-000122";
 const CAMISA_OUTRO = "OUT-000001";
+const BONE = "BTG-000200";
 
 const guilherme: OperationalActor = { uid: "wms-1", email: "guilherme@dutelog.com.br", name: "Guilherme Dantas", role: "wms", customer_code: "Dutelog" };
 const rafael: OperationalActor = { uid: "wms-2", email: "rafael@dutelog.com.br", name: "Rafael", role: "wms", customer_code: "Dutelog" };
@@ -79,6 +80,11 @@ beforeEach(async () => {
     db.collection("customers").doc("Outro_Cliente").set({ code: OUTRO, customer_code: OUTRO, name: OUTRO, sku_prefix: "OUT", status: "active" }),
     posicao("A-03", 3),
     posicao("B-01", 1),
+    // A rua C existe no mapa, sem caixa da BTG; o Outro Cliente tem uma caixa guardada em C-02.
+    posicao("C-01", 1),
+    db.collection("warehouse_boxes").doc("CX-000090").set({ id: "CX-000090", code: "CX-000090", customer_code: OUTRO, status: "stored", location_id: "C-02", stored_at: "2026-11-06T15:00:00.000Z", unit_count: 10, line_count: 1, sku_codes: [CAMISA_OUTRO], origin: { kind: "receipt", receipt_id: "inb_9" } }),
+    // O boné está no cadastro da BTG, sem caixa guardada.
+    cadastro(BONE, BTG, { cod_cliente: "C.0900.001.U", produto: "Boné Preto", tamanho: "U" }),
     cadastro(POLO_P, BTG, { cod_cliente: "A.01.0806.005.P", produto: "Polo Masculino Piquet Preto", tamanho: "P" }),
     cadastro(CAMISA_OUTRO, OUTRO, { cod_cliente: "C.01", produto: "Camisa Social", tamanho: "M" }),
     caixa("CX-000010", "A-03", "2026-10-20T12:00:00.000Z", 60, { kind: "opening_inventory", session_id: "opening_BTG_Pactual" }),
@@ -214,6 +220,31 @@ describe("Iniciar a rodada", () => {
     assert.equal(erro.message, `A ${LEGACY_ROUND_TITLE} está em andamento: conclua-a antes de iniciar outra.`);
     // De outro cliente, a recontagem geral da BTG não impede.
     await iniciar({ scope: "general" }, { cliente: OUTRO });
+  });
+});
+
+describe("Iniciar a rodada: o alcance vazio e a recontagem geral de outro cliente", () => {
+  it("o alcance sem caixa guardada do cliente recusa: a rua sem caixa, o item sem caixa, o cliente sem caixa", async () => {
+    const semRua = await recusa(iniciar({ scope: "aisle", aisle: "C" }));
+    assert.equal(codigoDa(semRua), "COUNT_ROUND_EMPTY_SCOPE");
+    assert.equal(semRua.message, "Nenhuma caixa guardada do cliente na rua C.");
+    const semItem = await recusa(iniciar({ scope: "item", sku_code: BONE }));
+    assert.equal(codigoDa(semItem), "COUNT_ROUND_EMPTY_SCOPE");
+    assert.equal(semItem.message, "Nenhuma caixa guardada com Boné Preto.");
+    const semCaixa = await recusa(iniciar({ scope: "general" }, { cliente: "Cliente Sem Caixa" }));
+    assert.equal(codigoDa(semCaixa), "COUNT_ROUND_EMPTY_SCOPE");
+    assert.equal(semCaixa.message, "Nenhuma caixa guardada do cliente: não há prateleira para contar.");
+    assert.equal((await todos("count_rounds")).length, 0);
+  });
+
+  it("a recontagem geral de 17/11 é da BTG: outro cliente com recontagem no id fixo não fica preso nela", async () => {
+    await db.collection("cycle_counts").doc("cc_outro_legado").set({ id: "cc_outro_legado", customer_code: OUTRO, sku_code: CAMISA_OUTRO, location_id: "C-02", box_code: "CX-000090", mode: "box", box_recount_id: "brc_outro", round_id: LEGACY_ROUND_ID, qty_before: 10, counted_qty: 10, adjustment_delta: 0, status: "completed", occurred_at: "2026-11-17T12:00:00.000Z" });
+    const nova = await iniciar({ scope: "general" }, { cliente: OUTRO });
+    assert.equal((await rodada(nova.round_id)).customer_code, OUTRO);
+    const legada = await recusa(concluir(LEGACY_ROUND_ID, { cliente: OUTRO }));
+    assert.equal(legada.code, "not-found");
+    assert.equal(codigoDa(legada), "COUNT_ROUND_NOT_FOUND");
+    assert.equal((await rodada(LEGACY_ROUND_ID)).status, undefined);
   });
 });
 

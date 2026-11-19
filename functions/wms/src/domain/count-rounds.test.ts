@@ -4,6 +4,10 @@ import { describe, it } from "node:test";
 import { HttpsError } from "firebase-functions/https";
 
 import {
+  LEGACY_ROUND_ID,
+  LEGACY_ROUND_TITLE,
+  alcanceTemCaixa,
+  conferirRodadaDaRecontagem,
   entradaDaConclusao,
   entradaDoInicio,
   numerosDaRodada,
@@ -13,6 +17,7 @@ import {
   type CaixaDaRodada,
   type LinhaDaRodada,
 } from "./count-rounds.js";
+import { LEGACY_CUSTOMER_CODE } from "./customer-scope.js";
 
 /**
  * A regra pura da rodada da contagem (docs/superpowers/specs/2026-11-18-registro-da-rodada-design.md):
@@ -147,5 +152,38 @@ describe("os números do fechamento", () => {
       recount_count: 0,
       primeira: null,
     });
+  });
+});
+
+describe("o alcance com caixa guardada (iniciar recusa o alcance vazio)", () => {
+  it("geral, por rua e por item: só a caixa guardada conta; a esvaziada, não", () => {
+    assert.equal(alcanceTemCaixa({ scope: "general" }, CAIXAS), true);
+    assert.equal(alcanceTemCaixa({ scope: "general" }, []), false);
+    assert.equal(alcanceTemCaixa({ scope: "aisle", aisle: "AB" }, CAIXAS), true);
+    assert.equal(alcanceTemCaixa({ scope: "aisle", aisle: "C" }, CAIXAS), false);
+    // Na rua B só há caixas esvaziadas.
+    assert.equal(alcanceTemCaixa({ scope: "aisle", aisle: "B" }, CAIXAS), false);
+    assert.equal(alcanceTemCaixa({ scope: "item", sku_code: GG }, CAIXAS), true);
+    assert.equal(alcanceTemCaixa({ scope: "item", sku_code: "BTG-000200" }, CAIXAS), false);
+  });
+});
+
+describe("a recontagem geral de 17/11 é do cliente legado", () => {
+  function codigo(acao: () => unknown): unknown {
+    try {
+      acao();
+    } catch (error) {
+      assert.ok(error instanceof HttpsError, String(error));
+      return (error.details as { code?: unknown } | undefined)?.code ?? error.code;
+    }
+    return "passou";
+  }
+
+  it("sem o documento, o id fixo vale só para o cliente legado; com o documento concluído, recusa como concluída", () => {
+    assert.equal(codigo(() => conferirRodadaDaRecontagem(null, LEGACY_ROUND_ID, LEGACY_CUSTOMER_CODE, "A-03", [])), "passou");
+    assert.equal(codigo(() => conferirRodadaDaRecontagem(null, LEGACY_ROUND_ID, "Outro Cliente", "A-03", [])), "BOX_RECOUNT_ROUND_NOT_FOUND");
+    const concluida = { id: LEGACY_ROUND_ID, customer_code: LEGACY_CUSTOMER_CODE, title: LEGACY_ROUND_TITLE, status: "closed", alcance: { scope: "general" as const } };
+    assert.equal(codigo(() => conferirRodadaDaRecontagem(concluida, LEGACY_ROUND_ID, LEGACY_CUSTOMER_CODE, "A-03", [caixa("CX-1", "A-03", [P])])), "BOX_RECOUNT_ROUND_CLOSED");
+    assert.equal(codigo(() => conferirRodadaDaRecontagem(concluida, LEGACY_ROUND_ID, "Outro Cliente", "A-03", [caixa("CX-1", "A-03", [P])])), "permission-denied");
   });
 });

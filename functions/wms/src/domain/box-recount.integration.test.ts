@@ -660,6 +660,8 @@ describe("Recontar a caixa: a rodada", () => {
   });
 
   it("a rodada de outro cliente é permission-denied", async () => {
+    // Iniciar pede caixa guardada do cliente no alcance.
+    await db.collection("warehouse_boxes").doc("CX-000090").set({ id: "CX-000090", code: "CX-000090", customer_code: "Outro Cliente", status: "stored", location_id: "A-04", stored_at: "2026-11-06T15:00:00.000Z", unit_count: 1, line_count: 1, sku_codes: ["OUT-000001"] });
     const deOutro = await iniciar({ scope: "general" }, "Outro Cliente");
     const erro = await recusa(semDiferenca("CX-000010", "A-03", POLO_P, 60, deOutro.round_id));
     assert.equal(erro.code, "permission-denied");

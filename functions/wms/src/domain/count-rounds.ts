@@ -4,7 +4,7 @@ import { FieldValue, type Firestore, type Transaction } from "firebase-admin/fir
 import { HttpsError } from "firebase-functions/https";
 import { z } from "genkit";
 
-import { recordOwner } from "./customer-scope.js";
+import { LEGACY_CUSTOMER_CODE, recordOwner } from "./customer-scope.js";
 import { nomeComTamanho } from "./nome-do-produto.js";
 import { createEvent, readRows, resolveCatalogAggregateTargets, type OperationalActor, type OperationalEventSummary } from "./operations.js";
 import { WAREHOUSE_BOXES_COLLECTION } from "./warehouse-boxes.js";
@@ -18,10 +18,13 @@ import { WAREHOUSE_POSITIONS_COLLECTION } from "./warehouse-positions.js";
  * iniciou e concluiu e os números do fechamento. O id do documento é o
  * `round_id` que as recontagens por caixa gravam (box-recount.ts).
  *
- * A recontagem geral de 17/11/2026 nasceu antes da coleção, com o id fixo
- * `recontagem-geral-2026-11-17`: enquanto o documento dela não existe, as
- * recontagens com esse id valem como a rodada aberta, e "Concluir contagem"
- * cria o documento já concluído (completeCountRoundTransaction).
+ * A recontagem geral de 17/11/2026 (a das caixas da BTG) nasceu antes da
+ * coleção, com o id fixo `recontagem-geral-2026-11-17`: enquanto o documento
+ * dela não existe, as recontagens do cliente legado (LEGACY_CUSTOMER_CODE)
+ * com esse id valem como a rodada aberta dele, e "Concluir contagem" cria o
+ * documento já concluído (completeCountRoundTransaction). Outro cliente com
+ * recontagem nesse id não a vê como rodada: elas ficam como histórico, e ele
+ * inicia a dele.
  */
 
 export const COUNT_ROUNDS_COLLECTION = "count_rounds";
@@ -155,6 +158,16 @@ export function prateleiraNoAlcance(alcance: AlcanceDaRodada, locationId: string
     return daPrateleira.some((caixa) => caixa.sku_codes.some((code) => chave(code) === sku));
   }
   return true;
+}
+
+/**
+ * O alcance tem alguma caixa guardada do cliente: geral, qualquer uma; por
+ * rua, uma na rua; por item, uma com o item. Iniciar recusa o alcance vazio,
+ * que deixaria a rodada sem prateleira para contar.
+ */
+export function alcanceTemCaixa(alcance: AlcanceDaRodada, caixas: readonly CaixaDaRodada[]): boolean {
+  const guardadas = caixas.filter((caixa) => caixa.status === "stored" && chave(caixa.location_id));
+  return guardadas.some((caixa) => prateleiraNoAlcance(alcance, caixa.location_id, guardadas, ""));
 }
 
 // ---------------------------------------------------------------- os números
@@ -308,6 +321,16 @@ async function lerItem(transaction: Transaction, db: Firestore, customerCode: st
   });
 }
 
+/** A frase do alcance sem caixa guardada do cliente. */
+function alcanceVazio(alcance: AlcanceDaRodada, item: NomeDoItem | undefined): string {
+  if (alcance.scope === "aisle") return `Nenhuma caixa guardada do cliente na rua ${alcance.aisle}.`;
+  if (alcance.scope === "item") {
+    const nome = item?.product_name ? nomeComTamanho({ nome: item.product_name, codigo: item.client_item_code, tamanho: item.size }) : "";
+    return `Nenhuma caixa guardada com ${nome || alcance.sku_code}.`;
+  }
+  return "Nenhuma caixa guardada do cliente: não há prateleira para contar.";
+}
+
 // ------------------------------------------------------------------ iniciar
 
 export type ResultadoDoInicio = {
@@ -354,9 +377,9 @@ export async function startCountRoundTransaction(db: Firestore, input: EntradaDo
       const aberta = abertas[0]!;
       recusa("failed-precondition", `A contagem «${text(aberta.data.title)}» está em andamento: conclua-a antes de iniciar outra.`, "COUNT_ROUND_ALREADY_OPEN", { round_id: aberta.id });
     }
-    // A recontagem geral de 17/11 sem documento: as recontagens com o id fixo valem como a rodada aberta.
-    const legada = await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(LEGACY_ROUND_ID));
-    if (!legada.exists) {
+    // A recontagem geral de 17/11 sem documento: as recontagens do cliente legado com o id fixo valem como a rodada aberta.
+    const legada = customerCode === LEGACY_CUSTOMER_CODE ? await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(LEGACY_ROUND_ID)) : null;
+    if (legada && !legada.exists) {
       const recontagens = await readRows(transaction, db.collection(CYCLE_COUNTS_COLLECTION).where("customer_code", "==", customerCode).where("round_id", "==", LEGACY_ROUND_ID).limit(1));
       if (recontagens.length) {
         recusa("failed-precondition", `A ${LEGACY_ROUND_TITLE} está em andamento: conclua-a antes de iniciar outra.`, "COUNT_ROUND_LEGACY_OPEN", { round_id: LEGACY_ROUND_ID });
@@ -368,6 +391,11 @@ export async function startCountRoundTransaction(db: Firestore, input: EntradaDo
       if (!posicoes.length) recusa("failed-precondition", `A rua ${alcance.aisle} não está no cadastro de Posições.`, "COUNT_ROUND_AISLE_NOT_FOUND", { aisle: alcance.aisle });
     }
     if (alcance.scope === "item") item = await lerItem(transaction, db, customerCode, alcance.sku_code);
+    // O alcance tem de ter caixa guardada do cliente: sem ela, a rodada nasceria sem prateleira para contar.
+    const guardadas = await readRows(transaction, db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode).where("status", "==", "stored"));
+    if (!alcanceTemCaixa(alcance, guardadas.map((row) => caixaDaRodada(row.id, row.data)))) {
+      recusa("failed-precondition", alcanceVazio(alcance, item), "COUNT_ROUND_EMPTY_SCOPE", { scope: alcance.scope });
+    }
     const title = tituloDaRodada(alcance, item, startedAt);
     const aisle = alcance.scope === "aisle" ? alcance.aisle : undefined;
     const skuCode = alcance.scope === "item" ? alcance.sku_code : undefined;
@@ -532,7 +560,8 @@ export async function completeCountRoundTransaction(db: Firestore, input: Entrad
     if (existente) {
       if (text(existente.customer_code) !== customerCode) throw new HttpsError("permission-denied", "A contagem é de outro cliente.");
       if (text(existente.status) !== "open") recusa("failed-precondition", `A contagem «${text(existente.title)}» já foi concluída.`, "COUNT_ROUND_NOT_OPEN", { round_id: roundId });
-    } else if (roundId !== LEGACY_ROUND_ID) {
+    } else if (roundId !== LEGACY_ROUND_ID || customerCode !== LEGACY_CUSTOMER_CODE) {
+      // Sem documento, só a recontagem geral de 17/11 do cliente legado é rodada.
       naoExiste();
     }
     const alcance: AlcanceDaRodada = existente ? alcanceDoDocumento(existente) : { scope: "general" };
@@ -628,7 +657,7 @@ export async function lerRodada(transaction: Transaction, db: Firestore, roundId
 export function conferirRodadaDaRecontagem(rodada: RodadaLida | null, roundId: string | undefined, customerCode: string, locationId: string, caixasDaPrateleira: readonly CaixaDaRodada[]): void {
   if (!roundId) return;
   if (!rodada) {
-    if (roundId === LEGACY_ROUND_ID) return;
+    if (roundId === LEGACY_ROUND_ID && customerCode === LEGACY_CUSTOMER_CODE) return;
     recusa("failed-precondition", "A contagem não existe mais: abra a Contagem e inicie uma.", "BOX_RECOUNT_ROUND_NOT_FOUND", { round_id: roundId });
   }
   if (rodada.customer_code !== customerCode) throw new HttpsError("permission-denied", "A contagem é de outro cliente.");
