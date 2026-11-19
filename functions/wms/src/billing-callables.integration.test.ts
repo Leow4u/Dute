@@ -650,9 +650,10 @@ describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () 
    * recebimento, na competência da conclusão, e a guarda da caixa (o par
    * wms_putaway) não cobra. Entradas 10 × 1,00; movimento 1 × 0,50: 10,50.
    * A recontagem da caixa guardada (contagem por caixa), pela callable de
-   * verdade, com falta e item fora da lista, também não cobra.
+   * verdade, com falta e item fora da lista, também não cobra; nem o mover
+   * da caixa para outra prateleira (Mover caixa, 19/11/2026).
    */
-  it("a entrada da NF cobra as peças uma vez, na competência da conclusão, e a guarda e a recontagem da caixa não cobram", async () => {
+  it("a entrada da NF cobra as peças uma vez, na competência da conclusão, e a guarda, a recontagem e o mover da caixa não cobram", async () => {
     const CAIXAS = "Cliente das Caixas";
     const operacao = { uid: "arm", role: "wms", name: "Armazém" };
     const competencia = competenciaFromDate(new Date());
@@ -668,7 +669,12 @@ describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () 
     await lote.commit();
     await upsertWarehousePositions(
       db,
-      { positions: [{ aisle: "Z", shelf: 1, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: CAIXAS }] },
+      {
+        positions: [
+          { aisle: "Z", shelf: 1, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: CAIXAS },
+          { aisle: "Z", shelf: 2, length_m: 1.8, depth_m: 0.75, height_m: 0.65, customer_code: CAIXAS },
+        ],
+      },
       { uid: "coord", role: "interno", name: "Coordenação" },
     );
 
@@ -717,6 +723,19 @@ describe("a chegada por caixa de verdade (recebimento com caixas, parte 4)", () 
     const depoisDaRecontagem = await previa({ competencia, customer_code: CAIXAS });
     assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDaRecontagem).get(id)?.qtde ?? 0), [10, 0, 1]);
     assert.equal(depoisDaRecontagem.total_cents, 1050);
+
+    // A caixa muda de prateleira, pela callable de verdade: a saída e a entrada do mover não cobram.
+    const movida = await chamar<{ to_location_id: string; units: number }>(wms.moveWarehouseBox, "arm", {
+      customer_code: CAIXAS,
+      box_code: caixa,
+      from_location_id: "Z-01",
+      to_location_id: "Z-02",
+      idempotency_key: "regua-mover",
+    });
+    assert.deepEqual([movida.to_location_id, movida.units], ["Z-02", 9]);
+    const depoisDoMover = await previa({ competencia, customer_code: CAIXAS });
+    assert.deepEqual(["1", "2", "3"].map((id) => linhas(depoisDoMover).get(id)?.qtde ?? 0), [10, 0, 1]);
+    assert.equal(depoisDoMover.total_cents, 1050);
   });
 });
 

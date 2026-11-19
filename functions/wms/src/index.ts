@@ -74,6 +74,7 @@ import {
   setPickLineSeparated as setPickLineSeparatedFor,
 } from "./domain/pick-progress.js";
 import { recordBoxBalanceLabelPrint as recordBoxBalanceLabelPrintFor } from "./domain/box-relabel.js";
+import { entradaDaPreviaDoMover, entradaDoMover, moveWarehouseBoxTransaction, previewBoxMoveTransaction } from "./domain/box-move.js";
 import { BOX_RECOUNT_EVENT_TYPE, entradaDaRecontagem, recountWarehouseBoxTransaction } from "./domain/box-recount.js";
 import { completeCountRoundTransaction, entradaDaConclusao, entradaDoInicio, startCountRoundTransaction } from "./domain/count-rounds.js";
 import { CLIENT_NOTICE_AFTER_PUTAWAY } from "./domain/inbound-box-entry.js";
@@ -6961,6 +6962,35 @@ export const recountWarehouseBox = onCall(async (request) => {
   const input = entradaDaRecontagem(request.data);
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return recountWarehouseBoxTransaction(db, { ...input, customer_code }, profile);
+});
+
+/**
+ * Mover caixa entre prateleiras (decisões do Leonardo em 19/11/2026,
+ * docs/superpowers/specs/2026-11-19-mover-caixa-design.md): o que a página
+ * mostra antes de mover, a sugestão, a lista e o que impede. Só lê. Quem
+ * opera o armazém.
+ */
+export const previewWarehouseBoxMove = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  // A entrada fora do formato recusa com a frase para quem opera; o ZodError cru viraria INTERNAL.
+  const input = entradaDaPreviaDoMover(request.data);
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return previewBoxMoveTransaction(db, { ...input, customer_code });
+});
+
+/**
+ * Mover caixa entre prateleiras: a caixa, o saldo das duas prateleiras, o
+ * razão e as linhas da abertura numa transação, com recibo e evento, fora da
+ * cobrança. Quem opera o armazém.
+ */
+export const moveWarehouseBox = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  // A entrada fora do formato recusa com a frase para quem opera; o ZodError cru viraria INTERNAL.
+  const input = entradaDoMover(request.data);
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return moveWarehouseBoxTransaction(db, { ...input, customer_code }, profile);
 });
 
 /**
