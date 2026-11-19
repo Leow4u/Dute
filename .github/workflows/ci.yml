@@ -81,6 +81,9 @@ jobs:
           pnpm --filter @workspace/dutelog-site run test
           pnpm --filter @workspace/dutelog-site run build
           pnpm --filter @workspace/dutelog-site run test:build
+      - name: Painel Zap
+        working-directory: .
+        run: pnpm --filter @workspace/dute-zap run test
       - name: Unitários do WMS
         working-directory: functions/wms
         run: npm ci && npm run test:unit
@@ -110,6 +113,9 @@ jobs:
         run: npm ci && npm run test:unit
       - name: Unitários do RH
         working-directory: functions/rh
+        run: npm ci && npm run test:unit
+      - name: Unitários do Zap
+        working-directory: functions/zap
         run: npm ci && npm run test:unit
       - name: Testes das ferramentas Python (tools/)
         working-directory: .
@@ -191,6 +197,7 @@ jobs:
             functions/financeiro/package-lock.json
             functions/core/package-lock.json
             functions/rh/package-lock.json
+            functions/zap/package-lock.json
       - name: Install Java (Firestore emulator)
         uses: actions/setup-java@v4
         with:
@@ -264,6 +271,17 @@ jobs:
         run: npm run test:integration
       - name: Índice das consultas do RH
         run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-rh.jsonl"
+      - name: Dependências do Zap
+        working-directory: functions/zap
+        run: npm ci
+      - name: Integração do Zap
+        working-directory: functions/zap
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/tools/registrar_consultas.cjs
+          CONSULTAS_SAIDA: ${{ runner.temp }}/consultas-zap.jsonl
+        run: npm run test:integration
+      - name: Índice das consultas do Zap
+        run: python3 tools/indices_das_consultas.py "${{ runner.temp }}/consultas-zap.jsonl"
 
   # A homologação não mora aqui. O homologacao.yml nasce quando este workflow
   # termina verde na main (workflow_run) e publica só o HEAD.

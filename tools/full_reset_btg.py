@@ -12,11 +12,11 @@ ops_aggregates para trás justamente por depender de uma lista escrita antes
 dessas coleções existirem.
 
 A zeragem é do WMS e nunca apaga dado do Comercial, o cadastro da
-Operação nem o Blog institucional: as coleções ficam sempre, inclusive com
---include-setup, e em `events` ficam os eventos com source "functions_comercial" ou
-"functions_operacao". Se a zeragem fosse apagar `customers` e algum
-cadastro tem o campo `stage` (do Comercial), ela para antes de alterar
-qualquer coisa.
+Operação, o Blog institucional nem as conversas do Zap: as coleções ficam
+sempre, inclusive com --include-setup, e em `events` ficam os eventos com
+source "functions_comercial" ou "functions_operacao". Se a zeragem fosse
+apagar `customers` e algum cadastro tem o campo `stage` (do Comercial), ela
+para antes de alterar qualquer coisa.
 
 Sem --apply, só audita e exibe o plano. Com --apply, exige a frase de
 confirmação e um export gerenciado do Firestore (--export-to gs://...), que é
@@ -148,6 +148,14 @@ SITE_BLOG_COLLECTIONS = (
     "site_blog_slugs",
     "site_blog_meta",
 )
+# Conversas de WhatsApp do painel Zap (docs/plataforma/zap.md): texto, telefone
+# e o registro de quem abriu. Não é dado do WMS: nunca apagadas, nem com
+# --include-setup.
+ZAP_COLLECTIONS = (
+    "zap_conversations",
+    "zap_messages",
+    "zap_access",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
@@ -187,6 +195,7 @@ def preserved_collections(
         | set(FINANCEIRO_COLLECTIONS)
         | set(MEMORIA_COLLECTIONS)
         | set(SITE_BLOG_COLLECTIONS)
+        | set(ZAP_COLLECTIONS)
     )
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
@@ -297,6 +306,11 @@ def site_blog_path(name: str) -> bool:
     return document_path(name).split("/", 1)[0] in SITE_BLOG_COLLECTIONS
 
 
+def zap_path(name: str) -> bool:
+    """Documento de conversa, mensagem ou acesso do painel Zap."""
+    return document_path(name).split("/", 1)[0] in ZAP_COLLECTIONS
+
+
 def has_stage(document: dict[str, Any]) -> bool:
     return STAGE_FIELD in document.get("fields", {})
 
@@ -377,6 +391,10 @@ def delete_writes(
             if site_blog_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga o Blog institucional: " + document_path(name)
+                )
+            if zap_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga o Zap: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(

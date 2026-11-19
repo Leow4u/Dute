@@ -249,6 +249,14 @@ documentação de produto e operação está em `docs/`.
     grava a admissão e o desligamento do próprio em `vinculos`, sem mexer no
     cadastro da Operação, e a planilha de colaboradores lista quem teve
     vínculo no mês. Desenho: `docs/plataforma/fase-8-rh.md`. Usa **npm**.
+  - `functions/zap`: Functions do painel de WhatsApp (codebase `zap`). A
+    ingestão `ingestZap` é HTTP, com o segredo `ZAP_INGEST_SECRET` só nos
+    projetos de `ZAP_PROJETOS_COM_SEGREDO` (a lista nasce vazia, para a
+    publicação não exigir o segredo antes de ele existir). `registrarAcessoZap`
+    grava quem da administração abriu o painel. A leitura no Firestore é só
+    owner/admin. O painel é o serviço `dute-zap`, em `artifacts/dute-zap`,
+    separado do app. Contrato, infra do subdomínio e LGPD:
+    `docs/plataforma/zap.md`. Usa **npm**.
   - `lib/dominio`: tipos e regras que o app e as Functions precisam ter iguais.
 - **IA native.** Todo módulo novo grava desde o primeiro dia o que a IA precisa
   (eventos em `events`, tempos e medidas) e respeita o isolamento por cliente. A
