@@ -641,6 +641,23 @@ export async function completeCountRoundTransaction(db: Firestore, input: Entrad
 
 export type RodadaLida = { id: string; customer_code: string; title: string; status: string; alcance: AlcanceDaRodada };
 
+/**
+ * A rodada aberta do cliente, no que o mover de caixa confere
+ * (docs/superpowers/specs/2026-11-19-mover-caixa-design.md); null sem
+ * nenhuma. A recontagem geral de 17/11 do cliente legado, sem documento e com
+ * recontagem gravada, conta como a geral aberta, como em iniciar. Só lê.
+ */
+export async function lerRodadaAberta(transaction: Transaction, db: Firestore, customerCode: string): Promise<RodadaLida | null> {
+  const abertas = await readRows(transaction, db.collection(COUNT_ROUNDS_COLLECTION).where("customer_code", "==", customerCode).where("status", "==", "open"));
+  const aberta = abertas[0];
+  if (aberta) return { id: aberta.id, customer_code: customerCode, title: text(aberta.data.title), status: "open", alcance: alcanceDoDocumento(aberta.data) };
+  if (customerCode !== LEGACY_CUSTOMER_CODE) return null;
+  const legada = await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(LEGACY_ROUND_ID));
+  if (legada.exists) return null;
+  const recontagens = await readRows(transaction, db.collection(CYCLE_COUNTS_COLLECTION).where("customer_code", "==", customerCode).where("round_id", "==", LEGACY_ROUND_ID).limit(1));
+  return recontagens.length ? { id: LEGACY_ROUND_ID, customer_code: customerCode, title: LEGACY_ROUND_TITLE, status: "open", alcance: { scope: "general" } } : null;
+}
+
 /** O documento da rodada, no que a recontagem confere; null quando não existe. */
 export async function lerRodada(transaction: Transaction, db: Firestore, roundId: string): Promise<RodadaLida | null> {
   const snapshot = await transaction.get(db.collection(COUNT_ROUNDS_COLLECTION).doc(roundId));

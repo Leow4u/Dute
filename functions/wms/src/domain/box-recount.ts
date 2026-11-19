@@ -245,15 +245,15 @@ function comSinal(qty: number): string {
 }
 
 /** O nome do item como a etiqueta e o evento dizem: "Polo Masculino Piquet Preto · GG"; sem nome, o SKU. */
-function nomeDoItem(nome: NomeDoItem | undefined, sku: string): string {
+export function nomeDoItem(nome: NomeDoItem | undefined, sku: string): string {
   const base = text(nome?.product_name);
   if (!base) return sku;
   return nomeComTamanho({ nome: base, codigo: nome?.client_item_code, tamanho: nome?.size }) || base;
 }
 
-type NomeDoItem = { client_item_code?: string; product_name?: string; size?: string };
+export type NomeDoItem = { client_item_code?: string; product_name?: string; size?: string };
 
-function nomeDe(data: Data): NomeDoItem {
+export function nomeDe(data: Data): NomeDoItem {
   return clean({
     client_item_code: text(data.client_item_code || data.cod_cliente) || undefined,
     product_name: text(data.product_name || data.produto) || undefined,
@@ -262,7 +262,7 @@ function nomeDe(data: Data): NomeDoItem {
 }
 
 /** A entrada da caixa por SKU: a do recebimento traz o conteúdo nela (`lines[]`); a da abertura, nas linhas da sessão. */
-function entradaDaCaixa(box: Data, linhasDaAbertura: Row[]): Array<LinhaDaCaixa & NomeDoItem> {
+export function entradaDaCaixa(box: Data, linhasDaAbertura: Row[]): Array<LinhaDaCaixa & NomeDoItem> {
   const proprias = Array.isArray(box.lines) ? (box.lines as unknown[]) : [];
   const fonte: Data[] = proprias.length
     ? proprias.filter((line): line is Data => Boolean(line) && typeof line === "object")
