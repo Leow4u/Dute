@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 
+import { INTERVALO_DO_TOQUE_MS } from "@/lib/campo/toque-unico";
 import { botaoPeloRotulo } from "@/test/botoes";
 
 /**
@@ -18,15 +19,24 @@ import { botaoPeloRotulo } from "@/test/botoes";
 
 const BTG = "BTG Pactual";
 
-const chamadas = vi.hoisted(() => ({ previa: vi.fn(), mover: vi.fn(), busca: { atual: "caixa=cx-121" }, papel: { atual: "admin" } }));
+const chamadas = vi.hoisted(() => ({ previa: vi.fn(), mover: vi.fn(), toast: vi.fn(), busca: { atual: "caixa=cx-121" }, papel: { atual: "admin" }, cliente: { falhou: false } }));
 
 vi.mock("wouter", async (original) => ({
   ...(await original<typeof import("wouter")>()),
   useSearch: () => chamadas.busca.atual,
 }));
 vi.mock("@/lib/auth", () => ({ useAppUser: () => ({ user: { uid: "u_1", fullName: "Leonardo", publicMetadata: { role: chamadas.papel.atual } }, isLoaded: true }) }));
-vi.mock("@/lib/active-customer-context", () => ({ useActiveCustomer: () => ({ code: "BTG Pactual", isLoading: false, falhou: false, options: [] }) }));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: () => undefined }) }));
+vi.mock("@/lib/active-customer-context", () => ({
+  useActiveCustomer: () => ({
+    code: "BTG Pactual",
+    isLoading: false,
+    falhou: chamadas.cliente.falhou,
+    erro: chamadas.cliente.falhou ? Object.assign(new Error("Falha no servidor."), { code: "internal" }) : null,
+    tentar: async () => undefined,
+    options: [],
+  }),
+}));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: chamadas.toast }) }));
 vi.mock("@/lib/firebase", () => ({ firestore: {}, firebaseApp: {}, firebaseAuth: null }));
 vi.mock("@/lib/warehouse-rows", () => ({ fetchWarehouseRows: async () => [] }));
 vi.mock("@/lib/wms/mover-caixa", () => ({ previaDoMover: chamadas.previa, moverCaixa: chamadas.mover }));
@@ -70,6 +80,12 @@ const PREVIA = {
   rejected: null,
 };
 
+/** Outra caixa, em C-01: a que se abre enquanto a primeira ainda move. */
+const PREVIA_130 = {
+  ...PREVIA,
+  box: { ...PREVIA.box, code: "CX-000130", location_id: "C-01", units: 10, items: [{ ...PREVIA.box.items[0]!, qty: 10 }] },
+};
+
 const MOVIDA = {
   ok: true,
   box_move_id: "bmv_1",
@@ -110,6 +126,17 @@ async function montar() {
   await esperar();
 }
 
+/** Digita no campo "Caixa" (o input controlado do React) e abre. */
+async function abrirACaixa(valor: string) {
+  const campo = container.querySelector<HTMLInputElement>("#mover-caixa-codigo");
+  if (!campo) throw new Error("Sem o campo da caixa.");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(campo, valor);
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await tocar(botaoPeloRotulo(container, "Abrir"));
+}
+
 async function tocar(elemento: Element | null | undefined) {
   if (!elemento) throw new Error("Nada para tocar.");
   await act(async () => (elemento as HTMLElement).click());
@@ -122,6 +149,8 @@ beforeEach(() => {
   chamadas.mover.mockReset();
   chamadas.busca.atual = "caixa=cx-121";
   chamadas.papel.atual = "admin";
+  chamadas.cliente.falhou = false;
+  chamadas.toast.mockReset();
   chamadas.previa.mockResolvedValue(PREVIA);
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -212,5 +241,109 @@ describe("a página Mover caixa", () => {
     await montar();
     expect(chamadas.previa).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Caixa inválida: confira o código e tente de novo.");
+  });
+});
+
+/** As correções da revisão final do PR da tela (19/11/2026). */
+describe("a página Mover caixa, a leitura e o resultado", () => {
+  it("sem o cliente ativo, a falha dele no lugar da caixa, e nada vai ao servidor", async () => {
+    chamadas.cliente.falhou = true;
+    await montar();
+    expect(chamadas.previa).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Não consegui carregar o cliente ativo.");
+    expect(container.textContent).not.toContain("Carregando a caixa");
+    expect(container.textContent).not.toContain("Caixa inválida");
+  });
+
+  it("a nova tentativa depois da falha deixa o aviso na tela até a leitura responder", async () => {
+    let responder: (valor: unknown) => void = () => undefined;
+    chamadas.previa.mockReset();
+    chamadas.previa
+      .mockRejectedValueOnce(Object.assign(new Error("Falha no servidor."), { code: "internal" }))
+      .mockImplementationOnce(() => new Promise((pronto) => (responder = pronto)));
+    await montar();
+    expect(container.textContent).toContain("Não consegui carregar a caixa.");
+    await tocar(botaoPeloRotulo(container, "Tentar de novo"));
+    expect(chamadas.previa).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Não consegui carregar a caixa.");
+    expect(container.textContent).not.toContain("Carregando a caixa");
+    await act(async () => responder(PREVIA));
+    await esperar();
+    expect(botaoPeloRotulo(container, "Mover para B-09")).toBeTruthy();
+  });
+
+  it("a primeira leitura presa recomeça no Tentar de novo da demora", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-11-19T17:30:00Z"));
+    chamadas.previa.mockReset();
+    chamadas.previa.mockImplementationOnce(() => new Promise(() => undefined)).mockResolvedValue(PREVIA);
+    await montar();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    await tocar(botaoPeloRotulo(container, "Tentar de novo"));
+    expect(chamadas.previa).toHaveBeenCalledTimes(2);
+    expect(botaoPeloRotulo(container, "Mover para B-09")).toBeTruthy();
+  });
+
+  it("depois de mover, o toast diz onde a caixa ficou e o foco vai ao Imprimir etiqueta", async () => {
+    chamadas.mover.mockResolvedValue(MOVIDA);
+    await montar();
+    await tocar(botaoPeloRotulo(container, "Mover para B-09"));
+    await act(async () => {
+      await new Promise((pronto) => setTimeout(pronto, 60));
+    });
+    expect(chamadas.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "CX-000121 em B-09" }));
+    expect(document.activeElement?.textContent).toBe("Imprimir etiqueta");
+  });
+
+  it("a escolhida que saiu da lista na releitura volta à sugestão, e o mover leva o encaixe dela", async () => {
+    const naoCabe = "A caixa não cabe em C-02 agora: escolha outra prateleira.";
+    chamadas.previa.mockReset();
+    chamadas.previa.mockResolvedValueOnce(PREVIA).mockResolvedValue({ ...PREVIA, prateleiras: PREVIA.prateleiras.slice(0, 2), nao_cabem: ["C-02"] });
+    chamadas.mover.mockRejectedValueOnce(Object.assign(new Error(naoCabe), { code: "failed-precondition", detalhe: "BOX_MOVE_DOES_NOT_FIT" })).mockResolvedValueOnce(MOVIDA);
+    await montar();
+    await tocar(botaoPeloRotulo(container, "Escolher prateleira"));
+    await tocar(container.querySelector("#destino-C-02"));
+    await tocar(botaoPeloRotulo(container, "Mover para C-02"));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(naoCabe);
+    // A releitura tirou a C-02: o botão volta à sugestão, com o encaixe que a tela mostra.
+    expect(botaoPeloRotulo(container, "Mover para C-02")).toBeUndefined();
+    // O segundo toque logo depois do primeiro é ignorado (toque duplo): a pessoa toca de novo depois.
+    await act(async () => {
+      await new Promise((pronto) => setTimeout(pronto, INTERVALO_DO_TOQUE_MS + 50));
+    });
+    await tocar(botaoPeloRotulo(container, "Mover para B-09"));
+    expect(chamadas.mover).toHaveBeenCalledTimes(2);
+    expect(chamadas.mover.mock.calls[1]![0]).toEqual(expect.objectContaining({ to_location_id: "B-09", orientation: "length_width_height", support_box_code: null }));
+  });
+
+  it("a recusa sai quando a pessoa escolhe de novo", async () => {
+    const reservada = "Polo Masculino Piquet Preto · M está reservado em B-09 para o pedido PED-0043: escolha outra prateleira ou mova depois da entrega.";
+    chamadas.mover.mockRejectedValue(Object.assign(new Error(reservada), { code: "failed-precondition", detalhe: "BOX_MOVE_DESTINATION_RESERVED" }));
+    await montar();
+    await tocar(botaoPeloRotulo(container, "Mover para B-09"));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(reservada);
+    await tocar(botaoPeloRotulo(container, "Escolher prateleira"));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("o resultado de uma caixa não aparece sobre outra que se abriu enquanto ela movia", async () => {
+    let concluir: (valor: unknown) => void = () => undefined;
+    chamadas.previa.mockReset();
+    chamadas.previa.mockImplementation(async ({ box_code }: { box_code: string }) => (box_code === "CX-000130" ? PREVIA_130 : PREVIA));
+    chamadas.mover.mockImplementation(() => new Promise((pronto) => (concluir = pronto)));
+    await montar();
+    await tocar(botaoPeloRotulo(container, "Mover para B-09"));
+    await abrirACaixa("cx-130");
+    expect(chamadas.previa).toHaveBeenLastCalledWith({ customer_code: BTG, box_code: "CX-000130" });
+    await act(async () => concluir(MOVIDA));
+    await esperar();
+    // A CX-000121 moveu (o toast diz), mas a tela é da CX-000130, que continua em C-01.
+    expect(chamadas.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "CX-000121 em B-09" }));
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.textContent).toContain("CX-000130");
+    expect(container.textContent).toContain("em C-01");
+    expect(container.textContent).not.toContain("CX-000121 em B-09");
   });
 });

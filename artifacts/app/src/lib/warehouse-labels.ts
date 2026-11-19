@@ -325,6 +325,22 @@ export function saldosParaRegistrar(
   return boxes.filter((box) => (boxIsOpen(box) || movida(box)) && boxLabelAvailability(box).ready).map((box) => box.code);
 }
 
+/**
+ * Quantas caixas cada registro da impressão leva: o limite de
+ * `recordBoxBalanceLabelPrint` (`CAIXAS_POR_IMPRESSAO`, em
+ * functions/wms/src/domain/box-relabel.ts). Depois de uma reorganização, a
+ * folha pode ter mais caixas movidas que isso, e a chamada única seria
+ * recusada inteira.
+ */
+export const CAIXAS_POR_REGISTRO = 100;
+
+/** As caixas para registrar, em lotes do tamanho que o servidor aceita, na ordem; sem caixa, nenhum lote. */
+export function lotesDoRegistro(codigos: readonly string[], tamanho = CAIXAS_POR_REGISTRO): string[][] {
+  const lotes: string[][] = [];
+  for (let inicio = 0; inicio < codigos.length; inicio += tamanho) lotes.push(codigos.slice(inicio, inicio + tamanho));
+  return lotes;
+}
+
 export type LabelAvailability = { ready: true; reason: null } | { ready: false; reason: string };
 
 /**

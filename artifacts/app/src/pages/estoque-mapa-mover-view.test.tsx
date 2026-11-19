@@ -239,3 +239,12 @@ describe("Mover caixa", () => {
     expect(await violacoesDeAcessibilidade(falha)).toEqual([]);
   });
 });
+
+describe("Mover caixa sem o cliente ativo", () => {
+  it("a falha do cliente ativo no lugar do campo e da caixa", async () => {
+    const html = tela({ fase: "vazia" }, { clienteFalhou: true });
+    expect(foraDaLista(html, ["Mapa", "Mover caixa", "Não consegui carregar o cliente ativo.", "Tentar de novo"])).toEqual([]);
+    expect(html).not.toContain("mover-caixa-codigo");
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+});

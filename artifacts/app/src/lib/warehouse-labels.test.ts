@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { warehouseBoxFromRecord } from "./warehouse-boxes";
 import {
+  lotesDoRegistro,
   BOXES_PER_SHEET,
   CONTINUATION_LABEL_LINES,
   FIRST_LABEL_LINES,
@@ -667,5 +668,16 @@ describe("etiqueta da caixa recontada", () => {
       ["BTG-000084", 28],
       ["BTG-000085", 28],
     ]);
+  });
+});
+
+describe("o registro da impressão em lotes (o limite de 100 caixas por chamada)", () => {
+  it("divide em lotes de 100, na ordem, e não manda lote vazio", () => {
+    const codigos = Array.from({ length: 230 }, (_, indice) => `CX-${String(indice + 1).padStart(6, "0")}`);
+    const lotes = lotesDoRegistro(codigos);
+    expect(lotes.map((lote) => lote.length)).toEqual([100, 100, 30]);
+    expect(lotes.flat()).toEqual(codigos);
+    expect(lotesDoRegistro([])).toEqual([]);
+    expect(lotesDoRegistro(["CX-000001"])).toEqual([["CX-000001"]]);
   });
 });

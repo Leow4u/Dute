@@ -4,6 +4,7 @@ import { Link } from "wouter";
 
 import { nomeComTamanho } from "@workspace/dominio";
 
+import { FalhaDoClienteAtivo } from "@/components/layout/falha-do-cliente-ativo";
 import { Badge } from "@/components/ui/badge";
 import { BotaoDeAcao, type EstadoDaAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,8 @@ export type PropsDoMover = {
   hrefDasEtiquetas: (codigos: readonly string[]) => string;
   onOutraCaixa: () => void;
   onTentar: () => unknown;
+  /** A lista dos clientes não veio: a falha do cliente ativo no lugar do campo e da caixa, e nada é lido. */
+  clienteFalhou?: boolean;
 };
 
 const MODOS = [
@@ -87,6 +90,10 @@ const SITUACOES: Record<string, string> = {
 const numero = new Intl.NumberFormat("pt-BR");
 const ID_DO_CAMPO = "mover-caixa-codigo";
 const ID_DO_AVISO = "mover-caixa-aviso";
+/** O título da página: o foco vai a ele quando a espera ou a falha sai com o foco nela. */
+const ID_DO_TITULO = "mover-caixa-titulo";
+/** O "Imprimir etiqueta" da caixa movida: o foco vai a ele depois de mover (pages/estoque-mapa-mover.tsx). */
+const ID_DA_ETIQUETA = "mover-caixa-etiqueta";
 
 /** O chip da caixa: o código em fonte fixa, no azul da v3. */
 function Chip({ code }: { code: string }) {
@@ -94,8 +101,6 @@ function Chip({ code }: { code: string }) {
 }
 
 export function EstoqueMapaMoverView(props: PropsDoMover) {
-  const { estado } = props;
-  const previa = estado.fase === "pronta" || estado.fase === "movida" ? estado.previa : null;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 pb-24">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -104,7 +109,9 @@ export function EstoqueMapaMoverView(props: PropsDoMover) {
             Mapa
           </Link>
           <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Mover caixa</h1>
+          <h1 id={ID_DO_TITULO} className="text-3xl font-extrabold tracking-tight text-foreground">
+            Mover caixa
+          </h1>
         </div>
         {props.etiquetas.length >= 2 ? (
           <Button asChild variant="outline" className="w-fit max-md:min-h-11">
@@ -116,13 +123,34 @@ export function EstoqueMapaMoverView(props: PropsDoMover) {
         ) : null}
       </header>
 
+      {props.clienteFalhou ? <FalhaDoClienteAtivo focoAoSair={ID_DO_TITULO} /> : <Conteudo {...props} />}
+    </div>
+  );
+}
+
+function Conteudo(props: PropsDoMover) {
+  const { estado } = props;
+  const previa = estado.fase === "pronta" || estado.fase === "movida" ? estado.previa : null;
+  return (
+    <>
       <CampoDaCaixa digitado={props.digitado} aviso={props.avisoDoCampo} onDigitar={props.onDigitar} onAbrir={props.onAbrir} />
 
       {estado.fase === "carregando" ? (
-        <CarregandoNaRegiao rotulo="Carregando a caixa…" onTentar={props.onTentar} className="rounded-lg border border-border bg-card px-5 py-6" />
+        <CarregandoNaRegiao
+          rotulo="Carregando a caixa…"
+          continuaARota
+          onTentar={props.onTentar}
+          focoAoSair={ID_DO_TITULO}
+          className="rounded-lg border border-border bg-card px-5 py-6"
+        />
       ) : null}
       {estado.fase === "falha" ? (
-        <FalhaNaLeitura leitura={{ error: estado.erro, refetch: async () => props.onTentar() }} erro={estado.erro} mensagem="Não consegui carregar a caixa." />
+        <FalhaNaLeitura
+          leitura={{ error: estado.erro, refetch: async () => props.onTentar() }}
+          erro={estado.erro}
+          mensagem="Não consegui carregar a caixa."
+          focoAoSair={ID_DO_TITULO}
+        />
       ) : null}
 
       {previa ? <CartaoDaCaixa box={previa.box} local={estado.fase === "movida" ? estado.resultado.to_location_id : previa.box.location_id} /> : null}
@@ -136,7 +164,7 @@ export function EstoqueMapaMoverView(props: PropsDoMover) {
       ) : null}
 
       {estado.fase === "movida" ? <Movida resultado={estado.resultado} hrefDaEtiqueta={props.hrefDasEtiquetas([estado.resultado.box_code])} onOutraCaixa={props.onOutraCaixa} /> : null}
-    </div>
+    </>
   );
 }
 
@@ -329,7 +357,7 @@ function Movida({ resultado, hrefDaEtiqueta, onOutraCaixa }: { resultado: Result
       <p className="text-sm">{textoDaMovida(resultado)}</p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button asChild className="max-md:min-h-12">
-          <Link href={hrefDaEtiqueta}>
+          <Link id={ID_DA_ETIQUETA} href={hrefDaEtiqueta}>
             <Printer className="size-4" aria-hidden="true" />
             Imprimir etiqueta
           </Link>
