@@ -1198,6 +1198,24 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Conversas de WhatsApp do painel Zap. O texto fica aqui: só owner e
+    // admin leem, e o navegador não grava. A ingestão e o registro de acesso
+    // passam pelo Admin SDK (docs/plataforma/zap.md).
+    match /zap_conversations/{conversationId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
+    match /zap_messages/{messageId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
+    match /zap_access/{accessId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

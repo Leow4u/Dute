@@ -175,6 +175,7 @@ jobs:
             functions/financeiro/package-lock.json
             functions/core/package-lock.json
             functions/rh/package-lock.json
+            functions/zap/package-lock.json
 
       # O predeploy de cada codebase (firebase.json) roda tsc na pasta dela, que
       # precisa do node_modules local.
@@ -202,6 +203,10 @@ jobs:
         working-directory: functions/rh
         run: npm ci
 
+      - name: Install functions deps (Zap)
+        working-directory: functions/zap
+        run: npm ci
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -226,7 +231,7 @@ jobs:
         run: gcloud services enable cloudscheduler.googleapis.com --project "${PROJECT_ID}"
 
       # Sempre o lote inteiro (todas as codebases do firebase.json: "default", o
-      # WMS, "comercial", "operacao", "financeiro", "core" e "rh"), nunca "firebase deploy --only functions:nome": foi
+      # WMS, "comercial", "operacao", "financeiro", "core", "rh" e "zap"), nunca "firebase deploy --only functions:nome": foi
       # deploy parcial que causou o incidente de 03/09/2026 (8 callables sem
       # invoker, um mês sem ninguém perceber). Timeout de descoberta já subido de
       # cara — na máquina do Leonardo precisou de 60-180s dependendo do dia (ver
@@ -404,3 +409,123 @@ jobs:
           name: frontend-startup-${{ inputs.ambiente }}
           path: ${{ runner.temp }}/dute-deployed-startup
           retention-days: 7
+
+  # O painel do Zap é outro serviço (dute-zap). Na homologação só sobe quando
+  # o commit mexe no painel, para não gastar runner em todo push. Na produção
+  # sobe junto: o disparo é manual e o serviço não pode ficar para trás.
+  # O domínio zap.dutelog.com.br não entra aqui (docs/plataforma/zap.md).
+  frontend-zap:
+    name: Painel Zap (Cloud Run)
+    needs: [regras, functions]
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ inputs.project_id }}
+      REPOSITORY: ${{ inputs.repository }}
+      AMBIENTE: ${{ inputs.ambiente }}
+      WORKLOAD_IDENTITY_PROVIDER: projects/${{ inputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      GCP_SERVICE_ACCOUNT: github-actions-deploy@${{ inputs.project_id }}.iam.gserviceaccount.com
+      COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.sha }}
+          fetch-depth: 2
+
+      - id: decidir
+        run: |
+          set -euo pipefail
+          if [ "${AMBIENTE}" = "producao" ]; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only HEAD^ HEAD | grep -Eq '^(artifacts/dute-zap/|Dockerfile\.zap$)'; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Painel Zap sem mudança neste commit; o Cloud Run dute-zap fica como está."
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.decidir.outputs.publicar == 'true'
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        if: steps.decidir.outputs.publicar == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install and build painel
+        if: steps.decidir.outputs.publicar == 'true'
+        env:
+          VITE_FIREBASE_API_KEY: ${{ inputs.firebase_api_key }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ inputs.project_id }}.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: ${{ inputs.project_id }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ inputs.project_id }}.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ inputs.project_number }}
+          VITE_FIREBASE_APP_ID: ${{ inputs.firebase_app_id }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "@workspace/dute-zap" run build
+          if ! grep -q "${VITE_FIREBASE_AUTH_DOMAIN}" artifacts/dute-zap/dist/public/assets/*.js; then
+            echo "::error::O build do Zap saiu sem a configuração do Firebase; não vai subir."
+            exit 1
+          fi
+
+      - id: auth
+        if: steps.decidir.outputs.publicar == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.decidir.outputs.publicar == 'true'
+
+      - uses: docker/login-action@v3
+        if: steps.decidir.outputs.publicar == 'true'
+        with:
+          registry: ${{ env.REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Build image and deploy dute-zap
+        if: steps.decidir.outputs.publicar == 'true'
+        run: |
+          set -euo pipefail
+          STAGE_DIR="${RUNNER_TEMP}/cloud-run-zap"
+          mkdir -p "${STAGE_DIR}/deploy/cloud-run"
+          mkdir -p "${STAGE_DIR}/artifacts/dute-zap/dist"
+          cp Dockerfile.zap "${STAGE_DIR}/Dockerfile"
+          cp deploy/cloud-run/nginx.conf "${STAGE_DIR}/deploy/cloud-run/"
+          cp -r artifacts/dute-zap/dist/public "${STAGE_DIR}/artifacts/dute-zap/dist/"
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/dute-zap:${SHORT_SHA}"
+
+          docker build --tag "${IMAGE}" "${STAGE_DIR}"
+          docker push "${IMAGE}"
+          gcloud run deploy dute-zap \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --project "${PROJECT_ID}"
+
+      - name: Verify dute-zap is serving this build
+        if: steps.decidir.outputs.publicar == 'true'
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(gcloud run services describe dute-zap --region "${REGION}" --project "${PROJECT_ID}" --format "value(status.url)")"
+          bash tools/check_frontend_deployed.sh artifacts/dute-zap/dist/public/index.html "${SERVICE_URL}"
+
