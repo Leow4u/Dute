@@ -55,7 +55,8 @@ vi.mock("wouter", async (original) => ({ ...(await original<typeof import("woute
 
 import PaginaRodadaDaContagem from "./estoque-contagem-rodada";
 
-const ABERTA = { id: "cr_1", cliente: "BTG Pactual", titulo: "Contagem geral · 19/11/2026", alcance: { tipo: "geral" }, status: "aberta", inicio: { quando: "2026-11-19T11:10:00.000Z", quem: "Rafael" }, fim: null, numeros: null };
+// O começo num dia fixo do passado: a hora de outro dia sai com o dia, em qualquer dia em que o teste rode.
+const ABERTA = { id: "cr_1", cliente: "BTG Pactual", titulo: "Contagem geral · 10/11/2026", alcance: { tipo: "geral" }, status: "aberta", inicio: { quando: "2026-11-10T11:10:00.000Z", quem: "Rafael" }, fim: null, numeros: null };
 const CONCLUIDA = {
   id: "cr_0",
   cliente: "BTG Pactual",
@@ -130,8 +131,8 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
   it("com rodada aberta: a rodada dela, com o começo do registro", async () => {
     estado.rodadas = { ...estado.rodadas, aberta: ABERTA, registradas: [ABERTA] };
     await montar();
-    await esperar(() => naTela().includes("Contagem geral · 19/11/2026"), "a rodada");
-    expect(naTela()).toContain("começou 19/11 08:10 · Rafael");
+    await esperar(() => naTela().includes("Contagem geral · 10/11/2026"), "a rodada");
+    expect(naTela()).toContain("começou 10/11 08:10 · Rafael");
     expect(naTela()).not.toContain("Nenhuma contagem em andamento.");
   });
 
@@ -142,7 +143,7 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     await esperar(() => naTela().includes("Contagem da rua A · 17/11/2026"), "a rodada concluída");
     expect(naTela()).toContain("17/11 a 21/11 · Guilherme Dantas");
     expect(naTela()).not.toContain("começou");
-    expect(naTela()).not.toContain("Contagem geral · 19/11/2026");
+    expect(naTela()).not.toContain("Contagem geral · 10/11/2026");
   });
 
   it("?rodada=<id> de uma rodada que não existe: diz que não há contagem, depois de ler", async () => {
@@ -150,6 +151,6 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     estado.rodadas = { ...estado.rodadas, aberta: ABERTA, registradas: [ABERTA] };
     await montar();
     await esperar(() => naTela().includes("Nenhuma contagem em andamento."), "a frase");
-    expect(naTela()).not.toContain("Contagem geral · 19/11/2026");
+    expect(naTela()).not.toContain("Contagem geral · 10/11/2026");
   });
 });
