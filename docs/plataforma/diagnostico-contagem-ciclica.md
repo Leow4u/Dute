@@ -320,7 +320,10 @@ que está certo e vale manter.
   caminho. *O que fazer:* hoje, listar esses casos à
   parte e gravá-los pelo plano do acerto (bloco `transferencias`), que faz as
   duas pernas juntas; no código, a mensagem certa e uma ação "Transferir" da
-  coordenação (seção 6).
+  coordenação (seção 6). *No código desde 23/11/2026:* a ficha do item com
+  caixa guardada não mostra "Ajustar saldo", e "Contar em …" é a ação
+  principal dela; o lançamento manual fica só para o item sem caixa
+  (`pages/estoque.tsx`, trava em `estoque.carregamento.test.tsx`).
 - **F08 · média · risco. "Endereço contado" é texto livre comparado ao pé
   da letra.** `locationId` só perde os espaços (`operations.ts:1958`) e a
   consulta é por igualdade (`:732-744`): "b-10", "B10" ou o código da caixa
