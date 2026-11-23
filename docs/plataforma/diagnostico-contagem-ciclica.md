@@ -1161,15 +1161,55 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    fora da lista de outra rodada, põe a prateleira dela na concluída, por
    contar; e o desfazer da separação depois do fechamento faz a caixa
    esvaziada antes dele contar como guardada. O exato pede o fechamento
-   gravar onde estava cada caixa, com a situação e os itens
-   (`completeCountRound` já lê todas as caixas do cliente); as rodadas já
-   concluídas ficariam com esta regra. O "Caixas × saldo" e o "Imprimir
-   folha" da concluída continuam com o estado de hoje, como antes. Travas:
+   gravar onde estava cada caixa, com a situação e os itens (feito no PR
+   640, abaixo); as rodadas já concluídas ficam com esta regra. O "Caixas ×
+   saldo" e o "Imprimir folha" da concluída continuam com o estado de hoje,
+   como antes. Travas:
    `recontagem-por-caixa.test.ts` (o describe "a rodada concluída"),
    `estoque-contagem-rodada-view.test.tsx` (a lista dos textos e o `axe` da
    concluída) e `estoque-contagem-rodada.test.tsx` (o "Ver" com a caixa
    movida). Falta conferir o "Ver" da recontagem geral na produção, depois da
    publicação.
+
+   *O fechamento grava onde estava cada caixa, no PR 640 (23/11/2026):*
+   `completeCountRound` grava no documento da rodada, junto com os números, a
+   lista `boxes_at_close`: cada caixa que conta na rodada (`contaNaRodada`),
+   com o código, a prateleira, a situação (`stored`, ou `emptied` pela
+   rodada) e os itens (`sku_codes`). São as mesmas caixas dos números, nas
+   prateleiras do alcance, com o mesmo agrupamento por prateleira
+   (`prateleirasDaRodada` e `caixasDoFechamento`, em `count-rounds.ts`). A
+   resposta, o recibo e o evento continuam só com os números. A entrada de
+   cada caixa é pequena: 150 caixas com 3 itens dão 13 KiB, e 600 com 10
+   itens, 97 KiB, longe do 1 MiB do documento. No app, `rodadaRegistrada` lê
+   a lista (`caixasDoFechamento`, os nomes do servidor), e `rodadaDaContagem`
+   monta a concluída com ela (`caixasDaListaDoFechamento`, em
+   `recontagem-por-caixa.ts`): as prateleiras e as caixas são as da lista,
+   cada caixa na situação e com os itens de lá, e o resto (o conteúdo e a
+   última recontagem) vem da caixa de hoje. A confirmada é a da última recontagem na prateleira, e o resumo é o
+   do PR 639. O alcance não se confere de novo pela caixa de hoje, porque a
+   lista já é o alcance no fechamento. Os três limites acima deixam de valer
+   nas rodadas concluídas depois da publicação, e a caixa contada vazia na
+   rodada que o desfazer da separação devolveu depois do fechamento continua
+   confirmada. Sem a lista, como na recontagem geral de 17/11, fica a regra
+   do PR 639; a lista vazia é o registro de nenhuma caixa no alcance, e a
+   lista com caixas e nenhuma que a tela entenda (um formato novo) também
+   fica com a regra do PR 639, para o "Ver" não ficar vazio. A rodada
+   aberta não muda, e nenhuma tela ou texto é novo. Fica um caso raro: a caixa
+   contada vazia na rodada (sem linha), devolvida pelo desfazer e recontada
+   em outra rodada, perde o registro da recontagem vazia, e o "Ver" a mostra
+   na prateleira em que estava, sem confirmação. A entrada da Contagem, a
+   rodada e a bancada de cada prateleira leem ao vivo todas as rodadas do
+   cliente (`use-rodadas.ts`; a bancada só precisa da aberta), e cada
+   concluída passa a trazer a lista: uns 13 KiB por rodada geral da BTG. Se
+   as rodadas se acumularem, a lista pode ir para um documento à parte, lido
+   só pelo "Ver", ou a bancada pode ler só a aberta. Travas:
+   `count-rounds.test.ts` (a lista, o alcance e o tamanho),
+   `count-rounds.integration.test.ts` (o documento no emulador, a rodada por
+   rua, a caixa contada vazia e a recontagem geral), `rodadas-da-contagem.test.ts`
+   (a leitura e o formato desconhecido), `recontagem-por-caixa.test.ts` (a
+   concluída com a lista) e
+   `estoque-contagem-rodada.test.tsx` (o "Ver" com a caixa movida duas
+   vezes).
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais

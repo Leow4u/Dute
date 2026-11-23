@@ -199,6 +199,54 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     expect(linhas).toEqual(["A-012 caixas2 itens · 120 un.contada 18/11 09:05 · sem diferença"]);
   });
 
+  it("?rodada=<id> da rodada concluída com a lista do fechamento: a caixa não recontada que o Mover levou duas vezes aparece onde estava", async () => {
+    // No fechamento (21/11), a CX-000012 estava na A-02, sem recontagem; depois, o Mover a levou à B-09 e, de lá, à A-01.
+    const caixa = (code: string, location_id: string, extra: Record<string, unknown> = {}) =>
+      warehouseBoxFromRecord({ code, customer_code: "BTG Pactual", status: "stored", location_id, stored_at: "2026-10-20T12:00:00.000Z", unit_count: 60, origin: { kind: "opening_inventory", session_id: "s1" }, ...extra });
+    const caixas = [caixa("CX-000010", "A-01"), caixa("CX-000012", "A-01", { moved_at: "2026-11-22T10:00:00.000Z", moved_from_location_id: "B-09" })];
+    const gravada = {
+      ...CONCLUIDA,
+      numeros: { prateleiras: 2, prateleirasContadas: 1, caixas: 2, caixasConfirmadas: 1, caixasComDiferenca: 0, diferenca: 0 },
+      caixasDoFechamento: [
+        { code: "CX-000010", location_id: "A-01", status: "stored", sku_codes: ["BTG-000121"] },
+        { code: "CX-000012", location_id: "A-02", status: "stored", sku_codes: ["BTG-000121"] },
+      ],
+    };
+    estado.busca = "rodada=cr_0";
+    estado.rodadas = { ...estado.rodadas, registradas: [gravada], anteriores: [gravada] };
+    estado.caixas = caixas;
+    estado.prateleiras = prateleirasDaContagem({
+      cliente: "BTG Pactual",
+      posicoes: ["A-01", "B-09"].map((code, sequence) => ({ code, aisle: code[0], shelf: Number(code.slice(2)), sequence, customer_code: "BTG Pactual" })),
+      caixas,
+      abertura: [
+        { box_code: "CX-000010", sku_code: "BTG-000121", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", size: "P", counted_qty: 60 },
+        { box_code: "CX-000012", sku_code: "BTG-000121", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", size: "P", counted_qty: 60 },
+      ],
+      saldos: [],
+    });
+    estado.recontagens = [
+      {
+        id: "brc_CX-000010",
+        caixa: "CX-000010",
+        posicao: "A-01",
+        rodada: "cr_0",
+        quando: "2026-11-18T12:00:00.000Z",
+        quem: "Rafael",
+        esperado: 60,
+        contado: 60,
+        diferenca: 0,
+        vazia: false,
+        itens: [{ sku: "BTG-000121", codigo: "", nome: "BTG-000121", esperado: 60, contado: 60, diferenca: 0, foraDaLista: false, origens: [] }],
+      } satisfies Recontagem,
+    ];
+    await montar();
+    await esperar(() => naTela().includes("Contagem da rua A · 17/11/2026"), "a rodada concluída");
+    const linhas = [...document.querySelectorAll('section[aria-labelledby^="rua-"] li')].map((linha) => (linha.textContent ?? "").replace(/\s+/g, " ").trim());
+    // Sem a lista: a CX-000012 na B-09, de onde o último mover a tirou (rua B, fora da rodada), e a A-02 fora.
+    expect(linhas).toEqual(["A-011 caixa1 item · 60 un.contada 18/11 09:00 · sem diferença", "A-021 caixa1 item · 60 un."]);
+  });
+
   it("?rodada=<id> de uma rodada que não existe: diz que não há contagem, depois de ler", async () => {
     estado.busca = "rodada=cr_nao_existe";
     estado.rodadas = { ...estado.rodadas, aberta: ABERTA, registradas: [ABERTA] };

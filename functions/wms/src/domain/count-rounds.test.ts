@@ -8,6 +8,7 @@ import {
   LEGACY_ROUND_TITLE,
   alcanceTemCaixa,
   caixaDaRodada,
+  caixasDoFechamento,
   conferirRodadaDaRecontagem,
   entradaDaConclusao,
   entradaDoInicio,
@@ -15,6 +16,7 @@ import {
   prateleiraNoAlcance,
   ruaDaPosicao,
   tituloDaRodada,
+  type AlcanceDaRodada,
   type CaixaDaRodada,
   type LinhaDaRodada,
 } from "./count-rounds.js";
@@ -201,6 +203,59 @@ describe("os números do fechamento", () => {
       recount_count: 0,
       primeira: null,
     });
+  });
+});
+
+/**
+ * O tamanho de um valor no documento do Firestore, pela conta da documentação (storage size calculations): a
+ * string, os bytes em UTF-8 mais 1; o número, 8; o booleano e o null, 1; o mapa, a soma dos nomes (bytes mais 1) e
+ * dos valores; a lista, a soma dos valores.
+ */
+function tamanhoNoFirestore(valor: unknown): number {
+  if (typeof valor === "string") return Buffer.byteLength(valor, "utf8") + 1;
+  if (typeof valor === "number") return 8;
+  if (typeof valor === "boolean" || valor === null) return 1;
+  if (Array.isArray(valor)) return valor.reduce((soma: number, item: unknown) => soma + tamanhoNoFirestore(item), 0);
+  if (valor && typeof valor === "object") return Object.entries(valor).reduce((soma, [nome, item]) => soma + Buffer.byteLength(nome, "utf8") + 1 + tamanhoNoFirestore(item), 0);
+  return 0;
+}
+
+// O "Ver" da rodada concluída (PR 639) adivinhava, pela caixa de hoje e pelo último mover, onde cada caixa estava no
+// fechamento; a não recontada movida duas vezes, o item que a caixa ganhou depois e o desfazer da separação o
+// enganavam. O fechamento grava a lista, com o mesmo agrupamento por prateleira dos números.
+describe("as caixas do fechamento (onde estava cada caixa da rodada)", () => {
+  it("cada caixa que conta na rodada, com a prateleira, a situação e os itens, na ordem da prateleira e do código", () => {
+    // A CX-4, esvaziada por esta rodada, entra esvaziada; a CX-5, esvaziada por outra, não conta.
+    assert.deepEqual(caixasDoFechamento(CAIXAS, { scope: "general" }, "r1"), [
+      { code: "CX-1", location_id: "A-03", status: "stored", sku_codes: [P] },
+      { code: "CX-2", location_id: "A-03", status: "stored", sku_codes: [M, GG] },
+      { code: "CX-3", location_id: "AB-01", status: "stored", sku_codes: [P] },
+      { code: "CX-4", location_id: "B-01", status: "emptied", sku_codes: [P] },
+    ]);
+  });
+
+  it("por rua e por item, só as prateleiras do alcance, cada uma inteira: as mesmas caixas dos números", () => {
+    const alcances: AlcanceDaRodada[] = [{ scope: "general" }, { scope: "aisle", aisle: "A" }, { scope: "aisle", aisle: "B" }, { scope: "item", sku_code: M }, { scope: "item", sku_code: P }];
+    for (const alcance of alcances) {
+      assert.equal(caixasDoFechamento(CAIXAS, alcance, "r1").length, numerosDaRodada(LINHAS, CAIXAS, alcance, "r1").boxes_total, JSON.stringify(alcance));
+    }
+    assert.deepEqual(caixasDoFechamento(CAIXAS, { scope: "aisle", aisle: "A" }, "r1").map((caixa) => caixa.code), ["CX-1", "CX-2"]);
+    // Por item, a prateleira se conta inteira: a CX-1, sem a M, entra com a CX-2.
+    assert.deepEqual(caixasDoFechamento(CAIXAS, { scope: "item", sku_code: M }, "r1").map((caixa) => caixa.code), ["CX-1", "CX-2"]);
+  });
+
+  it("fica longe do limite de 1 MiB do documento: 600 caixas com 10 itens cada (quatro vezes as da BTG) ficam abaixo de 128 KiB", () => {
+    const ruas = "ABCDEFGHIJ";
+    const muitas = Array.from({ length: 600 }, (_, indice) =>
+      caixa(
+        `CX-${String(indice + 1).padStart(6, "0")}`,
+        `${ruas[indice % ruas.length]}-${String((indice % 43) + 1).padStart(2, "0")}`,
+        Array.from({ length: 10 }, (_, item) => `BTG-${String(indice * 10 + item).padStart(6, "0")}`),
+      ),
+    );
+    const registro = caixasDoFechamento(muitas, { scope: "general" }, "r1");
+    assert.equal(registro.length, 600);
+    assert.ok(tamanhoNoFirestore({ boxes_at_close: registro }) < 128 * 1024, String(tamanhoNoFirestore({ boxes_at_close: registro })));
   });
 });
 
