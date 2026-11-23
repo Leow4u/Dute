@@ -155,6 +155,8 @@ count_rounds/{round_id}
   closed_at?, closed_by?
   shelves_total?, shelves_counted?, boxes_total?, boxes_counted?,
   boxes_with_difference?, difference_units?, recount_count?
+  boxes_at_close?         [{ code, location_id, status: "stored" | "emptied", sku_codes }]
+                          (onde estava cada caixa no fechamento, desde o PR 640)
   created_at, updated_at  serverTimestamp
 ```
 
