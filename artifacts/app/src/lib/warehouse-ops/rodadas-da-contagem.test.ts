@@ -58,6 +58,7 @@ describe("o documento da rodada", () => {
       inicio: { quando: "2026-11-19T11:10:00.000Z", quem: "Guilherme Dantas" },
       fim: null,
       numeros: null,
+      caixasGravadas: null,
     });
     expect(rodadaRegistrada(RODADA_DA_RECONTAGEM_GERAL.id, CONCLUIDA)).toEqual({
       id: RODADA_DA_RECONTAGEM_GERAL.id,
@@ -68,7 +69,36 @@ describe("o documento da rodada", () => {
       inicio: { quando: "2026-11-17T11:10:00.000Z", quem: "Guilherme Dantas" },
       fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" },
       numeros: { prateleiras: 5, prateleirasContadas: 5, caixas: 6, caixasConfirmadas: 6, caixasComDiferenca: 1, diferenca: -3 },
+      caixasGravadas: null,
     });
+  });
+
+  // O "Ver" da concluída monta as prateleiras por onde o fechamento gravou cada caixa (`boxes_at_close`); a caixa só
+  // guarda o estado de hoje e o último mover (PR 639).
+  it("a concluída lê onde o fechamento gravou cada caixa; sem a lista (as concluídas antes dela) e na aberta, null", () => {
+    const gravada = rodadaRegistrada("cr_10", {
+      ...CONCLUIDA,
+      boxes_at_close: [
+        { code: "cx-000040", location_id: "a-01", status: "stored", sku_codes: ["btg-000121", ""] },
+        { code: "CX-000042", location_id: "A-01", status: "emptied", sku_codes: [] },
+        { code: "CX-000050", location_id: "B-09", status: "stored" },
+        // Sem o código, sem a prateleira, com outra situação ou fora do formato, a linha não serve.
+        { code: "", location_id: "A-01", status: "stored", sku_codes: [] },
+        { code: "CX-000043", location_id: "", status: "stored", sku_codes: [] },
+        { code: "CX-000044", location_id: "A-01", status: "committing", sku_codes: [] },
+        "CX-000045",
+        null,
+      ],
+    });
+    expect(gravada?.caixasGravadas).toEqual([
+      { code: "CX-000040", location_id: "A-01", status: "stored", sku_codes: ["BTG-000121"] },
+      { code: "CX-000042", location_id: "A-01", status: "emptied", sku_codes: [] },
+      { code: "CX-000050", location_id: "B-09", status: "stored", sku_codes: [] },
+    ]);
+    // A lista vazia é um registro: nenhuma caixa no alcance no fechamento.
+    expect(rodadaRegistrada("cr_11", { ...CONCLUIDA, boxes_at_close: [] })?.caixasGravadas).toEqual([]);
+    expect(rodadaRegistrada("cr_12", { ...CONCLUIDA, boxes_at_close: "CX-000040" })?.caixasGravadas).toBeNull();
+    expect(rodadaRegistrada("cr_13", { ...ABERTA, boxes_at_close: [] })?.caixasGravadas).toBeNull();
   });
 
   it("o alcance por rua e por item; sem o nome do item, o SKU; sem nome de quem, o e-mail", () => {

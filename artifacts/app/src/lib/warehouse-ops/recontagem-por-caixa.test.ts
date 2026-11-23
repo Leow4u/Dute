@@ -40,6 +40,7 @@ import {
   textoDoComeco,
   textoDoProgresso,
   tituloDaCaixa,
+  type CaixaGravada,
   type ContagemDigitada,
   type Recontagem,
   type RodadaDaContagem,
@@ -770,6 +771,114 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
     const recontagens = [contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60, 0, "cr_m"), contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2, "cr_m")];
     // Antes: só a B-09, para onde a caixa com a M foi depois, por contar; a A-01, contada, sumia.
     expect(linhas(ver(caixas, porItem, recontagens))).toEqual([["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null]]);
+  });
+
+  // A lista que o fechamento grava (`boxes_at_close`, functions/wms count-rounds.ts): onde estava cada caixa da rodada às
+  // 13:55 de 19/11. Com ela, o "Ver" não adivinha mais pela caixa de hoje e pelo último mover.
+  const GRAVADAS: CaixaGravada[] = [
+    { code: "CX-000040", location_id: "A-01", status: "stored", sku_codes: [P.sku_code] },
+    { code: "CX-000041", location_id: "A-01", status: "stored", sku_codes: [M.sku_code] },
+    { code: "CX-000042", location_id: "A-01", status: "emptied", sku_codes: [] },
+    { code: "CX-000050", location_id: "B-09", status: "stored", sku_codes: [GG.sku_code] },
+  ];
+  const GRAVADA: RodadaDaRecontagem = { ...CONCLUIDA, caixasGravadas: GRAVADAS };
+  const comGravadas = (...mais: CaixaGravada[]): RodadaDaRecontagem => ({ ...GRAVADA, caixasGravadas: [...GRAVADAS, ...mais] });
+
+  it("com a lista do fechamento, a caixa que a rodada não recontou e o Mover levou duas vezes depois dele fica onde a lista a gravou", () => {
+    // A CX-000060 estava na A-02 no fechamento; depois foi para a B-09 e, da B-09, para a A-03: o último mover diz B-09.
+    const caixas = [...HOJE, caixa("CX-000060", "A-03", { unit_count: 10, sku_codes: [P.sku_code], moved_at: "2026-11-21T10:00:00.000Z", moved_from_location_id: "B-09" })];
+    const rodada = ver(caixas, comGravadas({ code: "CX-000060", location_id: "A-02", status: "stored", sku_codes: [P.sku_code] }));
+    // Sem a lista, a regra do PR 639 a punha na B-09, de onde o último mover a tirou, e a A-02 ficava fora.
+    expect(linhas(rodada)).toEqual([
+      ["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null],
+      ["A-02", "por_contar", 1, 0, "1 caixa · 1 item · 10 un.", null],
+      ["B-09", "contada", 1, 1, "1 caixa · 1 item · 16 un.", null],
+    ]);
+    expect(rodada).toMatchObject({ prateleiras: 3, prateleirasContadas: 2, caixas: 5, caixasConfirmadas: 4, caixasComDiferenca: 1, diferenca: -2 });
+  });
+
+  it("com a lista do fechamento, por item, a prateleira da caixa que ganhou o item depois dele fica fora", () => {
+    const porItem: RodadaDaRecontagem = {
+      id: "cr_m",
+      titulo: "Contagem de Polo Masculino Piquet Preto · M · 19/11/2026",
+      alcance: { tipo: "item", sku: M.sku_code, nome: "Polo Masculino Piquet Preto · M" },
+      inicio: { quando: "2026-11-19T11:00:00.000Z", quem: "Guilherme Dantas" },
+      fim: FECHAMENTO,
+      // No fechamento, só a A-01 tinha caixa com a M.
+      caixasGravadas: GRAVADAS.filter((gravada) => gravada.location_id === "A-01"),
+    };
+    // Depois do fechamento, a CX-000050 (B-09) ganhou a M num fora da lista da contagem de 21/11.
+    const caixas = HOJE.map((registro) => {
+      if (registro.code === "CX-000042") return { ...registro, last_recount_round_id: "cr_m" };
+      if (registro.code === "CX-000050") return { ...registro, sku_codes: [GG.sku_code, M.sku_code], last_recount_id: "brc_21", last_recounted_at: "2026-11-21T10:00:00.000Z", last_recount_round_id: "cr_2" };
+      return registro;
+    });
+    const recontagens = [contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60, 0, "cr_m"), contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2, "cr_m")];
+    // Sem a lista, a regra do PR 639 punha a B-09 na rodada, por contar, pelos itens de hoje da CX-000050.
+    expect(linhas(ver(caixas, porItem, recontagens))).toEqual([["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null]]);
+  });
+
+  it("com a lista do fechamento, a caixa que estava vazia nele e o desfazer da separação devolveu depois fica fora", () => {
+    // A CX-000062 saiu toda numa separação antes do fechamento; o desfazer a devolveu à A-02 depois dele, guardada e com o
+    // stored_at de antes.
+    const caixas = [...HOJE, caixa("CX-000062", "A-02", { unit_count: 3, sku_codes: [P.sku_code] })];
+    // Sem a lista, a regra do PR 639 a contava como guardada no fechamento: a A-02 na rodada, por contar.
+    expect(linhas(ver(caixas, GRAVADA))).toEqual([
+      ["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null],
+      ["B-09", "contada", 1, 1, "1 caixa · 1 item · 16 un.", null],
+    ]);
+  });
+
+  it("com a lista do fechamento, a caixa contada vazia na rodada continua confirmada depois que o desfazer da separação a devolveu", () => {
+    // A CX-000042 voltou à A-01 depois do fechamento: guardada de novo, com o registro da recontagem vazia.
+    const caixas = HOJE.map((registro) => (registro.code === "CX-000042" ? { ...registro, status: "stored", emptied_at: null } : registro));
+    const rodada = ver(caixas, GRAVADA);
+    // Sem a lista, a regra do PR 639 a punha guardada e por contar: a A-01 em contagem, 2 de 3.
+    expect(linhas(rodada)[0]).toEqual(["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null]);
+    expect(rodada.ruas[0].prateleiras[0]).toMatchObject({ vazias: 1, ultima: { quando: "2026-11-19T12:10:00.000Z", quem: "Rafael" } });
+  });
+
+  it("com a lista do fechamento, as prateleiras são as dela, sem conferir o alcance pela caixa de hoje", () => {
+    // Por item: no fechamento, a A-02 tinha só a CX-000080, com a M, contada vazia na rodada. Depois, o desfazer da
+    // separação a devolveu, e a contagem de 21/11 a recontou: a caixa de hoje não diz mais que esta rodada a esvaziou.
+    const porItem: RodadaDaRecontagem = {
+      id: "cr_m",
+      titulo: "Contagem de Polo Masculino Piquet Preto · M · 19/11/2026",
+      alcance: { tipo: "item", sku: M.sku_code, nome: "Polo Masculino Piquet Preto · M" },
+      inicio: { quando: "2026-11-19T11:00:00.000Z", quem: "Guilherme Dantas" },
+      fim: FECHAMENTO,
+      caixasGravadas: [{ code: "CX-000080", location_id: "A-02", status: "emptied", sku_codes: [M.sku_code] }],
+    };
+    const caixas = [...HOJE, caixa("CX-000080", "A-02", { unit_count: 4, sku_codes: [M.sku_code], last_recount_id: "brc_21", last_recounted_at: "2026-11-21T10:00:00.000Z", last_recount_round_id: "cr_2" })];
+    // A prateleira fica, com a caixa. A recontagem vazia desta rodada só estava na caixa (sem linha), e a de 21/11 a
+    // substituiu: a confirmação dela não tem de onde vir.
+    expect(linhas(ver(caixas, porItem, [])).map(([local, , total]) => [local, total])).toEqual([["A-02", 1]]);
+  });
+
+  it("com a lista do fechamento, a caixa que não está mais no cadastro continua na prateleira em que estava, sem conteúdo", () => {
+    const rodada = ver(HOJE, comGravadas({ code: "CX-000099", location_id: "A-02", status: "stored", sku_codes: [P.sku_code] }));
+    expect(linhas(rodada)[1]).toEqual(["A-02", "por_contar", 1, 0, "1 caixa · 0 itens · 0 un.", null]);
+  });
+
+  it("com a lista do fechamento, a prateleira que a rodada não contou fica \"contada antes\" só com a recontagem de antes dele", () => {
+    const caixas = [
+      ...HOJE,
+      caixa("CX-000064", "A-02", { unit_count: 5, last_recount_id: "brc_16", last_recounted_at: "2026-11-16T18:00:00.000Z", last_recount_round_id: "recontagem-2026-11-16" }),
+      caixa("CX-000065", "A-03", { unit_count: 3, last_recount_id: "brc_21", last_recounted_at: "2026-11-21T10:00:00.000Z", last_recount_round_id: "cr_2" }),
+    ];
+    const gravada = comGravadas({ code: "CX-000064", location_id: "A-02", status: "stored", sku_codes: [] }, { code: "CX-000065", location_id: "A-03", status: "stored", sku_codes: [] });
+    expect(ver(caixas, gravada).ruas[0].prateleiras.map((prateleira) => [prateleira.posicao, prateleira.estado, prateleira.contadaEm])).toEqual([
+      ["A-01", "contada", null],
+      ["A-02", "contada_antes", "16/11"],
+      ["A-03", "por_contar", null],
+    ]);
+  });
+
+  it("a lista vazia é o registro de nenhuma caixa no alcance; sem a lista, a regra do PR 639; a rodada aberta não usa a lista", () => {
+    // Sem a lista: antes, a lista vazia também caía na regra do PR 639 e mostrava as caixas de hoje.
+    expect(linhas(ver(HOJE, { ...CONCLUIDA, caixasGravadas: [] }))).toEqual([]);
+    expect(linhas(ver(HOJE, { ...CONCLUIDA, caixasGravadas: null }))).toEqual(linhas(ver(HOJE)));
+    expect(linhas(ver(HOJE, { ...GRAVADA, fim: null }))).toEqual(linhas(ver(HOJE, { ...CONCLUIDA, fim: null })));
   });
 });
 
