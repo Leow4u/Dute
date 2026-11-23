@@ -8,6 +8,7 @@ import {
   horaEmTexto,
   prateleirasDaContagem,
   resumoDaPrateleira,
+  ruaDoCodigo,
   textoDaDiferenca,
   type NomeDoSku,
   type PosicaoDaContagem,
@@ -955,10 +956,91 @@ function separacaoDaPrateleira(reservas: readonly ReservaLida[], posicao: string
   return `em separação · ${[...separados].sort((esquerda, direita) => esquerda.localeCompare(direita, "pt-BR", { numeric: true })).join(", ")}`;
 }
 
+/** O instante em milissegundos; NaN sem instante válido. */
+function instanteDe(valor: string | null | undefined): number {
+  return valor ? new Date(valor).getTime() : Number.NaN;
+}
+
+/**
+ * As caixas da rodada concluída como estavam no fechamento (o "Ver" das
+ * anteriores; achado de 19/11/2026: depois da recontagem geral, o Mover levou
+ * caixas recontadas para outras prateleiras, e o "Ver" as mostrava sem
+ * recontagem onde estão hoje). A caixa recontada na rodada fica na prateleira
+ * da última recontagem dela; a que a rodada não recontou, onde estava no
+ * fechamento: a de hoje ou, movida depois dele, a de onde o último mover a
+ * tirou (`moved_from_location_id`). Entram a caixa guardada no fechamento
+ * (guardada antes dele e, se vazia hoje, esvaziada depois) e a que a rodada
+ * esvaziou; a guardada depois do fechamento e a esvaziada antes dele, não.
+ */
+function caixasNoFechamento(caixas: readonly WarehouseBox[], ultimas: ReadonlyMap<string, Recontagem>, rodada: string, fechamento: string): WarehouseBox[] {
+  const fim = instanteDe(fechamento);
+  const depois = (instante: string | null | undefined) => instanteDe(instante) > fim;
+  return caixas.flatMap((caixa): WarehouseBox[] => {
+    const recontagem = ultimas.get(caixa.code);
+    const vaziaNoFechamento = caixa.status === "emptied" && !depois(caixa.emptied_at);
+    if (recontagem) return [{ ...caixa, location_id: recontagem.posicao, status: vaziaNoFechamento ? "emptied" : "stored" }];
+    if (vaziaNoFechamento) return esvaziadaNaRodada(caixa, rodada) ? [caixa] : [];
+    if ((caixa.status !== "stored" && caixa.status !== "emptied") || depois(caixa.stored_at)) return [];
+    return [
+      {
+        ...caixa,
+        status: "stored",
+        location_id: depois(caixa.moved_at) ? caixa.moved_from_location_id || caixa.location_id : caixa.location_id,
+        // A recontagem de outra rodada, depois do fechamento, não é a "contada antes" desta.
+        last_recounted_at: depois(caixa.last_recounted_at) ? null : caixa.last_recounted_at,
+      },
+    ];
+  });
+}
+
+/** O que a linha da rodada usa da prateleira: onde fica, a rua e, para o resumo, o que ela tem. */
+type ConteudoDaPrateleira = Pick<PrateleiraDaContagem, "posicao" | "rua" | "guardadas" | "aCaminho" | "itens" | "unidades">;
+
+/**
+ * As prateleiras da rodada concluída, das caixas como estavam no fechamento
+ * (caixasNoFechamento: as guardadas e as que a rodada esvaziou, por
+ * prateleira), na ordem de caminhada de hoje; a que a folha de hoje não tem
+ * vem depois, em ordem. O que cada caixa guardada tem: a recontada, o que a
+ * rodada contou nela (a separação depois do fechamento não muda); a não
+ * recontada, o que a folha de hoje dá a ela, e a que não está mais guardada,
+ * nada.
+ */
+function prateleirasNoFechamento(
+  guardadasPorLocal: ReadonlyMap<string, readonly WarehouseBox[]>,
+  vaziasPorLocal: ReadonlyMap<string, readonly WarehouseBox[]>,
+  hoje: readonly PrateleiraDaContagem[],
+  ultimas: ReadonlyMap<string, Recontagem>,
+): ConteudoDaPrateleira[] {
+  const daFolha = new Map(hoje.flatMap((prateleira) => prateleira.caixas.filter((caixa) => !caixa.aCaminho).map((caixa) => [caixa.code, caixa] as const)));
+  const ruas = new Map(hoje.map((prateleira) => [prateleira.posicao, prateleira.rua] as const));
+  const comCaixa = new Set([...guardadasPorLocal.keys(), ...vaziasPorLocal.keys()].filter(Boolean));
+  const foraDaFolha = [...comCaixa].filter((local) => !ruas.has(local)).sort((esquerda, direita) => esquerda.localeCompare(direita, "pt-BR", { numeric: true }));
+  return [...hoje.map((prateleira) => prateleira.posicao).filter((local) => comCaixa.has(local)), ...foraDaFolha].map((local) => {
+    const guardadas = guardadasPorLocal.get(local) ?? [];
+    const itens = new Set<string>();
+    let unidades = 0;
+    for (const caixa of guardadas) {
+      const recontagem = ultimas.get(caixa.code);
+      if (recontagem) {
+        for (const item of recontagem.itens) if (item.contado > 0) itens.add(item.sku);
+        unidades += recontagem.contado;
+        continue;
+      }
+      const conteudo = daFolha.get(caixa.code);
+      for (const linha of conteudo?.linhas ?? []) if (linha.esperado > 0) itens.add(linha.sku);
+      unidades += conteudo?.esperado ?? 0;
+    }
+    return { posicao: local, rua: ruas.get(local) ?? ruaDoCodigo(local), guardadas: guardadas.length, aCaminho: 0, itens: itens.size, unidades };
+  });
+}
+
 /**
  * A rodada por prateleira: as prateleiras com caixa, por rua, na ordem de
  * caminhada, cada uma com o estado nesta rodada (por contar, em contagem,
- * contada) e o que impede recontá-la; e os números da rodada.
+ * contada) e o que impede recontá-la; e os números da rodada. A rodada
+ * aberta usa as caixas como estão hoje, porque a bancada grava nela; a
+ * concluída (o "Ver" das anteriores), como estavam no fechamento, sem o que
+ * impede recontar hoje.
  */
 export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   const dono = texto(dados.cliente);
@@ -967,24 +1049,27 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   // A caixa contada vazia não tem linha: a recontagem dela vem do registro da caixa.
   const recontagens = [...lidas, ...recontagensDasCaixasContadasVazias(doCliente, lidas, dados.rodada.id)];
   const ultimas = ultimaDeCadaCaixa(recontagens);
+  const fechamento = dados.rodada.fim?.quando ?? null;
+  const caixas = fechamento ? caixasNoFechamento(doCliente, ultimas, dados.rodada.id, fechamento) : doCliente;
   const vaziasPorLocal = new Map<string, WarehouseBox[]>();
-  for (const caixa of doCliente) {
+  for (const caixa of caixas) {
     if (!esvaziadaNaRodada(caixa, dados.rodada.id)) continue;
     const local = chave(caixa.location_id);
     vaziasPorLocal.set(local, [...(vaziasPorLocal.get(local) ?? []), caixa]);
   }
   const guardadasPorLocal = new Map<string, WarehouseBox[]>();
-  for (const caixa of doCliente) {
+  for (const caixa of caixas) {
     if (caixa.status !== "stored") continue;
     const local = chave(caixa.location_id);
     guardadasPorLocal.set(local, [...(guardadasPorLocal.get(local) ?? []), caixa]);
   }
+  const prateleirasDaRodada: readonly ConteudoDaPrateleira[] = fechamento ? prateleirasNoFechamento(guardadasPorLocal, vaziasPorLocal, dados.prateleiras, ultimas) : dados.prateleiras;
 
   const linhas: PrateleiraDaRodada[] = [];
-  for (const prateleira of dados.prateleiras) {
+  for (const prateleira of prateleirasDaRodada) {
     const vazias = vaziasPorLocal.get(prateleira.posicao) ?? [];
     if (!prateleira.guardadas && !prateleira.aCaminho && !vazias.length) continue;
-    if (!prateleiraNoAlcance(dados.rodada.alcance, prateleira.posicao, prateleira.rua, doCliente, dados.rodada.id)) continue;
+    if (!prateleiraNoAlcance(dados.rodada.alcance, prateleira.posicao, prateleira.rua, caixas, dados.rodada.id)) continue;
     const guardadas = guardadasPorLocal.get(prateleira.posicao) ?? [];
     const daRodada = [...guardadas, ...vazias];
     const confirmadas = daRodada.flatMap((caixa) => {
@@ -1007,7 +1092,8 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
       diferenca: confirmadas.reduce((soma, recontagem) => soma + recontagem.diferenca, 0),
       vazias: vazias.length,
       contadaEm: estado === "contada_antes" ? dataCurta(antes) : null,
-      bloqueio: bloqueioDaPrateleira(prateleira.posicao, doCliente, dados.guardas) ?? separacaoDaPrateleira(dados.reservas, prateleira.posicao),
+      // A rodada concluída não se reconta: o que impede recontar hoje não é dela.
+      bloqueio: fechamento ? null : (bloqueioDaPrateleira(prateleira.posicao, doCliente, dados.guardas) ?? separacaoDaPrateleira(dados.reservas, prateleira.posicao)),
     });
   }
 

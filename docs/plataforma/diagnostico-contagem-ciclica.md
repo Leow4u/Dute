@@ -1123,6 +1123,50 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    pela posição de hoje das caixas, e as doze recontadas que o Mover levou
    de prateleira depois do fechamento (19/11, das 19:36 às 19:55 UTC)
    aparecem na A-09, na B-04, na B-05 e na B-09 sem recontagem.
+
+   *O "Ver" da rodada concluída depois do Mover, no PR 639 (23/11/2026):*
+   o "Ver" das anteriores montava as prateleiras pela posição de hoje das
+   caixas (`rodadaDaContagem`), e a caixa só conta como confirmada quando a
+   recontagem é da mesma prateleira: a caixa recontada que o Mover levou
+   depois do fechamento aparecia sem recontagem onde está hoje e sumia da
+   prateleira em que foi contada. Agora a rodada concluída põe cada caixa
+   como estava no fechamento (`caixasNoFechamento`, em
+   `recontagem-por-caixa.ts`): a recontada, na prateleira da última
+   recontagem dela na rodada; a que a rodada não recontou, onde estava no
+   fechamento, lida da própria caixa (a de hoje ou, movida depois dele, a de
+   onde o último mover a tirou, `moved_from_location_id`). Entram a caixa
+   guardada no fechamento (guardada antes dele, pelo `stored_at`, e, se vazia
+   hoje, esvaziada depois dele, pelo `emptied_at`) e a que a rodada esvaziou;
+   a guardada depois do fechamento e a esvaziada antes dele ficam fora, como
+   no fechamento do servidor (`contaNaRodada`), mesmo a recontada na rodada e
+   esvaziada antes do fechamento por uma recontagem fora dela, que apaga a
+   rodada da caixa. O resumo de cada prateleira leva
+   o que a rodada contou em cada caixa recontada (a separação depois do
+   fechamento não muda) e, na não recontada, o que a folha de hoje dá a ela
+   (a que não está mais guardada, nada). A concluída não mostra o que impede
+   recontar hoje (a guarda aberta, o pedido separado). A rodada aberta
+   continua com as caixas de hoje, porque a bancada grava nela, e a regra da
+   caixa contada vazia sem linha continua a mesma. O cartão continua com os
+   números gravados no fechamento (na recontagem geral de 17/11, 25 de 28
+   prateleiras e 137 de 142 caixas, decisão 2 da seção 7), e as linhas seguem
+   a regra do PR 637, que a leitura de 19/11 deu como 26 prateleiras contadas
+   e 140 caixas confirmadas. Limites, porque a caixa guarda só o estado de
+   hoje e o último mover: a não recontada movida duas vezes depois do
+   fechamento aparece na origem do último mover (o caso fica mais provável
+   quanto mais velha a rodada); por item, o alcance usa os itens de hoje da
+   caixa (`sku_codes`), e a caixa que ganhou o item depois do fechamento, num
+   fora da lista de outra rodada, põe a prateleira dela na concluída, por
+   contar; e o desfazer da separação depois do fechamento faz a caixa
+   esvaziada antes dele contar como guardada. O exato pede o fechamento
+   gravar onde estava cada caixa, com a situação e os itens
+   (`completeCountRound` já lê todas as caixas do cliente); as rodadas já
+   concluídas ficariam com esta regra. O "Caixas × saldo" e o "Imprimir
+   folha" da concluída continuam com o estado de hoje, como antes. Travas:
+   `recontagem-por-caixa.test.ts` (o describe "a rodada concluída"),
+   `estoque-contagem-rodada-view.test.tsx` (a lista dos textos e o `axe` da
+   concluída) e `estoque-contagem-rodada.test.tsx` (o "Ver" com a caixa
+   movida). Falta conferir o "Ver" da recontagem geral na produção, depois da
+   publicação.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais

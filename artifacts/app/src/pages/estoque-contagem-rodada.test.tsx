@@ -27,20 +27,24 @@ type Rodadas = {
 const estado = vi.hoisted(() => ({
   rodadas: { aberta: null, anteriores: [], registradas: [], carregando: false, falhou: false } as Rodadas,
   busca: "",
+  // As leituras da folha, das caixas e das recontagens da rodada: vazias, menos no "Ver" com a caixa movida.
+  prateleiras: [] as unknown[],
+  caixas: [] as unknown[],
+  recontagens: [] as unknown[],
 }));
 
 vi.mock("@/lib/active-customer-context", () => ({
   useActiveCustomer: () => ({ code: "BTG Pactual", active: { code: "BTG Pactual", name: "BTG" }, isLoading: false, falhou: false }),
 }));
 vi.mock("@/lib/warehouse-ops/use-contagem-por-caixa", () => ({
-  useContagemPorCaixa: () => ({ prateleiras: [], carregando: false, falha: null, catalogoFalhou: false, leituras: [], tentar: async () => undefined }),
+  useContagemPorCaixa: () => ({ prateleiras: estado.prateleiras, carregando: false, falha: null, catalogoFalhou: false, leituras: [], tentar: async () => undefined }),
 }));
 vi.mock("@/lib/warehouse-ops/use-lista-de-separacao", () => ({
-  useCaixasDoCliente: () => ({ data: [], isLoading: false, isError: false, error: null }),
+  useCaixasDoCliente: () => ({ data: estado.caixas, isLoading: false, isError: false, error: null }),
 }));
 vi.mock("@/lib/warehouse-ops/use-recontagem", () => ({
   useLeiturasDaRodada: () => ({
-    recontagens: [],
+    recontagens: estado.recontagens,
     guardas: [],
     separadas: [],
     carregando: false,
@@ -52,6 +56,10 @@ vi.mock("@/lib/warehouse-ops/use-rodadas", () => ({
   useRodadasDaContagem: () => ({ ...estado.rodadas, leitura: { tentando: false, tentar: () => undefined, falta: null, lidaEm: 1 } }),
 }));
 vi.mock("wouter", async (original) => ({ ...(await original<typeof import("wouter")>()), useSearch: () => estado.busca }));
+
+import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { prateleirasDaContagem } from "@/lib/warehouse-ops/contagem-por-caixa";
+import type { Recontagem } from "@/lib/warehouse-ops/recontagem-por-caixa";
 
 import PaginaRodadaDaContagem from "./estoque-contagem-rodada";
 
@@ -107,6 +115,9 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   estado.rodadas = { aberta: null, anteriores: [], registradas: [], carregando: false, falhou: false };
   estado.busca = "";
+  estado.prateleiras = [];
+  estado.caixas = [];
+  estado.recontagens = [];
   container = document.createElement("div");
   document.body.appendChild(container);
 });
@@ -147,6 +158,45 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     expect(naTela()).toContain("prateleiras2de 2");
     expect(naTela()).toContain("caixas3de 3");
     expect(naTela()).not.toContain("Contagem geral · 10/11/2026");
+  });
+
+  it("?rodada=<id> da rodada concluída: a caixa movida depois do fechamento aparece na prateleira em que foi contada", async () => {
+    // A rodada da rua A recontou as duas caixas da A-01; depois do fechamento (21/11), o Mover levou a CX-000011 para a B-09.
+    const caixa = (code: string, location_id: string, extra: Record<string, unknown> = {}) =>
+      warehouseBoxFromRecord({ code, customer_code: "BTG Pactual", status: "stored", location_id, stored_at: "2026-10-20T12:00:00.000Z", unit_count: 60, origin: { kind: "opening_inventory", session_id: "s1" }, ...extra });
+    const caixas = [caixa("CX-000010", "A-01"), caixa("CX-000011", "B-09", { moved_at: "2026-11-22T10:00:00.000Z", moved_from_location_id: "A-01" })];
+    const recontada = (code: string, sku: string, quando: string): Recontagem => ({
+      id: `brc_${code}`,
+      caixa: code,
+      posicao: "A-01",
+      rodada: "cr_0",
+      quando,
+      quem: "Rafael",
+      esperado: 60,
+      contado: 60,
+      diferenca: 0,
+      vazia: false,
+      itens: [{ sku, codigo: "", nome: sku, esperado: 60, contado: 60, diferenca: 0, foraDaLista: false, origens: [] }],
+    });
+    estado.busca = "rodada=cr_0";
+    estado.rodadas = { ...estado.rodadas, registradas: [CONCLUIDA], anteriores: [CONCLUIDA] };
+    estado.caixas = caixas;
+    estado.prateleiras = prateleirasDaContagem({
+      cliente: "BTG Pactual",
+      posicoes: ["A-01", "B-09"].map((code, sequence) => ({ code, aisle: code[0], shelf: Number(code.slice(2)), sequence, customer_code: "BTG Pactual" })),
+      caixas,
+      abertura: [
+        { box_code: "CX-000010", sku_code: "BTG-000121", client_item_code: "A.01.0806.005.P", product_name: "Polo Masculino Piquet Preto", size: "P", counted_qty: 60 },
+        { box_code: "CX-000011", sku_code: "BTG-000123", client_item_code: "A.01.0806.005.M", product_name: "Polo Masculino Piquet Preto", size: "M", counted_qty: 60 },
+      ],
+      saldos: [],
+    });
+    estado.recontagens = [recontada("CX-000010", "BTG-000121", "2026-11-18T12:00:00.000Z"), recontada("CX-000011", "BTG-000123", "2026-11-18T12:05:00.000Z")];
+    await montar();
+    await esperar(() => naTela().includes("Contagem da rua A · 17/11/2026"), "a rodada concluída");
+    const linhas = [...document.querySelectorAll('section[aria-labelledby^="rua-"] li')].map((linha) => (linha.textContent ?? "").replace(/\s+/g, " ").trim());
+    // Antes: a A-01 com 1 caixa, e a CX-000011 fora da rodada, na B-09 (rua B).
+    expect(linhas).toEqual(["A-012 caixas2 itens · 120 un.contada 18/11 09:05 · sem diferença"]);
   });
 
   it("?rodada=<id> de uma rodada que não existe: diz que não há contagem, depois de ler", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { warehouseBoxFromRecord } from "@/lib/warehouse-boxes";
+import { warehouseBoxFromRecord, type WarehouseBox } from "@/lib/warehouse-boxes";
 
 import type { LinhaDeEntrada } from "./caixas-da-separacao";
 import { prateleirasDaContagem } from "./contagem-por-caixa";
@@ -42,6 +42,8 @@ import {
   tituloDaCaixa,
   type ContagemDigitada,
   type Recontagem,
+  type RodadaDaContagem,
+  type RodadaDaRecontagem,
 } from "./recontagem-por-caixa";
 
 /**
@@ -592,6 +594,182 @@ describe("a rodada por prateleira", () => {
     expect(comRecontagem.comeco).toEqual({ quando: "2026-11-19T11:10:00.000Z", quem: "Rafael" });
     const concluida = rodadaDaContagem({ ...base, recontagens: [], rodada: { ...documento, fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } } });
     expect(concluida.concluida).toEqual({ quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" });
+  });
+});
+
+describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () => {
+  // Depois de concluída a recontagem geral, o Mover levou doze caixas recontadas para outras prateleiras: o "Ver"
+  // montava as prateleiras pela posição de hoje, e a caixa movida aparecia sem recontagem onde está hoje e sumia da
+  // prateleira em que foi contada.
+  const AGORA_DO_VER = new Date("2026-11-23T13:00:00.000Z");
+  const FECHAMENTO = { quando: "2026-11-19T16:55:00.000Z", quem: "Guilherme Dantas" };
+  const CONCLUIDA: RodadaDaRecontagem = { ...RODADA_DA_RECONTAGEM_GERAL, inicio: { quando: "2026-11-17T11:00:00.000Z", quem: "Guilherme Dantas" }, fim: FECHAMENTO };
+  const POSICOES_DO_VER = [posicao("A-01", 1), posicao("A-02", 2), posicao("A-03", 3), posicao("B-09", 20)];
+  const ABERTURA_DO_VER: LinhaDeEntrada[] = [
+    { box_code: "CX-000040", ...P, counted_qty: 60 },
+    { box_code: "CX-000041", ...M, counted_qty: 60 },
+    { box_code: "CX-000050", ...GG, counted_qty: 16 },
+    { box_code: "CX-000060", ...P, counted_qty: 10 },
+    { box_code: "CX-000061", ...P, counted_qty: 4 },
+    { box_code: "CX-000062", ...P, counted_qty: 3 },
+    { box_code: "CX-000063", ...M, counted_qty: 7 },
+    { box_code: "CX-000070", ...P, counted_qty: 5 },
+  ];
+  // Hoje: a CX-000041, recontada na A-01 com −2, foi movida para a B-09 depois do fechamento; a CX-000042, sem linha,
+  // foi contada vazia na A-01 (o registro dela, PR 637); a B-09 tem uma guarda aberta e a A-01, um pedido separado.
+  const HOJE = [
+    caixa("CX-000040", "A-01", { unit_count: 60, sku_codes: [P.sku_code] }),
+    caixa("CX-000041", "B-09", {
+      unit_count: 60,
+      sku_codes: [M.sku_code],
+      count_adjustments: [{ sku_code: M.sku_code, qty: -2, recount_id: "brc_CX-000041" }],
+      moved_at: "2026-11-19T19:40:00.000Z",
+      moved_from_location_id: "A-01",
+    }),
+    caixa("CX-000042", "A-01", {
+      status: "emptied",
+      emptied_at: "2026-11-19T12:10:00.000Z",
+      last_recount_id: "brc_042",
+      last_recounted_at: "2026-11-19T12:10:00.000Z",
+      last_recounted_by: { uid: "u2", name: "Rafael" },
+      last_recount_round_id: RODADA,
+      emptied_recount_id: "brc_042",
+    }),
+    caixa("CX-000050", "B-09", { unit_count: 16, sku_codes: [GG.sku_code] }),
+  ];
+  // Uma recontagem de um item, como as linhas de cycle_counts a dão.
+  const contada = (code: string, local: string, quando: string, sku: string, esperado: number, diferenca = 0, rodada = RODADA): Recontagem => ({
+    id: `brc_${code}`,
+    caixa: code,
+    posicao: local,
+    rodada,
+    quando,
+    quem: "Guilherme Dantas",
+    esperado,
+    contado: esperado + diferenca,
+    diferenca,
+    vazia: false,
+    itens: [{ sku, codigo: "", nome: sku, esperado, contado: esperado + diferenca, diferenca, foraDaLista: false, origens: [] }],
+  });
+  const RECONTAGENS_DO_VER = [
+    contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60),
+    contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2),
+    contada("CX-000050", "B-09", "2026-11-19T13:00:00.000Z", GG.sku_code, 16),
+  ];
+  const ver = (caixas: readonly WarehouseBox[], rodada: RodadaDaRecontagem = CONCLUIDA, recontagens: readonly Recontagem[] = RECONTAGENS_DO_VER) =>
+    rodadaDaContagem({
+      cliente: BTG,
+      prateleiras: prateleirasDaContagem({ cliente: BTG, posicoes: POSICOES_DO_VER, caixas, abertura: ABERTURA_DO_VER, saldos: [] }),
+      caixas,
+      recontagens,
+      guardas: [{ status: "planned", customer_code: BTG, destination_location_id: "B-09", receipt_number: "AVL-1" }],
+      reservas: [{ sku_code: P.sku_code, location_id: "A-01", status: "picked", order_number: "PED-0009", customer_code: BTG }],
+      rodada,
+      agora: AGORA_DO_VER,
+    });
+  const linhas = (rodada: RodadaDaContagem) =>
+    rodada.ruas.flatMap((rua) => rua.prateleiras.map((prateleira) => [prateleira.posicao, prateleira.estado, prateleira.total, prateleira.confirmadas, prateleira.resumo, prateleira.bloqueio]));
+
+  it("a caixa recontada e movida depois do fechamento fica na prateleira em que foi contada, confirmada", () => {
+    const rodada = ver(HOJE);
+    // Antes: a A-01 com 2 caixas e a B-09 "em contagem · 1 de 2", com a CX-000041 sem recontagem.
+    expect(linhas(rodada)).toEqual([
+      ["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null],
+      ["B-09", "contada", 1, 1, "1 caixa · 1 item · 16 un.", null],
+    ]);
+    const a01 = rodada.ruas[0].prateleiras[0];
+    expect(a01).toMatchObject({ vazias: 1, comDiferenca: 1, diferenca: -2 });
+    expect(seloDaPrateleira(a01, AGORA_DO_VER)).toBe("contada 19/11 09:10 · 1 diferença · −2 un.");
+    expect(rodada).toMatchObject({ prateleiras: 2, prateleirasContadas: 2, caixas: 4, caixasConfirmadas: 4, caixasComDiferenca: 1, diferenca: -2, concluida: FECHAMENTO });
+  });
+
+  it("a rodada aberta segue a posição de hoje: a bancada grava nela", () => {
+    expect(linhas(ver(HOJE, { ...CONCLUIDA, fim: null }))).toEqual([
+      ["A-01", "contada", 2, 2, "1 caixa · 1 item · 60 un.", "em separação · PED-0009"],
+      ["B-09", "em_contagem", 2, 1, "2 caixas · 2 itens · 74 un.", "guarda aberta · AVL-1"],
+    ]);
+  });
+
+  it("a caixa que a rodada não recontou fica onde estava no fechamento; a guardada depois dele e a esvaziada antes dele não entram", () => {
+    const caixas = [
+      ...HOJE,
+      // Na A-02 no fechamento e movida depois dele para a B-09: volta à A-02, de onde o mover a tirou.
+      caixa("CX-000060", "B-09", { unit_count: 10, moved_at: "2026-11-20T10:00:00.000Z", moved_from_location_id: "A-02" }),
+      // Movida antes do fechamento: estava onde está.
+      caixa("CX-000063", "A-02", { unit_count: 7, moved_at: "2026-11-18T09:00:00.000Z", moved_from_location_id: "B-09" }),
+      // Na A-02 no fechamento e esvaziada pela separação depois dele: conta, sem o que tinha (a separação já tirou).
+      caixa("CX-000061", "A-02", { status: "emptied", emptied_at: "2026-11-21T09:00:00.000Z", unit_count: 4, taken_lines: [{ sku_code: P.sku_code, qty: 4 }], taken_units: 4 }),
+      // Esvaziada antes do fechamento, e guardada depois dele: nenhuma das duas estava na rodada.
+      caixa("CX-000062", "A-02", { status: "emptied", emptied_at: "2026-11-18T09:00:00.000Z", unit_count: 3, taken_lines: [{ sku_code: P.sku_code, qty: 3 }], taken_units: 3 }),
+      caixa("CX-000070", "B-09", { unit_count: 5, stored_at: "2026-11-20T11:00:00.000Z" }),
+    ];
+    const rodada = ver(caixas);
+    expect(linhas(rodada)).toEqual([
+      ["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null],
+      ["A-02", "por_contar", 3, 0, "3 caixas · 2 itens · 17 un.", null],
+      ["B-09", "contada", 1, 1, "1 caixa · 1 item · 16 un.", null],
+    ]);
+    expect(rodada).toMatchObject({ prateleiras: 3, prateleirasContadas: 2, caixas: 7, caixasConfirmadas: 4 });
+  });
+
+  it("o resumo leva o que a rodada contou em cada caixa recontada, mesmo com a separação depois do fechamento", () => {
+    const caixas = [
+      // Contada com 60 na A-01; a separação tirou 9 depois do fechamento.
+      ...HOJE.map((registro) => (registro.code === "CX-000040" ? { ...registro, taken_lines: [{ sku_code: P.sku_code, qty: 9 }], taken_units: 9 } : registro)),
+      // Contada com 10 na A-01; a separação a esvaziou depois do fechamento.
+      caixa("CX-000043", "A-01", { status: "emptied", emptied_at: "2026-11-21T09:00:00.000Z", unit_count: 10, taken_lines: [{ sku_code: P.sku_code, qty: 10 }], taken_units: 10 }),
+    ];
+    const recontagens = [...RECONTAGENS_DO_VER, contada("CX-000043", "A-01", "2026-11-19T12:07:00.000Z", P.sku_code, 10)];
+    // Antes: 119 un., a folha de hoje para a CX-000040 (51) e a contagem para a CX-000043 (10).
+    expect(linhas(ver(caixas, CONCLUIDA, recontagens))[0]).toEqual(["A-01", "contada", 4, 4, "3 caixas · 2 itens · 128 un.", null]);
+  });
+
+  it("a caixa esvaziada por uma recontagem fora da rodada antes do fechamento não conta nela, como no fechamento do servidor", () => {
+    // Recontada na A-02 nesta rodada e, antes do fechamento, contada vazia sem rodada (a recontagem apaga a rodada da caixa).
+    const caixas = [
+      ...HOJE,
+      caixa("CX-000044", "A-02", {
+        status: "emptied",
+        emptied_at: "2026-11-19T15:00:00.000Z",
+        unit_count: 5,
+        last_recount_id: "brc_sem_rodada",
+        last_recounted_at: "2026-11-19T15:00:00.000Z",
+        emptied_recount_id: "brc_sem_rodada",
+      }),
+    ];
+    const recontagens = [...RECONTAGENS_DO_VER, contada("CX-000044", "A-02", "2026-11-19T12:20:00.000Z", P.sku_code, 5)];
+    // Antes: a A-02 "contada · 1 caixa vazia saiu", com uma caixa que o fechamento não contou.
+    expect(linhas(ver(caixas, CONCLUIDA, recontagens)).map(([local]) => local)).toEqual(["A-01", "B-09"]);
+  });
+
+  it("a prateleira que a rodada não contou fica \"contada antes\" só com a recontagem de antes do fechamento", () => {
+    const caixas = [
+      ...HOJE,
+      // Recontada numa rodada de 16/11, antes desta.
+      caixa("CX-000064", "A-02", { unit_count: 5, last_recount_id: "brc_16", last_recounted_at: "2026-11-16T18:00:00.000Z", last_recount_round_id: "recontagem-2026-11-16" }),
+      // Recontada numa rodada de 21/11, depois do fechamento desta.
+      caixa("CX-000065", "A-03", { unit_count: 3, last_recount_id: "brc_21", last_recounted_at: "2026-11-21T10:00:00.000Z", last_recount_round_id: "cr_2" }),
+    ];
+    const rodada = ver(caixas);
+    expect(rodada.ruas[0].prateleiras.map((prateleira) => [prateleira.posicao, prateleira.estado, prateleira.contadaEm])).toEqual([
+      ["A-01", "contada", null],
+      ["A-02", "contada_antes", "16/11"],
+      ["A-03", "por_contar", null],
+    ]);
+  });
+
+  it("por item, a prateleira de onde saiu a caixa com o item continua na rodada, e a de onde ela foi depois fica fora", () => {
+    const porItem: RodadaDaRecontagem = {
+      id: "cr_m",
+      titulo: "Contagem de Polo Masculino Piquet Preto · M · 19/11/2026",
+      alcance: { tipo: "item", sku: M.sku_code, nome: "Polo Masculino Piquet Preto · M" },
+      inicio: { quando: "2026-11-19T11:00:00.000Z", quem: "Guilherme Dantas" },
+      fim: FECHAMENTO,
+    };
+    const caixas = HOJE.map((registro) => (registro.code === "CX-000042" ? { ...registro, last_recount_round_id: "cr_m" } : registro));
+    const recontagens = [contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60, 0, "cr_m"), contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2, "cr_m")];
+    // Antes: só a B-09, para onde a caixa com a M foi depois, por contar; a A-01, contada, sumia.
+    expect(linhas(ver(caixas, porItem, recontagens))).toEqual([["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null]]);
   });
 });
 
