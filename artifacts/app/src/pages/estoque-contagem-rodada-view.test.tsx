@@ -182,16 +182,65 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
-  it("a rodada concluída, só leitura: o período no cartão, sem Continuar e sem ação nas prateleiras", async () => {
-    const concluida = { ...RODADA_DO_DIA, concluida: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } };
-    const html = render("pronto", { rodada: concluida, somenteLeitura: true });
-    const textos = textosDaTela(html);
-    expect(textos).toContain("17/11 a 21/11 · Guilherme Dantas");
-    expect(textos).not.toContain("começou 08:10 · Guilherme Dantas");
-    expect(textos.some((texto) => texto.startsWith("Continuar"))).toBe(false);
-    expect(textos).not.toContain("Ver");
-    expect(textos).not.toContain("Contar");
-    expect(textos).toContain("contada 08:22 · 1 diferença · −3 un.");
+  it("a rodada concluída, só leitura: cada caixa onde foi contada, o período no cartão, sem Continuar, sem ação e sem o que impede recontar hoje", async () => {
+    // Depois do fechamento, o Mover levou a CX-000011, recontada na A-01, para a B-09 (achado de 19/11/2026).
+    const deHoje = CAIXAS.map((registro) => (registro.code === "CX-000011" ? { ...registro, location_id: "B-09", moved_at: "2026-11-21T15:00:00.000Z", moved_from_location_id: "A-01" } : registro));
+    const folhaDeHoje = prateleirasDaContagem({
+      cliente: BTG,
+      posicoes: [posicao("A-01", 1), posicao("A-02", 2), posicao("B-09", 20)],
+      caixas: deHoje,
+      abertura: ABERTURA,
+      saldos: [
+        { location_id: "A-01", sku_code: P.sku_code, qty_on_hand: 60, customer_code: BTG },
+        { location_id: "A-02", sku_code: M.sku_code, qty_on_hand: 63, customer_code: BTG },
+        { location_id: "B-09", sku_code: P.sku_code, qty_on_hand: 60, customer_code: BTG },
+        { location_id: "B-09", sku_code: M.sku_code, qty_on_hand: 60, customer_code: BTG },
+      ],
+    });
+    const concluida = rodadaDaContagem({
+      cliente: BTG,
+      prateleiras: folhaDeHoje,
+      caixas: deHoje,
+      recontagens: [recontada("CX-000010", "A-01", "2026-11-17T11:10:00.000Z"), recontada("CX-000011", "A-01", "2026-11-17T11:22:00.000Z", -3)],
+      guardas: [{ status: "planned", customer_code: BTG, destination_location_id: "A-02", receipt_number: "AVL-7C21A9F0" }],
+      reservas: [{ sku_code: P.sku_code, location_id: "B-09", status: "picked", order_number: "PED-0002", customer_code: BTG }],
+      rodada: { ...RODADA_DA_RECONTAGEM_GERAL, fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } },
+      agora: AGORA,
+    });
+    const html = render("pronto", { rodada: concluida, somenteLeitura: true, relatorio: relatorioCaixasSaldo(folhaDeHoje) });
+    expect(textosDaTela(html)).toEqual([
+      "Contagem",
+      "Contagem por caixa",
+      "Caixas × saldo",
+      "Imprimir folha",
+      "Recontagem geral · 17/11/2026",
+      "17/11 a 21/11 · Guilherme Dantas",
+      "prateleiras",
+      "1",
+      "de 3",
+      "caixas",
+      "2",
+      "de 4",
+      "caixas com diferença",
+      "diferença líquida",
+      "−3 un.",
+      "Rua A",
+      "2 prateleiras · 1 contada",
+      "A-01",
+      "2 caixas",
+      "2 itens · 120 un.",
+      "contada 08:22 · 1 diferença · −3 un.",
+      "A-02",
+      "1 caixa",
+      "1 item · 60 un.",
+      "Rua B",
+      "1 prateleira · por contar",
+      "B-09",
+      "2 prateleiras iguais · 1 diferente",
+      "caixas 60 · saldo 63",
+      "−3",
+      "Relatório completo",
+    ]);
     expect(await violacoesDeAcessibilidade(html)).toEqual([]);
   });
 
