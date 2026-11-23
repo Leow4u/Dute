@@ -8,7 +8,7 @@ import {
   dataCurta,
   unidadesComSinal,
   type AlcanceDaRodada,
-  type CaixaGravada,
+  type CaixaDoFechamento,
   type Momento,
   type RodadaDaContagem,
   type RodadaDaRecontagem,
@@ -59,7 +59,7 @@ export type RodadaRegistrada = RodadaDaRecontagem & {
    * Onde estava cada caixa da rodada no fechamento, como ele a gravou
    * (`boxes_at_close`); null na aberta e nas concluídas antes da lista.
    */
-  caixasGravadas: CaixaGravada[] | null;
+  caixasDoFechamento: CaixaDoFechamento[] | null;
 };
 
 /** Quando e quem, do par `*_at` e `*_by` do documento; null sem instante válido. */
@@ -88,11 +88,12 @@ function alcanceDoDocumento(data: Record<string, unknown>): AlcanceDaRodada {
  * count-rounds.ts): a caixa com o código, a prateleira e a situação dela,
  * guardada ou esvaziada pela rodada; a linha fora disso não serve. Sem a
  * lista (as concluídas antes dela), null; a lista vazia é o registro de
- * nenhuma caixa no alcance.
+ * nenhuma caixa no alcance. A lista com caixas e nenhuma que sirva é um
+ * formato que a tela não conhece: null, para o "Ver" não ficar vazio.
  */
-function caixasGravadasLidas(valor: unknown): CaixaGravada[] | null {
+function caixasDoFechamentoLidas(valor: unknown): CaixaDoFechamento[] | null {
   if (!Array.isArray(valor)) return null;
-  return valor.flatMap((linha): CaixaGravada[] => {
+  const lidas = valor.flatMap((linha): CaixaDoFechamento[] => {
     const dado = linha && typeof linha === "object" ? (linha as Record<string, unknown>) : {};
     const code = chave(dado.code);
     const location_id = chave(dado.location_id);
@@ -101,6 +102,7 @@ function caixasGravadasLidas(valor: unknown): CaixaGravada[] | null {
     const sku_codes = Array.isArray(dado.sku_codes) ? dado.sku_codes.map((sku: unknown) => chave(sku)).filter(Boolean) : [];
     return [{ code, location_id, status, sku_codes }];
   });
+  return valor.length && !lidas.length ? null : lidas;
 }
 
 /** O documento de `count_rounds` como a tela o lê; null sem o cliente ou com status desconhecido. */
@@ -127,7 +129,7 @@ export function rodadaRegistrada(id: string, data: Record<string, unknown>): Rod
           diferenca: quantidade(data.difference_units),
         }
       : null,
-    caixasGravadas: concluida ? caixasGravadasLidas(data.boxes_at_close) : null,
+    caixasDoFechamento: concluida ? caixasDoFechamentoLidas(data.boxes_at_close) : null,
   };
 }
 

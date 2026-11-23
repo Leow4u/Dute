@@ -207,7 +207,7 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     const gravada = {
       ...CONCLUIDA,
       numeros: { prateleiras: 2, prateleirasContadas: 1, caixas: 2, caixasConfirmadas: 1, caixasComDiferenca: 0, diferenca: 0 },
-      caixasGravadas: [
+      caixasDoFechamento: [
         { code: "CX-000010", location_id: "A-01", status: "stored", sku_codes: ["BTG-000121"] },
         { code: "CX-000012", location_id: "A-02", status: "stored", sku_codes: ["BTG-000121"] },
       ],

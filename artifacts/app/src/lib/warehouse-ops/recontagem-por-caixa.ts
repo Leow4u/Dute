@@ -76,15 +76,15 @@ export type Momento = { quando: string; quem: string };
  * functions/wms, count-rounds.ts, caixasDoFechamento): onde estava, a
  * situação (guardada ou esvaziada pela rodada) e os itens.
  */
-export type CaixaGravada = Pick<WarehouseBox, "code" | "location_id" | "sku_codes"> & { status: "stored" | "emptied" };
+export type CaixaDoFechamento = Pick<WarehouseBox, "code" | "location_id" | "sku_codes"> & { status: "stored" | "emptied" };
 
 /**
  * Uma rodada de recontagem: o id que vai como `round_id`, o nome que a tela
  * mostra, o alcance e, no registro (`count_rounds`, rodadas-da-contagem.ts),
  * o começo, o fim e, na concluída, onde estava cada caixa no fechamento
- * (`caixasGravadas`; as concluídas antes da lista não a têm).
+ * (`caixasDoFechamento`; as concluídas antes da lista não a têm).
  */
-export type RodadaDaRecontagem = { id: string; titulo: string; alcance: AlcanceDaRodada; inicio: Momento | null; fim?: Momento | null; caixasGravadas?: readonly CaixaGravada[] | null };
+export type RodadaDaRecontagem = { id: string; titulo: string; alcance: AlcanceDaRodada; inicio: Momento | null; fim?: Momento | null; caixasDoFechamento?: readonly CaixaDoFechamento[] | null };
 
 /**
  * A recontagem geral das caixas da BTG, começada em 17/11/2026 antes do
@@ -972,7 +972,7 @@ function instanteDe(valor: string | null | undefined): number {
 /**
  * As caixas da rodada concluída como estavam no fechamento, na concluída sem
  * a lista que ele grava (as concluídas antes dela; com a lista, a regra é a
- * de caixasGravadasNoFechamento). O "Ver" das anteriores; achado de
+ * de caixasDaListaDoFechamento). O "Ver" das anteriores; achado de
  * 19/11/2026: depois da recontagem geral, o Mover levou caixas recontadas
  * para outras prateleiras, e o "Ver" as mostrava sem recontagem onde estão
  * hoje. A caixa recontada na rodada fica na prateleira da última recontagem
@@ -1005,24 +1005,24 @@ function caixasNoFechamento(caixas: readonly WarehouseBox[], ultimas: ReadonlyMa
 
 /**
  * As caixas da rodada concluída pela lista que o fechamento gravou
- * (`caixasGravadas`): cada uma na prateleira, na situação e com os itens de
- * lá, e o resto da caixa de hoje (o conteúdo, a última recontagem); a que não
- * está mais no cadastro, só com o que a lista diz. A caixa só guarda o
+ * (`caixasDoFechamento`): cada uma na prateleira, na situação e com os itens
+ * de lá, e o resto da caixa de hoje (o conteúdo, a última recontagem); a que
+ * não está mais no cadastro, só com o que a lista diz. A caixa só guarda o
  * estado de hoje e o último mover, e a lista não depende dela: a movida duas
  * vezes, a que ganhou o item depois e a que o desfazer da separação devolveu
  * ficam onde estavam. A recontagem de outra rodada depois do fechamento não é
  * a "contada antes" desta.
  */
-function caixasGravadasNoFechamento(gravadas: readonly CaixaGravada[], caixas: readonly WarehouseBox[], cliente: string, fechamento: string): WarehouseBox[] {
+function caixasDaListaDoFechamento(lista: readonly CaixaDoFechamento[], caixas: readonly WarehouseBox[], cliente: string, fechamento: string): WarehouseBox[] {
   const fim = instanteDe(fechamento);
   const deHoje = new Map(caixas.map((caixa) => [caixa.code, caixa] as const));
-  return gravadas.map((gravada): WarehouseBox => {
-    const caixa = deHoje.get(gravada.code) ?? warehouseBoxFromRecord({ code: gravada.code, customer_code: cliente });
+  return lista.map((noFechamento): WarehouseBox => {
+    const caixa = deHoje.get(noFechamento.code) ?? warehouseBoxFromRecord({ code: noFechamento.code, customer_code: cliente });
     return {
       ...caixa,
-      location_id: gravada.location_id,
-      status: gravada.status,
-      sku_codes: [...gravada.sku_codes],
+      location_id: noFechamento.location_id,
+      status: noFechamento.status,
+      sku_codes: [...noFechamento.sku_codes],
       last_recounted_at: instanteDe(caixa.last_recounted_at) > fim ? null : caixa.last_recounted_at,
     };
   });
@@ -1083,15 +1083,15 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
   const doCliente = dados.caixas.filter((caixa) => Boolean(dono) && belongsToCustomer(caixa, dono));
   const lidas = dados.recontagens.filter((recontagem) => recontagem.rodada === dados.rodada.id);
   const fechamento = dados.rodada.fim?.quando ?? null;
-  const gravadas = fechamento && dados.rodada.caixasGravadas ? caixasGravadasNoFechamento(dados.rodada.caixasGravadas, doCliente, dono, fechamento) : null;
+  const daLista = fechamento && dados.rodada.caixasDoFechamento ? caixasDaListaDoFechamento(dados.rodada.caixasDoFechamento, doCliente, dono, fechamento) : null;
   // A caixa contada vazia não tem linha: a recontagem dela vem do registro da caixa (na lista, esvaziada como lá).
-  const recontagens = [...lidas, ...recontagensDasCaixasContadasVazias(gravadas ?? doCliente, lidas, dados.rodada.id)];
+  const recontagens = [...lidas, ...recontagensDasCaixasContadasVazias(daLista ?? doCliente, lidas, dados.rodada.id)];
   const ultimas = ultimaDeCadaCaixa(recontagens);
-  const caixas = gravadas ?? (fechamento ? caixasNoFechamento(doCliente, ultimas, dados.rodada.id, fechamento) : doCliente);
+  const caixas = daLista ?? (fechamento ? caixasNoFechamento(doCliente, ultimas, dados.rodada.id, fechamento) : doCliente);
   const vaziasPorLocal = new Map<string, WarehouseBox[]>();
   for (const caixa of caixas) {
     // Na lista do fechamento, a esvaziada é a que a rodada esvaziou.
-    if (gravadas ? caixa.status !== "emptied" : !esvaziadaNaRodada(caixa, dados.rodada.id)) continue;
+    if (daLista ? caixa.status !== "emptied" : !esvaziadaNaRodada(caixa, dados.rodada.id)) continue;
     const local = chave(caixa.location_id);
     vaziasPorLocal.set(local, [...(vaziasPorLocal.get(local) ?? []), caixa]);
   }
@@ -1108,7 +1108,7 @@ export function rodadaDaContagem(dados: DadosDaRodada): RodadaDaContagem {
     const vazias = vaziasPorLocal.get(prateleira.posicao) ?? [];
     if (!prateleira.guardadas && !prateleira.aCaminho && !vazias.length) continue;
     // As prateleiras da lista do fechamento já são as do alcance, pelos itens de lá: o servidor grava só as dos números.
-    if (!gravadas && !prateleiraNoAlcance(dados.rodada.alcance, prateleira.posicao, prateleira.rua, caixas, dados.rodada.id)) continue;
+    if (!daLista && !prateleiraNoAlcance(dados.rodada.alcance, prateleira.posicao, prateleira.rua, caixas, dados.rodada.id)) continue;
     const guardadas = guardadasPorLocal.get(prateleira.posicao) ?? [];
     const daRodada = [...guardadas, ...vazias];
     const confirmadas = daRodada.flatMap((caixa) => {

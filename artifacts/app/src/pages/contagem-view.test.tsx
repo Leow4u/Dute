@@ -47,7 +47,7 @@ const CONCLUIDA: RodadaRegistrada = {
   inicio: { quando: "2026-11-17T11:10:00.000Z", quem: "Guilherme Dantas" },
   fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" },
   numeros: { prateleiras: 5, prateleirasContadas: 5, caixas: 6, caixasConfirmadas: 6, caixasComDiferenca: 1, diferenca: -3 },
-  caixasGravadas: null,
+  caixasDoFechamento: null,
 };
 const ABERTURA: RegistroDaAberturaConcluida = {
   titulo: "Inventário de abertura",

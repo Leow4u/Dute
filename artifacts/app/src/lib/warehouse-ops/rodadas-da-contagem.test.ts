@@ -58,7 +58,7 @@ describe("o documento da rodada", () => {
       inicio: { quando: "2026-11-19T11:10:00.000Z", quem: "Guilherme Dantas" },
       fim: null,
       numeros: null,
-      caixasGravadas: null,
+      caixasDoFechamento: null,
     });
     expect(rodadaRegistrada(RODADA_DA_RECONTAGEM_GERAL.id, CONCLUIDA)).toEqual({
       id: RODADA_DA_RECONTAGEM_GERAL.id,
@@ -69,7 +69,7 @@ describe("o documento da rodada", () => {
       inicio: { quando: "2026-11-17T11:10:00.000Z", quem: "Guilherme Dantas" },
       fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" },
       numeros: { prateleiras: 5, prateleirasContadas: 5, caixas: 6, caixasConfirmadas: 6, caixasComDiferenca: 1, diferenca: -3 },
-      caixasGravadas: null,
+      caixasDoFechamento: null,
     });
   });
 
@@ -90,15 +90,21 @@ describe("o documento da rodada", () => {
         null,
       ],
     });
-    expect(gravada?.caixasGravadas).toEqual([
+    expect(gravada?.caixasDoFechamento).toEqual([
       { code: "CX-000040", location_id: "A-01", status: "stored", sku_codes: ["BTG-000121"] },
       { code: "CX-000042", location_id: "A-01", status: "emptied", sku_codes: [] },
       { code: "CX-000050", location_id: "B-09", status: "stored", sku_codes: [] },
     ]);
     // A lista vazia é um registro: nenhuma caixa no alcance no fechamento.
-    expect(rodadaRegistrada("cr_11", { ...CONCLUIDA, boxes_at_close: [] })?.caixasGravadas).toEqual([]);
-    expect(rodadaRegistrada("cr_12", { ...CONCLUIDA, boxes_at_close: "CX-000040" })?.caixasGravadas).toBeNull();
-    expect(rodadaRegistrada("cr_13", { ...ABERTA, boxes_at_close: [] })?.caixasGravadas).toBeNull();
+    expect(rodadaRegistrada("cr_11", { ...CONCLUIDA, boxes_at_close: [] })?.caixasDoFechamento).toEqual([]);
+    expect(rodadaRegistrada("cr_12", { ...CONCLUIDA, boxes_at_close: "CX-000040" })?.caixasDoFechamento).toBeNull();
+    expect(rodadaRegistrada("cr_13", { ...ABERTA, boxes_at_close: [] })?.caixasDoFechamento).toBeNull();
+  });
+
+  // Uma lista com caixas e nenhuma que sirva é um formato que a tela não conhece (um campo renomeado no servidor, por
+  // exemplo): lida como vazia, o "Ver" ficaria sem prateleira enquanto o cartão diz "5 prateleiras".
+  it("a lista com caixas e nenhuma que sirva não vale como registro: o Ver fica com a regra de antes dela", () => {
+    expect(rodadaRegistrada("cr_14", { ...CONCLUIDA, boxes_at_close: [{ code: "CX-000040", location: "A-01", status: "stored" }, "CX-000041"] })?.caixasDoFechamento).toBeNull();
   });
 
   it("o alcance por rua e por item; sem o nome do item, o SKU; sem nome de quem, o e-mail", () => {
