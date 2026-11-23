@@ -275,6 +275,27 @@ describe("Concluir a rodada", () => {
     assert.equal((await todos("operational_operations")).filter((recibo) => recibo.kind === "inventory.count_round.complete").length, 1);
   });
 
+  // O "Ver" da rodada concluída (PR 639) adivinhava, pela caixa de hoje e pelo último mover, onde cada caixa estava no
+  // fechamento. Agora o fechamento grava a lista no documento da rodada, com o mesmo agrupamento dos números.
+  it("grava onde estava cada caixa da rodada, com a situação e os itens; por rua, só as da rua; a resposta, o recibo e o evento não levam a lista", async () => {
+    const geral = await iniciar({ scope: "general" });
+    await recontar({ box_code: "CX-000010", location_id: "A-03", lines: [{ sku_code: POLO_P, counted_qty: 57 }], round_id: geral.round_id });
+    const concluida = await concluir(geral.round_id);
+    assert.deepEqual((await rodada(geral.round_id)).boxes_at_close, [
+      { code: "CX-000010", location_id: "A-03", status: "stored", sku_codes: [POLO_P] },
+      { code: "CX-000014", location_id: "B-01", status: "stored", sku_codes: [POLO_P] },
+    ]);
+    assert.equal("boxes_at_close" in concluida, false);
+    const [evento] = await eventos(ROUND_CLOSED_EVENT_TYPE);
+    assert.equal("boxes_at_close" in ((evento?.payload ?? {}) as Record<string, unknown>), false);
+    const [recibo] = (await todos("operational_operations")).filter((operacao) => operacao.kind === "inventory.count_round.complete");
+    assert.equal("boxes_at_close" in ((recibo?.result ?? {}) as Record<string, unknown>), false);
+
+    const daRua = await iniciar({ scope: "aisle", aisle: "B" });
+    await concluir(daRua.round_id);
+    assert.deepEqual((await rodada(daRua.round_id)).boxes_at_close, [{ code: "CX-000014", location_id: "B-01", status: "stored", sku_codes: [POLO_P] }]);
+  });
+
   // A caixa que cede a última peça ao fora da lista de outra fica guardada sem nada na lista até alguém contá-la vazia
   // (decisão de 17/11/2026), como a da abertura que perdeu as linhas. Contada vazia, ela não grava linha em
   // `cycle_counts` (não há item), e antes ficava fora das confirmadas: a prateleira nunca fechava (a A-01 e a A-02 da
@@ -306,6 +327,12 @@ describe("Concluir a rodada", () => {
       [2, 2, 3, 3, 1, 60, 3],
     );
     assert.equal((await eventos(ROUND_CLOSED_EVENT_TYPE))[0]?.description, "2 prateleiras · 3 caixas · 1 com diferença · +60 un.");
+    // No registro do fechamento, a CX-000010 fica esvaziada, na prateleira em que foi contada vazia.
+    assert.deepEqual((await rodada(aberta.round_id)).boxes_at_close, [
+      { code: "CX-000010", location_id: "A-03", status: "emptied", sku_codes: [POLO_P] },
+      { code: "CX-000011", location_id: "A-03", status: "stored", sku_codes: [BONE, POLO_P] },
+      { code: "CX-000014", location_id: "B-01", status: "stored", sku_codes: [POLO_P] },
+    ]);
   });
 
   it("concluída, não conclui de novo; de outro cliente, permission-denied; inexistente, not-found", async () => {
@@ -337,6 +364,8 @@ describe("Concluir a rodada", () => {
     assert.equal((doc.started_by as { name?: string }).name, "Rafael");
     const primeira = (await todos("cycle_counts")).map((linha) => String(linha.occurred_at)).sort()[0];
     assert.equal(doc.started_at, primeira);
+    // O documento que o fechamento cria também leva onde estava cada caixa.
+    assert.deepEqual((doc.boxes_at_close as Array<{ code: string; location_id: string }>).map((caixa) => `${caixa.code} ${caixa.location_id}`), ["CX-000010 A-03", "CX-000014 B-01"]);
     // Concluída, a recontagem geral deixa de valer como rodada: iniciar outra passa.
     await iniciar({ scope: "general" });
   });

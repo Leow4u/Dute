@@ -214,6 +214,21 @@ export type NumerosDaRodada = {
 type Recontagem = { id: string; box: string; location: string; at: string; deltas: number[] };
 
 /**
+ * As prateleiras da rodada, cada uma com as caixas que contam nela
+ * (`contaNaRodada`): as do alcance com caixa. O agrupamento dos números e
+ * das caixas do fechamento.
+ */
+function prateleirasDaRodada(caixas: readonly CaixaDaRodada[], alcance: AlcanceDaRodada, roundId: string): Array<[string, CaixaDaRodada[]]> {
+  const porLocal = new Map<string, CaixaDaRodada[]>();
+  for (const caixa of caixas) {
+    if (!contaNaRodada(caixa, roundId)) continue;
+    const local = chave(caixa.location_id);
+    if (local) porLocal.set(local, [...(porLocal.get(local) ?? []), caixa]);
+  }
+  return [...porLocal].filter(([local, daPrateleira]) => prateleiraNoAlcance(alcance, local, daPrateleira, roundId));
+}
+
+/**
  * A recontagem da caixa contada vazia, como uma linha da rodada. A caixa
  * guardada sem nada na lista (o saldo zero em todos os itens: a que cede a
  * última peça ao fora da lista de outra, que fica guardada assim até alguém
@@ -256,13 +271,7 @@ export function linhasDasCaixasContadasVazias(caixas: readonly CaixaDaRodada[], 
  * da rodada: o começo da recontagem geral sem documento.
  */
 export function numerosDaRodada(linhas: readonly LinhaDaRodada[], caixas: readonly CaixaDaRodada[], alcance: AlcanceDaRodada, roundId: string): NumerosDaRodada & { primeira: LinhaDaRodada | null } {
-  const porLocal = new Map<string, CaixaDaRodada[]>();
-  for (const caixa of caixas) {
-    if (!contaNaRodada(caixa, roundId)) continue;
-    const local = chave(caixa.location_id);
-    if (local) porLocal.set(local, [...(porLocal.get(local) ?? []), caixa]);
-  }
-  const prateleiras = [...porLocal].filter(([local, daPrateleira]) => prateleiraNoAlcance(alcance, local, daPrateleira, roundId));
+  const prateleiras = prateleirasDaRodada(caixas, alcance, roundId);
 
   const recontagens = new Map<string, Recontagem>();
   let primeira: LinhaDaRodada | null = null;
@@ -298,6 +307,26 @@ export function numerosDaRodada(linhas: readonly LinhaDaRodada[], caixas: readon
     }
   }
   return { ...numeros, primeira };
+}
+
+/** Uma caixa da rodada como estava no fechamento: a prateleira, a situação (guardada ou esvaziada pela rodada) e os itens. */
+export type CaixaDoFechamento = { code: string; location_id: string; status: "stored" | "emptied"; sku_codes: string[] };
+
+/**
+ * As caixas da rodada como estavam no fechamento, gravadas no documento
+ * dela (`boxes_at_close`): as mesmas caixas dos números, nas mesmas
+ * prateleiras, em ordem de prateleira e de código. O "Ver" da concluída
+ * (recontagem-por-caixa.ts, rodadaDaContagem) monta as prateleiras por
+ * elas, porque a caixa só guarda o estado de hoje e o último mover (PR 639).
+ * Uma entrada pequena por caixa: a BTG tem cerca de 150.
+ */
+export function caixasDoFechamento(caixas: readonly CaixaDaRodada[], alcance: AlcanceDaRodada, roundId: string): CaixaDoFechamento[] {
+  const ordem = (esquerda: string, direita: string) => (esquerda < direita ? -1 : esquerda > direita ? 1 : 0);
+  return prateleirasDaRodada(caixas, alcance, roundId)
+    .flatMap(([local, daPrateleira]) =>
+      daPrateleira.map((caixa): CaixaDoFechamento => ({ code: chave(caixa.code), location_id: local, status: caixa.status === "emptied" ? "emptied" : "stored", sku_codes: [...caixa.sku_codes] })),
+    )
+    .sort((esquerda, direita) => ordem(esquerda.location_id, direita.location_id) || ordem(esquerda.code, direita.code));
 }
 
 // ------------------------------------------------------------------- apoio
@@ -586,7 +615,8 @@ export function caixaDaRodada(id: string, data: Data): CaixaDaRodada {
 
 /**
  * Conclui a rodada do cliente com os números das recontagens dela: a mesma
- * conta da tela, feita aqui, na transação. A rodada concluída não aceita
+ * conta da tela, feita aqui, na transação, com onde estava cada caixa da
+ * rodada (`boxes_at_close`, caixasDoFechamento). A rodada concluída não aceita
  * mais recontagem (box-recount.ts). A recontagem geral de 17/11, sem
  * documento, vira documento concluído aqui, com o começo da primeira
  * recontagem; sem recontagem nenhuma, não é rodada.
@@ -621,13 +651,14 @@ export async function completeCountRoundTransaction(db: Firestore, input: Entrad
       naoExiste();
     }
     const alcance: AlcanceDaRodada = existente ? alcanceDoDocumento(existente) : { scope: "general" };
-    const [linhas, caixas] = await Promise.all([
+    const [linhas, lidas] = await Promise.all([
       readRows(transaction, db.collection(CYCLE_COUNTS_COLLECTION).where("customer_code", "==", customerCode).where("round_id", "==", roundId)),
       readRows(transaction, db.collection(WAREHOUSE_BOXES_COLLECTION).where("customer_code", "==", customerCode)),
     ]);
+    const caixas = lidas.map((row) => caixaDaRodada(row.id, row.data));
     const { primeira, ...numeros } = numerosDaRodada(
       linhas.flatMap((row) => linhaDaRodada(row.data) ?? []),
-      caixas.map((row) => caixaDaRodada(row.id, row.data)),
+      caixas,
       alcance,
       roundId,
     );
@@ -639,7 +670,8 @@ export async function completeCountRoundTransaction(db: Firestore, input: Entrad
     const aisle = alcance.scope === "aisle" ? alcance.aisle : undefined;
     const skuCode = alcance.scope === "item" ? alcance.sku_code : undefined;
 
-    const fechamento = { status: "closed" as const, closed_at: closedAt, closed_by: by, ...numeros, updated_at: FieldValue.serverTimestamp() };
+    // Onde estava cada caixa da rodada fica só no documento dela: a resposta, o recibo e o evento levam os números.
+    const fechamento = { status: "closed" as const, closed_at: closedAt, closed_by: by, ...numeros, boxes_at_close: caixasDoFechamento(caixas, alcance, roundId), updated_at: FieldValue.serverTimestamp() };
     if (existente) {
       transaction.update(roundRef, fechamento);
     } else {
