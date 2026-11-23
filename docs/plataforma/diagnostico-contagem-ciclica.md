@@ -320,7 +320,7 @@ que está certo e vale manter.
   caminho. *O que fazer:* hoje, listar esses casos à
   parte e gravá-los pelo plano do acerto (bloco `transferencias`), que faz as
   duas pernas juntas; no código, a mensagem certa e uma ação "Transferir" da
-  coordenação (seção 6). *No código desde 23/11/2026:* a ficha do item com
+  coordenação (seção 6). *No código desde 23/11/2026 (PR 641):* a ficha do item com
   caixa guardada não mostra "Ajustar saldo", e "Contar em …" é a ação
   principal dela; o lançamento manual fica só para o item sem caixa
   (`pages/estoque.tsx`, trava em `estoque.carregamento.test.tsx`).
