@@ -197,11 +197,16 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
         { location_id: "B-09", sku_code: M.sku_code, qty_on_hand: 60, customer_code: BTG },
       ],
     });
+    // As recontagens com o item contado, como as linhas de cycle_counts: o resumo da concluída leva o que a rodada contou.
+    const comItem = (recontagem: Recontagem, sku: string): Recontagem => ({
+      ...recontagem,
+      itens: [{ sku, codigo: "", nome: sku, esperado: recontagem.esperado, contado: recontagem.contado, diferenca: recontagem.diferenca, foraDaLista: false, origens: [] }],
+    });
     const concluida = rodadaDaContagem({
       cliente: BTG,
       prateleiras: folhaDeHoje,
       caixas: deHoje,
-      recontagens: [recontada("CX-000010", "A-01", "2026-11-17T11:10:00.000Z"), recontada("CX-000011", "A-01", "2026-11-17T11:22:00.000Z", -3)],
+      recontagens: [comItem(recontada("CX-000010", "A-01", "2026-11-17T11:10:00.000Z"), P.sku_code), comItem(recontada("CX-000011", "A-01", "2026-11-17T11:22:00.000Z", -3), M.sku_code)],
       guardas: [{ status: "planned", customer_code: BTG, destination_location_id: "A-02", receipt_number: "AVL-7C21A9F0" }],
       reservas: [{ sku_code: P.sku_code, location_id: "B-09", status: "picked", order_number: "PED-0002", customer_code: BTG }],
       rodada: { ...RODADA_DA_RECONTAGEM_GERAL, fim: { quando: "2026-11-21T14:00:00.000Z", quem: "Guilherme Dantas" } },
@@ -228,7 +233,7 @@ describe("Estoque › Contagem por caixa, a rodada", () => {
       "2 prateleiras · 1 contada",
       "A-01",
       "2 caixas",
-      "2 itens · 120 un.",
+      "2 itens · 117 un.",
       "contada 08:22 · 1 diferença · −3 un.",
       "A-02",
       "1 caixa",

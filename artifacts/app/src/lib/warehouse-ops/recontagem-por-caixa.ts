@@ -978,9 +978,7 @@ function caixasNoFechamento(caixas: readonly WarehouseBox[], ultimas: ReadonlyMa
   return caixas.flatMap((caixa): WarehouseBox[] => {
     const recontagem = ultimas.get(caixa.code);
     const vaziaNoFechamento = caixa.status === "emptied" && !depois(caixa.emptied_at);
-    if (recontagem) {
-      return [{ ...caixa, location_id: recontagem.posicao, status: vaziaNoFechamento ? "emptied" : "stored", ...(vaziaNoFechamento ? { last_recount_round_id: rodada } : {}) }];
-    }
+    if (recontagem) return [{ ...caixa, location_id: recontagem.posicao, status: vaziaNoFechamento ? "emptied" : "stored" }];
     if (vaziaNoFechamento) return esvaziadaNaRodada(caixa, rodada) ? [caixa] : [];
     if ((caixa.status !== "stored" && caixa.status !== "emptied") || depois(caixa.stored_at)) return [];
     return [
@@ -1002,9 +1000,10 @@ type ConteudoDaPrateleira = Pick<PrateleiraDaContagem, "posicao" | "rua" | "guar
  * As prateleiras da rodada concluída, das caixas como estavam no fechamento
  * (caixasNoFechamento: as guardadas e as que a rodada esvaziou, por
  * prateleira), na ordem de caminhada de hoje; a que a folha de hoje não tem
- * vem depois, em ordem. O que cada caixa guardada tem é o da folha de hoje, a
- * mesma conta da rodada aberta; a que não está mais guardada leva o que a
- * rodada contou nela, e a não recontada, nada.
+ * vem depois, em ordem. O que cada caixa guardada tem: a recontada, o que a
+ * rodada contou nela (a separação depois do fechamento não muda); a não
+ * recontada, o que a folha de hoje dá a ela, e a que não está mais guardada,
+ * nada.
  */
 function prateleirasNoFechamento(
   guardadasPorLocal: ReadonlyMap<string, readonly WarehouseBox[]>,
@@ -1021,15 +1020,15 @@ function prateleirasNoFechamento(
     const itens = new Set<string>();
     let unidades = 0;
     for (const caixa of guardadas) {
-      const conteudo = daFolha.get(caixa.code);
-      if (conteudo) {
-        for (const linha of conteudo.linhas) itens.add(linha.sku);
-        unidades += conteudo.esperado;
+      const recontagem = ultimas.get(caixa.code);
+      if (recontagem) {
+        for (const item of recontagem.itens) if (item.contado > 0) itens.add(item.sku);
+        unidades += recontagem.contado;
         continue;
       }
-      const recontagem = ultimas.get(caixa.code);
-      for (const item of recontagem?.itens ?? []) if (item.contado > 0) itens.add(item.sku);
-      unidades += recontagem?.contado ?? 0;
+      const conteudo = daFolha.get(caixa.code);
+      for (const linha of conteudo?.linhas ?? []) if (linha.esperado > 0) itens.add(linha.sku);
+      unidades += conteudo?.esperado ?? 0;
     }
     return { posicao: local, rua: ruas.get(local) ?? ruaDoCodigo(local), guardadas: guardadas.length, aCaminho: 0, itens: itens.size, unidades };
   });

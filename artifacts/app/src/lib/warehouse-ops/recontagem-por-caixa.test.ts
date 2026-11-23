@@ -604,7 +604,7 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
   const AGORA_DO_VER = new Date("2026-11-23T13:00:00.000Z");
   const FECHAMENTO = { quando: "2026-11-19T16:55:00.000Z", quem: "Guilherme Dantas" };
   const CONCLUIDA: RodadaDaRecontagem = { ...RODADA_DA_RECONTAGEM_GERAL, inicio: { quando: "2026-11-17T11:00:00.000Z", quem: "Guilherme Dantas" }, fim: FECHAMENTO };
-  const POSICOES_DO_VER = [posicao("A-01", 1), posicao("A-02", 2), posicao("B-09", 20)];
+  const POSICOES_DO_VER = [posicao("A-01", 1), posicao("A-02", 2), posicao("A-03", 3), posicao("B-09", 20)];
   const ABERTURA_DO_VER: LinhaDeEntrada[] = [
     { box_code: "CX-000040", ...P, counted_qty: 60 },
     { box_code: "CX-000041", ...M, counted_qty: 60 },
@@ -637,7 +637,8 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
     }),
     caixa("CX-000050", "B-09", { unit_count: 16, sku_codes: [GG.sku_code] }),
   ];
-  const contada = (code: string, local: string, quando: string, esperado: number, diferenca = 0, rodada = RODADA): Recontagem => ({
+  // Uma recontagem de um item, como as linhas de cycle_counts a dão.
+  const contada = (code: string, local: string, quando: string, sku: string, esperado: number, diferenca = 0, rodada = RODADA): Recontagem => ({
     id: `brc_${code}`,
     caixa: code,
     posicao: local,
@@ -648,12 +649,12 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
     contado: esperado + diferenca,
     diferenca,
     vazia: false,
-    itens: [],
+    itens: [{ sku, codigo: "", nome: sku, esperado, contado: esperado + diferenca, diferenca, foraDaLista: false, origens: [] }],
   });
   const RECONTAGENS_DO_VER = [
-    contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", 60),
-    contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", 60, -2),
-    contada("CX-000050", "B-09", "2026-11-19T13:00:00.000Z", 16),
+    contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60),
+    contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2),
+    contada("CX-000050", "B-09", "2026-11-19T13:00:00.000Z", GG.sku_code, 16),
   ];
   const ver = (caixas: readonly WarehouseBox[], rodada: RodadaDaRecontagem = CONCLUIDA, recontagens: readonly Recontagem[] = RECONTAGENS_DO_VER) =>
     rodadaDaContagem({
@@ -711,7 +712,53 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
     expect(rodada).toMatchObject({ prateleiras: 3, prateleirasContadas: 2, caixas: 7, caixasConfirmadas: 4 });
   });
 
-  it("por item, o alcance é o do fechamento: a prateleira de onde saiu a caixa com o item continua na rodada", () => {
+  it("o resumo leva o que a rodada contou em cada caixa recontada, mesmo com a separação depois do fechamento", () => {
+    const caixas = [
+      // Contada com 60 na A-01; a separação tirou 9 depois do fechamento.
+      ...HOJE.map((registro) => (registro.code === "CX-000040" ? { ...registro, taken_lines: [{ sku_code: P.sku_code, qty: 9 }], taken_units: 9 } : registro)),
+      // Contada com 10 na A-01; a separação a esvaziou depois do fechamento.
+      caixa("CX-000043", "A-01", { status: "emptied", emptied_at: "2026-11-21T09:00:00.000Z", unit_count: 10, taken_lines: [{ sku_code: P.sku_code, qty: 10 }], taken_units: 10 }),
+    ];
+    const recontagens = [...RECONTAGENS_DO_VER, contada("CX-000043", "A-01", "2026-11-19T12:07:00.000Z", P.sku_code, 10)];
+    // Antes: 119 un., a folha de hoje para a CX-000040 (51) e a contagem para a CX-000043 (10).
+    expect(linhas(ver(caixas, CONCLUIDA, recontagens))[0]).toEqual(["A-01", "contada", 4, 4, "3 caixas · 2 itens · 128 un.", null]);
+  });
+
+  it("a caixa esvaziada por uma recontagem fora da rodada antes do fechamento não conta nela, como no fechamento do servidor", () => {
+    // Recontada na A-02 nesta rodada e, antes do fechamento, contada vazia sem rodada (a recontagem apaga a rodada da caixa).
+    const caixas = [
+      ...HOJE,
+      caixa("CX-000044", "A-02", {
+        status: "emptied",
+        emptied_at: "2026-11-19T15:00:00.000Z",
+        unit_count: 5,
+        last_recount_id: "brc_sem_rodada",
+        last_recounted_at: "2026-11-19T15:00:00.000Z",
+        emptied_recount_id: "brc_sem_rodada",
+      }),
+    ];
+    const recontagens = [...RECONTAGENS_DO_VER, contada("CX-000044", "A-02", "2026-11-19T12:20:00.000Z", P.sku_code, 5)];
+    // Antes: a A-02 "contada · 1 caixa vazia saiu", com uma caixa que o fechamento não contou.
+    expect(linhas(ver(caixas, CONCLUIDA, recontagens)).map(([local]) => local)).toEqual(["A-01", "B-09"]);
+  });
+
+  it("a prateleira que a rodada não contou fica \"contada antes\" só com a recontagem de antes do fechamento", () => {
+    const caixas = [
+      ...HOJE,
+      // Recontada numa rodada de 16/11, antes desta.
+      caixa("CX-000064", "A-02", { unit_count: 5, last_recount_id: "brc_16", last_recounted_at: "2026-11-16T18:00:00.000Z", last_recount_round_id: "recontagem-2026-11-16" }),
+      // Recontada numa rodada de 21/11, depois do fechamento desta.
+      caixa("CX-000065", "A-03", { unit_count: 3, last_recount_id: "brc_21", last_recounted_at: "2026-11-21T10:00:00.000Z", last_recount_round_id: "cr_2" }),
+    ];
+    const rodada = ver(caixas);
+    expect(rodada.ruas[0].prateleiras.map((prateleira) => [prateleira.posicao, prateleira.estado, prateleira.contadaEm])).toEqual([
+      ["A-01", "contada", null],
+      ["A-02", "contada_antes", "16/11"],
+      ["A-03", "por_contar", null],
+    ]);
+  });
+
+  it("por item, a prateleira de onde saiu a caixa com o item continua na rodada, e a de onde ela foi depois fica fora", () => {
     const porItem: RodadaDaRecontagem = {
       id: "cr_m",
       titulo: "Contagem de Polo Masculino Piquet Preto · M · 19/11/2026",
@@ -720,7 +767,7 @@ describe("a rodada concluída, o Ver das anteriores (achado de 19/11/2026)", () 
       fim: FECHAMENTO,
     };
     const caixas = HOJE.map((registro) => (registro.code === "CX-000042" ? { ...registro, last_recount_round_id: "cr_m" } : registro));
-    const recontagens = [contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", 60, 0, "cr_m"), contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", 60, -2, "cr_m")];
+    const recontagens = [contada("CX-000040", "A-01", "2026-11-19T12:00:00.000Z", P.sku_code, 60, 0, "cr_m"), contada("CX-000041", "A-01", "2026-11-19T12:05:00.000Z", M.sku_code, 60, -2, "cr_m")];
     // Antes: só a B-09, para onde a caixa com a M foi depois, por contar; a A-01, contada, sumia.
     expect(linhas(ver(caixas, porItem, recontagens))).toEqual([["A-01", "contada", 3, 3, "2 caixas · 2 itens · 118 un.", null]]);
   });

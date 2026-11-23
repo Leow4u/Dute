@@ -165,7 +165,19 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
     const caixa = (code: string, location_id: string, extra: Record<string, unknown> = {}) =>
       warehouseBoxFromRecord({ code, customer_code: "BTG Pactual", status: "stored", location_id, stored_at: "2026-10-20T12:00:00.000Z", unit_count: 60, origin: { kind: "opening_inventory", session_id: "s1" }, ...extra });
     const caixas = [caixa("CX-000010", "A-01"), caixa("CX-000011", "B-09", { moved_at: "2026-11-22T10:00:00.000Z", moved_from_location_id: "A-01" })];
-    const recontada = (code: string, quando: string): Recontagem => ({ id: `brc_${code}`, caixa: code, posicao: "A-01", rodada: "cr_0", quando, quem: "Rafael", esperado: 60, contado: 60, diferenca: 0, vazia: false, itens: [] });
+    const recontada = (code: string, sku: string, quando: string): Recontagem => ({
+      id: `brc_${code}`,
+      caixa: code,
+      posicao: "A-01",
+      rodada: "cr_0",
+      quando,
+      quem: "Rafael",
+      esperado: 60,
+      contado: 60,
+      diferenca: 0,
+      vazia: false,
+      itens: [{ sku, codigo: "", nome: sku, esperado: 60, contado: 60, diferenca: 0, foraDaLista: false, origens: [] }],
+    });
     estado.busca = "rodada=cr_0";
     estado.rodadas = { ...estado.rodadas, registradas: [CONCLUIDA], anteriores: [CONCLUIDA] };
     estado.caixas = caixas;
@@ -179,7 +191,7 @@ describe("Estoque › Contagem por caixa, a page da rodada", () => {
       ],
       saldos: [],
     });
-    estado.recontagens = [recontada("CX-000010", "2026-11-18T12:00:00.000Z"), recontada("CX-000011", "2026-11-18T12:05:00.000Z")];
+    estado.recontagens = [recontada("CX-000010", "BTG-000121", "2026-11-18T12:00:00.000Z"), recontada("CX-000011", "BTG-000123", "2026-11-18T12:05:00.000Z")];
     await montar();
     await esperar(() => naTela().includes("Contagem da rua A · 17/11/2026"), "a rodada concluída");
     const linhas = [...document.querySelectorAll('section[aria-labelledby^="rua-"] li')].map((linha) => (linha.textContent ?? "").replace(/\s+/g, " ").trim());
