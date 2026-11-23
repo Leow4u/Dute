@@ -1123,6 +1123,39 @@ Leonardo em 17/11/2026**, com a segunda contagem fora do sistema.
    pela posição de hoje das caixas, e as doze recontadas que o Mover levou
    de prateleira depois do fechamento (19/11, das 19:36 às 19:55 UTC)
    aparecem na A-09, na B-04, na B-05 e na B-09 sem recontagem.
+
+   *O "Ver" da rodada concluída depois do Mover, no PR 639 (23/11/2026):*
+   o "Ver" das anteriores montava as prateleiras pela posição de hoje das
+   caixas (`rodadaDaContagem`), e a caixa só conta como confirmada quando a
+   recontagem é da mesma prateleira: a caixa recontada que o Mover levou
+   depois do fechamento aparecia sem recontagem onde está hoje e sumia da
+   prateleira em que foi contada. Agora a rodada concluída põe cada caixa
+   como estava no fechamento (`caixasNoFechamento`, em
+   `recontagem-por-caixa.ts`): a recontada, na prateleira da última
+   recontagem dela na rodada; a que a rodada não recontou, onde estava no
+   fechamento, lida da própria caixa (a de hoje ou, movida depois dele, a de
+   onde o último mover a tirou, `moved_from_location_id`). Entram a caixa
+   guardada no fechamento (guardada antes dele, pelo `stored_at`, e, se vazia
+   hoje, esvaziada depois dele, pelo `emptied_at`) e a que a rodada esvaziou;
+   a guardada depois do fechamento e a esvaziada antes dele ficam fora. O
+   resumo de cada prateleira soma o que a folha de hoje dá a cada caixa dela,
+   a mesma conta da rodada aberta (a caixa que não está mais guardada leva o
+   que a rodada contou nela, e a não recontada, nada), e a concluída não
+   mostra o que impede recontar hoje (a guarda aberta, o pedido separado). A
+   rodada aberta continua com as caixas de hoje, porque a bancada grava nela,
+   e a regra da caixa contada vazia sem linha continua a mesma. O cartão
+   continua com os números gravados no fechamento (na recontagem geral de
+   17/11, 25 de 28 prateleiras e 137 de 142 caixas, decisão 2 da seção 7), e
+   as linhas seguem a regra do PR 637, que a leitura de 19/11 deu como 26
+   prateleiras contadas e 140 caixas confirmadas. Limite: a caixa não
+   recontada movida duas vezes depois do fechamento aparece na origem do
+   último mover, porque a caixa guarda só o último; o exato pede ler os
+   eventos `warehouse.box_moved` ou o fechamento gravar onde estava cada
+   caixa. Travas: `recontagem-por-caixa.test.ts` (o describe "a rodada
+   concluída"), `estoque-contagem-rodada-view.test.tsx` (a lista dos textos
+   e o `axe` da concluída) e `estoque-contagem-rodada.test.tsx` (o "Ver" com a
+   caixa movida). Falta conferir o "Ver" da recontagem geral na produção,
+   depois da publicação.
 5. **Transferir entre prateleiras e caixas, pela coordenação (F03).** SAIDA
    e ENTRADA na mesma transação, com a caixa de origem e a de destino,
    recusando o que está separado; o lançamento manual sem os literais
