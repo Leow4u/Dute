@@ -368,3 +368,27 @@ describe("os últimos movimentos na ficha", () => {
     expect(await violacoesDeAcessibilidade(comOAviso)).toEqual([]);
   });
 });
+
+describe("as ações da ficha", () => {
+  // A caixa guardada com o item: o saldo dela só se acerta pela contagem por caixa, que grava a caixa e a
+  // prateleira juntas. O lançamento manual ("Ajustar saldo") não toca a caixa (23/11/2026).
+  const CAIXA = { code: "CX-000212", posicao: "B-02", diasParado: 32, parada: false };
+  const linkPorTexto = (texto: string) => Array.from(container.querySelectorAll<HTMLAnchorElement>("a")).find((link) => link.textContent?.trim() === texto);
+
+  it("o item guardado em caixa não oferece \"Ajustar saldo\", e \"Contar em B-02\" é a ação principal", async () => {
+    await montar(<ItemCard item={ITEM} caixas={[CAIXA]} rotuloDaCaixaParada="Parado" />);
+    expect(botaoPorTexto("Ajustar saldo")).toBeUndefined();
+    const contar = linkPorTexto("Contar em B-02");
+    expect(contar?.className).toContain("bg-primary");
+    expect(textosForaDaLista(container.innerHTML, [...TEXTOS_DA_FICHA, "Caixas", "CX-000212", "32 dias"])).toEqual([]);
+    const acoes = contar!.parentElement!.outerHTML;
+    vi.useRealTimers();
+    expect(await violacoesDeAcessibilidade(acoes)).toEqual([]);
+  });
+
+  it("o item sem caixa guardada continua com \"Ajustar saldo\"", async () => {
+    await montar(<ItemCard item={ITEM} caixas={[]} rotuloDaCaixaParada="Parado" />);
+    expect(botaoPorTexto("Ajustar saldo")).toBeTruthy();
+    expect(linkPorTexto("Contar em B-02")?.className).toContain("bg-primary");
+  });
+});

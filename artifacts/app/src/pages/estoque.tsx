@@ -788,6 +788,10 @@ export function ItemCard({
   const catalogWriter = canWriteCatalog(role);
   // "Contar este item": a bancada da prateleira do item, ou a rodada quando ele está em várias (18/11/2026).
   const contar = contarOItem(item.locations);
+  // O item guardado em caixa se acerta pela contagem por caixa, que grava a caixa e a prateleira juntas: "Contar em …"
+  // é a ação principal, e o lançamento manual ("Ajustar saldo"), que não toca a caixa, fica só para o item sem caixa
+  // guardada (23/11/2026).
+  const emCaixa = caixas.length > 0;
   const photoWriter = canAddItemPhotos(role);
   // Contar é de quem opera o armazém; o suporte só consulta a ficha.
   const warehouseWriter = canOperateWarehouse(role);
@@ -1060,7 +1064,7 @@ export function ItemCard({
 
       {warehouseWriter ? (
         <div className="mt-auto flex flex-wrap gap-2 border-t border-border/60 bg-muted/20 p-4">
-          <Button asChild variant={catalogWriter ? "outline" : "default"} className={cn(!catalogWriter && "w-full")}>
+          <Button asChild className={cn(!catalogWriter && "w-full")}>
             <Link href={contar.href}>
               <ClipboardCheck className="size-4" />
               {contar.rotulo}
@@ -1077,15 +1081,17 @@ export function ItemCard({
                   </Button>
                 }
               />
-              <MovementModal
-                defaultSku={item.skuCode}
-                trigger={
-                  <Button type="button" variant="outline">
-                    <SlidersHorizontal className="size-4" />
-                    Ajustar saldo
-                  </Button>
-                }
-              />
+              {!emCaixa ? (
+                <MovementModal
+                  defaultSku={item.skuCode}
+                  trigger={
+                    <Button type="button" variant="outline">
+                      <SlidersHorizontal className="size-4" />
+                      Ajustar saldo
+                    </Button>
+                  }
+                />
+              ) : null}
               {item.id !== undefined ? (
                 <DeleteSkuButton
                   id={item.id as number}
