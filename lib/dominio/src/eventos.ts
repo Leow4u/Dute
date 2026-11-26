@@ -141,8 +141,9 @@ export type MomentoPrevisto = {
  * cronograma"): até 12 momentos, até cinco do tipo outro; cada tipo uma vez,
  * menos o outro, que leva rótulo; o evento sempre com data; com itens do
  * estoque, a entrega no local com data e hora e o retorno ao estoque com
- * data; com coleta, a coleta no cliente com data; e as datas crescendo na
- * ordem da lista (o mesmo instante vale).
+ * data; com coleta, a coleta no cliente com data; e as datas dos tipos fixos
+ * crescendo na ordem da lista (o mesmo instante vale). O outro fica fora da
+ * ordem: o formulário o põe depois dos sete, com a data que tiver.
  */
 export function problemaDoCronograma(
   momentos: readonly MomentoPrevisto[],
@@ -169,11 +170,12 @@ export function problemaDoCronograma(
     if (!preenchido(doTipo("retorno_ao_estoque")?.data)) return "Informe a data do retorno ao estoque";
   }
   if (contexto.comColeta && !preenchido(doTipo("coleta_no_cliente")?.data)) return "Informe a data da coleta no cliente";
-  for (let posicao = 1; posicao < momentos.length; posicao += 1) {
-    const anterior = momentos[posicao - 1];
-    const momento = momentos[posicao];
+  const fixos = momentos.filter((momento) => momento.tipo !== "outro");
+  for (let posicao = 1; posicao < fixos.length; posicao += 1) {
+    const anterior = fixos[posicao - 1];
+    const momento = fixos[posicao];
     if (instante(momento) < instante(anterior)) {
-      return `${rotuloDoMomento(momento)} está antes de ${rotuloDoMomento(anterior)}`;
+      return `${ROTULO_DO_MOMENTO[momento.tipo]} está antes de ${ROTULO_DO_MOMENTO[anterior.tipo]}`;
     }
   }
   return null;
@@ -196,8 +198,4 @@ function preenchido(texto: string | null | undefined): boolean {
 
 function instante(momento: MomentoPrevisto): string {
   return `${momento.data}T${momento.hora}`;
-}
-
-function rotuloDoMomento(momento: MomentoPrevisto): string {
-  return momento.tipo === "outro" ? String(momento.rotulo ?? "").trim() : ROTULO_DO_MOMENTO[momento.tipo];
 }
