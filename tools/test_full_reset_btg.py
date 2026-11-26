@@ -520,6 +520,41 @@ class PlanTests(unittest.TestCase):
                 legado = raw_document("events", "evt-legado", {"source": "functions_client_events", "type": tipo})
                 self.assertTrue(full_reset_btg.removable("events", legado, control_name=control))
 
+    def test_edicoes_em_aberto_impedem_a_zeragem(self) -> None:
+        # De enviado a no_evento, a zeragem apagaria a solicitação, o pedido e as
+        # reservas da edição, que não andaria mais (decisão do Leonardo, 26/11/2026).
+        snapshot = {
+            "client_event_editions": [
+                raw_document(
+                    "client_event_editions",
+                    f"ced_{status}",
+                    {"status": status, "customer_code": "BTG Pactual", "event_name": "B2B Conference", "label": "2027"},
+                )
+                for status in ("rascunho", "enviado", "confirmado", "separado", "no_evento", "retornado", "fechado", "cancelado")
+            ],
+        }
+        self.assertEqual(
+            full_reset_btg.editions_blocking(snapshot),
+            [
+                "ced_confirmado (B2B Conference 2027, BTG Pactual, confirmado)",
+                "ced_enviado (B2B Conference 2027, BTG Pactual, enviado)",
+                "ced_no_evento (B2B Conference 2027, BTG Pactual, no_evento)",
+                "ced_separado (B2B Conference 2027, BTG Pactual, separado)",
+            ],
+        )
+        self.assertEqual(full_reset_btg.editions_blocking({}), [])
+
+    def test_edicoes_em_aberto_sao_as_de_enviado_a_no_evento(self) -> None:
+        # Os status moram em lib/dominio/src/eventos.ts (STATUS_DA_EDICAO).
+        fonte = (Path(__file__).resolve().parent.parent / "lib" / "dominio" / "src" / "eventos.ts").read_text(encoding="utf-8")
+        bloco = re.search(r"STATUS_DA_EDICAO = \[([^\]]*)\]", fonte)
+        self.assertIsNotNone(bloco)
+        status = re.findall(r'"([a-z_]+)"', bloco.group(1))
+        self.assertEqual(
+            list(full_reset_btg.OPEN_EDITION_STATUSES),
+            status[status.index("enviado") : status.index("no_evento") + 1],
+        )
+
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
         # subcoleções, aditivos e revisões continuam fora do alcance.
@@ -737,6 +772,69 @@ class MainTests(unittest.TestCase):
             {"source": "functions_client_events", "documents": 2},
         )
         self.assertEqual(self.fake.batches, [])
+
+    def test_dry_run_stops_when_an_event_edition_is_open(self) -> None:
+        self.fake.seed(
+            "client_event_editions", "ced_1",
+            {"customer_code": "BTG Pactual", "event_name": "B2B Conference", "label": "2027", "status": "confirmado"},
+        )
+        self.fake.seed(
+            "client_event_editions", "ced_2",
+            {"customer_code": "BTG Pactual", "event_name": "B2B Conference", "label": "2026", "status": "fechado"},
+        )
+        with fake_backend(self.fake), self.assertRaises(SystemExit) as raised:
+            run_main([])
+        mensagem = str(raised.exception)
+        self.assertIn("ced_1 (B2B Conference 2027, BTG Pactual, confirmado)", mensagem)
+        self.assertNotIn("ced_2", mensagem)
+        self.assertIn("Nada foi alterado", mensagem)
+        self.assertEqual(self.fake.batches, [])
+
+    def test_apply_with_an_open_event_edition_changes_nothing(self) -> None:
+        self.fake.seed("client_event_editions", "ced_1", {"customer_code": "BTG Pactual", "status": "no_evento"})
+        before = copy.deepcopy(self.fake.docs)
+        with fake_backend(self.fake), self.assertRaises(SystemExit) as raised:
+            run_main(self.apply_args())
+        self.assertIn("ced_1", str(raised.exception))
+        self.assertIn("Nada foi alterado", str(raised.exception))
+        self.assertEqual(self.fake.docs, before)
+        self.assertEqual(self.fake.batches, [])
+        self.assertEqual(self.fake.exports, [])
+        self.assertFalse(self.backup.exists())
+
+    def test_draft_and_finished_editions_do_not_block_and_stay(self) -> None:
+        for status in ("rascunho", "retornado", "fechado", "cancelado"):
+            self.fake.seed("client_event_editions", f"ced_{status}", {"customer_code": "BTG Pactual", "status": status})
+        with fake_backend(self.fake):
+            code, _ = run_main(self.apply_args())
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            sorted(self.fake.docs["client_event_editions"]),
+            ["ced_cancelado", "ced_fechado", "ced_rascunho", "ced_retornado"],
+        )
+        self.assertNotIn("products", self.fake.collections())
+
+    def test_edition_opened_after_the_plan_stops_before_export(self) -> None:
+        before = copy.deepcopy(self.fake.docs)
+        write = self.fake.batch_write
+
+        def freeze_then_send_edition(writes: list[dict[str, Any]], **kwargs: Any) -> None:
+            write(writes, **kwargs)
+            if len(self.fake.batches) == 1:
+                self.fake.seed("client_event_editions", "ced_9", {"customer_code": "BTG Pactual", "status": "enviado"})
+
+        with fake_backend(self.fake), mock.patch.object(
+            full_reset_btg, "batch_write", freeze_then_send_edition
+        ), self.assertRaises(SystemExit) as raised:
+            run_main(self.apply_args())
+        self.assertIn("ced_9", str(raised.exception))
+        self.assertIn("nada foi apagado", str(raised.exception).lower())
+        self.assertIn("products", self.fake.collections())
+        self.assertEqual(self.fake.exports, [])
+        self.assertEqual(
+            self.fake.fields("system_controls", "inventory"),
+            decode_document(before["system_controls"]["inventory"]),
+        )
 
     def test_rh_database_is_never_reset(self) -> None:
         before = copy.deepcopy(self.fake.docs)

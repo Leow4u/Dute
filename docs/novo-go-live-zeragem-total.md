@@ -44,6 +44,17 @@ cliente, e preservar só eles deixaria o cliente sem perfil e sem módulos
 mantenha o cliente inteiro com `--keep customers --keep client_profiles --keep
 client_access`.
 
+**Edição dos Eventos em aberto.** A edição enviada, confirmada, separada ou no
+evento (de `enviado` a `no_evento`) depende da solicitação, do pedido e das
+reservas, que a zeragem apaga: sem eles, ela não anda mais. Com uma edição
+assim, a zeragem **para antes de qualquer escrita**, no dry-run e no apply, e
+lista as edições (`ced_… (evento e label, cliente, status)`); se uma abrir
+entre o plano e o congelamento, para também, e o controle de estoque volta ao
+estado anterior. Antes de zerar, cancele as enviadas, confirmadas e separadas
+e registre o retorno das que estão no evento. O rascunho e as edições
+retornadas, fechadas e canceladas não impedem (decisão do Leonardo,
+26/11/2026).
+
 `system_controls/inventory` é reescrito por inteiro ao final: estoque não
 inicializado, inventário de abertura obrigatório, movimentações liberadas. Em
 `events`, além dos eventos do Comercial, fica um evento
@@ -64,7 +75,9 @@ Fora do alcance da ferramenta:
 ## Antes de rodar
 
 1. **Operação parada.** Pedidos, envios, recebimentos e solicitações em
-   aberto são apagados junto; conclua ou aceite como perdidos.
+   aberto são apagados junto; conclua ou aceite como perdidos. As edições dos
+   Eventos em aberto impedem a zeragem: cancele ou registre o retorno de cada
+   uma antes (ver "Edição dos Eventos em aberto").
 2. **Financeiro guardou as faturas.** `client_invoices` e `billing_periods`
    somem do sistema. Exporte ou imprima faturas e relatórios de cada
    competência emitida para a guarda contábil antes de prosseguir.
@@ -102,7 +115,8 @@ atual de `system_controls/inventory` e a frase de confirmação. Nada é
 alterado. Revise a lista `delete`: se algo precisa ficar, repita com `--keep
 <coleção>`; se quer apagar a estrutura, acrescente `--include-setup`. Se o
 dry-run termina com "têm o campo stage", siga a mensagem (ver "Cadastro com
-`stage`").
+`stage`"); se termina com "edições dos Eventos em aberto", feche cada uma como
+a mensagem diz (ver "Edição dos Eventos em aberto").
 
 ### 2. Aplicar
 
