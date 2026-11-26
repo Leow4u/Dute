@@ -820,3 +820,40 @@ v3 de uma caixa. Desenho em
   tokens `--modulo-*` de `index.css`. O violeta continua do Agent Dute.
 - Sem legendas: só rótulos, dados e ações. Explicação vai para manual em `docs/`.
 - Operação e campo nunca veem valores.
+
+A página "Eventos · do portal ao histórico" tem canvas próprio (privado,
+https://claude.ai/artifact/H1S2s47XbVPUxvyuxXJ7NQ): a proposta de 24/11/2026,
+depois do primeiro evento da BTG no portal (B2B Conference Necton, 28 e
+29/01/2027, Hotel Unique), que o "Salvar como evento" do carrinho recusou pelo
+limite de 300 caracteres das observações. O Leonardo decidiu em 24/11/2026: o
+"Novo evento" nasce na tela Eventos, não no carrinho; o evento é o registro
+completo de cada edição (endereço, layout, itens, horários, o que foi, o que
+voltou, fotos e preço fechado), para a história do ano seguinte; o Guilherme,
+operador WMS, registra tudo pela Armazenagem, e o cliente abre, envia e lê.
+Prancha aprovada pelo Leonardo em 25/11/2026 (nada no código ainda). As telas do
+portal seguem o visual do WMS, como o Estoque do portal; as da Armazenagem, o
+shell v3. As premissas e as três perguntas para decidir (o preço e quem vê
+valores, a edição sem a Operação, quem fotografa) estão na nota do canvas.
+Ajuste de 25/11/2026, pedido do Leonardo: com 100 itens e 2.000 peças, escolher
+item a item dentro do evento não funciona, e a lista não cabe na tela. A escolha
+passa a ser no Estoque, no modo "montando o evento", com foto, tamanhos e
+saldo; o evento guarda só o resumo e abre a lista inteira em "Ver os N itens";
+toda lista longa (no evento, na edição registrada e no retorno da Armazenagem)
+mostra poucas linhas, com busca, filtro e "Ver mais".
+A seção dos horários do Novo evento chama-se "Cronograma", a palavra do mercado
+de eventos (25/11). O desenho aprovado é a spec
+`docs/superpowers/specs/2026-11-26-eventos-design.md` (aprovada em 26/11/2026), que
+vem antes do plano e de qualquer código; o plano é
+`docs/superpowers/plans/2026-11-26-eventos.md` (o índice, com o detalhe de cada
+parte em `…-eventos-parte-NN.md`).
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Fluxo do evento · quem faz o quê | `EventosFluxo.dc.html` | As sete etapas (rascunho, enviado, confirmado, separado, no evento, retornado, fechado), quem faz cada uma e o que fica registrado; o que já existe (pedido, romaneio, retorno, comprovante, fatura) e o que é novo. |
+| Portal · Eventos | `EventosPortalLista.dc.html` | "Novo evento" no topo; um cartão por evento com a etapa da edição, o local, os horários, os itens, as edições de cada ano e "Nova edição a partir de 2026". |
+| Portal · Novo evento | `EventosPortalNovo.dc.html` | O plano da edição: o evento (ou a edição de um que existe); onde (local, endereço, contato, layout anexo); o cronograma (coleta no cliente, entrega, montagem, evento, desmontagem, retorno, entrega de volta); o que vai do estoque Dutelog só como resumo (100 itens · 2.000 peças, cinco famílias e "Ver os 100 itens", com "Escolher no Estoque"); a coleta no cliente (quantidade, valor declarado, planilha); observações; "Salvar rascunho" e "Enviar para a Dutelog". |
+| Portal · Estoque, montando o evento | `EventosPortalEstoque.dc.html` | O Estoque de sempre, com foto, tamanhos e saldo, no modo "montando o evento": a faixa com o evento e o total, "Adicionar ao evento" e "Alterar no evento" nos cartões, o filtro "No evento", e o painel "Itens do evento" com busca, poucas linhas, "Ver os 100 itens" e "Voltar ao evento". |
+| Portal · os itens do evento | `EventosPortalItens.dc.html` | A lista inteira num diálogo: busca, filtro por tipo, uma linha por família com a quantidade de cada tamanho, "Mostrando 16 de 100 · Ver mais 30", "Escolher mais no Estoque" e "Pronto". |
+| Portal · a edição registrada | `EventosPortalEvento.dc.html` | A edição fechada como o cliente a lê: o que foi e o que voltou (busca, "Com diferença" e "Ver os 100 itens"), o preço fechado, as fotos por momento, o que aconteceu com o previsto e o feito, os documentos, as edições e "Nova edição a partir desta". |
+| Armazenagem · Eventos | `EventosWmsLista.dc.html` | A agenda da Armazenagem: para confirmar, próximos, em andamento e para fechar, com o "separar até" de cada edição. |
+| Armazenagem · Evento, o Guilherme registra | `EventosWmsFicha.dc.html` | A ficha da edição no evento: cada momento com o previsto e o feito, "Registrar fim", o retorno ao estoque com o que voltou e a avaria por item (busca, "Com diferença", "Os outros 96 voltaram iguais" e "Ver mais"), o preço fechado, as fotos, os documentos, a equipe e o histórico. |

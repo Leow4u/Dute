@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Portal · a edição registrada</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F4F5F7;color:#1E293B;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:#2457D6;text-decoration:none}a:hover{color:#1C45AB}
+h1,h2,h3,p{margin:0}
+button{font-family:inherit;color:inherit}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:16px;height:16px;flex:0 0 auto}
+.muted{color:#5D6877}
+.card{background:#fff;border:1px solid #E2E6EB;border-radius:10px}
+.sec{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.sec h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid transparent;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#2457D6;color:#fff}.btn-p:hover{background:#1C45AB;color:#fff}
+.btn-o{background:#fff;color:#1E293B;border-color:#E2E6EB}.btn-o:hover{background:#F4F5F7;color:#1E293B}
+.btn-lg{height:44px;padding:0 18px;font-size:14px;border-radius:8px}
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.s-fech{background:#DCFCE7;border-color:#B4EBC5;color:#166534}
+.kpi{padding:14px 18px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12.5px;color:#5D6877;font-weight:600}
+.kpi b{font-size:22px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.kpi small{font-size:12.5px;color:#5D6877;font-weight:500}
+.tl{display:flex;flex-direction:column}
+.tr{display:grid;grid-template-columns:28px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr);gap:12px;align-items:start;padding:10px 0;border-top:1px solid #EEF1F4}
+.tr:first-child{border-top:0}
+.tr i{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#DCFCE7;color:#166534;border:1px solid #B4EBC5;font-style:normal;margin-top:1px}
+.tr b{display:block;font-size:14px;font-weight:600}
+.tr .p{font-size:12.5px;color:#5D6877}
+.tr .w{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.tr .x{font-size:13px;color:#3F4A5A}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12.5px;font-weight:600;color:#5D6877;text-align:left;padding:0 8px 8px 0;border-bottom:1px solid #EEF1F4}
+td{padding:9px 8px 9px 0;border-top:1px solid #EEF1F4;vertical-align:middle}
+tr:first-child td{border-top:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td b{font-weight:600}
+.ph{width:36px;height:36px;border-radius:8px;background:#EEF1F4;border:1px solid #E2E6EB;display:inline-flex;align-items:center;justify-content:center;color:#5D6877;vertical-align:middle;margin-right:10px}
+.thumb{width:112px;height:84px;border-radius:8px;background:#EEF1F4;border:1px solid #E2E6EB;display:flex;align-items:center;justify-content:center;color:#5D6877;flex:0 0 auto}
+.thumb svg{width:22px;height:22px}
+.grp{display:flex;flex-direction:column;gap:8px}
+.grp h3{font-size:13.5px;font-weight:600;color:#3F4A5A}
+.doc{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #EEF1F4;font-size:14px}
+.doc:first-child{border-top:0}
+.doc .ic{color:#5D6877}
+.doc span{flex:1;min-width:0}
+.doc small{color:#5D6877;font-size:12.5px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.kv b{font-weight:600;text-align:right}
+.ed{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #EEF1F4}
+.ed:first-child{border-top:0}
+.ed b{font-size:14px;font-weight:700}
+.ed span{font-size:12.5px;color:#5D6877;display:block}
+.fc{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:6px;border:1px solid #E2E6EB;background:#fff;color:#1E293B;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
+.fc span{font-size:12px;color:#5D6877;font-variant-numeric:tabular-nums}
+.fc.on{background:#1E293B;border-color:#1E293B;color:#fff}.fc.on span{color:rgba(255,255,255,.7)}
+.inp{display:flex;align-items:center;gap:8px;height:36px;border:1px solid #CED4DC;border-radius:8px;padding:0 10px;background:#fff;color:#5D6877}
+.inp input{border:0;outline:0;background:transparent;font-size:13.5px;font-weight:500;color:#1E293B;width:100%}
+</style>
+</helmet>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-chair" viewBox="0 0 24 24"><path d="M6 19v-7a6 6 0 0 1 12 0v7"/><path d="M4 12h16"/><path d="M6 19h12"/><path d="M8 12V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v7"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+</svg>
+<div style="min-height: 100%; display: flex; flex-direction: column">
+<div style="width: 100%; max-width: 1280px; margin: 0 auto; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 20px">
+
+  <header style="display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid #E2E6EB; padding-bottom: 20px">
+    <a class="btn btn-o" href="EventosPortalLista.dc.html" aria-label="Voltar a Eventos" style="width: 40px; height: 40px; padding: 0"><svg class="ic" aria-hidden="true"><use href="#i-back"></use></svg></a>
+    <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"><h1 style="font-size: 24px; font-weight: 700; letter-spacing: -0.01em">B2B Conference Necton</h1><span class="badge s-fech"><i></i>Fechado</span></div>
+      <p class="muted">Edição 2027 · 28 e 29/01/2027 · Hotel Unique · PED-0007</p>
+    </div>
+    <div style="display: flex; gap: 8px">
+      <button class="btn btn-o btn-lg" type="button"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg>PDF da edição</button>
+      <a class="btn btn-p btn-lg" href="EventosPortalNovo.dc.html"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg>Nova edição a partir desta</a>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+    <div class="card kpi"><span>Foi</span><b>2.000 peças</b><small>100 itens e 2.190 produtos do cliente</small></div>
+    <div class="card kpi"><span>Voltou</span><b>1.994 peças</b><small>6 não voltaram · 3 avariadas · 1.930 produtos</small></div>
+    <div class="card kpi"><span>Preço fechado</span><b>R$ 9.800,00</b><small>frete, equipe e montagem</small></div>
+    <div class="card kpi"><span>Fotos</span><b>15</b><small>da coleta ao retorno</small></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+
+      <section class="card sec">
+        <h2>O que aconteceu</h2>
+        <div class="tl">
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Pedido enviado</b><span class="p">pelo cliente</span></div><span class="w">24/11/2026 15:14</span><span class="x">Cristiane · PED-0007</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Confirmado e preço fechado</b><span class="p">pela Dutelog</span></div><span class="w">05/12/2026 11:02</span><span class="x">R$ 9.800,00 · proposta anexa</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Separado</b><span class="p">no armazém</span></div><span class="w">26/01/2027 16:40</span><span class="x">38 volumes · lacre 88412 · <a href="#">romaneio</a></span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Coleta no cliente</b><span class="p">previsto 28/01 05:00</span></div><span class="w">28/01 05:10</span><span class="x">2.190 produtos · 1 foto</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Entrega no local</b><span class="p">previsto 28/01 08:30</span></div><span class="w">28/01 08:20</span><span class="x"><a href="#">Comprovante de entrega</a></span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Montagem</b><span class="p">previsto 28/01 10:00 às 19:00</span></div><span class="w">28/01 10:05 às 18:40</span><span class="x">2 estoquistas e 2 do cliente · 6 fotos</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Evento</b><span class="p">previsto 29/01 08:00 às 20:00</span></div><span class="w">29/01 08:00 às 20:00</span><span class="x">2 estoquistas e 2 do cliente · 4 fotos</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Desmontagem e coleta</b><span class="p">previsto 29/01 20:00</span></div><span class="w">29/01 20:10 às 22:30</span><span class="x">2 fotos</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Retorno ao estoque e contagem</b><span class="p">previsto 30/01 09:00</span></div><span class="w">30/01 09:30</span><span class="x">1.994 peças · 6 não voltaram, 3 avariadas · 1.930 produtos · 2 fotos</span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Entrega de volta no cliente</b><span class="p">previsto 02/02 10:00</span></div><span class="w">02/02 10:15</span><span class="x">1.930 produtos · <a href="#">comprovante</a></span></div>
+          <div class="tr"><i><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg></i><div><b>Edição fechada</b><span class="p">pela Dutelog</span></div><span class="w">03/02/2027 09:12</span><span class="x">Guilherme</span></div>
+        </div>
+      </section>
+
+      <section class="card sec">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+          <h2>O que foi e o que voltou</h2>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <button class="fc on" type="button" aria-pressed="true">Todos<span>· 100</span></button>
+            <button class="fc" type="button" aria-pressed="false">Com diferença<span>· 4</span></button>
+            <label class="inp" style="width: 250px"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg><input type="search" placeholder="Buscar entre os 100 itens" aria-label="Buscar entre os 100 itens"></label>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Item</th><th>Código</th><th class="n">Foi</th><th class="n">Voltou</th><th>Diferença</th></tr></thead>
+          <tbody>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Polo Masculino Piquet Arpoador · G</b></td><td class="muted">A.01.0809.002</td><td class="n">200</td><td class="n">198</td><td style="color: #854D0E; font-weight: 600">2 não voltaram</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Sacola Quadrada BTG · N1</b></td><td class="muted">J.0149.003</td><td class="n">300</td><td class="n">296</td><td style="color: #854D0E; font-weight: 600">4 não voltaram</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Caneca Necton</b></td><td class="muted">B.0412.001</td><td class="n">150</td><td class="n">150</td><td style="color: #854D0E; font-weight: 600">2 avariadas · alça quebrada</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-chair"></use></svg></span><b>Mesa lateral</b></td><td class="muted">MAT-012</td><td class="n">2</td><td class="n">2</td><td style="color: #854D0E; font-weight: 600">1 avariada · tampo riscado</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Polo Masculino Piquet Arpoador · M</b></td><td class="muted">A.01.0809.002</td><td class="n">300</td><td class="n">300</td><td class="muted">—</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Polo Feminina Piquet Azul Marinho · M</b></td><td class="muted">A.01.0805.002</td><td class="n">220</td><td class="n">220</td><td class="muted">—</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-chair"></use></svg></span><b>Balcão de Recepção</b></td><td class="muted">MAT-021</td><td class="n">1</td><td class="n">1</td><td class="muted">—</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-chair"></use></svg></span><b>Poltrona Lounge Preta</b></td><td class="muted">MAT-034</td><td class="n">4</td><td class="n">4</td><td class="muted">—</td></tr>
+            <tr style="font-weight: 700"><td>Do estoque Dutelog</td><td class="muted">100 itens</td><td class="n">2.000</td><td class="n">1.994</td><td class="muted" style="font-weight: 500">6 não voltaram · 3 avariadas</td></tr>
+            <tr><td><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><b>Produtos coletados no cliente</b></td><td class="muted"><a href="#">planilha</a></td><td class="n">2.190</td><td class="n">1.930</td><td class="muted">260 distribuídos no evento</td></tr>
+          </tbody>
+        </table>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; padding-top: 4px"><span class="muted">Mostrando 8 de 100 itens</span><a href="#" style="font-weight: 700">Ver os 100 itens</a></div>
+      </section>
+
+      <section class="card sec">
+        <h2>Fotos</h2>
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <div class="grp"><h3>Montagem · 28/01 · 6 fotos</h3><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span></div></div>
+          <div class="grp"><h3>Evento · 29/01 · 4 fotos</h3><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span></div></div>
+          <div class="grp"><h3>Desmontagem · 29/01 · 2 fotos</h3><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span></div></div>
+          <div class="grp"><h3>Retorno ao estoque · 30/01 · 2 fotos</h3><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span></div></div>
+          <div class="grp"><h3>Coleta no cliente · 28/01 · 1 foto</h3><div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="thumb"><svg aria-hidden="true"><use href="#i-cam"></use></svg></span></div></div>
+        </div>
+      </section>
+
+      <section class="card sec">
+        <h2>Documentos</h2>
+        <div style="display: flex; flex-direction: column">
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Layout do evento <small>· layout-necton-2027.pdf · pelo cliente</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Planilha dos produtos coletados <small>· produtos-b2b-conference.xlsx · pelo cliente</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Proposta da Dutelog <small>· proposta-necton-2027.pdf · 05/12/2026</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Romaneio PED-0007 <small>· 38 volumes · lacre 88412</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Comprovante de entrega <small>· Hotel Unique · 28/01 08:20</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Comprovante do retorno <small>· contagem de 30/01</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg><span>Fatura FAT-0031 <small>· R$ 9.800,00 · paga em 10/02/2027</small></span><a href="#">Abrir</a></div>
+        </div>
+      </section>
+    </div>
+
+    <aside style="display: flex; flex-direction: column; gap: 16px">
+      <section class="card sec">
+        <h2>Edições</h2>
+        <div style="display: flex; flex-direction: column">
+          <div class="ed"><svg class="ic" style="color: #5D6877" aria-hidden="true"><use href="#i-cal"></use></svg><div style="flex: 1"><b>2027</b><span>28 e 29/01 · Hotel Unique · R$ 9.800,00 · esta</span></div></div>
+        </div>
+        <a class="btn btn-o" href="EventosPortalNovo.dc.html"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg>Nova edição a partir desta</a>
+      </section>
+      <section class="card sec">
+        <h2>Preço fechado</h2>
+        <b style="font-size: 26px; font-weight: 700; letter-spacing: -.01em">R$ 9.800,00</b>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div class="kv"><span class="muted">Cobre</span><b>Frete, equipe e montagem</b></div>
+          <div class="kv"><span class="muted">Fechado em</span><b>05/12/2026</b></div>
+          <div class="kv"><span class="muted">Fatura</span><b>FAT-0031 · paga</b></div>
+        </div>
+      </section>
+      <section class="card sec">
+        <h2>Onde</h2>
+        <div style="display: flex; gap: 8px; align-items: flex-start"><svg class="ic" style="margin-top: 3px; color: #5D6877" aria-hidden="true"><use href="#i-pin"></use></svg><div><b style="font-weight: 600">Hotel Unique</b><p class="muted" style="font-size: 13px">Av. Brigadeiro Luís Antônio, 4700 · Jardim Paulista · São Paulo/SP</p></div></div>
+        <div class="kv"><span class="muted">Contato no local</span><b>Cristiane</b></div>
+        <div class="kv"><span class="muted">Coleta e entrega de volta</span><b>BTG Pactual · Faria Lima, 3477</b></div>
+      </section>
+      <section class="card sec">
+        <h2>Equipe</h2>
+        <div style="display: flex; gap: 8px; align-items: flex-start"><svg class="ic" style="margin-top: 3px; color: #5D6877" aria-hidden="true"><use href="#i-users"></use></svg><div style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px"><span><b style="font-weight: 600">Dutelog</b> · Rafael S. e Marcos A., estoquistas</span><span><b style="font-weight: 600">Cliente</b> · 2 pessoas na montagem e no evento</span><span><b style="font-weight: 600">Veículo</b> · utilitário Dutelog</span></div></div>
+      </section>
+    </aside>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1760}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

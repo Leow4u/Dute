@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Portal · os itens do evento</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F4F5F7;color:#1E293B;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:#2457D6;text-decoration:none}a:hover{color:#1C45AB}
+h1,h2,h3,p{margin:0}
+button,input{font-family:inherit;color:inherit}
+.ic{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.muted{color:#5D6877}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid transparent;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#2457D6;color:#fff}.btn-p:hover{background:#1C45AB;color:#fff}
+.btn-o{background:#fff;color:#1E293B;border-color:#E2E6EB}.btn-o:hover{background:#F4F5F7;color:#1E293B}
+.btn-g{background:transparent;color:#3F4A5A}.btn-g:hover{background:#F4F5F7;color:#1E293B}
+.btn-lg{height:44px;padding:0 16px;font-size:14px;border-radius:8px}
+.inp{display:flex;align-items:center;gap:10px;height:40px;border:1px solid #CED4DC;border-radius:8px;padding:0 12px;background:#fff;color:#5D6877}
+.inp input{border:0;outline:0;background:transparent;font-size:14px;font-weight:500;color:#1E293B;width:100%}
+.fc{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:6px;border:1px solid #E2E6EB;background:#fff;color:#1E293B;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
+.fc span{font-size:12px;color:#5D6877;font-variant-numeric:tabular-nums}
+.fc.on{background:#1E293B;border-color:#1E293B;color:#fff}.fc.on span{color:rgba(255,255,255,.7)}
+.dlg{width:960px;max-height:900px;background:#fff;border:1px solid #E2E6EB;border-radius:12px;box-shadow:0 20px 50px rgba(15,23,42,.22);display:flex;flex-direction:column;overflow:hidden}
+.dlg header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px 14px;border-bottom:1px solid #E2E6EB}
+.dlg h2{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.xb{width:36px;height:36px;border:1px solid #E2E6EB;border-radius:8px;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#5D6877;cursor:pointer}
+.fam{display:grid;grid-template-columns:44px minmax(0,1.4fr) minmax(0,2fr) 90px 36px;gap:12px;align-items:center;padding:10px 22px;border-top:1px solid #EEF1F4}
+.fam:first-child{border-top:0}
+.ph{width:44px;height:44px;border-radius:8px;background:#EDE8DF;border:1px solid #E2E6EB;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
+.ph svg{width:34px;height:30px}
+.fam .t b{display:block;font-size:14px;font-weight:600}
+.fam .t span{display:block;font-size:12.5px;color:#5D6877}
+.szs{display:flex;flex-wrap:wrap;gap:6px}
+.szq{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 4px 0 8px;border-radius:6px;border:1px solid #E2E6EB;background:#F4F5F7;font-size:12.5px;font-weight:600;color:#3F4A5A}
+.szq input{width:52px;height:22px;border:1px solid #CED4DC;border-radius:4px;text-align:right;font-size:12.5px;font-weight:700;color:#1E293B;background:#fff;padding:0 6px}
+.fam .n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.fam .n small{display:block;font-size:12px;color:#5D6877;font-weight:500}
+.x{width:32px;height:32px;border:0;background:transparent;border-radius:6px;color:#5D6877;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+</style>
+</helmet>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M11 5h10M11 9h7M11 13h4M3 17l3 3 3-3M6 18V4"/></symbol>
+  <symbol id="a-polo" viewBox="0 0 200 170"><path fill="currentColor" d="M62 38 28 52 18 92l34 8v62h96v-62l34-8-10-40-34-14-14 20-24 8-24-8Z"></path><path fill="#000" fill-opacity=".22" d="M76 58 62 38l22-8 16 18 16-18 22 8-14 20-24 8Z"></path><rect x="95" y="62" width="10" height="34" fill="#000" fill-opacity=".14"></rect></symbol>
+  <symbol id="a-tee" viewBox="0 0 200 170"><path fill="currentColor" d="M66 36 28 52 18 92l34 8v62h96v-62l34-8-10-40-38-16c-6 10-16 16-34 16s-28-6-34-16Z"></path><path fill="#000" fill-opacity=".18" d="M66 36c6 10 16 16 34 16s28-6 34-16l6 2c-8 14-22 22-40 22S68 52 60 38Z"></path></symbol>
+  <symbol id="a-towel" viewBox="0 0 200 170"><rect x="28" y="42" width="144" height="92" rx="10" fill="currentColor"></rect><rect x="28" y="42" width="144" height="30" rx="10" fill="#000" fill-opacity=".14"></rect></symbol>
+  <symbol id="a-bag" viewBox="0 0 200 170"><path fill="currentColor" d="M46 62h108l12 92H34Z"></path><path fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" d="M70 62c0-32 60-32 60 0"></path></symbol>
+  <symbol id="a-mug" viewBox="0 0 200 170"><rect x="50" y="40" width="90" height="100" rx="12" fill="currentColor"></rect><path fill="none" stroke="currentColor" stroke-width="12" d="M140 70h14a18 18 0 0 1 0 36h-14"></path><rect x="50" y="40" width="90" height="22" rx="10" fill="#000" fill-opacity=".14"></rect></symbol>
+  <symbol id="a-chair" viewBox="0 0 200 170"><rect x="40" y="30" width="120" height="70" rx="14" fill="currentColor"></rect><rect x="30" y="92" width="140" height="34" rx="10" fill="currentColor"></rect><rect x="44" y="126" width="14" height="26" fill="currentColor"></rect><rect x="142" y="126" width="14" height="26" fill="currentColor"></rect></symbol>
+</svg>
+<div style="min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 40px 40px 60px; background: rgba(15, 23, 42, .45)">
+  <section class="dlg" role="dialog" aria-labelledby="dlg-t" aria-modal="true">
+    <header>
+      <div>
+        <h2 id="dlg-t">Itens do evento · B2B Conference Necton</h2>
+        <p class="muted" style="font-size: 13px">100 itens · 2.000 peças · R$ 86.400,00 em peças</p>
+      </div>
+      <a class="xb" href="EventosPortalNovo.dc.html" aria-label="Fechar a lista de itens"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></a>
+    </header>
+
+    <div style="display: flex; gap: 10px; align-items: center; padding: 12px 22px; border-bottom: 1px solid #EEF1F4; flex-wrap: wrap">
+      <label class="inp" style="flex: 1; min-width: 260px"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg><input type="search" placeholder="Buscar entre os 100 itens" aria-label="Buscar entre os 100 itens"></label>
+      <button class="fc on" type="button" aria-pressed="true">Todos<span>· 100</span></button>
+      <button class="fc" type="button" aria-pressed="false">Polo<span>· 28</span></button>
+      <button class="fc" type="button" aria-pressed="false">Camiseta<span>· 22</span></button>
+      <button class="fc" type="button" aria-pressed="false">Brindes<span>· 31</span></button>
+      <button class="fc" type="button" aria-pressed="false">Móveis<span>· 19</span></button>
+      <button class="btn btn-o" type="button" style="height: 40px"><svg class="ic" aria-hidden="true"><use href="#i-sort"></use></svg>Como no Estoque<svg class="ic" style="width: 14px; height: 14px; color: #5D6877" aria-hidden="true"><use href="#i-chev"></use></svg></button>
+    </div>
+
+    <div style="overflow-y: auto; flex: 1">
+      <div class="fam"><span class="ph"><svg style="color: #2F6BBF" aria-hidden="true"><use href="#a-polo"></use></svg></span><div class="t"><b>Polo Masculino Piquet Arpoador</b><span>A.01.0809.002 · 4 tamanhos</span></div><div class="szs"><span class="szq">P<input value="120" inputmode="numeric" aria-label="Polo Masculino Piquet Arpoador P"></span><span class="szq">M<input value="300" inputmode="numeric" aria-label="Polo Masculino Piquet Arpoador M"></span><span class="szq">G<input value="200" inputmode="numeric" aria-label="Polo Masculino Piquet Arpoador G"></span><span class="szq">GG<input value="80" inputmode="numeric" aria-label="Polo Masculino Piquet Arpoador GG"></span></div><span class="n">700<small>peças</small></span><button class="x" type="button" aria-label="Tirar Polo Masculino Piquet Arpoador do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #243B6E" aria-hidden="true"><use href="#a-polo"></use></svg></span><div class="t"><b>Polo Feminina Piquet Azul Marinho</b><span>A.01.0805.002 · 3 tamanhos</span></div><div class="szs"><span class="szq">P<input value="90" inputmode="numeric" aria-label="Polo Feminina Piquet Azul Marinho P"></span><span class="szq">M<input value="220" inputmode="numeric" aria-label="Polo Feminina Piquet Azul Marinho M"></span><span class="szq">G<input value="140" inputmode="numeric" aria-label="Polo Feminina Piquet Azul Marinho G"></span></div><span class="n">450<small>peças</small></span><button class="x" type="button" aria-label="Tirar Polo Feminina Piquet Azul Marinho do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #2B2B2B" aria-hidden="true"><use href="#a-tee"></use></svg></span><div class="t"><b>Camiseta Feminina Piquet Preto</b><span>A.02.0311.006 · 3 tamanhos</span></div><div class="szs"><span class="szq">P<input value="40" inputmode="numeric" aria-label="Camiseta Feminina Piquet Preto P"></span><span class="szq">M<input value="60" inputmode="numeric" aria-label="Camiseta Feminina Piquet Preto M"></span><span class="szq">G<input value="40" inputmode="numeric" aria-label="Camiseta Feminina Piquet Preto G"></span></div><span class="n">140<small>peças</small></span><button class="x" type="button" aria-label="Tirar Camiseta Feminina Piquet Preto do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #2C4A9A" aria-hidden="true"><use href="#a-bag"></use></svg></span><div class="t"><b>Sacola Quadrada BTG</b><span>J.0149.003 · 1 tamanho</span></div><div class="szs"><span class="szq">N1<input value="300" inputmode="numeric" aria-label="Sacola Quadrada BTG N1"></span></div><span class="n">300<small>peças</small></span><button class="x" type="button" aria-label="Tirar Sacola Quadrada BTG do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #8A4B00" aria-hidden="true"><use href="#a-mug"></use></svg></span><div class="t"><b>Caneca Necton</b><span>B.0412.001</span></div><div class="szs"><span class="szq">Único<input value="150" inputmode="numeric" aria-label="Caneca Necton"></span></div><span class="n">150<small>peças</small></span><button class="x" type="button" aria-label="Tirar Caneca Necton do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #3F63B5" aria-hidden="true"><use href="#a-towel"></use></svg></span><div class="t"><b>Toalha de Academia</b><span>C.0659.001</span></div><div class="szs"><span class="szq">Único<input value="100" inputmode="numeric" aria-label="Toalha de Academia"></span></div><span class="n">100<small>peças</small></span><button class="x" type="button" aria-label="Tirar Toalha de Academia do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #5B4636" aria-hidden="true"><use href="#a-chair"></use></svg></span><div class="t"><b>Balcão de Recepção</b><span>MAT-021</span></div><div class="szs"><span class="szq">Único<input value="1" inputmode="numeric" aria-label="Balcão de Recepção"></span></div><span class="n">1<small>peça</small></span><button class="x" type="button" aria-label="Tirar Balcão de Recepção do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div class="fam"><span class="ph"><svg style="color: #5B4636" aria-hidden="true"><use href="#a-chair"></use></svg></span><div class="t"><b>Poltrona Lounge Preta</b><span>MAT-034</span></div><div class="szs"><span class="szq">Único<input value="4" inputmode="numeric" aria-label="Poltrona Lounge Preta"></span></div><span class="n">4<small>peças</small></span><button class="x" type="button" aria-label="Tirar Poltrona Lounge Preta do evento"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; border-top: 1px solid #EEF1F4; font-size: 13.5px">
+        <span class="muted">Mostrando 16 de 100 itens</span>
+        <button class="btn btn-o" type="button">Ver mais 30 itens</button>
+      </div>
+    </div>
+
+    <footer style="display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-top: 1px solid #E2E6EB; background: #FAFBFC">
+      <span style="font-size: 13.5px"><span class="muted">100 itens</span> · <b>2.000 peças</b></span>
+      <span style="margin-left: auto; display: flex; gap: 8px">
+        <a class="btn btn-o btn-lg" href="EventosPortalEstoque.dc.html"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Escolher mais no Estoque</a>
+        <a class="btn btn-p btn-lg" href="EventosPortalNovo.dc.html"><svg class="ic" aria-hidden="true"><use href="#i-check"></use></svg>Pronto</a>
+      </span>
+    </footer>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
