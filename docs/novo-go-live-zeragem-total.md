@@ -157,8 +157,10 @@ URI do export. Guarde essa saída.
    0001.
 4. Cloud Storage, opcional. Apague só o que é do WMS (fotos de produto,
    anexos de envio, documentos operacionais). **Nunca apague prefixo do
-   Comercial**, como os anexos de contrato. Liste o bucket e o conteúdo de
-   cada prefixo antes do `rm`:
+   Comercial**, como os anexos de contrato, **nem os dos Eventos**
+   (`eventos/` e `portal/<cliente>/eventos/`): as fotos, os documentos e os
+   anexos de cada edição são da história que a zeragem preserva. Liste o
+   bucket e o conteúdo de cada prefixo antes do `rm`:
 
    ```powershell
    gcloud storage ls gs://dute-btg.firebasestorage.app/
