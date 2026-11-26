@@ -24,6 +24,13 @@ export const CLIENT_EVENTS_COLLECTION = "client_event_templates";
 const INTERNAL_EDITORS = ["owner", "admin", "interno"];
 const MAX_ITEMS = 200;
 const MAX_LIST = 200;
+/**
+ * Descrição, endereço, observações e logística cabem o mesmo que as notas da
+ * abertura do inventário. Em 24/11/2026 o limite era 300, e as observações do
+ * pedido, que a tela manda como `schedule`, não têm limite: o escopo de um
+ * evento da BTG, com 418 caracteres, foi recusado duas vezes.
+ */
+export const CLIENT_EVENT_TEXT_MAX = 2000;
 
 const optionalText = (max: number) =>
   z.string().trim().max(max).nullish().transform((value) => value || null);
@@ -41,9 +48,9 @@ export const ClientEventInputSchema = z.object({
   /** Repetir a criação com a mesma chave não duplica o evento. */
   idempotency_key: z.string().trim().max(120).nullish(),
   name: z.string().trim().min(1).max(120),
-  description: optionalText(300),
+  description: optionalText(CLIENT_EVENT_TEXT_MAX),
   venue: z.string().trim().min(1).max(160),
-  address: optionalText(300),
+  address: optionalText(CLIENT_EVENT_TEXT_MAX),
   /** Dia da próxima edição (AAAA-MM-DD). */
   next_date: z
     .string()
@@ -52,8 +59,8 @@ export const ClientEventInputSchema = z.object({
     .nullish()
     .or(z.literal(""))
     .transform((value) => value || null),
-  schedule: optionalText(300),
-  logistics: optionalText(300),
+  schedule: optionalText(CLIENT_EVENT_TEXT_MAX),
+  logistics: optionalText(CLIENT_EVENT_TEXT_MAX),
   items: z.array(ClientEventItemSchema).min(1).max(MAX_ITEMS),
 });
 
@@ -63,6 +70,26 @@ export const ArchiveClientEventSchema = z.object({
 
 export type ClientEventInput = z.infer<typeof ClientEventInputSchema>;
 export type ClientEventItem = z.infer<typeof ClientEventItemSchema>;
+
+const RECUSA_GENERICA = "Dê um nome ao evento, informe o local e escolha ao menos um item.";
+const FALTOU = new Set(["too_small", "invalid_type"]);
+
+/**
+ * A frase da recusa diz o campo que falhou. Até 24/11/2026 toda recusa do
+ * esquema virava a frase genérica, e a cliente, com nome, local e itens
+ * preenchidos, leu duas vezes que faltava um deles quando o que passava era o
+ * tamanho das observações.
+ */
+export function mensagemDaRecusa(issues: ReadonlyArray<{ code: string; path: ReadonlyArray<PropertyKey> }>) {
+  for (const issue of issues) {
+    const campo = issue.path[0];
+    if (campo === "name" && FALTOU.has(issue.code)) return "Dê um nome ao evento.";
+    if (campo === "venue" && FALTOU.has(issue.code)) return "Informe o local.";
+    if (campo === "items" && issue.path.length === 1 && FALTOU.has(issue.code)) return "Escolha ao menos um item.";
+    if (campo === "schedule" && issue.code === "too_big") return `As observações passam de ${CLIENT_EVENT_TEXT_MAX} caracteres.`;
+  }
+  return RECUSA_GENERICA;
+}
 
 export type ClientEventView = {
   id: string;

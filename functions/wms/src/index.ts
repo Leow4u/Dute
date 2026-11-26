@@ -174,6 +174,7 @@ import {
   ArchiveClientEventSchema,
   ClientEventInputSchema,
   listClientEvents,
+  mensagemDaRecusa,
   saveClientEvent,
 } from "./domain/client-events.js";
 import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
@@ -7236,7 +7237,7 @@ export const saveClientEventTemplate = onCall(async (request) => {
   const profile = await getProfile(request);
   const parsed = ClientEventInputSchema.safeParse(request.data ?? {});
   if (!parsed.success) {
-    throw new HttpsError("invalid-argument", "Dê um nome ao evento, informe o local e escolha ao menos um item.");
+    throw new HttpsError("invalid-argument", mensagemDaRecusa(parsed.error.issues));
   }
   const customerCode = requireCustomerScope(profile, requestedCustomer(request.data));
   return saveClientEvent(db, customerCode, parsed.data, profile);
