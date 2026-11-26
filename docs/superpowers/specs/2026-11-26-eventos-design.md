@@ -68,6 +68,14 @@ Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
    (26/11): na v1 o cliente preenche e envia, e a Dutelog ajuda por
    telefone. A agenda mostra os rascunhos do cliente só para leitura; o
    "Novo evento" da agenda entra numa parte futura.
+10. **O "Outro momento" fica fora da ordem do cronograma** (26/11, na
+    revisão da parte 1, PR 645): a ordem das datas vale só entre os sete
+    momentos fixos. O formulário põe cada outro momento depois deles, com
+    a data que tiver; pela regra de antes, todo outro com data antes da
+    entrega de volta seria recusado.
+11. **A zeragem recusa com edição em aberto** (26/11, PR 645): com uma
+    edição de `enviado` a `no_evento`, a zeragem para antes de qualquer
+    escrita, no ensaio e na execução, e aponta as edições que impedem.
 
 ## Objetivos
 
@@ -335,8 +343,9 @@ Regras:
   `entrega_no_local` (data e hora) e `retorno_ao_estoque` (data) também.
   Com coleta, `coleta_no_cliente` também.
 - Um tipo só aparece uma vez, exceto `outro` (até cinco). O total é 12.
-- As datas crescem na ordem da lista; a recusa diz qual momento está antes
-  do anterior.
+- As datas dos sete tipos fixos crescem na ordem da lista; a recusa diz
+  qual momento está antes do anterior. O `outro` fica fora da ordem
+  (decisão 10): o formulário o põe depois dos sete, com a data que tiver.
 - O `feito` com `origem: pedido` (a entrega, quando veio da expedição) e
   `origem: retorno` (o retorno ao estoque) tem o instante do fato: a hora
   não se corrige, só a observação. Os outros são registrados à mão, um por
@@ -617,11 +626,14 @@ fotos da OS. Teste das regras no emulador em
 - Zeragem: tupla `EVENTOS_COLLECTIONS = ("client_events",
   "client_event_editions", "client_event_prices")` sempre preservada em
   `tools/full_reset_btg.py`, com o teste em `tools/test_full_reset_btg.py`,
-  e a origem `functions_client_events` entre as que a zeragem preserva em
-  `events`. Os pedidos, volumes, devoluções e movimentos ligados continuam
-  apagados: a edição guarda as próprias cópias (foi, voltou, lacre, volumes)
-  para a história não depender deles. Registro em
-  `docs/novo-go-live-zeragem-total.md`. O legado `client_event_templates`
+  e a origem `functions_client_events`, com o tipo `evento.*`, entre as que
+  a zeragem preserva em `events` (o legado grava a mesma origem com
+  `client_event_template.*`, e esses vão embora). Os pedidos, volumes,
+  devoluções e movimentos ligados continuam apagados: a edição guarda as
+  próprias cópias (foi, voltou, lacre, volumes) para a história não depender
+  deles. Com uma edição em aberto (de `enviado` a `no_evento`), a zeragem
+  para antes de qualquer escrita e aponta as edições (decisão 11). Registro
+  em `docs/novo-go-live-zeragem-total.md`. O legado `client_event_templates`
   continua apagado.
 
 ### Eventos de auditoria
