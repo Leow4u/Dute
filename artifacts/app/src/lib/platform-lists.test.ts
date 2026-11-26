@@ -22,6 +22,7 @@ import { ALERTA_PARADO_ROLES } from "./memoria/alertas";
 import {
   AGENTE_AMBIENTES_LIBERADOS,
   COMERCIAL_AMBIENTES_LIBERADOS,
+  EVENTOS_AMBIENTES_LIBERADOS,
   FINANCEIRO_AMBIENTES_LIBERADOS,
   MEMORIA_AMBIENTES_LIBERADOS,
   OMIE_AMBIENTES_LIBERADOS,
@@ -30,6 +31,7 @@ import {
   RH_AMBIENTES_LIBERADOS,
   RH_PUBLICADO,
   agenteLiberado,
+  eventosLiberado,
   memoriaLiberada,
   recebimentoPorCaixaLiberado,
   rhLiberado,
@@ -312,6 +314,16 @@ describe("o recebimento por caixa igual em todo lugar (recebimento com caixas, p
 
   it("a callable da chegada passa a liberação do ambiente ao domínio", () => {
     expect(read("functions/wms/src/index.ts")).toContain("{ boxReceivingEnabled: boxReceivingEnabled(PROJECT_ID) }");
+  });
+});
+
+describe("os Eventos iguais em todo lugar (eventos, parte 1)", () => {
+  const liberacao = read("functions/wms/src/domain/eventos/liberacao.ts");
+
+  it("a liberação das callables é a do app: só a homologação até a parte 12", () => {
+    expect(tsList(liberacao, "EVENTOS_PROJECTS")).toEqual([...EVENTOS_AMBIENTES_LIBERADOS]);
+    expect([...EVENTOS_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
+    expect([eventosLiberado("dute-homolog"), eventosLiberado("dute-prod"), eventosLiberado("dute-btg"), eventosLiberado(undefined)]).toEqual([true, false, false, false]);
   });
 });
 
