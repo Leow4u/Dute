@@ -514,6 +514,11 @@ class PlanTests(unittest.TestCase):
         self.assertFalse(full_reset_btg.removable("events", documento, control_name=control))
         outro = raw_document("events", "evt-2", {"source": "functions", "type": "inventory.movement"})
         self.assertTrue(full_reset_btg.removable("events", outro, control_name=control))
+        # O modelo antigo grava a mesma origem com client_event_template.*: vai embora com client_event_templates.
+        for tipo in ("client_event_template.created", "client_event_template.updated", "client_event_template.archived"):
+            with self.subTest(tipo=tipo):
+                legado = raw_document("events", "evt-legado", {"source": "functions_client_events", "type": tipo})
+                self.assertTrue(full_reset_btg.removable("events", legado, control_name=control))
 
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
@@ -718,6 +723,8 @@ class MainTests(unittest.TestCase):
         self.fake.seed("client_event_templates", "cev_1", {"customer_code": "BTG Pactual", "name": "Modelo antigo"})
         self.fake.seed("events", "evt1", {"type": "evento.edicao_enviada", "source": "functions_client_events"})
         self.fake.seed("events", "evt2", {"type": "evento.edicao_fechada", "source": "functions_client_events"})
+        # O evento do modelo antigo tem a mesma origem e não conta: sai com o modelo.
+        self.fake.seed("events", "evt3", {"type": "client_event_template.created", "source": "functions_client_events"})
         with fake_backend(self.fake):
             code, output = run_main(["--include-setup"])
         self.assertEqual(code, 0)

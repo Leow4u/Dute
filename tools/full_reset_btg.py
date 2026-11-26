@@ -15,9 +15,10 @@ A zeragem é do WMS e nunca apaga dado do Comercial, o cadastro da
 Operação, o Blog institucional, as conversas do Zap nem as edições dos
 Eventos do portal: as coleções ficam sempre, inclusive com --include-setup,
 e em `events` ficam os eventos com source "functions_comercial",
-"functions_operacao", "functions_financeiro" ou "functions_client_events". Se a zeragem fosse
-apagar `customers` e algum cadastro tem o campo `stage` (do Comercial), ela
-para antes de alterar qualquer coisa.
+"functions_operacao", "functions_financeiro" ou "functions_client_events" (este,
+só os do tipo `evento.*`). Se a zeragem fosse apagar `customers` e algum
+cadastro tem o campo `stage` (do Comercial), ela para antes de alterar
+qualquer coisa.
 
 Sem --apply, só audita e exibe o plano. Com --apply, exige a frase de
 confirmação e um export gerenciado do Firestore (--export-to gs://...), que é
@@ -173,8 +174,11 @@ EVENTOS_COLLECTIONS = (
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
 OPERACAO_EVENT_SOURCE = "functions_operacao"
 FINANCEIRO_EVENT_SOURCE = "functions_financeiro"
-# Os eventos de auditoria dos Eventos do portal ficam com as edições.
+# Os eventos de auditoria dos Eventos do portal ficam com as edições: a origem
+# e o tipo `evento.*`. O modelo antigo grava a mesma origem com
+# `client_event_template.*`, e esses vão embora com ele.
 EVENTOS_EVENT_SOURCE = "functions_client_events"
+EVENTOS_EVENT_TYPE_PREFIX = "evento."
 # O Comercial marca em `customers` o campo `stage` (prospect ou cliente).
 CUSTOMERS_COLLECTION = "customers"
 STAGE_FIELD = "stage"
@@ -293,8 +297,13 @@ def financeiro_event(collection: str, document: dict[str, Any]) -> bool:
 
 
 def eventos_event(collection: str, document: dict[str, Any]) -> bool:
-    """Evento de auditoria dos Eventos do portal: fica com as edições."""
-    return event_source(collection, document) == EVENTOS_EVENT_SOURCE
+    """Evento de auditoria dos Eventos do portal (tipo `evento.*`): fica com as
+    edições. O modelo antigo grava a mesma origem com `client_event_template.*`,
+    e esses vão embora com `client_event_templates`."""
+    return (
+        event_source(collection, document) == EVENTOS_EVENT_SOURCE
+        and event_type(document).startswith(EVENTOS_EVENT_TYPE_PREFIX)
+    )
 
 
 def event_source(collection: str, document: dict[str, Any]) -> str:
@@ -303,6 +312,13 @@ def event_source(collection: str, document: dict[str, Any]) -> str:
     source = document.get("fields", {}).get("source")
     if isinstance(source, dict) and isinstance(source.get("stringValue"), str):
         return source["stringValue"]
+    return ""
+
+
+def event_type(document: dict[str, Any]) -> str:
+    kind = document.get("fields", {}).get("type")
+    if isinstance(kind, dict) and isinstance(kind.get("stringValue"), str):
+        return kind["stringValue"]
     return ""
 
 

@@ -29,9 +29,11 @@ A zeragem é do WMS e **nunca apaga dado do Comercial**
 **Eventos do Comercial, da Operação, do Financeiro e dos Eventos do portal.**
 Ficam em `events`, junto dos do WMS. A zeragem apaga só os eventos cujo
 `source` não é `functions_comercial`, `functions_operacao`,
-`functions_financeiro` nem `functions_client_events`; o dry-run mostra quantos
-ficam em `preserve_events`, `preserve_operacao_events`,
-`preserve_financeiro_events` e `preserve_eventos_events`.
+`functions_financeiro` nem `functions_client_events` com o tipo `evento.*`; o
+dry-run mostra quantos ficam em `preserve_events`, `preserve_operacao_events`,
+`preserve_financeiro_events` e `preserve_eventos_events`. O modelo de evento
+antigo grava a mesma origem com o tipo `client_event_template.*`: esses
+eventos vão embora com `client_event_templates`.
 
 **Cadastro com `stage`.** O Comercial marca prospect e cliente com o campo
 `stage` em `customers`. Com `--include-setup`, se algum cadastro tem esse
