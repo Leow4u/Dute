@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,6 +12,7 @@ import {
   eventNotes,
   eventPiecesValue,
   eventShortages,
+  MAX_TEXTO_DO_EVENTO,
   productForEventItem,
   sortEvents,
   type ClientEvent,
@@ -120,5 +124,17 @@ describe("eventos do portal", () => {
     const archive = functionRoute("/api/client/events/cev_1/archive", "POST");
     expect(archive?.name).toBe("archiveClientEventTemplate");
     expect(await archive?.payload("/api/client/events/cev_1/archive")).toEqual({ id: "cev_1" });
+  });
+});
+
+describe("o tamanho dos textos livres do evento", () => {
+  it("é o que o servidor aceita", () => {
+    // 26/11/2026: o PR 642 levou o servidor a 2000 caracteres e a tela Eventos
+    // continuou cortando em 300.
+    const raiz = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    const servidor = readFileSync(resolve(raiz, "functions/wms/src/domain/client-events.ts"), "utf8");
+    const limite = Number(/export const CLIENT_EVENT_TEXT_MAX = (\d+);/.exec(servidor)?.[1]);
+    expect(limite).toBe(2000);
+    expect(MAX_TEXTO_DO_EVENTO).toBe(limite);
   });
 });
