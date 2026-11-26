@@ -12,6 +12,7 @@ export * from "./areas-de-passagem";
 export * from "./avisos";
 export * from "./contratos-datas";
 export * from "./dinheiro";
+export * from "./eventos";
 export * from "./nome-do-produto";
 export * from "./parados";
 export * from "./saldo-da-caixa";
