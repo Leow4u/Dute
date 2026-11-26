@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Fluxo do evento · quem faz o quê</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+a{color:#0054CE;text-decoration:none}a:hover{color:#004496}
+h1,h2,h3,p{margin:0}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.st{flex:1 1 0;min-width:0;background:#fff;border:1px solid #E5E5E1;border-radius:12px;padding:16px 16px 14px;display:flex;flex-direction:column;gap:8px}
+.st .n{width:30px;height:30px;border-radius:50%;background:#161616;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+.st h2{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.st p{font-size:13px;color:#3F403F}
+.st .r{font-size:12.5px;color:#5F6368;border-top:1px solid #F0F0ED;padding-top:8px;margin-top:auto}
+.st .r b{color:#161616}
+.who{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border:1px solid transparent;align-self:flex-start}
+.w-cli{background:#E8EEFC;border-color:#C7D6F7;color:#1C45AB}
+.w-dut{background:#FBE3E4;border-color:#F3B9BC;color:#AD0015}
+.arr{flex:0 0 18px;display:flex;align-items:center;justify-content:center;color:#9A9A95}
+.arr svg{width:18px;height:18px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 600px; padding: 40px 44px; display: flex; flex-direction: column; gap: 22px">
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+    <div>
+      <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -.02em">O evento, do portal ao histórico</h1>
+      <p style="font-size: 15px; color: #5F6368; margin-top: 4px">Uma edição por ano. O cliente abre e envia; a Dutelog registra; o registro fica para a próxima.</p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <span class="who w-cli">Cliente</span><span style="font-size: 13px; color: #5F6368">abre, envia e lê</span>
+      <span class="who w-dut" style="margin-left: 10px">Dutelog</span><span style="font-size: 13px; color: #5F6368">Guilherme registra na Armazenagem</span>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 6px; align-items: stretch; flex: 1">
+    <article class="st">
+      <span class="n">1</span>
+      <h2>Rascunho</h2>
+      <span class="who w-cli">Cliente</span>
+      <p>Novo evento em Eventos: nome, edição, local, endereço, layout, horários, itens do estoque e a coleta no cliente.</p>
+      <span class="r"><b>Fica:</b> o plano da edição</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st">
+      <span class="n">2</span>
+      <h2>Enviado</h2>
+      <span class="who w-cli">Cliente</span>
+      <p>Enviar para a Dutelog: nasce o pedido de saída com os itens e a entrega no local, ligado ao evento.</p>
+      <span class="r"><b>Fica:</b> PED-0007 do evento</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st">
+      <span class="n">3</span>
+      <h2>Confirmado</h2>
+      <span class="who w-dut">Dutelog</span>
+      <p>Confirma o pedido, fecha o preço com a proposta anexa e marca até quando separar.</p>
+      <span class="r"><b>Fica:</b> preço fechado, separar até</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st">
+      <span class="n">4</span>
+      <h2>Separado</h2>
+      <span class="who w-dut">Dutelog</span>
+      <p>O armazém separa, fecha os volumes e o lacre. O romaneio é o que foi.</p>
+      <span class="r"><b>Fica:</b> itens que foram, volumes, lacre</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st">
+      <span class="n">5</span>
+      <h2>No evento</h2>
+      <span class="who w-dut">Dutelog</span>
+      <p>Coleta no cliente, entrega, montagem, o evento e a desmontagem: a hora feita e as fotos de cada momento.</p>
+      <span class="r"><b>Fica:</b> horários feitos, equipe, fotos</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st">
+      <span class="n">6</span>
+      <h2>Retornado</h2>
+      <span class="who w-dut">Dutelog</span>
+      <p>Retorno ao armazém e contagem: o que voltou, a avaria, o que ficou; a entrega de volta no cliente.</p>
+      <span class="r"><b>Fica:</b> itens que voltaram, diferenças, fotos</span>
+    </article>
+    <span class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+    <article class="st" style="border-color: #161616">
+      <span class="n">7</span>
+      <h2>Fechado</h2>
+      <span class="who w-dut">Dutelog</span>
+      <p>Tudo registrado: a edição vira história. No ano seguinte, "Nova edição a partir desta".</p>
+      <span class="r"><b>Fica:</b> a edição inteira, para sempre</span>
+    </article>
+  </div>
+
+  <div style="display: flex; gap: 28px; font-size: 13px; color: #5F6368; border-top: 1px solid #E5E5E1; padding-top: 14px">
+    <span><b style="color: #161616">O que já existe e entra no registro:</b> o pedido de saída e o romaneio (o que foi), o retorno do pedido conferido pelo armazém (o que voltou), o comprovante de entrega e a fatura.</span>
+    <span><b style="color: #161616">O que é novo:</b> o evento com edições, a ficha da edição com horários feitos, fotos e preço, e "Nova edição a partir desta".</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

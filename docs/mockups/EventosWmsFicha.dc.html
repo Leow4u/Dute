@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Armazenagem · Evento, o Guilherme registra</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#F5F5F3;color:#161616;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+button,input{font:inherit;color:inherit}
+a{color:#0054CE;text-decoration:none}a:hover{color:#003E99}
+x-dc{display:contents}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:20px;height:20px;flex:0 0 auto}.ic-s{width:16px;height:16px;flex:0 0 auto}
+.app{display:flex;width:1440px;min-height:1640px}
+.sb{flex:0 0 248px;background:#161616;color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;gap:2px}
+.logo{font-weight:800;font-size:22px;letter-spacing:.04em;padding:0 10px 6px}
+.logo small{display:block;font-size:8px;letter-spacing:.18em;font-weight:700;opacity:.8;margin-top:-2px}
+.sw{display:flex;align-items:center;gap:10px;width:100%;height:44px;margin:8px 0 6px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font:800 15px Manrope,sans-serif;text-align:left;cursor:pointer}
+.cli{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px}
+.cli i{width:34px;height:34px;border-radius:9px;background:#2a2a2a;display:inline-flex;align-items:center;justify-content:center}
+.cli small{display:block;font-size:11px;color:rgba(255,255,255,.66)}
+.cli b{font-size:14px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:10px;color:rgba(255,255,255,.78);font-weight:600;font-size:15px;text-decoration:none;position:relative}
+.nav:hover{color:#fff}
+.nav.on{background:rgba(255,255,255,.12);color:#fff}
+.nav.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:#E71C23}
+.nav .cnt{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.sbf{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.12)}
+.av{width:36px;height:36px;border-radius:50%;background:#E71C23;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.sbf b{display:block;font-size:14px}.sbf span{font-size:13px;color:rgba(255,255,255,.66)}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;padding:30px 44px 40px;gap:16px}
+.hd{display:flex;align-items:center;gap:14px}
+.hd .t{flex:1;min-width:0}
+.hd h1{font-size:26px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;line-height:1.2}
+.hd .t p{font-size:13.5px;color:#5F6368}
+.bk,.bk:hover{width:40px;height:40px;border-radius:8px;border:1px solid #D4D4CF;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#161616;flex:0 0 auto}
+.acts{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font:700 14px Manrope,sans-serif;border:1px solid transparent;white-space:nowrap;cursor:pointer;text-decoration:none}
+.btn-p{background:#E71C23;color:#fff}.btn-p:hover{background:#AD0015;color:#fff}
+.btn-s{background:#fff;color:#161616;border-color:#D4D4CF}.btn-s:hover{background:#F0F0ED;color:#161616}
+.btn-sm{height:32px;padding:0 12px;font-size:13px}
+.card{background:#fff;border:1px solid #E5E5E1;border-radius:12px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:12px;padding:12px 18px;background:#FAFAF8;border-bottom:1px solid #E5E5E1}
+.ch .t{flex:1;min-width:0}
+.ch h2{font-size:16px;font-weight:800}
+.ch span{font-size:13px;color:#5F6368;font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+.badge i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.s-evt{background:#FDF0D5;border-color:#F3DCA3;color:#8A4B00}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:22px;align-items:start}
+.mo{display:grid;grid-template-columns:30px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) auto;gap:12px;align-items:center;padding:12px 18px;border-top:1px solid #F0F0ED}
+.mo.f{border-top:0}
+.mo i{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:12px;border:1px solid #E5E5E1;background:#F0F0ED;color:#5F6368}
+.mo i.ok{background:#DDF5E4;border-color:#B6E4C4;color:#14602F}
+.mo i.cur{background:#E71C23;border-color:#E71C23;color:#fff;box-shadow:0 0 0 4px #FBE3E4}
+.mo b{display:block;font-size:14.5px;font-weight:800}
+.mo .p{font-size:12.5px;color:#5F6368;font-weight:600}
+.mo .w{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.mo .w small{display:block;font-size:12.5px;color:#5F6368;font-weight:600}
+.mo .x{font-size:13px;color:#3F403F;font-weight:600}
+.mo .x em{font-style:normal;color:#AD0015;font-weight:800}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12.5px;font-weight:700;color:#5F6368;text-align:left;padding:10px 18px 8px 0;border-bottom:1px solid #E5E5E1}
+th:first-child,td:first-child{padding-left:18px}
+td{padding:9px 18px 9px 0;border-top:1px solid #F0F0ED;vertical-align:middle}
+tbody tr:first-child td{border-top:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td b{font-weight:800}
+.num{width:84px;height:36px;border:1px solid #D4D4CF;border-radius:8px;padding:0 10px;text-align:right;font-weight:700;background:#fff}
+.obs{width:100%;height:36px;border:1px solid #D4D4CF;border-radius:8px;padding:0 10px;font-weight:600;background:#fff}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.kv b{font-weight:700;text-align:right}
+.pn{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.th{width:100px;height:76px;border-radius:8px;background:#F0F0ED;border:1px solid #E5E5E1;display:flex;align-items:center;justify-content:center;color:#5F6368;position:relative}
+.th svg{width:22px;height:22px}
+.th small{position:absolute;left:6px;bottom:6px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:#fff;border:1px solid #E5E5E1;border-radius:4px;padding:1px 5px;color:#3F403F}
+.doc{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F0F0ED;font-size:13.5px;font-weight:600}
+.doc:first-child{border-top:0}
+.doc .ic-s{color:#5F6368}
+.doc span{flex:1;min-width:0}
+.doc small{color:#5F6368;font-weight:600}
+.hi{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px solid #F0F0ED;font-size:13px}
+.hi:first-child{border-top:0}
+.hi b{font-weight:700}
+.hi span{color:#5F6368;font-weight:600;font-size:12.5px}
+.srch{display:flex;align-items:center;gap:8px;height:34px;width:250px;border:1px solid #D4D4CF;border-radius:8px;background:#fff;padding:0 10px;color:#5F6368}
+.srch input{border:0;outline:0;width:100%;font-weight:600;color:#161616;background:transparent;font-size:13px}
+.fc{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;background:#fff;border:1px solid #D4D4CF;font:700 13px Manrope,sans-serif;color:#161616;cursor:pointer}
+.fc em{font-style:normal;min-width:22px;height:20px;border-radius:999px;background:#F0F0ED;color:#161616;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.fc.on{background:#161616;border-color:#161616;color:#fff}
+.fc.on em{background:rgba(255,255,255,.2);color:#fff}
+</style>
+</helmet>
+<div class="app">
+<aside class="sb">
+  <div class="logo">DUTELOG<small>SOLUÇÕES LOGÍSTICAS</small></div>
+  <button type="button" class="sw"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>Armazenagem<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto;opacity:.75"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg></button>
+  <div class="cli"><i><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></i><div><small>Cliente ativo</small><b>BTG</b></div></div>
+  <a class="nav" href="#" style="color:#C9B8FB"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>Agent Dute</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Início</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Pedidos<span class="cnt">1</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Estoque<svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:auto"><path d="m9 18 6-6-6-6"/></svg></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m3 9 2.5-5h13L21 9"/><path d="M12 4v5M10 13h4"/></svg>Receber</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Contagem</a>
+  <a class="nav on" href="EventosWmsLista.dc.html" aria-current="page"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Eventos<span class="cnt">2</span></a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>Faturamento</a>
+  <a class="nav" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Documentos</a>
+  <div class="sbf"><span class="av">GD</span><div><b>Guilherme Dantas</b><span>Operação WMS</span></div></div>
+</aside>
+<main class="main">
+  <div class="hd">
+    <a class="bk" href="EventosWmsLista.dc.html" aria-label="Voltar a Eventos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <div class="t">
+      <h1>B2B Conference Necton <span class="badge s-evt"><i></i>No evento</span></h1>
+      <p>BTG Pactual · edição 2027 · 28 e 29/01 · Hotel Unique · PED-0007 separado · lacre 88412 · R$ 9.800,00</p>
+    </div>
+    <div class="acts">
+      <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Romaneio</button>
+      <button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Adicionar fotos</button>
+      <button type="button" class="btn btn-p"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Registrar momento</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+
+      <div class="card">
+        <div class="ch"><div class="t"><h2>A edição, momento a momento</h2><span>o previsto pelo cliente e o feito pela Dutelog</span></div></div>
+        <div class="mo f"><i class="ok"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Pedido confirmado e preço fechado</b><span class="p">PED-0007 · 100 itens · 2.000 peças</span></div><span class="w">05/12/2026 11:02<small>Guilherme</small></span><span class="x">R$ 9.800,00 · proposta anexa</span><span class="x">Separar até 26/01</span><button type="button" class="btn btn-s btn-sm">Editar</button></div>
+        <div class="mo"><i class="ok"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Separado</b><span class="p">no armazém</span></div><span class="w">26/01 16:40<small>Rafael</small></span><span class="x">38 volumes · lacre 88412</span><span class="x"><a href="#">Romaneio</a></span><button type="button" class="btn btn-s btn-sm">Ver pedido</button></div>
+        <div class="mo"><i class="ok"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Coleta no cliente</b><span class="p">previsto 28/01 05:00 · Faria Lima</span></div><span class="w">28/01 05:10<small>Guilherme</small></span><span class="x">2.190 produtos · planilha</span><span class="x">1 foto</span><button type="button" class="btn btn-s btn-sm">Editar</button></div>
+        <div class="mo"><i class="ok"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Entrega no local</b><span class="p">previsto 28/01 08:30 · doca do hotel</span></div><span class="w">28/01 08:20<small>Guilherme</small></span><span class="x"><a href="#">Comprovante de entrega</a></span><span class="x">—</span><button type="button" class="btn btn-s btn-sm">Editar</button></div>
+        <div class="mo"><i class="ok"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i><div><b>Montagem</b><span class="p">previsto 28/01 10:00 às 19:00</span></div><span class="w">28/01 10:05 às 18:40<small>Guilherme</small></span><span class="x">Rafael, Marcos e 2 do cliente</span><span class="x">6 fotos</span><button type="button" class="btn btn-s btn-sm">Editar</button></div>
+        <div class="mo"><i class="cur">5</i><div><b>Evento</b><span class="p">previsto 29/01 08:00 às 20:00</span></div><span class="w">começou 29/01 08:00<small>Guilherme</small></span><span class="x">Rafael, Marcos e 2 do cliente</span><span class="x">4 fotos</span><button type="button" class="btn btn-p btn-sm">Registrar fim</button></div>
+        <div class="mo"><i>6</i><div><b>Desmontagem e coleta</b><span class="p">previsto 29/01 20:00</span></div><span class="w">—</span><span class="x">—</span><span class="x">—</span><button type="button" class="btn btn-s btn-sm">Registrar</button></div>
+        <div class="mo"><i>7</i><div><b>Retorno ao estoque e contagem</b><span class="p">previsto 30/01 09:00</span></div><span class="w">—</span><span class="x">o que voltou, abaixo</span><span class="x">—</span><button type="button" class="btn btn-s btn-sm">Registrar retorno</button></div>
+        <div class="mo"><i>8</i><div><b>Entrega de volta no cliente</b><span class="p">previsto 02/02 10:00 · Faria Lima</span></div><span class="w">—</span><span class="x">produtos que voltaram</span><span class="x">—</span><button type="button" class="btn btn-s btn-sm">Registrar</button></div>
+        <div class="mo"><i>9</i><div><b>Fechar a edição</b><span class="p">vira história</span></div><span class="w">—</span><span class="x"><em>Faltam</em> desmontagem, retorno e entrega de volta</span><span class="x">—</span><button type="button" class="btn btn-s btn-sm">Fechar edição</button></div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Registrar o retorno ao estoque</h2><span>previsto 30/01 09:00 · 100 itens · 2.000 peças foram</span></div><label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700">Chegou em<input class="obs" style="width:170px" value="30/01/2027 09:30" aria-label="Quando o retorno chegou"></label></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid #E5E5E1;flex-wrap:wrap">
+          <label class="srch"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="search" placeholder="Item ou código" aria-label="Buscar item ou código"></label>
+          <button type="button" class="fc on" aria-pressed="true">Todos <em>100</em></button>
+          <button type="button" class="fc" aria-pressed="false">Com diferença <em>4</em></button>
+          <button type="button" class="fc" aria-pressed="false">Por conferir <em>0</em></button>
+          <button type="button" class="btn btn-s btn-sm" style="margin-left:auto">Os outros 96 voltaram iguais</button>
+        </div>
+        <table>
+          <thead><tr><th>Item</th><th>Código</th><th class="n">Foi</th><th class="n">Voltou</th><th>Avaria ou observação</th></tr></thead>
+          <tbody>
+            <tr><td><b>Polo Masculino Piquet Arpoador · G</b></td><td style="color:#5F6368">A.01.0809.002</td><td class="n">200</td><td class="n"><input class="num" value="198" inputmode="numeric" aria-label="Voltou: Polo Masculino Piquet Arpoador G"></td><td><input class="obs" value="2 não voltaram" aria-label="Avaria ou observação: Polo Masculino Piquet Arpoador G"></td></tr>
+            <tr><td><b>Sacola Quadrada BTG · N1</b></td><td style="color:#5F6368">J.0149.003</td><td class="n">300</td><td class="n"><input class="num" value="296" inputmode="numeric" aria-label="Voltou: Sacola Quadrada BTG N1"></td><td><input class="obs" value="4 não voltaram" aria-label="Avaria ou observação: Sacola Quadrada BTG N1"></td></tr>
+            <tr><td><b>Caneca Necton</b></td><td style="color:#5F6368">B.0412.001</td><td class="n">150</td><td class="n"><input class="num" value="150" inputmode="numeric" aria-label="Voltou: Caneca Necton"></td><td><input class="obs" value="2 avariadas · alça quebrada" aria-label="Avaria ou observação: Caneca Necton"></td></tr>
+            <tr><td><b>Mesa lateral</b></td><td style="color:#5F6368">MAT-012</td><td class="n">2</td><td class="n"><input class="num" value="2" inputmode="numeric" aria-label="Voltou: Mesa lateral"></td><td><input class="obs" value="1 avariada · tampo riscado" aria-label="Avaria ou observação: Mesa lateral"></td></tr>
+            <tr><td><b>Polo Masculino Piquet Arpoador · M</b></td><td style="color:#5F6368">A.01.0809.002</td><td class="n">300</td><td class="n"><input class="num" value="300" inputmode="numeric" aria-label="Voltou: Polo Masculino Piquet Arpoador M"></td><td><input class="obs" value="" aria-label="Avaria ou observação: Polo Masculino Piquet Arpoador M"></td></tr>
+            <tr><td><b>Polo Feminina Piquet Azul Marinho · M</b></td><td style="color:#5F6368">A.01.0805.002</td><td class="n">220</td><td class="n"><input class="num" value="220" inputmode="numeric" aria-label="Voltou: Polo Feminina Piquet Azul Marinho M"></td><td><input class="obs" value="" aria-label="Avaria ou observação: Polo Feminina Piquet Azul Marinho M"></td></tr>
+            <tr><td><b>Balcão de Recepção</b></td><td style="color:#5F6368">MAT-021</td><td class="n">1</td><td class="n"><input class="num" value="1" inputmode="numeric" aria-label="Voltou: Balcão de Recepção"></td><td><input class="obs" value="" aria-label="Avaria ou observação: Balcão de Recepção"></td></tr>
+            <tr><td><b>Poltrona Lounge Preta</b></td><td style="color:#5F6368">MAT-034</td><td class="n">4</td><td class="n"><input class="num" value="4" inputmode="numeric" aria-label="Voltou: Poltrona Lounge Preta"></td><td><input class="obs" value="" aria-label="Avaria ou observação: Poltrona Lounge Preta"></td></tr>
+            <tr><td><b>Produtos coletados no cliente</b></td><td style="color:#5F6368"><a href="#">planilha</a></td><td class="n">2.190</td><td class="n"><input class="num" value="1.930" inputmode="numeric" aria-label="Voltou: produtos coletados no cliente"></td><td><input class="obs" value="260 distribuídos no evento" aria-label="Avaria ou observação: produtos coletados no cliente"></td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 18px;border-top:1px solid #F0F0ED;font-size:13px"><span style="color:#5F6368;font-weight:600">Mostrando 8 de 100 itens</span><button type="button" class="btn btn-s btn-sm">Ver mais 30</button></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid #E5E5E1;background:#FAFAF8">
+          <span style="font-size:13.5px;font-weight:700">2.000 peças foram · 1.994 voltam ao estoque · 6 não voltaram · 3 avariadas · a devolução do pedido nasce com elas</span>
+          <span style="margin-left:auto;display:flex;gap:8px"><button type="button" class="btn btn-s"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Fotos do retorno</button><button type="button" class="btn btn-p">Confirmar retorno</button></span>
+        </div>
+      </div>
+    </div>
+
+    <aside style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Preço fechado</h2></div><button type="button" class="btn btn-s btn-sm">Alterar</button></div>
+        <div class="pn">
+          <b style="font-size:26px;font-weight:800;letter-spacing:-.01em">R$ 9.800,00</b>
+          <div class="kv"><span style="color:#5F6368">Cobre</span><b>Frete, equipe e montagem</b></div>
+          <div class="kv"><span style="color:#5F6368">Proposta</span><b><a href="#">proposta-necton-2027.pdf</a></b></div>
+          <div class="kv"><span style="color:#5F6368">Fechado por</span><b>Guilherme · 05/12/2026</b></div>
+          <div class="kv"><span style="color:#5F6368">Faturar</span><b>ao fechar a edição</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Fotos</h2><span>11 até agora</span></div><button type="button" class="btn btn-s btn-sm">Adicionar</button></div>
+        <div class="pn">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Evento</small></span>
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Evento</small></span>
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Evento</small></span>
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Montagem</small></span>
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Montagem</small></span>
+            <span class="th"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><small>Montagem</small></span>
+          </div>
+          <a href="#" style="font-size:13px;font-weight:700">Ver as 11 fotos</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Documentos</h2></div><button type="button" class="btn btn-s btn-sm">Anexar</button></div>
+        <div class="pn" style="gap:0">
+          <div class="doc"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>Layout do evento <small>· cliente</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>Planilha dos produtos <small>· cliente</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>Proposta <small>· 05/12/2026</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>Romaneio PED-0007 <small>· 38 volumes</small></span><a href="#">Abrir</a></div>
+          <div class="doc"><svg class="ic-s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>Comprovante de entrega <small>· 28/01</small></span><a href="#">Abrir</a></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Equipe e veículo</h2></div><button type="button" class="btn btn-s btn-sm">Editar</button></div>
+        <div class="pn">
+          <div class="kv"><span style="color:#5F6368">Estoquistas</span><b>Rafael S. · Marcos A.</b></div>
+          <div class="kv"><span style="color:#5F6368">Do cliente</span><b>2 pessoas</b></div>
+          <div class="kv"><span style="color:#5F6368">Veículo</span><b>Fiorino · ABC-1D23</b></div>
+          <div class="kv"><span style="color:#5F6368">Contato no local</span><b>Cristiane</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="t"><h2>Histórico</h2></div></div>
+        <div class="pn" style="gap:0">
+          <div class="hi"><b>Evento começou</b><span>Guilherme · 29/01 08:02</span></div>
+          <div class="hi"><b>6 fotos da montagem</b><span>Guilherme · 28/01 18:45</span></div>
+          <div class="hi"><b>Montagem feita 10:05 às 18:40</b><span>Guilherme · 28/01 18:44</span></div>
+          <div class="hi"><b>Entrega no local feita 08:20</b><span>Guilherme · 28/01 08:25</span></div>
+          <div class="hi"><b>Coleta no cliente feita 05:10</b><span>Guilherme · 28/01 05:20</span></div>
+          <div class="hi"><b>Separado · 38 volumes · lacre 88412</b><span>Rafael · 26/01 16:40</span></div>
+          <div class="hi"><b>Confirmado e preço fechado R$ 9.800,00</b><span>Guilherme · 05/12/2026 11:02</span></div>
+          <div class="hi"><b>Enviado pelo cliente · PED-0007</b><span>Cristiane · 24/11/2026 15:14</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

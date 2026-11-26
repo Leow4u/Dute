@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Portal · Novo evento</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#F4F5F7;color:#1E293B;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:#2457D6;text-decoration:none}a:hover{color:#1C45AB}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font-family:inherit;color:inherit}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic{width:16px;height:16px;flex:0 0 auto}
+.muted{color:#5D6877}
+.card{background:#fff;border:1px solid #E2E6EB;border-radius:10px}
+.sec{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.sec h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid transparent;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn-p{background:#2457D6;color:#fff}.btn-p:hover{background:#1C45AB;color:#fff}
+.btn-o{background:#fff;color:#1E293B;border-color:#E2E6EB}.btn-o:hover{background:#F4F5F7;color:#1E293B}
+.btn-g{background:transparent;color:#3F4A5A}.btn-g:hover{background:#F4F5F7;color:#1E293B}
+.btn-lg{height:44px;padding:0 18px;font-size:14px;border-radius:8px}
+.inp{height:40px;border:1px solid #CED4DC;border-radius:8px;padding:0 12px;font-size:14px;font-weight:500;color:#1E293B;background:#fff;width:100%}
+.inp:focus{outline:2px solid #2457D6;outline-offset:1px}
+textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.5}
+.lbl{font-size:12.5px;font-weight:600;color:#3F4A5A;display:block;margin-bottom:6px}
+.fld{display:flex;flex-direction:column;min-width:0}
+.req{color:#BF1247}
+.chip{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 12px;border-radius:8px;border:1px solid #E2E6EB;background:#F4F5F7;font-size:13px;font-weight:600}
+.chip button{width:26px;height:26px;border:0;border-radius:6px;background:transparent;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#5D6877}
+.mm{display:grid;grid-template-columns:200px 150px 90px 90px minmax(0,1fr);gap:10px;align-items:center}
+.mm.hd{font-size:12.5px;font-weight:600;color:#5D6877;padding-bottom:2px;border-bottom:1px solid #EEF1F4}
+.mm b{font-size:14px;font-weight:600}
+.it{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #EEF1F4}
+.it:first-of-type{border-top:0}
+.ph{width:44px;height:44px;border-radius:8px;background:#EEF1F4;border:1px solid #E2E6EB;display:inline-flex;align-items:center;justify-content:center;color:#5D6877;flex:0 0 auto}
+.it .t{flex:1;min-width:0}
+.it .t b{display:block;font-size:14px;font-weight:600}
+.it .t span{display:block;font-size:12.5px;color:#5D6877}
+.step{display:inline-flex;align-items:center;height:36px;border:1px solid #E2E6EB;border-radius:6px;background:#fff;overflow:hidden}
+.step button{width:34px;height:34px;border:0;background:#fff;color:#1E293B;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.step output{min-width:40px;text-align:center;font-size:14px;font-weight:600}
+.sum{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid #EEF1F4}
+.sum b{font-weight:700}
+.fam{display:grid;grid-template-columns:44px minmax(0,1.2fr) minmax(0,1.6fr) 70px;gap:12px;align-items:center;padding:9px 0;border-top:1px solid #EEF1F4}
+.fam:first-child{border-top:0}
+.fam .t b{display:block;font-size:14px;font-weight:600}
+.fam .t span{display:block;font-size:12.5px;color:#5D6877}
+.szs{display:flex;flex-wrap:wrap;gap:6px}
+.szq{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:6px;border:1px solid #E2E6EB;background:#F4F5F7;font-size:12.5px;font-weight:600;color:#3F4A5A}
+.szq b{color:#1E293B;font-weight:700}
+.fam .n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="i-chair" viewBox="0 0 24 24"><path d="M6 19v-7a6 6 0 0 1 12 0v7"/><path d="M4 12h16"/><path d="M6 19h12"/><path d="M8 12V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v7"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></symbol>
+</svg>
+<div style="min-height: 100%; display: flex; flex-direction: column">
+<div style="width: 100%; max-width: 1280px; margin: 0 auto; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 20px">
+
+  <header style="display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid #E2E6EB; padding-bottom: 20px">
+    <a class="btn btn-o" href="EventosPortalLista.dc.html" aria-label="Voltar a Eventos" style="width: 40px; height: 40px; padding: 0"><svg class="ic" aria-hidden="true"><use href="#i-back"></use></svg></a>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="font-size: 24px; font-weight: 700; letter-spacing: -0.01em">Novo evento</h1>
+      <p class="muted">O plano da edição. Salvar guarda o rascunho; Enviar para a Dutelog cria o pedido com os itens.</p>
+    </div>
+  </header>
+
+  <form style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start" aria-label="Novo evento">
+    <div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+
+      <section class="card sec">
+        <h2>O evento</h2>
+        <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px">
+          <div class="fld"><label class="lbl" for="nome">Nome do evento <span class="req" aria-hidden="true">*</span></label><input class="inp" id="nome" value="B2B Conference Necton" required></div>
+          <div class="fld"><label class="lbl" for="edicao">Edição de</label><select class="inp" id="edicao"><option selected>Evento novo</option><option>Convenção de vendas</option><option>Feira de Investimentos</option><option>Workshop de líderes</option></select></div>
+        </div>
+        <div class="fld"><label class="lbl" for="descricao">Descrição</label><input class="inp" id="descricao" value="Lounge, balcão de recepção e brindes da conferência B2B da Necton"></div>
+      </section>
+
+      <section class="card sec">
+        <h2>Onde</h2>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 14px">
+          <div class="fld"><label class="lbl" for="local">Local <span class="req" aria-hidden="true">*</span></label><input class="inp" id="local" value="Hotel Unique" required></div>
+          <div class="fld"><label class="lbl" for="endereco">Endereço</label><input class="inp" id="endereco" value="Av. Brigadeiro Luís Antônio, 4700 · Jardim Paulista · São Paulo/SP"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px">
+          <div class="fld"><label class="lbl" for="contato">Contato no local</label><input class="inp" id="contato" value="Cristiane"></div>
+          <div class="fld"><label class="lbl" for="telefone">Telefone do contato</label><input class="inp" id="telefone" value=""></div>
+        </div>
+        <div class="fld">
+          <span class="lbl">Layout do evento</span>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+            <span class="chip"><svg class="ic" aria-hidden="true"><use href="#i-clip"></use></svg>layout-necton-2027.pdf · 1,2 MB<button type="button" aria-label="Tirar layout-necton-2027.pdf"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></span>
+            <button class="btn btn-o" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clip"></use></svg>Anexar layout</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card sec">
+        <h2>Cronograma</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="mm hd"><span>Momento</span><span>Data</span><span>Hora</span><span>Até</span><span>Observação</span></div>
+          <div class="mm"><b>Coleta no cliente</b><input class="inp" type="date" value="2027-01-28" aria-label="Data da coleta no cliente"><input class="inp" type="time" value="05:00" aria-label="Hora da coleta no cliente"><span class="muted" style="text-align: center">—</span><input class="inp" value="Produtos separados no BTG, Faria Lima" aria-label="Observação da coleta no cliente"></div>
+          <div class="mm"><b>Entrega no local</b><input class="inp" type="date" value="2027-01-28" aria-label="Data da entrega no local"><input class="inp" type="time" value="08:30" aria-label="Hora da entrega no local"><span class="muted" style="text-align: center">—</span><input class="inp" value="Doca do hotel" aria-label="Observação da entrega no local"></div>
+          <div class="mm"><b>Montagem</b><input class="inp" type="date" value="2027-01-28" aria-label="Data da montagem"><input class="inp" type="time" value="10:00" aria-label="Hora da montagem"><input class="inp" type="time" value="19:00" aria-label="Fim da montagem"><input class="inp" value="2 estoquistas Dutelog e 2 pessoas do cliente" aria-label="Observação da montagem"></div>
+          <div class="mm"><b>Evento</b><input class="inp" type="date" value="2027-01-29" aria-label="Data do evento"><input class="inp" type="time" value="08:00" aria-label="Hora do evento"><input class="inp" type="time" value="20:00" aria-label="Fim do evento"><input class="inp" value="2 estoquistas Dutelog e 2 pessoas do cliente" aria-label="Observação do evento"></div>
+          <div class="mm"><b>Desmontagem e coleta</b><input class="inp" type="date" value="2027-01-29" aria-label="Data da desmontagem"><input class="inp" type="time" value="20:00" aria-label="Hora da desmontagem"><span class="muted" style="text-align: center">—</span><input class="inp" value="" aria-label="Observação da desmontagem"></div>
+          <div class="mm"><b>Retorno ao estoque Dutelog</b><input class="inp" type="date" value="2027-01-30" aria-label="Data do retorno ao estoque"><input class="inp" type="time" value="09:00" aria-label="Hora do retorno ao estoque"><span class="muted" style="text-align: center">—</span><input class="inp" value="Contagem do que voltou" aria-label="Observação do retorno"></div>
+          <div class="mm"><b>Entrega de volta no cliente</b><input class="inp" type="date" value="2027-02-02" aria-label="Data da entrega de volta"><input class="inp" type="time" value="10:00" aria-label="Hora da entrega de volta"><span class="muted" style="text-align: center">—</span><input class="inp" value="Produtos que voltaram do evento" aria-label="Observação da entrega de volta"></div>
+        </div>
+        <div><button class="btn btn-g" type="button"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Outro momento</button></div>
+      </section>
+
+      <section class="card sec">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+          <div><h2>O que vai · do estoque Dutelog</h2><p class="muted" style="font-size: 13px">100 itens · 2.000 peças · R$ 86.400,00 em peças</p></div>
+          <div style="display: flex; gap: 8px"><a class="btn btn-o" href="EventosPortalItens.dc.html">Ver os 100 itens</a><a class="btn btn-p" href="EventosPortalEstoque.dc.html"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Escolher no Estoque</a></div>
+        </div>
+        <div style="display: flex; flex-direction: column">
+          <div class="fam"><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><div class="t"><b>Polo Masculino Piquet Arpoador</b><span>A.01.0809.002 · 4 tamanhos</span></div><div class="szs"><span class="szq">P <b>120</b></span><span class="szq">M <b>300</b></span><span class="szq">G <b>200</b></span><span class="szq">GG <b>80</b></span></div><span class="n">700</span></div>
+          <div class="fam"><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><div class="t"><b>Polo Feminina Piquet Azul Marinho</b><span>A.01.0805.002 · 3 tamanhos</span></div><div class="szs"><span class="szq">P <b>90</b></span><span class="szq">M <b>220</b></span><span class="szq">G <b>140</b></span></div><span class="n">450</span></div>
+          <div class="fam"><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><div class="t"><b>Camiseta Feminina Piquet Preto</b><span>A.02.0311.006 · 3 tamanhos</span></div><div class="szs"><span class="szq">P <b>40</b></span><span class="szq">M <b>60</b></span><span class="szq">G <b>40</b></span></div><span class="n">140</span></div>
+          <div class="fam"><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span><div class="t"><b>Sacola Quadrada BTG</b><span>J.0149.003</span></div><div class="szs"><span class="szq">N1 <b>300</b></span></div><span class="n">300</span></div>
+          <div class="fam"><span class="ph"><svg class="ic" aria-hidden="true"><use href="#i-chair"></use></svg></span><div class="t"><b>Balcão de Recepção</b><span>MAT-021</span></div><div class="szs"><span class="szq">Único <b>1</b></span></div><span class="n">1</span></div>
+        </div>
+        <div class="sum"><span class="muted">Mostrando 12 de 100 itens</span><a href="EventosPortalItens.dc.html" style="font-weight: 700">Ver os 100 itens</a></div>
+      </section>
+
+      <section class="card sec">
+        <h2>O que vai · coleta no cliente</h2>
+        <div style="display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .7fr) minmax(0, .9fr); gap: 14px">
+          <div class="fld"><label class="lbl" for="coleta-onde">Onde buscar</label><input class="inp" id="coleta-onde" value="BTG Pactual · Av. Brigadeiro Faria Lima, 3477"></div>
+          <div class="fld"><label class="lbl" for="coleta-qtd">Quantidade</label><input class="inp" id="coleta-qtd" inputmode="numeric" value="2.190"></div>
+          <div class="fld"><label class="lbl" for="coleta-valor">Valor declarado</label><input class="inp" id="coleta-valor" inputmode="decimal" value="R$ 100.000,00"></div>
+        </div>
+        <div class="fld">
+          <span class="lbl">Planilha dos produtos</span>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+            <span class="chip"><svg class="ic" aria-hidden="true"><use href="#i-clip"></use></svg>produtos-b2b-conference.xlsx · 507 KB<button type="button" aria-label="Tirar produtos-b2b-conference.xlsx"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button></span>
+            <button class="btn btn-o" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clip"></use></svg>Anexar planilha</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card sec">
+        <h2>Observações para a Dutelog</h2>
+        <div class="fld"><label class="lbl" for="obs">O que mais a Dutelog precisa saber</label><textarea class="inp" id="obs" rows="5">Separação dos móveis que estão no estoque Dutelog.
+Coleta dos produtos que vão ser separados no BTG no dia anterior ou no próprio dia 28/01 às 05:00.
+Montagem do evento: 2 estoquistas e 2 pessoas do cliente, das 10:00 às 19:00.
+Trabalho no evento: 2 estoquistas e 2 pessoas do cliente, das 08:00 às 20:00.
+Coleta dos produtos no evento no dia 29/01 às 20:00, contagem no estoque Dutelog e entrega do que voltou no BTG.</textarea></div>
+      </section>
+
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 4px 0 8px">
+        <a class="btn btn-g btn-lg" href="EventosPortalLista.dc.html">Cancelar</a>
+        <button class="btn btn-o btn-lg" type="button">Salvar rascunho</button>
+        <button class="btn btn-p btn-lg" type="button"><svg class="ic" aria-hidden="true"><use href="#i-send"></use></svg>Enviar para a Dutelog</button>
+      </div>
+    </div>
+
+    <aside class="card sec" style="position: sticky; top: 20px">
+      <h2>Resumo da edição</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13.5px">
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Evento</span><b>B2B Conference Necton</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Edição</span><b>28 e 29/01/2027</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Local</span><b>Hotel Unique</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Do estoque Dutelog</span><b>100 itens · 2.000 peças</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Coleta no cliente</span><b>2.190 produtos</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Entrega no local</span><b>28/01 08:30</b></div>
+        <div style="display: flex; justify-content: space-between; gap: 10px"><span class="muted">Retorno ao estoque</span><b>30/01 09:00</b></div>
+      </div>
+      <div style="border-top: 1px solid #EEF1F4; padding-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+        <span style="display: flex; justify-content: space-between"><span class="muted">Ao enviar</span><b>Pedido PED com os 100 itens</b></span>
+        <span style="display: flex; justify-content: space-between"><span class="muted">A Dutelog responde com</span><b>Preço fechado</b></span>
+      </div>
+    </aside>
+  </form>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
