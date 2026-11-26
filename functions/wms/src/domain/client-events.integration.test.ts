@@ -9,6 +9,7 @@ import {
   CLIENT_EVENTS_COLLECTION,
   ClientEventInputSchema,
   listClientEvents,
+  mensagemDaRecusa,
   saveClientEvent,
 } from "./client-events.js";
 
@@ -165,5 +166,39 @@ describe("validação do evento", () => {
     );
     assert.equal(ClientEventInputSchema.parse({ ...input(), next_date: "" }).next_date, null);
     assert.equal(ClientEventInputSchema.parse({ ...input(), description: "  " }).description, null);
+  });
+
+  it("as observações e os outros textos livres cabem até 2000 caracteres", () => {
+    // 24/11/2026: o escopo do evento da BTG, com 418 caracteres nas observações,
+    // foi recusado duas vezes pelo limite de 300, e o pedido comum levou o mesmo
+    // texto sem limite.
+    const escopo = "x".repeat(418);
+    assert.equal(ClientEventInputSchema.parse({ ...input(), schedule: escopo }).schedule, escopo);
+    for (const campo of ["description", "address", "schedule", "logistics"]) {
+      assert.equal(ClientEventInputSchema.safeParse({ ...input(), [campo]: "x".repeat(2000) }).success, true, campo);
+      assert.equal(ClientEventInputSchema.safeParse({ ...input(), [campo]: "x".repeat(2001) }).success, false, campo);
+    }
+  });
+
+  it("a recusa diz o campo que falhou", () => {
+    const recusa = (overrides: Record<string, unknown>) => {
+      const result = ClientEventInputSchema.safeParse({ ...input(), ...overrides });
+      if (result.success) throw new Error("a entrada devia ser recusada");
+      return mensagemDaRecusa(result.error.issues);
+    };
+    assert.equal(recusa({ name: " " }), "Dê um nome ao evento.");
+    assert.equal(recusa({ name: undefined }), "Dê um nome ao evento.");
+    assert.equal(recusa({ venue: "" }), "Informe o local.");
+    assert.equal(recusa({ items: [] }), "Escolha ao menos um item.");
+    assert.equal(recusa({ schedule: "x".repeat(2001) }), "As observações passam de 2000 caracteres.");
+    // O que a tela não deixa acontecer continua com a frase de sempre.
+    assert.equal(
+      recusa({ next_date: "20/11/2026" }),
+      "Dê um nome ao evento, informe o local e escolha ao menos um item.",
+    );
+    assert.equal(
+      recusa({ items: [{ sku_code: "SKU1", product_name: "X", quantity: 0 }] }),
+      "Dê um nome ao evento, informe o local e escolha ao menos um item.",
+    );
   });
 });
