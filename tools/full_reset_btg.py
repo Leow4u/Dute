@@ -12,9 +12,10 @@ ops_aggregates para trás justamente por depender de uma lista escrita antes
 dessas coleções existirem.
 
 A zeragem é do WMS e nunca apaga dado do Comercial, o cadastro da
-Operação, o Blog institucional nem as conversas do Zap: as coleções ficam
-sempre, inclusive com --include-setup, e em `events` ficam os eventos com
-source "functions_comercial" ou "functions_operacao". Se a zeragem fosse
+Operação, o Blog institucional, as conversas do Zap nem as edições dos
+Eventos do portal: as coleções ficam sempre, inclusive com --include-setup,
+e em `events` ficam os eventos com source "functions_comercial",
+"functions_operacao", "functions_financeiro" ou "functions_client_events". Se a zeragem fosse
 apagar `customers` e algum cadastro tem o campo `stage` (do Comercial), ela
 para antes de alterar qualquer coisa.
 
@@ -156,11 +157,24 @@ ZAP_COLLECTIONS = (
     "zap_messages",
     "zap_access",
 )
+# Os Eventos do portal (docs/superpowers/specs/2026-11-26-eventos-design.md):
+# o evento do cliente, cada edição e o preço dela. A edição é a história do
+# ano seguinte (o que foi, o que voltou, as fotos e o preço) e guarda as
+# próprias cópias do pedido: nunca apagadas, nem com --include-setup. Os
+# pedidos, volumes, devoluções e movimentos ligados a ela vão embora com o
+# estoque, e o modelo antigo (client_event_templates) também.
+EVENTOS_COLLECTIONS = (
+    "client_events",
+    "client_event_editions",
+    "client_event_prices",
+)
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
 OPERACAO_EVENT_SOURCE = "functions_operacao"
 FINANCEIRO_EVENT_SOURCE = "functions_financeiro"
+# Os eventos de auditoria dos Eventos do portal ficam com as edições.
+EVENTOS_EVENT_SOURCE = "functions_client_events"
 # O Comercial marca em `customers` o campo `stage` (prospect ou cliente).
 CUSTOMERS_COLLECTION = "customers"
 STAGE_FIELD = "stage"
@@ -196,6 +210,7 @@ def preserved_collections(
         | set(MEMORIA_COLLECTIONS)
         | set(SITE_BLOG_COLLECTIONS)
         | set(ZAP_COLLECTIONS)
+        | set(EVENTOS_COLLECTIONS)
     )
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
@@ -277,6 +292,11 @@ def financeiro_event(collection: str, document: dict[str, Any]) -> bool:
     return event_source(collection, document) == FINANCEIRO_EVENT_SOURCE
 
 
+def eventos_event(collection: str, document: dict[str, Any]) -> bool:
+    """Evento de auditoria dos Eventos do portal: fica com as edições."""
+    return event_source(collection, document) == EVENTOS_EVENT_SOURCE
+
+
 def event_source(collection: str, document: dict[str, Any]) -> str:
     if collection != EVENTS_COLLECTION:
         return ""
@@ -311,6 +331,11 @@ def zap_path(name: str) -> bool:
     return document_path(name).split("/", 1)[0] in ZAP_COLLECTIONS
 
 
+def eventos_path(name: str) -> bool:
+    """Documento de um evento do cliente, de uma edição ou do preço dela."""
+    return document_path(name).split("/", 1)[0] in EVENTOS_COLLECTIONS
+
+
 def has_stage(document: dict[str, Any]) -> bool:
     return STAGE_FIELD in document.get("fields", {})
 
@@ -341,7 +366,7 @@ def stage_message(customer_ids: list[str]) -> str:
 
 def removable(collection: str, document: dict[str, Any], *, control_name: str) -> bool:
     """O que sai da coleção: tudo, menos o controle (é reescrito) e os eventos
-    do Comercial."""
+    do Comercial, da Operação, do Financeiro e dos Eventos do portal."""
     name = str(document.get("name", ""))
     return (
         bool(name)
@@ -349,6 +374,7 @@ def removable(collection: str, document: dict[str, Any], *, control_name: str) -
         and not comercial_event(collection, document)
         and not operacao_event(collection, document)
         and not financeiro_event(collection, document)
+        and not eventos_event(collection, document)
     )
 
 
@@ -395,6 +421,10 @@ def delete_writes(
             if zap_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga o Zap: " + document_path(name)
+                )
+            if eventos_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga os Eventos do portal: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(
@@ -682,6 +712,14 @@ def build_plan(
                 1
                 for document in snapshot.get(EVENTS_COLLECTION, [])
                 if financeiro_event(EVENTS_COLLECTION, document)
+            ),
+        },
+        "preserve_eventos_events": {
+            "source": EVENTOS_EVENT_SOURCE,
+            "documents": sum(
+                1
+                for document in snapshot.get(EVENTS_COLLECTION, [])
+                if eventos_event(EVENTS_COLLECTION, document)
             ),
         },
         "include_setup": include_setup,

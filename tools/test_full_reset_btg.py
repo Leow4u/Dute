@@ -80,6 +80,13 @@ ZAP = (
     "zap_messages",
     "zap_access",
 )
+# Os Eventos do portal (docs/superpowers/specs/2026-11-26-eventos-design.md):
+# a edição é a história do ano seguinte.
+EVENTOS = (
+    "client_events",
+    "client_event_editions",
+    "client_event_prices",
+)
 # O que as Functions dos módulos declaram e a zeragem apaga de propósito: o
 # estoque e o faturamento do WMS, que elas leem, e o Agent Dute, cujas
 # conversas e conhecimento recomeçam (docs/novo-go-live-zeragem-total.md).
@@ -345,7 +352,8 @@ class PlanTests(unittest.TestCase):
             | set(FINANCEIRO)
             | set(MEMORIA)
             | set(SITE_BLOG)
-            | set(ZAP),
+            | set(ZAP)
+            | set(EVENTOS),
         )
 
     def test_comercial_collections_are_always_preserved(self) -> None:
@@ -479,6 +487,34 @@ class PlanTests(unittest.TestCase):
             )
         self.assertIn("Zap", str(raised.exception))
 
+    def test_eventos_ficam_na_zeragem(self) -> None:
+        # A edição é a história do ano seguinte: fica com e sem --include-setup;
+        # o legado client_event_templates vai embora.
+        self.assertEqual(set(full_reset_btg.EVENTOS_COLLECTIONS), set(EVENTOS))
+        for nome in EVENTOS:
+            for include_setup in (False, True):
+                with self.subTest(colecao=nome, include_setup=include_setup):
+                    self.assertIn(nome, full_reset_btg.preserved_collections(include_setup=include_setup))
+        for include_setup in (False, True):
+            self.assertNotIn(
+                "client_event_templates", full_reset_btg.preserved_collections(include_setup=include_setup)
+            )
+        control = full_reset_btg.control_document_name(PROJECT, DATABASE)
+        with self.assertRaises(RuntimeError) as raised:
+            full_reset_btg.delete_writes(
+                {"products": [raw_document("client_event_editions", "ced_1")]},
+                ["products"],
+                control_name=control,
+            )
+        self.assertIn("Eventos", str(raised.exception))
+
+    def test_eventos_de_auditoria_dos_eventos_ficam(self) -> None:
+        control = full_reset_btg.control_document_name(PROJECT, DATABASE)
+        documento = raw_document("events", "evt-1", {"source": "functions_client_events", "type": "evento.edicao_fechada"})
+        self.assertFalse(full_reset_btg.removable("events", documento, control_name=control))
+        outro = raw_document("events", "evt-2", {"source": "functions", "type": "inventory.movement"})
+        self.assertTrue(full_reset_btg.removable("events", outro, control_name=control))
+
     def test_delete_writes_refuse_any_comercial_path(self) -> None:
         # O script só lê documentos das coleções raiz; se um dia descer nas
         # subcoleções, aditivos e revisões continuam fora do alcance.
@@ -560,7 +596,7 @@ class PlanTests(unittest.TestCase):
         preserved = full_reset_btg.preserved_collections(include_setup=True)
         self.assertEqual(
             preserved,
-            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA) | set(SITE_BLOG) | set(ZAP),
+            set(full_reset_btg.ACCESS_COLLECTIONS) | set(COMERCIAL) | set(OPERACAO) | set(FINANCEIRO) | set(MEMORIA) | set(SITE_BLOG) | set(ZAP) | set(EVENTOS),
         )
 
     def test_keep_extends_preserved(self) -> None:
@@ -674,6 +710,26 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.fake.batches, [])
         self.assertEqual(self.fake.exports, [])
         self.assertFalse(self.backup.exists())
+
+    def test_dry_run_preserves_eventos_and_counts_their_events(self) -> None:
+        self.fake.seed("client_events", "cve_1", {"customer_code": "BTG Pactual", "name": "B2B Conference"})
+        self.fake.seed("client_event_editions", "ced_1", {"customer_code": "BTG Pactual", "status": "fechado"})
+        self.fake.seed("client_event_prices", "ced_1", {"customer_code": "BTG Pactual", "fechado_cents": 1250000})
+        self.fake.seed("client_event_templates", "cev_1", {"customer_code": "BTG Pactual", "name": "Modelo antigo"})
+        self.fake.seed("events", "evt1", {"type": "evento.edicao_enviada", "source": "functions_client_events"})
+        self.fake.seed("events", "evt2", {"type": "evento.edicao_fechada", "source": "functions_client_events"})
+        with fake_backend(self.fake):
+            code, output = run_main(["--include-setup"])
+        self.assertEqual(code, 0)
+        plan = json.loads(output.split("\nDry-run")[0])
+        self.assertTrue(set(EVENTOS) <= set(plan["preserve"]))
+        self.assertEqual(sorted(set(EVENTOS) & set(plan["delete"])), [])
+        self.assertEqual(plan["delete"]["client_event_templates"], 1)
+        self.assertEqual(
+            plan["preserve_eventos_events"],
+            {"source": "functions_client_events", "documents": 2},
+        )
+        self.assertEqual(self.fake.batches, [])
 
     def test_rh_database_is_never_reset(self) -> None:
         before = copy.deepcopy(self.fake.docs)

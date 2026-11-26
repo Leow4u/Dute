@@ -22,14 +22,16 @@ A zeragem é do WMS e **nunca apaga dado do Comercial**
 | Operação | `collaborators`, `vehicles`, `operacao_operations`, `service_orders`, `service_order_counters`, `service_requests`, `client_notifications`, `email_outbox`, `notification_cursors`, `client_notification_reads` | **Nunca apagadas**, nem com `--include-setup`. Cadastro, ordens de serviço, as solicitações de OS pelo portal e os avisos do portal (o sino, até quando cada login viu, a fila de e-mail e o cursor da rotina). |
 | Financeiro | `faturas`, `pagamentos`, `client_faturas`, `financeiro_operations`, `nf_emissoes`, `nf_baixas` | **Nunca apagadas**, nem com `--include-setup`. A fatura da demanda (NF registrada, Fase 4), os pagamentos dela, a NF como o cliente vê no portal, os recibos e as filas da Omie (Fase 7, parte 7.4): a emissão da NFS-e, que reserva a demanda e guarda a nota autorizada, e a baixa do recebimento. |
 | Zap | `zap_conversations`, `zap_messages`, `zap_access` | **Nunca apagadas**, nem com `--include-setup`. Conversas de WhatsApp do painel, o texto e o registro de quem abriu (`docs/plataforma/zap.md`). |
+| Eventos | `client_events`, `client_event_editions`, `client_event_prices` | **Nunca apagadas**, nem com `--include-setup`. A história de cada edição (o que foi, o que voltou, fotos e preço) é do cliente para o ano seguinte; os pedidos e movimentos ligados a ela vão embora, e a edição guarda as próprias cópias (`docs/superpowers/specs/2026-11-26-eventos-design.md`). |
 | Estrutura | `customers`, `client_profiles`, `client_access`, `locations`, `warehouse_positions`, `billing_price_list`, `billing_config` | Preservadas. Com `--include-setup` são apagadas também, menos quando há cadastro com `stage` (abaixo). |
-| Tudo o mais | catálogo, saldos, movimentações, inventários, recebimentos, putaway, solicitações, pedidos, reservas, picking, packing, envios, devoluções, exceções, **faturamento** (competências, faturas, manual, snapshots), **eventos** (menos os do Comercial, da Operação e do Financeiro), caixa, notificações, conversas e conhecimento do Agent Dute, documentos, contadores PED-/ENV- e de SKU (`sku_counters`: a numeração `<SIGLA>-000001` recomeça), agregados do painel, recibos de idempotência e qualquer coleção nova | Apagadas. `--keep <coleção>` (repetível) preserva uma coleção específica depois de revisar o dry-run. |
+| Tudo o mais | catálogo, saldos, movimentações, inventários, recebimentos, putaway, solicitações, pedidos, reservas, picking, packing, envios, devoluções, exceções, **faturamento** (competências, faturas, manual, snapshots), **eventos** (menos os do Comercial, da Operação, do Financeiro e dos Eventos do portal), o modelo de evento antigo (`client_event_templates`), caixa, notificações, conversas e conhecimento do Agent Dute, documentos, contadores PED-/ENV- e de SKU (`sku_counters`: a numeração `<SIGLA>-000001` recomeça), agregados do painel, recibos de idempotência e qualquer coleção nova | Apagadas. `--keep <coleção>` (repetível) preserva uma coleção específica depois de revisar o dry-run. |
 
-**Eventos do Comercial, da Operação e do Financeiro.** Ficam em `events`,
-junto dos do WMS. A zeragem apaga só os eventos cujo `source` não é
-`functions_comercial`, `functions_operacao` nem `functions_financeiro`; o
-dry-run mostra quantos ficam em `preserve_events`, `preserve_operacao_events`
-e `preserve_financeiro_events`.
+**Eventos do Comercial, da Operação, do Financeiro e dos Eventos do portal.**
+Ficam em `events`, junto dos do WMS. A zeragem apaga só os eventos cujo
+`source` não é `functions_comercial`, `functions_operacao`,
+`functions_financeiro` nem `functions_client_events`; o dry-run mostra quantos
+ficam em `preserve_events`, `preserve_operacao_events`,
+`preserve_financeiro_events` e `preserve_eventos_events`.
 
 **Cadastro com `stage`.** O Comercial marca prospect e cliente com o campo
 `stage` em `customers`. Com `--include-setup`, se algum cadastro tem esse
