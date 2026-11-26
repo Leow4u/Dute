@@ -50,6 +50,7 @@ import {
   eventPiecesValue,
   eventShortages,
   isUpcoming,
+  MAX_TEXTO_DO_EVENTO,
   productForEventItem,
   sortEvents,
   type ClientEvent,
@@ -408,7 +409,7 @@ export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClos
               value={form.description}
               onChange={(change) => set("description")(change.target.value)}
               placeholder="Ex.: palco, lounge e área de fotos"
-              maxLength={300}
+              maxLength={MAX_TEXTO_DO_EVENTO}
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -416,7 +417,7 @@ export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClos
               <Input id="event-venue" value={form.venue} onChange={(change) => set("venue")(change.target.value)} maxLength={160} />
             </Field>
             <Field id="event-address" label="Endereço">
-              <Input id="event-address" value={form.address} onChange={(change) => set("address")(change.target.value)} maxLength={300} />
+              <Input id="event-address" value={form.address} onChange={(change) => set("address")(change.target.value)} maxLength={MAX_TEXTO_DO_EVENTO} />
             </Field>
           </div>
           <Field id="event-schedule" label="Montagem e retorno">
@@ -426,7 +427,7 @@ export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClos
               value={form.schedule}
               onChange={(change) => set("schedule")(change.target.value)}
               placeholder="Ex.: montagem na véspera a partir das 7h, retorno ao galpão no dia seguinte"
-              maxLength={300}
+              maxLength={MAX_TEXTO_DO_EVENTO}
             />
           </Field>
           <Field id="event-logistics" label="Transporte e equipe">
@@ -436,7 +437,7 @@ export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClos
               value={form.logistics}
               onChange={(change) => set("logistics")(change.target.value)}
               placeholder="Ex.: 1 caminhão baú e 4 montadores"
-              maxLength={300}
+              maxLength={MAX_TEXTO_DO_EVENTO}
             />
           </Field>
 

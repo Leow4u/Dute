@@ -33,6 +33,13 @@ export type ClientEventInput = Omit<ClientEvent, "id" | "updated_by_name" | "upd
   idempotency_key?: string;
 };
 
+/**
+ * Descrição, endereço, "Montagem e retorno" e "Transporte e equipe" cabem o
+ * que o servidor aceita (`CLIENT_EVENT_TEXT_MAX` das Functions, travado no
+ * teste). Até 26/11/2026 a tela cortava em 300.
+ */
+export const MAX_TEXTO_DO_EVENTO = 2000;
+
 /** O pedaço do produto do Estoque que o evento precisa. */
 export type EventStockProduct = {
   key: string;

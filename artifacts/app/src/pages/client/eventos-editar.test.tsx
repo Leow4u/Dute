@@ -99,6 +99,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("Editar evento, os textos livres", () => {
+  it("descrição, endereço, montagem e transporte deixam escrever o que o servidor aceita", () => {
+    // Até 26/11/2026 cada um cortava em 300, e o servidor já aceitava 2000 (PR 642).
+    for (const id of ["event-description", "event-address", "event-schedule", "event-logistics"]) {
+      const campo = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+      expect(campo, id).not.toBeNull();
+      expect(campo!.maxLength, id).toBe(2000);
+    }
+  });
+});
+
 describe("Editar evento, salvando", () => {
   it("o Esc, o toque fora, o X e o Cancelar não fecham; a janela fecha depois do retorno, com o aviso", async () => {
     await act(async () => botao("Salvar")!.click());
