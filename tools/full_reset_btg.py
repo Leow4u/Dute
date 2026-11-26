@@ -12,11 +12,14 @@ ops_aggregates para trás justamente por depender de uma lista escrita antes
 dessas coleções existirem.
 
 A zeragem é do WMS e nunca apaga dado do Comercial, o cadastro da
-Operação, o Blog institucional nem as conversas do Zap: as coleções ficam
-sempre, inclusive com --include-setup, e em `events` ficam os eventos com
-source "functions_comercial" ou "functions_operacao". Se a zeragem fosse
-apagar `customers` e algum cadastro tem o campo `stage` (do Comercial), ela
-para antes de alterar qualquer coisa.
+Operação, o Blog institucional, as conversas do Zap nem as edições dos
+Eventos do portal: as coleções ficam sempre, inclusive com --include-setup,
+e em `events` ficam os eventos com source "functions_comercial",
+"functions_operacao", "functions_financeiro" ou "functions_client_events" (este,
+só os do tipo `evento.*`). Se a zeragem fosse apagar `customers` e algum
+cadastro tem o campo `stage` (do Comercial), ela para antes de alterar
+qualquer coisa; com uma edição dos Eventos em aberto (de enviado a no
+evento), também.
 
 Sem --apply, só audita e exibe o plano. Com --apply, exige a frase de
 confirmação e um export gerenciado do Firestore (--export-to gs://...), que é
@@ -32,7 +35,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, NoReturn
 
 from reset_btg_inventory import (
     BACKUP_DIR,
@@ -156,11 +159,34 @@ ZAP_COLLECTIONS = (
     "zap_messages",
     "zap_access",
 )
+# Os Eventos do portal (docs/superpowers/specs/2026-11-26-eventos-design.md):
+# o evento do cliente, cada edição e o preço dela. A edição é a história do
+# ano seguinte (o que foi, o que voltou, as fotos e o preço) e guarda as
+# próprias cópias do pedido: nunca apagadas, nem com --include-setup. Os
+# pedidos, volumes, devoluções e movimentos ligados a ela vão embora com o
+# estoque, e o modelo antigo (client_event_templates) também.
+EVENTOS_COLLECTIONS = (
+    "client_events",
+    "client_event_editions",
+    "client_event_prices",
+)
+# As edições em aberto, de enviado a no_evento (STATUS_DA_EDICAO de
+# lib/dominio/src/eventos.ts, travado em tools/test_full_reset_btg.py): a
+# zeragem apagaria a solicitação, o pedido e as reservas delas, e a edição não
+# andaria mais. Com uma delas, a zeragem para antes de qualquer escrita, no
+# dry-run e no apply (decisão do Leonardo, 26/11/2026).
+EDITIONS_COLLECTION = "client_event_editions"
+OPEN_EDITION_STATUSES = ("enviado", "confirmado", "separado", "no_evento")
 # Os eventos do Comercial moram em `events`, junto dos do WMS: a zeragem apaga
 # só os outros.
 COMERCIAL_EVENT_SOURCE = "functions_comercial"
 OPERACAO_EVENT_SOURCE = "functions_operacao"
 FINANCEIRO_EVENT_SOURCE = "functions_financeiro"
+# Os eventos de auditoria dos Eventos do portal ficam com as edições: a origem
+# e o tipo `evento.*`. O modelo antigo grava a mesma origem com
+# `client_event_template.*`, e esses vão embora com ele.
+EVENTOS_EVENT_SOURCE = "functions_client_events"
+EVENTOS_EVENT_TYPE_PREFIX = "evento."
 # O Comercial marca em `customers` o campo `stage` (prospect ou cliente).
 CUSTOMERS_COLLECTION = "customers"
 STAGE_FIELD = "stage"
@@ -196,6 +222,7 @@ def preserved_collections(
         | set(MEMORIA_COLLECTIONS)
         | set(SITE_BLOG_COLLECTIONS)
         | set(ZAP_COLLECTIONS)
+        | set(EVENTOS_COLLECTIONS)
     )
     if not include_setup:
         preserved.update(SETUP_COLLECTIONS)
@@ -277,12 +304,29 @@ def financeiro_event(collection: str, document: dict[str, Any]) -> bool:
     return event_source(collection, document) == FINANCEIRO_EVENT_SOURCE
 
 
+def eventos_event(collection: str, document: dict[str, Any]) -> bool:
+    """Evento de auditoria dos Eventos do portal (tipo `evento.*`): fica com as
+    edições. O modelo antigo grava a mesma origem com `client_event_template.*`,
+    e esses vão embora com `client_event_templates`."""
+    return (
+        event_source(collection, document) == EVENTOS_EVENT_SOURCE
+        and string_field(document, "type").startswith(EVENTOS_EVENT_TYPE_PREFIX)
+    )
+
+
 def event_source(collection: str, document: dict[str, Any]) -> str:
     if collection != EVENTS_COLLECTION:
         return ""
     source = document.get("fields", {}).get("source")
     if isinstance(source, dict) and isinstance(source.get("stringValue"), str):
         return source["stringValue"]
+    return ""
+
+
+def string_field(document: dict[str, Any], field: str) -> str:
+    value = document.get("fields", {}).get(field)
+    if isinstance(value, dict) and isinstance(value.get("stringValue"), str):
+        return value["stringValue"]
     return ""
 
 
@@ -311,6 +355,11 @@ def zap_path(name: str) -> bool:
     return document_path(name).split("/", 1)[0] in ZAP_COLLECTIONS
 
 
+def eventos_path(name: str) -> bool:
+    """Documento de um evento do cliente, de uma edição ou do preço dela."""
+    return document_path(name).split("/", 1)[0] in EVENTOS_COLLECTIONS
+
+
 def has_stage(document: dict[str, Any]) -> bool:
     return STAGE_FIELD in document.get("fields", {})
 
@@ -329,6 +378,39 @@ def customers_blocking(
     )
 
 
+def edition_description(document: dict[str, Any]) -> str:
+    """`ced_… (B2B Conference 2027, BTG Pactual, confirmado)`, com o que a edição tiver."""
+    edition_id = str(document.get("name", "")).rsplit("/", 1)[-1]
+    evento = " ".join(
+        part for part in (string_field(document, "event_name"), string_field(document, "label")) if part
+    )
+    detalhes = [
+        part
+        for part in (evento, string_field(document, "customer_code"), string_field(document, "status"))
+        if part
+    ]
+    return f"{edition_id} ({', '.join(detalhes)})"
+
+
+def editions_blocking(snapshot: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """As edições dos Eventos em aberto (de enviado a no_evento): impedem a zeragem."""
+    return sorted(
+        edition_description(document)
+        for document in snapshot.get(EDITIONS_COLLECTION, [])
+        if string_field(document, "status") in OPEN_EDITION_STATUSES
+    )
+
+
+def editions_message(editions: list[str]) -> str:
+    return (
+        "Há edições dos Eventos em aberto, de enviado a no evento: "
+        f"{'; '.join(editions)}. A zeragem apagaria a solicitação, o pedido e "
+        "as reservas de cada uma, e a edição não andaria mais. Antes de zerar, "
+        "cancele as enviadas, confirmadas e separadas e registre o retorno das "
+        "que estão no evento."
+    )
+
+
 def stage_message(customer_ids: list[str]) -> str:
     return (
         "A zeragem apagaria customers, e estes cadastros têm o campo stage, "
@@ -341,7 +423,7 @@ def stage_message(customer_ids: list[str]) -> str:
 
 def removable(collection: str, document: dict[str, Any], *, control_name: str) -> bool:
     """O que sai da coleção: tudo, menos o controle (é reescrito) e os eventos
-    do Comercial."""
+    do Comercial, da Operação, do Financeiro e dos Eventos do portal."""
     name = str(document.get("name", ""))
     return (
         bool(name)
@@ -349,6 +431,7 @@ def removable(collection: str, document: dict[str, Any], *, control_name: str) -
         and not comercial_event(collection, document)
         and not operacao_event(collection, document)
         and not financeiro_event(collection, document)
+        and not eventos_event(collection, document)
     )
 
 
@@ -395,6 +478,10 @@ def delete_writes(
             if zap_path(name):
                 raise RuntimeError(
                     "A zeragem não apaga o Zap: " + document_path(name)
+                )
+            if eventos_path(name):
+                raise RuntimeError(
+                    "A zeragem não apaga os Eventos do portal: " + document_path(name)
                 )
             if collection == CUSTOMERS_COLLECTION and has_stage(document):
                 raise RuntimeError(
@@ -600,6 +687,34 @@ def restore_control(
     )
 
 
+def stop_after_freeze(
+    reason: str,
+    before: dict[str, Any] | None,
+    *,
+    project_id: str,
+    database: str,
+    token: str,
+) -> NoReturn:
+    """Para depois do congelamento e antes de apagar: desfaz o congelamento."""
+    try:
+        restore_control(
+            before,
+            project_id=project_id,
+            database=database,
+            token=token,
+        )
+    except Exception as restore_error:  # noqa: BLE001
+        raise SystemExit(
+            f"{reason} Nada foi apagado, mas o controle de estoque não pôde "
+            "ser restaurado e as movimentações seguem congeladas. "
+            f"Restauração: {restore_error}"
+        ) from restore_error
+    raise SystemExit(
+        f"{reason} Nada foi apagado e o controle de estoque voltou ao estado "
+        "anterior."
+    )
+
+
 def export_destination(export_to: str, reset_id: str) -> str:
     base = export_to.strip().rstrip("/")
     if not base.startswith("gs://") or len(base) <= len("gs://"):
@@ -682,6 +797,14 @@ def build_plan(
                 1
                 for document in snapshot.get(EVENTS_COLLECTION, [])
                 if financeiro_event(EVENTS_COLLECTION, document)
+            ),
+        },
+        "preserve_eventos_events": {
+            "source": EVENTOS_EVENT_SOURCE,
+            "documents": sum(
+                1
+                for document in snapshot.get(EVENTS_COLLECTION, [])
+                if eventos_event(EVENTS_COLLECTION, document)
             ),
         },
         "include_setup": include_setup,
@@ -794,6 +917,12 @@ def main(argv: list[str] | None = None) -> int:
     blocking = customers_blocking(snapshot, to_delete)
     if blocking:
         raise SystemExit(stage_message(blocking) + " Nada foi alterado.")
+    # A edição dos Eventos em aberto (de enviado a no evento) perderia a
+    # solicitação, o pedido e as reservas e não andaria mais. Para aqui, no
+    # dry-run e no apply, antes de qualquer escrita.
+    open_editions = editions_blocking(snapshot)
+    if open_editions:
+        raise SystemExit(editions_message(open_editions) + " Nada foi alterado.")
     expected_confirmation = confirmation_phrase(args.project_id, args.database)
     if not args.apply:
         print(
@@ -862,23 +991,29 @@ def main(argv: list[str] | None = None) -> int:
     # depois do plano. O que sai é este snapshot, então a conferência é nele.
     blocking = customers_blocking(frozen_snapshot, to_delete)
     if blocking:
-        reason = stage_message(blocking) + " O cadastro apareceu depois do plano."
-        try:
-            restore_control(
-                control_raw,
-                project_id=args.project_id,
-                database=args.database,
-                token=token,
-            )
-        except Exception as restore_error:  # noqa: BLE001
-            raise SystemExit(
-                f"{reason} Nada foi apagado, mas o controle de estoque não pôde "
-                "ser restaurado e as movimentações seguem congeladas. "
-                f"Restauração: {restore_error}"
-            ) from restore_error
-        raise SystemExit(
-            f"{reason} Nada foi apagado e o controle de estoque voltou ao estado "
-            "anterior."
+        stop_after_freeze(
+            stage_message(blocking) + " O cadastro apareceu depois do plano.",
+            control_raw,
+            project_id=args.project_id,
+            database=args.database,
+            token=token,
+        )
+    # A edição enviada entre o plano e o congelamento também para a zeragem.
+    open_editions = editions_blocking(
+        fetch_snapshot(
+            (EDITIONS_COLLECTION,),
+            project_id=args.project_id,
+            database=args.database,
+            token=token,
+        )
+    )
+    if open_editions:
+        stop_after_freeze(
+            editions_message(open_editions) + " A edição abriu depois do plano.",
+            control_raw,
+            project_id=args.project_id,
+            database=args.database,
+            token=token,
         )
     backup_path, backup_hash = create_backup(
         args.backup_path or BACKUP_DIR / f"{reset_id}.json",

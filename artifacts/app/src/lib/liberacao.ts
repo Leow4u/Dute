@@ -170,3 +170,22 @@ export function recebimentoPorCaixaLiberado(projectId: string | null | undefined
 
 /** Valor deste build: a chegada avulsa do modelo que confere por caixa nasce por caixa (parte 5). */
 export const RECEBIMENTO_POR_CAIXA_LIBERADO = recebimentoPorCaixaLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
+/**
+ * Os Eventos do portal, do portal ao histórico
+ * (docs/superpowers/specs/2026-11-26-eventos-design.md, "Liberação por ambiente
+ * e o legado"). As callables novas dos Eventos no WMS recusam fora de
+ * EVENTOS_PROJECTS (functions/wms/src/domain/eventos/liberacao.ts, travada
+ * igual a esta por platform-lists.test.ts). Só a homologação até a parte 12,
+ * quando o dute-prod entra com o OK do Leonardo; o dute-btg fica de fora. É do
+ * WMS, então não depende de SOMENTE_ARMAZENAGEM. Desligada, o portal segue com
+ * o Eventos de hoje e o "Salvar como evento" do carrinho.
+ */
+export const EVENTOS_AMBIENTES_LIBERADOS: readonly string[] = ["dute-homolog"];
+
+export function eventosLiberado(projectId: string | null | undefined): boolean {
+  return EVENTOS_AMBIENTES_LIBERADOS.includes(String(projectId ?? "").trim());
+}
+
+/** Valor deste build: o portal e a Armazenagem mostram os Eventos novos (as telas entram a partir da parte 4). */
+export const EVENTOS_LIBERADO = eventosLiberado(import.meta.env.VITE_FIREBASE_PROJECT_ID);

@@ -63,7 +63,7 @@ inteiro continua verde sem o app saber dos Eventos.
   - `podeTransitar(de: StatusDaEdicao, para: StatusDaEdicao): boolean`.
   - `edicaoAberta(status: unknown): boolean` (true para rascunho, enviado, confirmado, separado, no_evento, retornado).
   - `type MomentoPrevisto = { tipo: TipoDeMomento; rotulo?: string | null; data: string; hora: string; ate?: string | null; local?: string | null; observacao?: string | null }`.
-  - `problemaDoCronograma(momentos: readonly MomentoPrevisto[], contexto: { comItensDoEstoque: boolean; comColeta: boolean }): string | null`, a primeira recusa, nesta ordem: "O cronograma leva até 12 momentos"; "O cronograma leva até cinco momentos do tipo outro"; "O momento <Rótulo> se repete" (tipo fora de `outro` duas vezes); "Informe o rótulo do outro momento"; "Informe a data do evento"; com `comItensDoEstoque`, "Informe a data e a hora da entrega no local" e "Informe a data do retorno ao estoque"; com `comColeta`, "Informe a data da coleta no cliente"; "<Rótulo> está antes de <Rótulo anterior>" quando `data`+`hora` de um momento é menor que a do anterior na lista (igual vale). O rótulo do `outro` é o seu `rotulo`.
+  - `problemaDoCronograma(momentos: readonly MomentoPrevisto[], contexto: { comItensDoEstoque: boolean; comColeta: boolean }): string | null`, a primeira recusa, nesta ordem: "O cronograma leva até 12 momentos"; "O cronograma leva até cinco momentos do tipo outro"; "O momento <Rótulo> se repete" (tipo fora de `outro` duas vezes); "Informe o rótulo do outro momento"; "Informe a data do evento"; com `comItensDoEstoque`, "Informe a data e a hora da entrega no local" e "Informe a data do retorno ao estoque"; com `comColeta`, "Informe a data da coleta no cliente"; "<Rótulo> está antes de <Rótulo anterior>" quando `data`+`hora` de um momento de tipo fixo é menor que a do tipo fixo anterior na lista (igual vale). O `outro` fica fora da ordem (ajuste da revisão final, aceito pelo Leonardo em 26/11/2026, decisão 10 da spec: o formulário põe os `outro` depois dos sete, e a regra literal recusaria todo `outro` antes da entrega de volta; registro no índice, "Ordem do cronograma").
   - `naoVoltaram(foi: number, voltou: number, avariadas: number): number` = `foi − voltou − avariadas`, nunca negativo.
   - `labelPadrao(momentos: readonly MomentoPrevisto[]): string | null` = os quatro dígitos do ano da `data` do momento `evento`, ou null.
 
@@ -325,6 +325,7 @@ git commit -m "feat(regras): índices das edições e dos eventos do cliente"
 
 **Interfaces:**
 - Produces: `EVENTOS_COLLECTIONS = ("client_events", "client_event_editions", "client_event_prices")`, `EVENTOS_EVENT_SOURCE = "functions_client_events"`.
+- Acrescentado no PR 645, depois da revisão final e das decisões do Leonardo de 26/11/2026: `EVENTOS_EVENT_TYPE_PREFIX = "evento."` (o legado grava a mesma origem com `client_event_template.*`, e esses vão embora) e a recusa com edição em aberto (decisão 11 da spec): `OPEN_EDITION_STATUSES = ("enviado", "confirmado", "separado", "no_evento")`, travada contra `STATUS_DA_EDICAO`, `editions_blocking` e `editions_message`, no dry-run, no apply e de novo depois do congelamento.
 
 - [ ] **Step 1: Write the failing tests**
 

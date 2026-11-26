@@ -161,6 +161,26 @@ describe("o índice de cada consulta das telas", () => {
     expect(lidas.map(indiceQueFalta).filter(Boolean)).toEqual([]);
   });
 
+  // Os Eventos (eventos, parte 1; spec, "Regras do Firestore, índices e
+  // zeragem"): o índice nasce antes das telas. As consultas delas entram em
+  // CONSULTAS_DAS_TELAS quando as telas entrarem (o portal na parte 4, a
+  // agenda da Armazenagem na parte 7).
+  it("os Eventos: as edições do portal e da agenda, e os eventos do cliente", () => {
+    const igual = (campo: string): Restricao => ({ tipo: "where", campo, op: "==" });
+    const ordem = (campo: string, direcao: "asc" | "desc"): Restricao => ({ tipo: "orderBy", campo, direcao });
+    const consultas: Consulta[] = [
+      // O portal: as edições do cliente, e as de um status.
+      { colecao: "client_event_editions", restricoes: [igual("customer_code"), ordem("updated_at", "desc")] },
+      { colecao: "client_event_editions", restricoes: [igual("customer_code"), igual("status"), ordem("updated_at", "desc")] },
+      // A agenda: todos os clientes, por "separar até" e pelas mais recentes.
+      { colecao: "client_event_editions", restricoes: [{ tipo: "where", campo: "status", op: "in" }, ordem("separar_ate", "asc")] },
+      { colecao: "client_event_editions", restricoes: [{ tipo: "where", campo: "status", op: "in" }, ordem("updated_at", "desc")] },
+      // Os eventos ativos do cliente, pelo nome.
+      { colecao: "client_events", restricoes: [igual("customer_code"), igual("status"), ordem("name", "asc")] },
+    ];
+    expect(consultas.map(indiceQueFalta).filter(Boolean)).toEqual([]);
+  });
+
   it("a conta do índice: igualdade antes, depois a ordem, na direção dela", () => {
     const tipoEBusca: Consulta = {
       colecao: "movements",

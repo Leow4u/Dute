@@ -1,0 +1,360 @@
+{
+  "_leia": "Casos de referência dos Eventos (lib/dominio/src/eventos.ts, spec docs/superpowers/specs/2026-11-26-eventos-design.md). Rodam no vitest do app e no node --test de functions/wms, contra a cópia de lá. problema: null quando o cronograma vale; label: null quando não há o momento evento com data. O cronograma da Necton é o da prancha EventosPortalNovo.",
+  "transicoes": [
+    { "de": "rascunho", "para": "enviado", "pode": true },
+    { "de": "enviado", "para": "confirmado", "pode": true },
+    { "de": "enviado", "para": "cancelado", "pode": true },
+    { "de": "confirmado", "para": "separado", "pode": true },
+    { "de": "confirmado", "para": "no_evento", "pode": true },
+    { "de": "confirmado", "para": "cancelado", "pode": true },
+    { "de": "separado", "para": "no_evento", "pode": true },
+    { "de": "separado", "para": "cancelado", "pode": true },
+    { "de": "no_evento", "para": "retornado", "pode": true },
+    { "de": "retornado", "para": "fechado", "pode": true },
+    { "de": "fechado", "para": "rascunho", "pode": false },
+    { "de": "no_evento", "para": "cancelado", "pode": false },
+    { "de": "rascunho", "para": "confirmado", "pode": false },
+    { "de": "rascunho", "para": "cancelado", "pode": false },
+    { "de": "cancelado", "para": "enviado", "pode": false }
+  ],
+  "cronogramas": [
+    {
+      "caso": "a Necton de 2027: os sete momentos, com itens e coleta",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": null
+    },
+    {
+      "caso": "sem o momento evento",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data do evento"
+    },
+    {
+      "caso": "o evento sem data",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data do evento"
+    },
+    {
+      "caso": "com itens do estoque, sem a entrega no local",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data e a hora da entrega no local"
+    },
+    {
+      "caso": "com itens do estoque, a entrega no local sem hora",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data e a hora da entrega no local"
+    },
+    {
+      "caso": "com itens do estoque, sem o retorno ao estoque",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data do retorno ao estoque"
+    },
+    {
+      "caso": "com coleta, sem a coleta no cliente",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe a data da coleta no cliente"
+    },
+    {
+      "caso": "sem coleta, a coleta no cliente não é exigida",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": null
+    },
+    {
+      "caso": "sem itens do estoque, a entrega e o retorno não são exigidos",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": true },
+      "problema": null
+    },
+    {
+      "caso": "o momento outro sem rótulo",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" },
+        { "tipo": "outro", "data": "2027-02-03", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe o rótulo do outro momento"
+    },
+    {
+      "caso": "o momento outro com o rótulo em branco",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "   ", "data": "2027-02-03", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Informe o rótulo do outro momento"
+    },
+    {
+      "caso": "dois momentos de montagem",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "14:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "15:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "O momento Montagem se repete"
+    },
+    {
+      "caso": "seis momentos do tipo outro",
+      "momentos": [
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "outro", "rotulo": "Credenciamento", "data": "2027-01-29", "hora": "09:00" },
+        { "tipo": "outro", "rotulo": "Palestra de abertura", "data": "2027-01-29", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "Almoço", "data": "2027-01-29", "hora": "12:00" },
+        { "tipo": "outro", "rotulo": "Painel", "data": "2027-01-29", "hora": "14:00" },
+        { "tipo": "outro", "rotulo": "Coquetel", "data": "2027-01-29", "hora": "18:00" },
+        { "tipo": "outro", "rotulo": "Sorteio", "data": "2027-01-29", "hora": "19:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": false },
+      "problema": "O cronograma leva até cinco momentos do tipo outro"
+    },
+    {
+      "caso": "12 momentos, os cinco do tipo outro depois dos sete, como o formulário monta, valem",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "Credenciamento da equipe", "data": "2027-01-28", "hora": "09:00" },
+        { "tipo": "outro", "rotulo": "Vistoria do estande", "data": "2027-01-28", "hora": "19:30" },
+        { "tipo": "outro", "rotulo": "Coquetel", "data": "2027-01-29", "hora": "18:00" },
+        { "tipo": "outro", "rotulo": "Conferência no local", "data": "2027-01-29", "hora": "23:00" },
+        { "tipo": "outro", "rotulo": "Contagem no estoque", "data": "2027-01-30", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": null
+    },
+    {
+      "caso": "13 momentos: o total recusa antes dos seis do tipo outro",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "Credenciamento da equipe", "data": "2027-01-28", "hora": "09:00" },
+        { "tipo": "outro", "rotulo": "Vistoria do estande", "data": "2027-01-28", "hora": "19:30" },
+        { "tipo": "outro", "rotulo": "Coquetel", "data": "2027-01-29", "hora": "18:00" },
+        { "tipo": "outro", "rotulo": "Conferência no local", "data": "2027-01-29", "hora": "23:00" },
+        { "tipo": "outro", "rotulo": "Contagem no estoque", "data": "2027-01-30", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "Pesquisa de satisfação", "data": "2027-02-03", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "O cronograma leva até 12 momentos"
+    },
+    {
+      "caso": "a entrega no local com a hora antes da coleta",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Entrega no local está antes de Coleta no cliente"
+    },
+    {
+      "caso": "a lista com a entrega antes da coleta: a coleta das 05:00 vem depois da entrega das 08:30",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Coleta no cliente está antes de Entrega no local"
+    },
+    {
+      "caso": "o mesmo dia e a mesma hora valem",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "08:30", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": null
+    },
+    {
+      "caso": "a Necton com um outro momento no fim da lista e a data no meio do cronograma",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" },
+        { "tipo": "outro", "rotulo": "Credenciamento", "data": "2027-01-28", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": null
+    },
+    {
+      "caso": "o outro momento fica fora da ordem: depois do evento na lista e com a data antes",
+      "momentos": [
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "outro", "rotulo": "Ensaio", "data": "2027-01-28", "hora": "15:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": false },
+      "problema": null
+    },
+    {
+      "caso": "a ordem dos tipos fixos pula o outro momento do meio",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "outro", "rotulo": "Credenciamento", "data": "2027-01-28", "hora": "06:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "10:00", "ate": "19:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" },
+        { "tipo": "desmontagem", "data": "2027-01-29", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" },
+        { "tipo": "entrega_de_volta", "data": "2027-02-02", "hora": "10:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": true },
+      "problema": "Entrega no local está antes de Coleta no cliente"
+    },
+    {
+      "caso": "só o evento, sem itens do estoque nem coleta",
+      "momentos": [
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": false },
+      "problema": null
+    }
+  ],
+  "retornos": [
+    { "caso": "a Necton: de 2000 que foram, 1994 voltaram e 3 avariadas", "foi": 2000, "voltou": 1994, "avariadas": 3, "naoVoltaram": 3 },
+    { "caso": "tudo voltou", "foi": 100, "voltou": 100, "avariadas": 0, "naoVoltaram": 0 },
+    { "caso": "nunca negativo", "foi": 10, "voltou": 9, "avariadas": 3, "naoVoltaram": 0 },
+    { "caso": "nada voltou", "foi": 5, "voltou": 0, "avariadas": 0, "naoVoltaram": 5 }
+  ],
+  "labels": [
+    {
+      "caso": "o ano do evento da Necton",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" }
+      ],
+      "label": "2027"
+    },
+    {
+      "caso": "o ano é o do evento, não o do primeiro momento",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2026-12-30", "hora": "09:00" },
+        { "tipo": "evento", "data": "2027-01-02", "hora": "10:00" }
+      ],
+      "label": "2027"
+    },
+    {
+      "caso": "sem o momento evento",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" }
+      ],
+      "label": null
+    },
+    {
+      "caso": "o evento sem data",
+      "momentos": [
+        { "tipo": "evento", "data": "", "hora": "08:00" }
+      ],
+      "label": null
+    }
+  ]
+}

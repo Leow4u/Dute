@@ -959,6 +959,26 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Os Eventos do portal (docs/superpowers/specs/2026-11-26-eventos-design.md):
+    // o evento que se repete e cada edição dele, sem dinheiro. A agenda da
+    // Armazenagem mostra todos os clientes; o cliente lê os próprios, com a
+    // armazenagem no contrato. Só as callables do WMS gravam.
+    match /client_events/{eventId} {
+      allow read: if canReadOperations() || isOwnProjectionWith('wms');
+      allow create, update, delete: if false;
+    }
+
+    match /client_event_editions/{editionId} {
+      allow read: if canReadOperations() || isOwnProjectionWith('wms');
+      allow create, update, delete: if false;
+    }
+
+    // O dinheiro da edição: quem lê valores e o próprio cliente. O wms não lê.
+    match /client_event_prices/{editionId} {
+      allow read: if canReadPrices() || isOwnProjectionWith('wms');
+      allow create, update, delete: if false;
+    }
+
     match /order_items/{itemId} {
       allow read: if canReadOperations();
       allow create, update, delete: if false;
