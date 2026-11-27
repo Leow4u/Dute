@@ -11,10 +11,19 @@ apagadas à mão antes de cada publicação.
 
 **Architecture:** só remoção e documentação; nenhuma callable, coleção ou
 tela nova. `assertClientEventEditor` muda de `domain/client-events.ts` para
-`domain/eventos/edicao.ts` com as mesmas frases (as treze linhas da matriz
-recusam com uma delas). A trava de `platform-lists.test.ts` passa a reprovar a
-volta do legado. A liberação muda nas duas cópias (app e Functions). A
-publicação é a de sempre (`publicar.yml`), com um passo a mais, inédito no
+`domain/eventos/edicao.ts` com as mesmas frases: as quatro linhas da matriz
+da parte 2 (`saveEventEdition`, `sendEventEdition`, `cancelEventEdition`,
+`archiveClientEvent`) recusam com `SO_EVENTOS_DO_CLIENTE`; as outras nove
+usam `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam. O app perde
+a liberação dos Eventos inteira: as rotas do portal e da Armazenagem, o
+módulo do menu, o Estoque, as leituras do Início e o "Evento" de Pedidos
+deixam de olhar `EVENTOS_LIBERADO`, que sai de `liberacao.ts`;
+`EVENTOS_AMBIENTES_LIBERADOS` e `eventosLiberado` ficam como espelho da
+lista das Functions, travados por `platform-lists.test.ts`, cuja trava
+passa a reprovar a volta do legado e qualquer `EVENTOS_LIBERADO` em
+`App.tsx`, `lib/modules.ts`, `lib/liberacao.ts` e `pages/client`. A
+liberação muda nas duas cópias (app e Functions). A publicação é a de
+sempre (`publicar.yml`), com um passo a mais, inédito no
 repositório: `firebase deploy --only functions --non-interactive` sem
 `--force` aborta quando uma function do projeto não existe no código
 (firebase-tools 15.22.4, `lib/deploy/functions/prompts.js`, "Aborting because
@@ -37,7 +46,11 @@ valem aqui).
 
 As do índice. Nesta parte, ainda: nenhum documento de `client_event_templates`
 é lido, migrado ou apagado por código (a contagem na produção é pelo console
-e quem recria é a BTG); a `demo/` fica como está (o Eventos dela é protótipo
+e quem recria é a BTG); as três functions do legado saem dos projetos só à
+mão, por `firebase functions:delete` antes de cada publicação (T4), e o
+`publicar.yml` continua sem `--force`: o CI nunca apaga function, como nunca
+apaga índice; depois da T1 nenhum código nem teste do app olha a liberação
+dos Eventos; a `demo/` fica como está (o Eventos dela é protótipo
 próprio, `artifacts/app/demo/portal/demo-api.ts`, fora do `tsconfig` do app);
 as linhas citadas são da `main` de hoje (`aa0649a1`) e as partes 1 a 11 as
 deslocam: confira cada uma antes de editar; a T3 só começa com o OK do
@@ -50,7 +63,11 @@ Leonardo registrado, com a data; a T4 só com o CI do PR verde.
    e o da produção no disparo, e nada do commit sobe, nem o frontend (T4).
 2. `assertClientEventEditor` muda de arquivo com as duas frases iguais
    ("Cliente sem código operacional.", "Perfil sem acesso aos eventos do
-   cliente."): a `MATRIZ` das treze callables recusa com a segunda (T1).
+   cliente."): na `MATRIZ`, as quatro linhas da parte 2 (`saveEventEdition`,
+   `sendEventEdition`, `cancelEventEdition`, `archiveClientEvent`) recusam
+   com a segunda (`SO_EVENTOS_DO_CLIENTE`); as outras nove usam
+   `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam; o
+   `edicao.test.ts` cobre as duas frases (T1).
 3. Os oito testes do Estoque montam `CartPanel` com `isSavingEvent` e
    `onSaveEvent`: as props saem com o "Salvar como evento", e nenhum teste
    pode continuar a passá-las (T1).
@@ -59,6 +76,12 @@ Leonardo registrado, com a data; a T4 só com o CI do PR verde.
 5. O modelo da Necton 2027 em `client_event_templates` não é recriado: a
    edição dela entra pela parte 13 (decisão 8); a BTG recria só os outros
    modelos ativos, se houver (T4).
+6. O app sem a liberação dos Eventos: nenhum `EVENTOS_LIBERADO` sobra (a
+   trava e o `typecheck`), o menu da Armazenagem mostra Eventos a
+   `WMS_ROLES` em todo ambiente, a barra do celular não muda (Eventos fica
+   em "Mais", parte 7), e os testes que contavam com a liberação desligada
+   no vitest (o menu, o Mais do celular, o Início) mudam com o código, sem
+   voltar a fixá-la por `vi.mock` (T1).
 
 ---
 
@@ -68,41 +91,67 @@ Leonardo registrado, com a data; a T4 só com o CI do PR verde.
 - Delete: `functions/wms/src/domain/client-events.ts`, `functions/wms/src/domain/client-events.integration.test.ts`
 - Modify: `functions/wms/src/index.ts` (o `import { … } from "./domain/client-events.js"`, hoje linhas 172-178; `requestedCustomer` e as três callables com os comentários, hoje 7221-7253, só elas o usam; o import de `assertClientEventEditor` que a parte 2 trouxe passa a `./domain/eventos/edicao.js`)
 - Modify: `functions/wms/src/domain/eventos/edicao.ts` (recebe `assertClientEventEditor` e `INTERNAL_EDITORS`, hoje `client-events.ts` 24 e 81-89)
-- Modify: `functions/wms/src/callables-papeis.integration.test.ts` (as linhas `archiveClientEventTemplate`, hoje 94-98, `listClientEventTemplates`, 181, e `saveClientEventTemplate`, 250-254; `SO_EVENTOS_DO_CLIENTE`, linha 65, fica: as treze linhas novas o usam)
+- Modify: `functions/wms/src/domain/eventos/edicao-gravacao.ts` (o import de `assertClientEventEditor` de `../client-events.js`, que a parte 2 trouxe na T3, passa a `./edicao.js`; sem isso, apagar `client-events.ts` quebra o `typecheck`, e a trava de `platform-lists.test.ts` reprova o import antigo)
+- Modify: `functions/wms/src/callables-papeis.integration.test.ts` (as linhas `archiveClientEventTemplate`, hoje 94-98, `listClientEventTemplates`, 181, e `saveClientEventTemplate`, 250-254; `SO_EVENTOS_DO_CLIENTE`, linha 65, fica: as quatro linhas da parte 2, `saveEventEdition`, `sendEventEdition`, `cancelEventEdition` e `archiveClientEvent`, o usam; as outras nove dos Eventos usam `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam)
 - Modify: `functions/wms/src/firestore.rules.test.ts` (a semente `client_event_templates/cev-a`, hoje 191-197, e o caso "eventos do portal só passam pelas Cloud Functions…", 628-642: coleção sem regra e sem código)
 - Modify: `functions/wms/package.json` (`lib/domain/client-events.integration.test.js` sai de `test:integration`)
 - Delete: `artifacts/app/src/pages/client/events-api.ts`, `artifacts/app/src/lib/client-events.ts`, `artifacts/app/src/lib/client-events.test.ts`; a tela legada que a parte 4 moveu, `pages/client/eventos-modelos.tsx` (`ClienteEventosModelos`, `EventEditDialog`), com `eventos-modelos-carregando.test.tsx`, `eventos-modelos-editar.test.tsx` e `eventos-modelos-excluir.test.tsx`; e `pages/client/eventos-liberacao.test.tsx` (parte 4, T7: só compara o novo com o legado)
-- Modify: `artifacts/app/src/pages/client/eventos.tsx` (`ClienteEventos = () => (EVENTOS_LIBERADO ? <ListaDeEventos /> : <ClienteEventosModelos />)`, parte 4, vira só a lista), `artifacts/app/src/pages/client/index.ts` (o export de `ClienteEventosModelos` sai), `artifacts/app/src/App.tsx` (o spread `...(EVENTOS_LIBERADO ? [protectedRoute("/portal/eventos/novo", …), protectedRoute("/portal/eventos/edicao", …)] : [])` das partes 4 e 11 vira as `protectedRoute` diretas, como as outras do portal)
+- Modify: `artifacts/app/src/pages/client/eventos.tsx` (`ClienteEventos = () => (EVENTOS_LIBERADO ? <ListaDeEventos /> : <ClienteEventosModelos />)`, parte 4, vira só a lista), `artifacts/app/src/pages/client/index.ts` (o export de `ClienteEventosModelos` sai), `artifacts/app/src/App.tsx` (todo spread sob `EVENTOS_LIBERADO` vira as `protectedRoute` diretas, como as outras: o do portal da parte 4, `...(EVENTOS_LIBERADO ? [protectedRoute("/portal/eventos/novo", …), protectedRoute("/portal/eventos/edicao", …)] : [])`, o spread próprio do romaneio da parte 11, `/portal/eventos/romaneio`, e o da Armazenagem das partes 7 e 8, `/eventos/edicao` e `/eventos`; o import de `EVENTOS_LIBERADO` sai)
+- Modify: `artifacts/app/src/lib/liberacao.ts` (`EVENTOS_LIBERADO` e o comentário dele saem; no comentário do bloco da parte 1, a frase do portal que fora da liberação segue com o Eventos de hoje e o "Salvar como evento" passa a dizer que fora dela as telas abrem e as callables recusam; `EVENTOS_AMBIENTES_LIBERADOS` e `eventosLiberado` ficam, espelho da lista das Functions)
+- Modify: `artifacts/app/src/lib/use-inicio-do-wms.ts` (o `EVENTOS_LIBERADO &&` de `seesEventos`, parte 7, que liga também a leitura da parte 10, e o de `seesRetornos`, parte 9, com o import), `artifacts/app/src/pages/pedidos.tsx` e `artifacts/app/src/pages/customer-requests.tsx` (o "Evento" da parte 8, na solicitação e no pedido com `event_edition_id`, deixa de olhar a liberação; `pages/pedidos.evento.test.tsx` e `pages/customer-requests-detalhe.test.tsx` perdem o `EVENTOS_LIBERADO` do mock de `@/lib/liberacao` que a parte 8 lhes deu, e o `OPERACAO_LIBERADO` fica; a lista permitida do `it` da parte 6 em `pedidos.evento.test.tsx` fica com o "Evento" que a parte 8 lhe deu, e a de `customer-requests-detalhe.test.tsx` também, se ele conferir lista de textos: o link passa a aparecer em todo ambiente)
 - Modify: `artifacts/app/src/lib/functions-api.ts` (as três rotas `/api/client/events`, hoje 160-173)
 - Modify: `artifacts/app/src/pages/client/estoque.tsx` (o ramo que a parte 5 deixou sob `const legado = !EVENTOS_LIBERADO`: o import de `@/lib/client-events`, hoje 70, e de `./events-api`, 88; `useClientEvents`, `useSaveClientEvent`, `applyEvent`, o `DraftLoader key="evento"` e o "Abrindo o evento…", hoje 259-330 e 425-438; `saveCartAsEvent`, 671; `idDaEdicao = EVENTOS_LIBERADO ? wantsEvent : null` vira `wantsEvent`; em `CartPanel`, as props opcionais `isSavingEvent` e `onSaveEvent` e o bloco "Salvar como evento", hoje 2018-2040, 2067-2068 e 2215-2282)
 - Modify: `artifacts/app/src/pages/client/estoque-carregando.test.tsx` (os casos do legado "o evento no pedido", hoje 173-181, e "Salvar como evento", 183-227, e o `vi.mock("@/lib/liberacao", …)` da parte 5), `estoque-evento.test.tsx` e os outros `estoque*.test.tsx` (o mesmo `vi.mock`, que fica sem leitor; o caso "sem onSaveEvent, o painel do pedido não oferece Salvar como evento" de `estoque.test.tsx` fica, como trava do carrinho)
-- Modify: `artifacts/app/src/lib/modules.ts` (o comentário do módulo `client-events`, hoje 774: a edição do evento, não "vira pedido no Estoque")
+- Modify: `artifacts/app/src/lib/modules.ts` (o comentário do módulo `client-events`, hoje 774: a edição do evento, não "vira pedido no Estoque"; o módulo `eventos` da parte 7 perde `liberacao: "eventos"`, e o tipo `AppModule.liberacao` perde o `"eventos"`; `navigationForAmbiente` e `getNavigationForProfileRole` perdem o parâmetro `eventos` e o filtro `(module.liberacao !== "eventos" || eventos)`; o import de `EVENTOS_LIBERADO` sai; `FORA_DA_BARRA_DO_CELULAR`, da parte 7, fica: no celular, Eventos segue em "Mais" e a barra não muda)
+- Modify: `artifacts/app/src/lib/modules.test.ts` (o `it` "Eventos entra no menu do WMS entre Estoque e Faturamento só com a liberação" da parte 7, T6, perde a metade sem a liberação e o quinto argumento, e o `it` da parte 7 na barra do celular ("com a liberação, Eventos fica em Mais no celular e a barra do operador não muda") perde o quinto argumento e o "com a liberação" do nome, com as mesmas expectativas; os casos de lista exata, o `menu` de owner e admin, hoje 229-243, e o do `wms`, 244-251, passam a ter o módulo Eventos depois de Estoque; nos da barra do celular de owner e do `wms`, hoje 462-478, a barra não muda (o `eventos` fica fora de `MOBILE_BAR_PRIORITY` e o laço que completa a barra o pula, `FORA_DA_BARRA_DO_CELULAR`, parte 7), e só o Mais ganha "Eventos · Eventos" depois de "Estoque · Posições": o caso "operador WMS completa a barra com Documentos" fica com o nome e a barra), `artifacts/app/src/lib/resumo-do-modulo.test.ts` (o caso da parte 7 perde o quinto argumento de `getNavigationForProfileRole`)
+- Modify: os testes que montam o `useInicioDoWms` de verdade, sem simulá-lo (hoje `pages/home.carregando.test.tsx`, `components/layout/wms-layout.test.tsx` e `pages/entrada-leituras.test.tsx`): sem a liberação, as três leituras dos Eventos (`edicoesEnviadas`, `edicoesNoEvento` e `edicoesRetornadas`, de `lib/eventos/agenda.ts`, partes 7, 9 e 10) rodam no vitest; o que conta as leituras (`entrada-leituras`) passa a esperá-las para quem as vê, e os outros ganham o `vi.mock` delas devolvendo `[]`
 - Test: `functions/wms/src/domain/eventos/edicao.test.ts`, `artifacts/app/src/lib/platform-lists.test.ts`
 
 **Interfaces:**
-- Consumes: `assertClientEventEditor` (hoje em `domain/client-events.ts`, importado pelas callables da parte 2), `SO_EVENTOS_DO_CLIENTE`, `CALLABLES_DOS_EVENTOS` (parte 2, `lib/wms/eventos.ts`), `EVENTOS_LIBERADO` (parte 1), `ListaDeEventos`, `ClienteEventosModelos`, `ClienteEventoNovo`, `ClienteEventoEdicao` e o `it` "o portal só troca de Eventos com a liberação: a lista e as rotas do formulário" (parte 4), `legado` e `idDaEdicao` em `ClienteEstoque` (parte 5), `read` e `root` de `platform-lists.test.ts`.
-- Produces: `assertClientEventEditor(actor: { role: string; customer_code?: string }): void` exportado de `functions/wms/src/domain/eventos/edicao.ts`, com os mesmos papéis (`cliente` com `customer_code`; `owner`, `admin`, `interno`) e as mesmas frases; a trava "o legado dos eventos (client_event_templates) saiu do código", no lugar do `it` da parte 4. Depois desta tarefa `EVENTOS_LIBERADO` nunca mais escolhe entre o novo e o legado: fora da liberação (só o `dute-btg`, congelado) a tela nova abre e a callable recusa com a frase da liberação. Ele só pode restar onde escolhe entre existir e não existir (o item "Eventos" do menu da Armazenagem, se a parte 7 o pôs sob a liberação como o Comercial); se nada o importar, a constante sai de `liberacao.ts`, e `eventosLiberado` e `EVENTOS_AMBIENTES_LIBERADOS` ficam como espelho da lista das Functions.
+- Consumes: `assertClientEventEditor` (hoje em `domain/client-events.ts`, importado pelas callables da parte 2 e por `domain/eventos/edicao-gravacao.ts`, parte 2, T3), `SO_EVENTOS_DO_CLIENTE` (as quatro linhas da parte 2), `CALLABLES_DOS_EVENTOS` (parte 2, `lib/wms/eventos.ts`), `EVENTOS_LIBERADO` (parte 1) e quem o lê: `ListaDeEventos`, `ClienteEventosModelos`, `ClienteEventoNovo`, `ClienteEventoEdicao` e o `it` "o portal só troca de Eventos com a liberação: a lista e as rotas do formulário" (parte 4); `legado` e `idDaEdicao` em `ClienteEstoque` (parte 5); o módulo `eventos` com `liberacao: "eventos"`, o parâmetro `eventos` de `navigationForAmbiente` e de `getNavigationForProfileRole`, a rota `/eventos`, `seesEventos` em `useInicioDoWms`, `FORA_DA_BARRA_DO_CELULAR` e os `it` "Eventos entra no menu do WMS entre Estoque e Faturamento só com a liberação" e "com a liberação, Eventos fica em Mais no celular e a barra do operador não muda" (parte 7); a rota `/eventos/edicao` e o "Evento" de Pedidos (parte 8); `seesRetornos` (parte 9); a leitura de "Edição para fechar" sob `seesEventos` (parte 10); o spread do romaneio (parte 11); `MOBILE_BAR_PRIORITY` e `getMobileNavigation` (`lib/modules.ts`); `read` e `root` de `platform-lists.test.ts`, com `existsSync` e `readdirSync` no import de `node:fs`.
+- Produces: `assertClientEventEditor(actor: { role: string; customer_code?: string }): void` exportado de `functions/wms/src/domain/eventos/edicao.ts`, com os mesmos papéis (`cliente` com `customer_code`; `owner`, `admin`, `interno`) e as mesmas frases; a trava "o legado dos eventos (client_event_templates) saiu do código e o app não olha a liberação dos Eventos", no lugar do `it` da parte 4; `navigationForAmbiente` e `getNavigationForProfileRole(role, operation, comercial, financeiro)` sem o parâmetro `eventos`. Depois desta tarefa nada no app olha a liberação dos Eventos: as rotas do portal e da Armazenagem são `protectedRoute` diretas, o módulo "Eventos" aparece a `WMS_ROLES` em todo ambiente (no celular, em "Mais", com a barra de sempre), o Estoque abre o modo pelo `?evento=`, as leituras do Início e o "Evento" de Pedidos valem para quem o papel deixa, e `EVENTOS_LIBERADO` não existe mais; fora da liberação (só o `dute-btg`, congelado) a tela abre e a callable recusa com a frase da liberação. `EVENTOS_AMBIENTES_LIBERADOS` e `eventosLiberado` ficam em `liberacao.ts` como espelho da lista das Functions, travados por `platform-lists.test.ts` (a T3 muda a lista).
 
 - [ ] **Step 1: Write the failing tests**
 
 No `describe` dos Eventos de `platform-lists.test.ts`, no lugar do `it` da
-parte 4 (que exigia os dois ternários e passa a ser o contrário):
+parte 4 (que exigia os dois ternários e passa a ser o contrário), com
+`existsSync` e `readdirSync` no import de `node:fs`:
 
 ```ts
-it("o legado dos eventos (client_event_templates) saiu do código", () => {
+it("o legado dos eventos (client_event_templates) saiu do código e o app não olha a liberação dos Eventos", () => {
   expect(read("functions/wms/src/index.ts")).not.toMatch(/ClientEventTemplate|client-events\.js|requestedCustomer/);
+  expect(read("functions/wms/src/domain/eventos/edicao-gravacao.ts")).not.toContain("client-events.js");
   expect(existsSync(resolve(root, "functions/wms/src/domain/client-events.ts"))).toBe(false);
   expect(existsSync(resolve(root, "artifacts/app/src/pages/client/events-api.ts"))).toBe(false);
   expect(existsSync(resolve(root, "artifacts/app/src/pages/client/eventos-modelos.tsx"))).toBe(false);
   expect(existsSync(resolve(root, "artifacts/app/src/lib/client-events.ts"))).toBe(false);
   expect(read("artifacts/app/src/lib/functions-api.ts")).not.toContain("/api/client/events");
-  expect(read("artifacts/app/src/pages/client/eventos.tsx")).not.toMatch(/ClienteEventosModelos|EVENTOS_LIBERADO/);
+  expect(read("artifacts/app/src/pages/client/eventos.tsx")).not.toContain("ClienteEventosModelos");
   expect(read("artifacts/app/src/App.tsx")).toContain('protectedRoute("/portal/eventos/novo", ClienteEventoNovo)');
-  expect(read("artifacts/app/src/App.tsx")).not.toContain("EVENTOS_LIBERADO ?");
-  expect(read("artifacts/app/src/pages/client/estoque.tsx")).not.toMatch(/Salvar como evento|events-api|EVENTOS_LIBERADO/);
+  expect(read("artifacts/app/src/App.tsx")).toContain('protectedRoute("/eventos", Eventos)');
+  expect(read("artifacts/app/src/pages/client/estoque.tsx")).not.toMatch(/Salvar como evento|events-api/);
+  expect(read("artifacts/app/src/lib/modules.ts")).not.toContain('liberacao: "eventos"');
+  const doPortal = readdirSync(resolve(root, "artifacts/app/src/pages/client"))
+    .filter((nome) => /\.tsx?$/.test(nome))
+    .map((nome) => `artifacts/app/src/pages/client/${nome}`);
+  for (const arquivo of ["artifacts/app/src/App.tsx", "artifacts/app/src/lib/modules.ts", "artifacts/app/src/lib/liberacao.ts", ...doPortal]) {
+    expect(read(arquivo), arquivo).not.toContain("EVENTOS_LIBERADO");
+  }
   expect(read("functions/wms/package.json")).not.toContain("client-events.integration");
 });
 ```
+
+Em `modules.test.ts`, o `it` da parte 7 passa a "Eventos entra no menu do
+WMS entre Estoque e Faturamento, em todo ambiente": sem o quinto argumento,
+`getNavigationForProfileRole("admin", null, false, false)` tem "Estoque",
+"Eventos", "Faturamento" em seguida e o do `wms` tem "Eventos"; a metade
+"sem a liberação, não tem" sai. Os casos de lista exata ganham o módulo:
+`{ label: "Eventos", routes: ["Eventos"] }` depois de Estoque no `menu` de
+owner e admin e no do `wms`; "Eventos · Eventos" depois de "Estoque ·
+Posições" no Mais de owner e no do `wms`. A barra do celular não muda: o
+caso "operador WMS completa a barra com Documentos" segue com "Pedidos",
+"Estoque", "Agent Dute", "Documentos", e o `it` da barra da parte 7 só
+perde o quinto argumento (e o "com a liberação" do nome).
 
 Em `edicao.test.ts`: `assertClientEventEditor({ role: "cliente" })` lança
 `permission-denied` "Cliente sem código operacional."; `{ role: "wms" }` lança
@@ -111,15 +160,19 @@ Em `edicao.test.ts`: `assertClientEventEditor({ role: "cliente" })` lança
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd C:\DEV\Dute\artifacts\app; npx vitest run src/lib/platform-lists.test.ts` e
+Run: `cd C:\DEV\Dute\artifacts\app; npx vitest run src/lib/platform-lists.test.ts src/lib/modules.test.ts` e
 `cd C:\DEV\Dute\functions\wms; npm run build:test; node --test lib/domain/eventos/edicao.test.js`
-Expected: FAIL (o legado existe; `edicao.js` não exporta `assertClientEventEditor`).
+Expected: FAIL (o legado existe, `edicao-gravacao.ts` ainda importa de
+`../client-events.js` e o app ainda olha `EVENTOS_LIBERADO`; no vitest, sem
+`VITE_FIREBASE_PROJECT_ID`, o menu não tem Eventos; `edicao.js` não exporta
+`assertClientEventEditor`).
 
 - [ ] **Step 3: Remove the legacy from the Functions**
 
 Mova `assertClientEventEditor` e `INTERNAL_EDITORS` para `edicao.ts` sem
 mudar uma letra das frases; aponte o import do `index.ts` para
-`./domain/eventos/edicao.js`; apague `client-events.ts` e o teste de
+`./domain/eventos/edicao.js` e o de `edicao-gravacao.ts` (parte 2, T3) para
+`./edicao.js`; apague `client-events.ts` e o teste de
 integração; tire o import, `requestedCustomer` e as três callables do
 `index.ts` (o comentário `// Eventos (…)` da parte 2 passa a seguir
 `setClientItemArchived`); tire as três linhas da `MATRIZ`, a semente e o caso
@@ -133,28 +186,39 @@ Apague `events-api.ts`, `lib/client-events.ts` com o teste,
 `eventos-modelos.tsx` com os três testes e `eventos-liberacao.test.tsx`; tire
 as três rotas de `functions-api.ts`; em `eventos.tsx`, `ClienteEventos` passa
 a ser só `ListaDeEventos`, e `index.ts` deixa de exportar
-`ClienteEventosModelos`; em `App.tsx`, o spread vira as `protectedRoute`
+`ClienteEventosModelos`; em `App.tsx`, cada spread sob `EVENTOS_LIBERADO`
+(o do portal, o do romaneio e o da Armazenagem) vira as `protectedRoute`
 diretas; em `estoque.tsx`, o `legado` inteiro, o `idDaEdicao` condicional e
 as props `isSavingEvent` e `onSaveEvent` de `CartPanel` (e de quem o monta
 nos testes, `grep -ln "isSavingEvent\|onSaveEvent" src/pages/client/*.test.tsx`);
 nos testes do Estoque, os dois casos do legado e o `vi.mock("@/lib/liberacao", …)`
-que ficou sem leitor; o comentário de `modules.ts`. Por fim
-`grep -rn "EVENTOS_LIBERADO" artifacts/app/src`: o que restar escolhe entre
-existir e não existir, nunca entre o novo e o legado; sem leitor, a
-constante sai de `liberacao.ts`.
+que ficou sem leitor; em `modules.ts`, o comentário, `liberacao: "eventos"`
+e o parâmetro `eventos` com o filtro dele; em `resumo-do-modulo.test.ts`, o
+quinto argumento; em `use-inicio-do-wms.ts`, o `EVENTOS_LIBERADO &&` de
+`seesEventos` e de `seesRetornos`; em `pedidos.tsx` e
+`customer-requests.tsx`, a condição do "Evento", e o `EVENTOS_LIBERADO` do
+mock dos testes deles, com o "Evento" mantido nas listas dos textos (parte
+8); nos testes que montam o
+Início de verdade, as leituras dos Eventos simuladas (ou esperadas, no que
+conta as leituras), nunca a liberação fixada de volta; por fim
+`EVENTOS_LIBERADO` sai de `liberacao.ts`, com o comentário do bloco
+corrigido. Então `grep -rn "EVENTOS_LIBERADO" artifacts/app/src` só acha a
+trava de `platform-lists.test.ts`.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: os dois comandos do passo 2; `cd C:\DEV\Dute; corepack pnpm run typecheck`;
-`cd C:\DEV\Dute\artifacts\app; npx vitest run src/pages/client src/lib/modules.test.ts src/lib/cloud-api-indices.test.ts`;
+`cd C:\DEV\Dute\artifacts\app; npx vitest run src/pages/client src/lib/modules.test.ts src/lib/resumo-do-modulo.test.ts src/lib/cloud-api-indices.test.ts src/components/layout src/pages/home src/pages/entrada src/pages/pedidos src/pages/customer-requests`;
 `cd C:\DEV\Dute\functions\wms; npm run build:test; firebase emulators:exec --project demo-dute-operations --only firestore,storage,auth "node --test lib/callables-papeis.integration.test.js lib/callables-auth.integration.test.js lib/firestore.rules.test.js lib/domain/eventos/edicao.integration.test.js"`
-Expected: PASS; a matriz sem linha sem callable e sem callable sem linha.
+Expected: PASS; a matriz sem linha sem callable e sem callable sem linha; o
+`typecheck` sem `EVENTOS_LIBERADO` nem o quinto argumento do menu em lugar
+nenhum.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add -A functions/wms/src functions/wms/package.json artifacts/app/src
-git commit -m "feat(wms): o legado dos eventos do portal sai (as três callables, o domínio e o events-api)"
+git commit -m "feat: o legado dos eventos do portal sai (as três callables, o domínio e o events-api) e o app deixa de olhar a liberação dos Eventos"
 ```
 
 ### Task 2: os manuais, o CLAUDE.md, o contrato de eventos e a cobertura da API
@@ -163,7 +227,7 @@ git commit -m "feat(wms): o legado dos eventos do portal sai (as três callables
 - Modify: `docs/manual-portal.md` (a linha "Eventos" da tabela do menu, hoje 61; o bullet "Salvar como evento" do Estoque, 138-139, vira o modo "montando o evento"; a seção "## Eventos", 164-184, refeita)
 - Modify: `docs/manual-armazenagem.md` (a tabela do menu, hoje 13-24, ganha "Eventos"; "O cliente ativo", 51-54: "Mostram todos" ganha a agenda dos Eventos; a tabela do Início, 63-71, ganha as três linhas; seção nova "## Eventos" entre "## A entrega do pedido" e "## Receber", hoje 234; "## Devoluções", 521-529, a devolução que nasce do retorno; "## Quem vê valor", 554-561, o bloco "Preço fechado")
 - Modify: `CLAUDE.md` (bullet novo em "Verdades do projeto", antes de "**`pnpm` não está no PATH.**", hoje linha 593)
-- Modify: `docs/contrato-eventos-ai-native.md` (as três linhas `client_event_template.*`, hoje 43-45, saem; grupo novo "Eventos do cliente (a edição):" com os dezesseis tipos `evento.*`)
+- Modify: `docs/contrato-eventos-ai-native.md` (as três linhas `client_event_template.*`, hoje 43-45, saem; grupo novo "Eventos do cliente (a edição):" com os dezesseis tipos `evento.*` que as partes 2 a 11 gravam; o 17º de `EVENTO_EVENT_TYPES`, `evento.pedido_adotado`, entra no grupo na parte 13, que o grava)
 - Modify: `docs/api-cobertura.md` (linha 10, a coluna "Explicitamente fora desta versão" da Armazenagem ganha "; Eventos do cliente (`client_events`, `client_event_editions`, `client_event_prices`): não cobertos")
 - Modify: `docs/mockups/README.md` (hoje 834, "(nada no código ainda)" vira o registro: as partes 1 a 11 na `main`, com os PRs, e a parte 12; cada linha da tabela das oito pranchas ganha ao fim "No código desde DD/MM/2026 (PR N)", como a linha da Folha de contagem, 771)
 
@@ -222,19 +286,26 @@ nem explicação de código nos manuais:
   valor); o envio cria a solicitação com `event_edition_id`, o packing e a
   entrega escrevem a edição, o retorno faz a ENTRADA `functions_event_return`
   fora da cobrança e manda as avariadas a Devoluções; as rotas do portal e da
-  Armazenagem e a v3; a zeragem preserva as três coleções e os eventos
-  `functions_client_events`; o legado `client_event_templates` (as três
-  callables e o "Salvar como evento") saiu do código nesta parte, e a
-  function removida pede `firebase functions:delete` antes da publicação
-  (`docs/deploy-functions-manual.md`, "Function removida do código"). A frase
+  Armazenagem e a v3; a zeragem preserva as três coleções e os eventos de
+  auditoria de origem `functions_client_events` cujo tipo começa por
+  `evento.` (`EVENTOS_EVENT_TYPE_PREFIX`); os do modelo antigo vão embora;
+  o legado `client_event_templates` (as três callables e o "Salvar como
+  evento") saiu do código nesta parte, e a function removida pede
+  `firebase functions:delete` à mão antes da
+  publicação, nunca pelo CI (o `publicar.yml` continua sem `--force`;
+  `docs/deploy-functions-manual.md`, "Function removida do código"). A frase
   da liberação e a da produção entram na T3 e na T4.
 
 - [ ] **Step 2: Verify**
 
-Run: `cd C:\DEV\Dute; git diff --stat` (só os seis arquivos) e
-`grep -rn "Salvar como evento\|client_event_template\|modelo de pedido\|Usar no pedido" docs/manual-portal.md docs/manual-armazenagem.md docs/contrato-eventos-ai-native.md CLAUDE.md`
-Expected: nenhuma linha (o único "Salvar como evento" que fica no repositório
-é o da `demo/` e o das notas históricas de `docs/mockups/README.md` e da spec).
+Run: `cd C:\DEV\Dute; git diff --stat` (só os seis arquivos),
+`grep -rn "Salvar como evento\|client_event_template\|modelo de pedido\|Usar no pedido" docs/manual-portal.md docs/manual-armazenagem.md docs/contrato-eventos-ai-native.md`
+e, no CLAUDE.md, só o que não pode sobrar (o bullet novo cita o legado e o
+"Salvar como evento" para dizer que saíram):
+`grep -n "modelo de pedido\|Usar no pedido" CLAUDE.md`
+Expected: nenhuma linha nos dois `grep` (fora do bullet do CLAUDE.md, o
+único "Salvar como evento" que fica no repositório é o da `demo/` e o das
+notas históricas de `docs/mockups/README.md` e da spec).
 
 - [ ] **Step 3: Commit**
 
@@ -246,10 +317,10 @@ git commit -m "docs(plataforma): os Eventos nos manuais, no CLAUDE.md, no contra
 ### Task 3: `dute-prod` na liberação (OK do Leonardo)
 
 **Files:**
-- Modify: `artifacts/app/src/lib/liberacao.ts` (o bloco dos Eventos da parte 1: a lista e o comentário, com a data do OK, no molde do bloco `RECEBIMENTO_POR_CAIXA`, hoje 156-172)
+- Modify: `artifacts/app/src/lib/liberacao.ts` (o bloco dos Eventos da parte 1, já sem o `EVENTOS_LIBERADO`, que saiu na T1: a lista e o comentário, com a data do OK, no molde do bloco `RECEBIMENTO_POR_CAIXA`, hoje 156-172)
 - Modify: `functions/wms/src/domain/eventos/liberacao.ts` (a lista e o comentário, no molde de `inbound-mode.ts` 29-34)
 - Test: `artifacts/app/src/lib/platform-lists.test.ts` (o `it` da parte 1 no `describe` dos Eventos), `functions/wms/src/domain/eventos/liberacao.test.ts`
-- Modify: `docs/manual-portal.md` (a tabela "Homologação e produção", hoje 362-368: a linha "Eventos (as edições) | Sim | Sim, desde DD/MM/2026"), `docs/manual-armazenagem.md` (a tabela "O que muda por ambiente", hoje 564-570: "A agenda e a ficha dos Eventos | Homologação e produção"), `CLAUDE.md` (no bullet da T2: "Liberação própria `EVENTOS_AMBIENTES_LIBERADOS`/`EVENTOS_PROJECTS`: homologação e, desde DD/MM/2026 com o OK do Leonardo, produção; o `dute-btg` de fora")
+- Modify: `docs/manual-portal.md` (a tabela "Homologação e produção", hoje 362-368: a linha "Eventos (as edições) | Sim | Sim, desde DD/MM/2026"), `docs/manual-armazenagem.md` (a tabela "O que muda por ambiente", hoje 564-570: "A agenda e a ficha dos Eventos | Homologação e produção"), `CLAUDE.md` (no bullet da T2: "Liberação própria `EVENTOS_AMBIENTES_LIBERADOS`/`EVENTOS_PROJECTS`: homologação e, desde DD/MM/2026 com o OK do Leonardo, produção; o `dute-btg` de fora; é só das callables: no app, a lista é o espelho da das Functions e nenhuma tela a olha")
 
 **Interfaces:**
 - Consumes: `EVENTOS_AMBIENTES_LIBERADOS`, `eventosLiberado`, `EVENTOS_PROJECTS`, `assertEventosLiberado` (parte 1), `tsList` (`platform-lists.test.ts`).
@@ -381,6 +452,7 @@ git commit -m "docs(plataforma): a publicação dos Eventos na produção e a fu
 
 `corepack pnpm run typecheck`, `npm --prefix functions/wms run test:unit` e
 `npm --prefix functions/wms run test:integration` verdes sem nenhuma menção a
-`ClientEventTemplate`; a homologação e a produção publicadas com as
-conferências verdes e sem as três functions; a BTG com o Eventos novo e os
-modelos que tinha recriados (fora o da Necton); a parte 13 pode começar.
+`ClientEventTemplate`, e o app sem `EVENTOS_LIBERADO` (só a trava o cita);
+a homologação e a produção publicadas com as conferências verdes e sem as
+três functions; a BTG com o Eventos novo e os modelos que tinha recriados
+(fora o da Necton); a parte 13 pode começar.

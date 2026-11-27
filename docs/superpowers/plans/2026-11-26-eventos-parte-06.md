@@ -350,7 +350,7 @@ git commit -m "feat(app): a linha do pedido de evento em Pedidos diz o evento"
 
 **Files:**
 - Modify: `functions/wms/src/index.ts` (`CreateCustomerRequestSchema`, linhas 411 a 441: `event_edition_id: z.string().trim().min(1).max(120).optional()`; `createCustomerRequest`, linhas 6578 a 6593: a recusa logo depois do `safeParse`)
-- Modify: `docs/superpowers/plans/2026-11-26-eventos.md` (a linha "Campo novo do pedido" das interfaces e a entrada de `envio.ts` no File Structure)
+- Modify: `docs/superpowers/plans/2026-11-26-eventos.md` (a linha "Campo novo do pedido" das interfaces; a entrada de `envio.ts` no File Structure e as duas funções da parte 6 em "Funções do domínio" já estão lá e só se conferem)
 - Test: `functions/wms/src/customer-request.integration.test.ts` (um `it` novo)
 
 **Interfaces:**
@@ -390,10 +390,14 @@ Expected: PASS.
 
 - [ ] **Step 5: Update the index and commit**
 
-No índice: a linha "Campo novo do pedido" passa a citar também
-`CreateOperationalRequestInput` e `createCustomerRequestInTransaction`; o File
-Structure ganha `domain/eventos/envio.ts (parte 6): a solicitação da edição, o
-envio com pedido e o cancelamento com a solicitação`.
+No índice, o acréscimo é só na linha "Campo novo do pedido", que passa a
+citar também `CreateOperationalRequestInput` e
+`createCustomerRequestInTransaction`, os dois em `domain/operations.ts`. O
+resto já está lá e só se confere, sem duplicar: a entrada
+`domain/eventos/envio.ts` (parte 6) do File Structure e, em "Funções do
+domínio", as duas da parte 6, `createCustomerRequestInTransaction(transaction, db, pedido, actor)`
+(extraída em `domain/operations.ts`) e `cancelarEdicaoComSolicitacao(db, input, actor)`
+(`envio.ts`).
 
 ```bash
 git add functions/wms/src/index.ts functions/wms/src/customer-request.integration.test.ts docs/superpowers/plans/2026-11-26-eventos.md
