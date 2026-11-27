@@ -9,7 +9,8 @@
  * precisam ter iguais.
  *
  * Funções puras, sem Firestore nem Date: a ordem do cronograma compara o
- * texto `${data}T${hora}` (AAAA-MM-DD e HH:MM). functions/wms guarda uma
+ * dia (AAAA-MM-DD) e, quando os dois momentos têm hora, o texto
+ * `${data}T${hora}` (HH:MM). functions/wms guarda uma
  * cópia literal (domain/eventos/dominio.ts), e os dois rodam os mesmos casos
  * de eventos.casos.json.
  */
@@ -84,7 +85,6 @@ export const LIMITES = {
   observacaoDoMomento: 300,
   observacoes: 2000,
   coletaOnde: 300,
-  coletaObservacao: 500,
   itens: 100,
   quantidade: 1_000_000,
   momentos: 12,
@@ -131,7 +131,8 @@ export type MomentoPrevisto = {
   tipo: TipoDeMomento;
   rotulo?: string | null;
   data: string;
-  hora: string;
+  /** HH:MM; vazia, a linha grava com o dia (decisão 12 da spec); a da entrega no local é exigida no envio. */
+  hora?: string | null;
   ate?: string | null;
   local?: string | null;
   observacao?: string | null;
@@ -142,9 +143,13 @@ export type MomentoPrevisto = {
  * cronograma"): até 12 momentos, até cinco do tipo outro; cada tipo uma vez,
  * menos o outro, que leva rótulo; o evento sempre com data; com itens do
  * estoque, a entrega no local com data e hora e o retorno ao estoque com
- * data; com coleta, a coleta no cliente com data; e as datas dos tipos fixos
- * crescendo na ordem da lista (o mesmo instante vale). O outro fica fora da
- * ordem: o formulário o põe depois dos sete, com a data que tiver.
+ * data; sem eles, a entrega no local que estiver no cronograma também com a
+ * hora (decisão 12); com coleta, a coleta no cliente com data; e as datas
+ * dos tipos fixos crescendo na ordem da lista (o mesmo instante vale). O
+ * outro fica fora da ordem: o formulário o põe depois dos sete, com a data
+ * que tiver. Sem a hora (decisão 12: no rascunho toda linha grava com o
+ * dia), vale o dia: o momento sem hora não fica antes de um do mesmo dia, e
+ * a hora ordena entre os que têm hora.
  */
 export function problemaDoCronograma(
   momentos: readonly MomentoPrevisto[],
@@ -165,19 +170,22 @@ export function problemaDoCronograma(
   }
   const doTipo = (tipo: TipoDeMomento) => momentos.find((momento) => momento.tipo === tipo);
   if (!preenchido(doTipo("evento")?.data)) return "Informe a data do evento";
-  if (contexto.comItensDoEstoque) {
-    const entrega = doTipo("entrega_no_local");
-    if (!preenchido(entrega?.data) || !preenchido(entrega?.hora)) return "Informe a data e a hora da entrega no local";
-    if (!preenchido(doTipo("retorno_ao_estoque")?.data)) return "Informe a data do retorno ao estoque";
+  const entrega = doTipo("entrega_no_local");
+  if ((contexto.comItensDoEstoque || entrega) && (!preenchido(entrega?.data) || !preenchido(entrega?.hora))) {
+    return "Informe a data e a hora da entrega no local";
   }
+  if (contexto.comItensDoEstoque && !preenchido(doTipo("retorno_ao_estoque")?.data)) return "Informe a data do retorno ao estoque";
   if (contexto.comColeta && !preenchido(doTipo("coleta_no_cliente")?.data)) return "Informe a data da coleta no cliente";
   const fixos = momentos.filter((momento) => momento.tipo !== "outro");
-  for (let posicao = 1; posicao < fixos.length; posicao += 1) {
-    const anterior = fixos[posicao - 1];
-    const momento = fixos[posicao];
-    if (instante(momento) < instante(anterior)) {
-      return `${ROTULO_DO_MOMENTO[momento.tipo]} está antes de ${ROTULO_DO_MOMENTO[anterior.tipo]}`;
-    }
+  // O último dia e a última hora até aqui: o dia vale para todos, a hora só entre os que a têm.
+  let ultimoDia: MomentoPrevisto | null = null;
+  let ultimaHora: MomentoPrevisto | null = null;
+  for (const momento of fixos) {
+    if (ultimoDia && momento.data < ultimoDia.data) return antesDe(momento, ultimoDia);
+    const comHora = preenchido(momento.hora);
+    if (comHora && ultimaHora && instante(momento) < instante(ultimaHora)) return antesDe(momento, ultimaHora);
+    if (!ultimoDia || momento.data >= ultimoDia.data) ultimoDia = momento;
+    if (comHora && (!ultimaHora || instante(momento) >= instante(ultimaHora))) ultimaHora = momento;
   }
   return null;
 }
@@ -198,5 +206,9 @@ function preenchido(texto: string | null | undefined): boolean {
 }
 
 function instante(momento: MomentoPrevisto): string {
-  return `${momento.data}T${momento.hora}`;
+  return `${momento.data}T${momento.hora ?? ""}`;
+}
+
+function antesDe(momento: MomentoPrevisto, anterior: MomentoPrevisto): string {
+  return `${ROTULO_DO_MOMENTO[momento.tipo]} está antes de ${ROTULO_DO_MOMENTO[anterior.tipo]}`;
 }

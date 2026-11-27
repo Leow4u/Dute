@@ -170,13 +170,29 @@ import {
   storageFailure,
 } from "./domain/client-shipments.js";
 import {
-  archiveClientEvent,
+  // O modelo antigo (client_event_templates): o nome archiveClientEvent é da callable dos Eventos.
+  archiveClientEvent as archiveClientEventTemplateRecord,
   ArchiveClientEventSchema,
+  assertClientEventEditor,
   ClientEventInputSchema,
   listClientEvents,
   mensagemDaRecusa,
   saveClientEvent,
 } from "./domain/client-events.js";
+import {
+  ArquivarEventoSchema,
+  CancelarEdicaoSchema,
+  EnviarEdicaoSchema,
+  entradaDe,
+  entradaDoSalvar,
+} from "./domain/eventos/edicao.js";
+import {
+  archiveClientEventTransaction,
+  cancelEventEditionTransaction,
+  saveEventEditionTransaction,
+  sendEventEditionTransaction,
+} from "./domain/eventos/edicao-gravacao.js";
+import { assertEventosLiberado } from "./domain/eventos/liberacao.js";
 import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
 import { billingReportWorkbook, buildBillingReport } from "./domain/billing-report.js";
 import {
@@ -7249,7 +7265,49 @@ export const archiveClientEventTemplate = onCall(async (request) => {
   const parsed = ArchiveClientEventSchema.safeParse(request.data ?? {});
   if (!parsed.success) throw new HttpsError("invalid-argument", "Evento inválido.");
   const customerCode = requireCustomerScope(profile, requestedCustomer(request.data));
-  return archiveClientEvent(db, customerCode, parsed.data, profile);
+  return archiveClientEventTemplateRecord(db, customerCode, parsed.data, profile);
+});
+
+// Eventos (docs/superpowers/specs/2026-11-26-eventos-design.md)
+
+/** Portal › Eventos: sem id, a edição nasce em rascunho (e o evento, quando novo); com id, o patch pelo CAS. */
+export const saveEventEdition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  assertClientEventEditor(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDoSalvar(request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return saveEventEditionTransaction(db, { ...input, customer_code }, { ...profile, customer_code });
+});
+
+/** Envia o rascunho à Dutelog (rascunho → enviado). Recibo e evento. */
+export const sendEventEdition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  assertClientEventEditor(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(EnviarEdicaoSchema, request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return sendEventEditionTransaction(db, { ...input, customer_code }, { ...profile, customer_code });
+});
+
+/** Exclui o rascunho ou cancela a edição enviada. Recibo e evento. */
+export const cancelEventEdition = onCall(async (request) => {
+  const profile = await getProfile(request);
+  assertClientEventEditor(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(CancelarEdicaoSchema, request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return cancelEventEditionTransaction(db, { ...input, customer_code }, { ...profile, customer_code });
+});
+
+/** Arquiva o evento sem edição aberta. Recibo e evento. */
+export const archiveClientEvent = onCall(async (request) => {
+  const profile = await getProfile(request);
+  assertClientEventEditor(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(ArquivarEventoSchema, request.data ?? {});
+  const customer_code = requireCustomerScope(profile, input.customer_code);
+  return archiveClientEventTransaction(db, { ...input, customer_code }, { ...profile, customer_code });
 });
 
 const CancelShipmentNoticeSchema = z.object({
