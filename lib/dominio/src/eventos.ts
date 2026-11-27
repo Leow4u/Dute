@@ -130,7 +130,7 @@ export type MomentoPrevisto = {
   tipo: TipoDeMomento;
   rotulo?: string | null;
   data: string;
-  /** HH:MM; vazia fora da entrega no local (decisão 12 da spec): a linha grava com o dia. */
+  /** HH:MM; vazia, a linha grava com o dia (decisão 12 da spec); a da entrega no local é exigida no envio. */
   hora?: string | null;
   ate?: string | null;
   local?: string | null;
@@ -142,11 +142,13 @@ export type MomentoPrevisto = {
  * cronograma"): até 12 momentos, até cinco do tipo outro; cada tipo uma vez,
  * menos o outro, que leva rótulo; o evento sempre com data; com itens do
  * estoque, a entrega no local com data e hora e o retorno ao estoque com
- * data; com coleta, a coleta no cliente com data; e as datas dos tipos fixos
- * crescendo na ordem da lista (o mesmo instante vale). O outro fica fora da
- * ordem: o formulário o põe depois dos sete, com a data que tiver. Sem a hora
- * (decisão 12, só a entrega no local a exige), vale o dia: o momento sem hora
- * não fica antes de um do mesmo dia, e a hora ordena entre os que têm hora.
+ * data; sem eles, a entrega no local que estiver no cronograma também com a
+ * hora (decisão 12); com coleta, a coleta no cliente com data; e as datas
+ * dos tipos fixos crescendo na ordem da lista (o mesmo instante vale). O
+ * outro fica fora da ordem: o formulário o põe depois dos sete, com a data
+ * que tiver. Sem a hora (decisão 12: no rascunho toda linha grava com o
+ * dia), vale o dia: o momento sem hora não fica antes de um do mesmo dia, e
+ * a hora ordena entre os que têm hora.
  */
 export function problemaDoCronograma(
   momentos: readonly MomentoPrevisto[],
@@ -167,11 +169,11 @@ export function problemaDoCronograma(
   }
   const doTipo = (tipo: TipoDeMomento) => momentos.find((momento) => momento.tipo === tipo);
   if (!preenchido(doTipo("evento")?.data)) return "Informe a data do evento";
-  if (contexto.comItensDoEstoque) {
-    const entrega = doTipo("entrega_no_local");
-    if (!preenchido(entrega?.data) || !preenchido(entrega?.hora)) return "Informe a data e a hora da entrega no local";
-    if (!preenchido(doTipo("retorno_ao_estoque")?.data)) return "Informe a data do retorno ao estoque";
+  const entrega = doTipo("entrega_no_local");
+  if ((contexto.comItensDoEstoque || entrega) && (!preenchido(entrega?.data) || !preenchido(entrega?.hora))) {
+    return "Informe a data e a hora da entrega no local";
   }
+  if (contexto.comItensDoEstoque && !preenchido(doTipo("retorno_ao_estoque")?.data)) return "Informe a data do retorno ao estoque";
   if (contexto.comColeta && !preenchido(doTipo("coleta_no_cliente")?.data)) return "Informe a data da coleta no cliente";
   const fixos = momentos.filter((momento) => momento.tipo !== "outro");
   // O último dia e a última hora até aqui: o dia vale para todos, a hora só entre os que a têm.

@@ -135,6 +135,26 @@
       "problema": null
     },
     {
+      "caso": "sem itens do estoque, a entrega no local que está no cronograma leva a hora",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": true },
+      "problema": "Informe a data e a hora da entrega no local"
+    },
+    {
+      "caso": "sem itens do estoque, a entrega no local com a hora vale",
+      "momentos": [
+        { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00", "ate": "20:00" }
+      ],
+      "contexto": { "comItensDoEstoque": false, "comColeta": true },
+      "problema": null
+    },
+    {
       "caso": "o momento outro sem rótulo",
       "momentos": [
         { "tipo": "coleta_no_cliente", "data": "2027-01-28", "hora": "05:00" },

@@ -17,7 +17,7 @@ export type MomentoPrevisto = {
   rotulo?: string | null;
   /** AAAA-MM-DD */
   data: string;
-  /** HH:MM; obrigatória só na entrega no local (decisão 12 da spec): nos outros momentos pode ir vazia. */
+  /** HH:MM; pode ir vazia no rascunho (decisão 12 da spec): a da entrega no local é exigida no envio. */
   hora?: string | null;
   ate?: string | null;
   local?: string | null;
@@ -96,7 +96,7 @@ export type MomentoView = {
   id: string;
   tipo: TipoDeMomento;
   rotulo: string | null;
-  /** `hora` null fora da entrega no local, quando a pessoa não a deu. */
+  /** `hora` null quando a pessoa não a deu; a da entrega no local é exigida no envio. */
   previsto: { data: string; hora: string | null; ate: string | null; local: string | null; observacao: string | null };
   feito: FeitoDoMomentoView | null;
 };

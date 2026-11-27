@@ -251,7 +251,10 @@ nem explicação de código nos manuais:
   "Nova edição a partir de <label>", os filtros Próximas, Em andamento,
   Fechadas e Todas); o formulário (o evento, Onde, Cronograma com os sete
   momentos e "Outro momento", "O que vai · do estoque Dutelog" como resumo,
-  "O que vai · coleta no cliente", Observações, anexos; a edição nasce com o
+  "O que vai · coleta no cliente", Observações, anexos; no Cronograma vale a
+  decisão 12 da spec: a hora é opcional, menos na entrega no local, que
+  precisa dela para enviar, "Informe a data e a hora da entrega no local",
+  e sem ela o rascunho grava do mesmo jeito; a edição nasce com o
   nome do evento e grava sozinha, "Salvo 14:32"; "Salvar rascunho"; "Enviar
   para a Dutelog" cria o pedido com os itens, "Saldo insuficiente para o SKU
   …"; "A edição mudou em outra aba"); os status na ordem da spec, com quem
@@ -268,7 +271,10 @@ nem explicação de código nos manuais:
   "… Alertas, Relatórios e a agenda dos Eventos". A seção "## Eventos": a
   agenda (os quatro grupos, "Rascunho do cliente · ainda sem envio",
   "Separar até"), "Confirmar" e "Confirmar e fechar preço" (quem vê valores),
-  a ficha momento a momento ("Registrar", "Registrar fim", "Editar"), a
+  a ficha momento a momento ("Registrar", "Registrar fim", "Editar"; no
+  "Editar" do previsto vale a mesma decisão 12: a hora é opcional, menos na
+  entrega no local, que precisa dela para enviar e, depois do envio, não
+  fica sem ela, "Informe a data e a hora da entrega no local"), a
   entrega pelo registro de "Entrega no local" (Quem levou, Placa, Quem
   recebeu), "Registrar o retorno ao estoque" (Foi, Voltou, Avariadas, "Os
   outros N voltaram iguais", "Confirmar retorno"; a ENTRADA na EXPEDICAO e a
@@ -277,7 +283,7 @@ nem explicação de código nos manuais:
   Devoluções: a linha "Retorno do evento" que nasce das avariadas. Quem vê
   valor: "Preço fechado" só para owner, admin e financeiro; o `wms` não vê o
   preço nem a proposta.
-- `CLAUDE.md`, o bullet diz: o que o evento é (decisões 1 a 9, a spec e as
+- `CLAUDE.md`, o bullet diz: o que o evento é (decisões 1 a 13, a spec e as
   pranchas); as três coleções, só o WMS escreve, o dinheiro só em
   `client_event_prices`, nunca lida pelo `wms`; as treze callables de uma
   linha em `functions/wms/src/index.ts` com `assertEventosLiberado`, o

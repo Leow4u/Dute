@@ -44,8 +44,9 @@ const idDaEdicao = z.string().trim().min(1).max(120);
 /**
  * Um momento do cronograma como a tela o manda: o `id` só no momento já
  * gravado (o patch funde por ele), o tipo, o rótulo do `outro` e o previsto.
- * A hora só é obrigatória na entrega no local (decisão 12 da spec): nos outros
- * momentos a linha grava com o dia e sem a hora.
+ * No rascunho toda linha grava com o dia, até a entrega no local sem a hora:
+ * a hora dela é exigida no envio e nas mudanças depois dele, por
+ * problemaParaEnviar (decisão 12 da spec).
  */
 export const MomentoPrevistoSchema = z
   .object({
@@ -58,12 +59,7 @@ export const MomentoPrevistoSchema = z
     local: optionalText(LIMITES.local),
     observacao: optionalText(LIMITES.observacaoDoMomento),
   })
-  .strict()
-  .superRefine((momento, ctx) => {
-    if (momento.tipo === "entrega_no_local" && !momento.hora) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hora"], message: `Informe a hora de ${ROTULO_DO_MOMENTO.entrega_no_local}` });
-    }
-  });
+  .strict();
 
 export const ItemDaEdicaoSchema = z
   .object({
@@ -433,7 +429,7 @@ export type MomentoView = {
   id: string;
   tipo: TipoDeMomento;
   rotulo: string | null;
-  /** `hora` null fora da entrega no local, quando a pessoa não a deu (decisão 12). */
+  /** `hora` null quando a pessoa não a deu; a da entrega no local é exigida no envio (decisão 12). */
   previsto: { data: string; hora: string | null; ate: string | null; local: string | null; observacao: string | null };
   feito: FeitoDoMomentoView | null;
 };
