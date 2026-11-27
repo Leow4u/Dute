@@ -42,7 +42,7 @@ vi.mock("./shared", async (importOriginal) => {
   };
 });
 
-import { ClienteEventos } from "./eventos";
+import { ListaDeEventos } from "./eventos";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -76,7 +76,7 @@ beforeEach(async () => {
   await act(async () =>
     raiz!.render(
       <Router hook={memoria.hook} searchHook={memoria.searchHook}>
-        <ClienteEventos />
+        <ListaDeEventos />
       </Router>,
     ),
   );

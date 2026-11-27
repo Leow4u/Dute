@@ -250,7 +250,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
  * e o toque nele não faz nada; esmaece com o gerúndio do confirmar. O anel do
  * foco é o cheio, com o recuo, e não esmaece com o ícone.
  */
-export function BotaoFecharDoPainel({ travado, esmaecido = travado, className, rotulo = "Fechar" }: { travado: boolean; esmaecido?: boolean; className?: string; rotulo?: string }) {
+export function BotaoFecharDoPainel({ travado, esmaecido = travado, className, rotulo }: { travado: boolean; esmaecido?: boolean; className?: string; rotulo?: string }) {
   const dialogo = useDialogoEmAcao();
   return (
     <DialogPrimitive.Close
@@ -269,7 +269,8 @@ export function BotaoFecharDoPainel({ travado, esmaecido = travado, className, r
       )}
     >
       <X className="h-4 w-4" aria-hidden="true" />
-      <span className="sr-only">{rotulo}</span>
+      {/* "Fechar", em português; o diálogo que fecha algo próprio diz o quê ("Fechar a lista de itens"). */}
+      {rotulo ? <span className="sr-only">{rotulo}</span> : <span className="sr-only">Fechar</span>}
     </DialogPrimitive.Close>
   );
 }

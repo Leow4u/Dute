@@ -328,6 +328,13 @@ describe("os Eventos iguais em todo lugar (eventos, parte 1)", () => {
     expect([eventosLiberado("dute-homolog"), eventosLiberado("dute-prod"), eventosLiberado("dute-btg"), eventosLiberado(undefined)]).toEqual([true, false, false, false]);
   });
 
+  it("o portal só troca de Eventos com a liberação: a lista e as rotas do formulário (parte 4)", () => {
+    expect(read("artifacts/app/src/pages/client/eventos.tsx")).toContain("EVENTOS_LIBERADO ? <ListaDeEventos /> : <ClienteEventosModelos />");
+    expect(read("artifacts/app/src/App.tsx")).toContain(
+      '...(EVENTOS_LIBERADO ? [protectedRoute("/portal/eventos/novo", ClienteEventoNovo), protectedRoute("/portal/eventos/edicao", ClienteEventoEdicao)] : [])',
+    );
+  });
+
   it("cada callable dos Eventos existe numa linha do index.ts e confere a liberação", () => {
     const fonte = read("functions/wms/src/index.ts");
     for (const nome of CALLABLES_DOS_EVENTOS) {

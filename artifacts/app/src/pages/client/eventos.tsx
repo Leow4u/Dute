@@ -20,6 +20,7 @@ import { FaixaAoVivo, FalhaAoVivo, type LeituraAoVivoNaTela } from "@/components
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
+import { EVENTOS_LIBERADO } from "@/lib/liberacao";
 import { cartoesDaLista, contagemDosFiltros, filtrarCartoes, type CartaoDoEvento } from "@/lib/eventos/lista";
 import { ROTA_NOVO_EVENTO, hrefDaEdicao, hrefDoNovoDoEvento } from "@/lib/eventos/navegacao";
 import { ETAPAS_DA_EDICAO, FILTROS_DA_LISTA, ROTULO_DO_FILTRO, type FiltroDaLista } from "@/lib/eventos/rotulos";
@@ -32,6 +33,7 @@ import { leiturasDoPortal } from "@/lib/operations";
 import { cn } from "@/lib/utils";
 import { cancelarEdicao } from "@/lib/wms/eventos";
 
+import { ClienteEventosModelos } from "./eventos-modelos";
 import { ClientDataBoundary, ClientModuleShell } from "./shared";
 
 export type ListaDeEventosViewProps = {
@@ -87,7 +89,7 @@ function Etapas({ etapa }: { etapa: number }) {
             aria-hidden="true"
             className={cn(
               "relative z-10 size-3 rounded-full border-2",
-              indice < etapa ? "border-success-soft-foreground bg-success-soft-foreground" : indice === etapa ? "border-primary bg-primary ring-4 ring-primary/15" : "border-border bg-card",
+              indice < etapa ? "border-success-soft-foreground bg-success-soft-foreground" : indice === etapa ? "border-primary-fundo bg-primary ring-4 ring-primary/15" : "border-border bg-card",
             )}
           />
           <span className={cn("whitespace-nowrap text-xs font-semibold", indice <= etapa ? "text-foreground" : "text-muted-foreground")}>{ROTULO_DO_STATUS[status]}</span>
@@ -326,7 +328,5 @@ export function ListaDeEventos() {
   );
 }
 
-/** Portal › Eventos. */
-export function ClienteEventos() {
-  return <ListaDeEventos />;
-}
+/** Portal › Eventos: a lista nova só com a liberação dos Eventos; fora dela, a tela de hoje (o legado, até a parte 12). */
+export const ClienteEventos = () => (EVENTOS_LIBERADO ? <ListaDeEventos /> : <ClienteEventosModelos />);
