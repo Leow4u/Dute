@@ -34,7 +34,7 @@ equipe e o preço fechado, para que no ano seguinte a Dutelog e o cliente
 tenham a base de tudo que foi feito naquele evento. O cliente abre e envia; o
 Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
 
-## Decisões do Leonardo (24 a 26/11/2026)
+## Decisões do Leonardo (24 a 27/11/2026)
 
 1. **O "Novo evento" nasce em Eventos**, nunca no carrinho do Estoque. O
    "Salvar como evento" sai.
@@ -86,6 +86,19 @@ Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
 13. **Um `evento.edicao_salva` a cada gravação** (27/11, PR 647), também
     no salvamento automático, como esta spec pede; agrupar na tela fica
     para depois.
+14. **O anexo, a retirada e a foto não sobem a `edicao`** (27/11, PR 651:
+    "aceito as duas decisões"): gravam `documentos` ou `fotos` e
+    `updated_*`. Nenhum `patch` grava esses campos, e com o +1 o
+    salvamento automático do formulário recusaria "A edição mudou em outra
+    aba" numa aba só, logo depois de um anexo, e descartaria o texto
+    digitado.
+15. **Do lado do cliente, quem tira o documento é a empresa** (27/11, PR
+    651): qualquer pessoa do cliente tira o documento de origem cliente,
+    em `rascunho` e `enviado`, e nunca o da Dutelog; do lado da Dutelog, o
+    `wms` tira só o que anexou, e a coordenação tira qualquer um.
+16. **Sem retirada de foto por enquanto** (27/11, PR 651): a foto anexada
+    fica na edição e aparece no portal; uma retirada de foto, se vier, é
+    parte própria.
 
 ## Objetivos
 
@@ -289,7 +302,7 @@ client_event_editions/{ced_…}
   id, customer_code, event_id, event_name          (cópia, para listar)
   label                                            "2027" (até 40; padrão: o ano do momento "evento")
   status                                           rascunho | enviado | confirmado | separado | no_evento | retornado | fechado | cancelado
-  edicao                                           inteiro, +1 a cada escrita (CAS: expected_edicao)
+  edicao                                           inteiro, +1 a cada escrita (CAS: expected_edicao); o anexo, a retirada e a foto não sobem (decisão 14)
   origem_edicao_id                                 a edição copiada em "Nova edição a partir desta", ou null
   onde: { local (até 160), endereco (até 300), contato: { nome (até 120), telefone (até 40) } }
   cronograma: [ momento ]                          até 12 (abaixo)
@@ -445,7 +458,7 @@ gravação, no molde de `count-rounds.ts`.
 | `cancelEventEdition` | cliente (`rascunho`: exclui; `enviado`: cancela) e coordenação (`rascunho`: exclui em nome do cliente; `enviado`, `confirmado`, `separado`: cancela, com motivo) | Exclusão ou `cancelado`, com a solicitação ou o pedido tratados como acima. |
 | `archiveClientEvent` | cliente e coordenação | Arquiva o evento sem edição aberta (`rascunho` a `retornado`); o rascunho precisa ser excluído antes. |
 | `attachEventDocument` | cliente (origem `cliente`) e quem opera (origem `dutelog`), os dois de `rascunho` a `retornado` | Confere o arquivo no bucket e o acrescenta a `documentos`, com o momento quando houver. |
-| `removeEventDocument` | quem anexou o documento, ou a coordenação | Tira o registro de `documentos` (o arquivo fica no bucket). O cliente só em `rascunho` e `enviado`. |
+| `removeEventDocument` | quem anexou o documento, ou a coordenação; do lado do cliente, quem anexou é a empresa (decisão 15) | Tira o registro de `documentos` (o arquivo fica no bucket). O cliente só em `rascunho` e `enviado`. |
 | `confirmEventEdition` | coordenação; o preço só para quem também passa em `requireBillingWrite` | `enviado` → `confirmado`, com `separar_ate` e, opcionais, `fechado_cents`, `fechado_observacao` e a proposta; aprova a solicitação na mesma transação. Preço vindo de quem não escreve valores: recusa ("Só quem vê valores fecha o preço."). |
 | `registerEventMoment` | quem opera | Grava `feito` de um momento (início, ou fim como segunda escrita) ou, com `corrigir: true` e `expected_edicao`, corrige início, fim e observação de um momento registrado à mão. Em `entrega_no_local` com pedido ainda não entregue, roda `dispatched` e `delivered` antes (abaixo). |
 | `attachEventPhoto` | quem opera | Confere a foto no bucket e a acrescenta a `fotos`, com o momento. De `confirmado` a `retornado`: é foto da execução. |

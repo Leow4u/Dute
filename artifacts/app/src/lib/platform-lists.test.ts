@@ -51,6 +51,7 @@ import * as FICHA_DO_RH from "./rh/ficha";
 import { PRIMEIRO_DIA, TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP, ULTIMO_DIA } from "./rh/formulario";
 import { RH_ROLES as RH_ROLES_DO_APP, RH_WRITE_ROLES as RH_WRITE_ROLES_DO_APP } from "./rh/navegacao";
 import { TV_ROLES } from "./tv/navegacao";
+import { TAMANHO_DA_FOTO, TAMANHO_DO_DOCUMENTO, TIPOS_DE_DOCUMENTO, TIPOS_DE_FOTO } from "./eventos/arquivos";
 import { CALLABLES_DOS_EVENTOS } from "./wms/eventos";
 
 /**
@@ -344,6 +345,15 @@ describe("os Eventos iguais em todo lugar (eventos, parte 1)", () => {
       .filter(({ inicio }, posicao) => fonte.slice(inicio, declaradas[posicao + 1]?.inicio ?? fonte.length).includes("assertEventosLiberado(PROJECT_ID)"))
       .map(({ nome }) => nome);
     expect(dosEventos.sort()).toEqual([...CALLABLES_DOS_EVENTOS].sort());
+  });
+
+  it("o arquivo da edição: os tipos e os tamanhos são os de functions/wms (parte 3)", () => {
+    const arquivos = read("functions/wms/src/domain/eventos/arquivos.ts");
+    expect(tsList(arquivos, "TIPOS_DE_FOTO")).toEqual([...TIPOS_DE_FOTO]);
+    expect(tsList(arquivos, "TIPOS_DE_DOCUMENTO")).toEqual([...TIPOS_DE_DOCUMENTO]);
+    expect(arquivos).toContain("export const TAMANHO_DA_FOTO = 8 * 1024 * 1024;");
+    expect(arquivos).toContain("export const TAMANHO_DO_DOCUMENTO = 10 * 1024 * 1024;");
+    expect([TAMANHO_DA_FOTO, TAMANHO_DO_DOCUMENTO]).toEqual([8 * 1024 * 1024, 10 * 1024 * 1024]);
   });
 });
 

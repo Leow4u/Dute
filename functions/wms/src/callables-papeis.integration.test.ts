@@ -99,6 +99,9 @@ const MATRIZ: Record<string, Linha> = {
     entrada: { id: "evento-que-nao-existe" },
   },
   assignRequestNumbers: { passam: OWNER, recusa: "Só o owner roda esta manutenção." },
+  // Eventos, parte 3: o cliente anexa e tira os próprios documentos; quem opera anexa documentos e fotos.
+  attachEventDocument: { passam: [...ARMAZEM, "cliente"], recusa: SO_ARMAZEM },
+  attachEventPhoto: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   cancelCustomerOrder: { passam: CLIENTE, recusa: "Cancelamento disponível no portal do cliente." },
   cancelEventEdition: { passam: [...COORDENACAO, "cliente"], recusa: SO_EVENTOS_DO_CLIENTE },
   cancelInboundReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
@@ -233,6 +236,7 @@ const MATRIZ: Record<string, Linha> = {
   removeInboundBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeOpeningInventoryLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
+  removeEventDocument: { passam: [...ARMAZEM, "cliente"], recusa: SO_ARMAZEM },
   removeWarehouseBox: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   removeWarehousePosition: { passam: COORDENACAO, recusa: SO_POSICOES, entrada: { code: "Z-99" } },
   resolveWarehouseException: { passam: ARMAZEM, recusa: SO_ARMAZEM },

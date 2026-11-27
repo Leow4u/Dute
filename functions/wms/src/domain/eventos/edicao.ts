@@ -235,6 +235,14 @@ export const ROTULO_DO_CAMPO: Record<string, Rotulo> = {
   "patch.evento": "o evento",
   "patch.evento.name": "o nome do evento",
   "patch.evento.description": "a descrição do evento",
+  // Os arquivos da edição (parte 3): attachEventDocument, removeEventDocument e attachEventPhoto.
+  edition_id: "a edição",
+  arquivo: "o arquivo",
+  nome: "o nome do arquivo",
+  legenda: "a legenda",
+  momento_id: "o momento",
+  instante: "o instante da foto",
+  documento_id: "o documento",
 };
 
 /** A unidade de cada lista, pelo nome dela: "O cronograma leva até 12 momentos". */

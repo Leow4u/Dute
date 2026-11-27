@@ -192,6 +192,15 @@ import {
   saveEventEditionTransaction,
   sendEventEditionTransaction,
 } from "./domain/eventos/edicao-gravacao.js";
+import {
+  AnexarDocumentoSchema,
+  AnexarFotoSchema,
+  TirarDocumentoSchema,
+  attachEventDocumentTransaction,
+  attachEventPhotoTransaction,
+  removeEventDocumentTransaction,
+  type BucketDosEventos,
+} from "./domain/eventos/arquivos.js";
 import { assertEventosLiberado } from "./domain/eventos/liberacao.js";
 import { assignMissingRequestNumbers } from "./domain/request-numbers.js";
 import { billingReportWorkbook, buildBillingReport } from "./domain/billing-report.js";
@@ -1022,6 +1031,27 @@ function documentBucketName() {
     process.env.FIREBASE_STORAGE_BUCKET ||
     `${PROJECT_ID}.firebasestorage.app`
   );
+}
+
+/**
+ * O bucket dos arquivos dos Eventos: o mesmo em que o navegador sobe pelo SDK
+ * (o das fotos do produto, que generateCatalogPhoto lê daqui). Confere o
+ * tipo, o tamanho e a geração do objeto; apaga só a geração conferida.
+ */
+function bucketDosEventos(): BucketDosEventos {
+  const bucket = getStorage().bucket(documentBucketName());
+  return {
+    async conferir(caminho) {
+      const arquivo = bucket.file(caminho);
+      const [existe] = await arquivo.exists();
+      if (!existe) return null;
+      const [metadados] = await arquivo.getMetadata();
+      return { contentType: String(metadados.contentType ?? ""), size: Number(metadados.size ?? 0), generation: String(metadados.generation ?? "") };
+    },
+    async apagar(caminho, generation) {
+      await bucket.file(caminho, { generation }).delete({ ignoreNotFound: true });
+    },
+  };
 }
 
 function firebaseDownloadUrl(bucketName: string, objectPath: string, token: string) {
@@ -7308,6 +7338,35 @@ export const archiveClientEvent = onCall(async (request) => {
   const input = entradaDe(ArquivarEventoSchema, request.data ?? {});
   const customer_code = requireCustomerScope(profile, input.customer_code);
   return archiveClientEventTransaction(db, { ...input, customer_code }, { ...profile, customer_code });
+});
+
+/** O documento que já subiu entra na edição: o anexo do cliente (an_) ou o da Dutelog (dc_), conferido no bucket. Recibo e evento. */
+export const attachEventDocument = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "cliente") requireWarehouseWrite(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(AnexarDocumentoSchema, request.data ?? {});
+  const customer_code = profile.role === "cliente" ? requireCustomerScope(profile, input.customer_code) : undefined;
+  return attachEventDocumentTransaction(db, input, { ...profile, customer_code }, bucketDosEventos());
+});
+
+/** Tira o documento da edição (o arquivo fica no bucket): quem anexou, ou a coordenação. Recibo e evento. */
+export const removeEventDocument = onCall(async (request) => {
+  const profile = await getProfile(request);
+  if (profile.role !== "cliente") requireWarehouseWrite(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(TirarDocumentoSchema, request.data ?? {});
+  const customer_code = profile.role === "cliente" ? requireCustomerScope(profile, input.customer_code) : undefined;
+  return removeEventDocumentTransaction(db, input, { ...profile, customer_code });
+});
+
+/** A foto que já subiu entra na edição, no momento dela, de confirmado a retornado. Recibo e evento. */
+export const attachEventPhoto = onCall(async (request) => {
+  const profile = await getProfile(request);
+  requireWarehouseWrite(profile);
+  assertEventosLiberado(PROJECT_ID);
+  const input = entradaDe(AnexarFotoSchema, request.data ?? {});
+  return attachEventPhotoTransaction(db, input, profile, bucketDosEventos());
 });
 
 const CancelShipmentNoticeSchema = z.object({
