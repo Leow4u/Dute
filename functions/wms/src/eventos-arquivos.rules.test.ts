@@ -169,4 +169,86 @@ describe("os arquivos da edição do evento no Storage", () => {
     for (const uid of [...EQUIPE_INTERNA, "client-itau"]) await assertSucceeds(ler(uid, doItau));
     for (const uid of ["client-safra", "client-btg", "comercial-a", "campo-a"]) await assertFails(ler(uid, doItau));
   });
+
+  it("5. fotos: só ft_ com 16 hex e jpg, png ou webp, imagem, menos de 8 MiB; a edição fora de ced_<16 hex> recusa; regravar e apagar recusam", async () => {
+    await assertSucceeds(subir("wms-a", foto("ITAU", nome("ft", 5, 1, "png")), JPEG, "image/png"));
+    await assertSucceeds(subir("wms-a", foto("ITAU", nome("ft", 5, 2, "webp")), new Uint8Array(8 * 1024 * 1024 - 1), "image/webp"));
+    await assertFails(subir("wms-a", foto("ITAU", "foto.jpg"), JPEG, "image/jpeg"));
+    await assertFails(subir("wms-a", foto("ITAU", nome("dc", 5, 3, "jpg")), JPEG, "image/jpeg"));
+    await assertFails(subir("wms-a", foto("ITAU", nome("ft", 5, 4, "gif")), JPEG, "image/gif"));
+    await assertFails(subir("wms-a", foto("ITAU", nome("ft", 5, 5, "jpg")), PDF, "application/pdf"));
+    // A regra é "menos de 8 MiB": 8 MiB exatos recusam.
+    await assertFails(subir("wms-a", foto("ITAU", nome("ft", 5, 6, "jpg")), new Uint8Array(8 * 1024 * 1024), "image/jpeg"));
+    await assertFails(subir("wms-a", foto("ITAU", nome("ft", 5, 7, "jpg"), "ced_x"), JPEG, "image/jpeg"));
+    const caminho = foto("ITAU", nome("ft", 5, 8, "jpg"));
+    await assertSucceeds(subir("wms-a", caminho, JPEG, "image/jpeg"));
+    await assertFails(subir("wms-a", caminho, JPEG, "image/jpeg"));
+    await assertFails(storage("wms-a").ref(caminho).delete());
+    await assertFails(storage("owner-a").ref(caminho).delete());
+  });
+
+  it("6. documentos: PDF, imagem ou .xlsx com o tipo da planilha, até 10 MiB; .xlsx com application/octet-stream, .exe e 10 MiB + 1 recusam; 10 MiB exatos sobem", async () => {
+    await assertSucceeds(subir("wms-a", documento("ITAU", nome("dc", 6, 1, "xlsx")), XLSX, PLANILHA));
+    await assertSucceeds(subir("wms-a", documento("ITAU", nome("dc", 6, 2, "jpg")), JPEG, "image/jpeg"));
+    await assertSucceeds(subir("wms-a", documento("ITAU", nome("dc", 6, 3, "webp")), JPEG, "image/webp"));
+    await assertSucceeds(subir("wms-a", documento("ITAU", nome("dc", 6, 4, "pdf")), new Uint8Array(10 * 1024 * 1024), "application/pdf"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("dc", 6, 5, "xlsx")), XLSX, "application/octet-stream"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("dc", 6, 6, "exe")), PDF, "application/octet-stream"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("dc", 6, 7, "pdf")), new Uint8Array(10 * 1024 * 1024 + 1), "application/pdf"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("dc", 6, 8, "pdf")), PDF, "text/html"));
+    await assertFails(subir("wms-a", documento("ITAU", "layout.pdf"), PDF, "application/pdf"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("an", 6, 9, "pdf")), PDF, "application/pdf"));
+    await assertFails(subir("wms-a", documento("ITAU", nome("dc", 6, 10, "pdf"), "ced_0123"), PDF, "application/pdf"));
+    const caminho = documento("ITAU", nome("dc", 6, 11, "pdf"));
+    await assertSucceeds(subir("ops-a", caminho, PDF, "application/pdf"));
+    await assertFails(subir("ops-a", caminho, PDF, "application/pdf"));
+    await assertFails(storage("ops-a").ref(caminho).delete());
+  });
+
+  it("7. valores: só PDF ou imagem; a planilha recusa, mesmo para quem lê valores", async () => {
+    await assertSucceeds(subir("owner-a", valores("ITAU", nome("dc", 7, 1, "jpg")), JPEG, "image/jpeg"));
+    await assertSucceeds(subir("financeiro-a", valores("ITAU", nome("dc", 7, 2, "pdf")), new Uint8Array(10 * 1024 * 1024), "application/pdf"));
+    for (const uid of ["owner-a", "financeiro-a"]) {
+      await assertFails(subir(uid, valores("ITAU", nome("dc", 7, uid === "owner-a" ? 3 : 4, "xlsx")), XLSX, PLANILHA));
+    }
+    await assertFails(subir("owner-a", valores("ITAU", nome("dc", 7, 5, "pdf")), new Uint8Array(10 * 1024 * 1024 + 1), "application/pdf"));
+    await assertFails(subir("owner-a", valores("ITAU", nome("dc", 7, 6, "pdf")), PDF, "text/html"));
+    await assertFails(subir("owner-a", valores("ITAU", nome("dc", 7, 7, "pdf"), "ced_x"), PDF, "application/pdf"));
+    const caminho = valores("ITAU", nome("dc", 7, 8, "pdf"));
+    await assertSucceeds(subir("admin-a", caminho, PDF, "application/pdf"));
+    await assertFails(subir("admin-a", caminho, PDF, "application/pdf"));
+    await assertFails(storage("admin-a").ref(caminho).delete());
+  });
+
+  it("8. o anexo do portal: an_ com 16 hex, PDF, imagem ou planilha, até 10 MiB; nome fora do padrão, .exe, 10 MiB + 1, regravar e apagar recusam", async () => {
+    await assertSucceeds(subir("client-itau", anexo("ITAU", nome("an", 8, 1, "xlsx")), XLSX, PLANILHA));
+    await assertSucceeds(subir("client-itau", anexo("ITAU", nome("an", 8, 2, "png")), JPEG, "image/png"));
+    await assertSucceeds(subir("client-itau", anexo("ITAU", nome("an", 8, 3, "pdf")), new Uint8Array(10 * 1024 * 1024), "application/pdf"));
+    await assertFails(subir("client-itau", anexo("ITAU", "layout.pdf"), PDF, "application/pdf"));
+    await assertFails(subir("client-itau", anexo("ITAU", nome("dc", 8, 4, "pdf")), PDF, "application/pdf"));
+    await assertFails(subir("client-itau", anexo("ITAU", nome("an", 8, 5, "exe")), PDF, "application/octet-stream"));
+    await assertFails(subir("client-itau", anexo("ITAU", nome("an", 8, 6, "xlsx")), XLSX, "application/octet-stream"));
+    await assertFails(subir("client-itau", anexo("ITAU", nome("an", 8, 7, "pdf")), new Uint8Array(10 * 1024 * 1024 + 1), "application/pdf"));
+    await assertFails(subir("client-itau", anexo("ITAU", nome("an", 8, 8, "pdf"), "ced_x"), PDF, "application/pdf"));
+    const caminho = anexo("ITAU", nome("an", 8, 9, "pdf"));
+    await assertSucceeds(subir("client-itau", caminho, PDF, "application/pdf"));
+    await assertFails(subir("client-itau", caminho, PDF, "application/pdf"));
+    await assertFails(storage("client-itau").ref(caminho).delete());
+    await assertFails(storage("owner-a").ref(caminho).delete());
+  });
+
+  it("9. com o portal desligado (arquivado ou \"Sem portal\"), o cliente não sobe nem lê o anexo nem a foto; a equipe continua lendo (pergunta 69)", async () => {
+    const doAnexo = anexo("ITAU", nome("an", 9, 1, "pdf"));
+    const daFoto = foto("ITAU", nome("ft", 9, 2, "jpg"));
+    await assertSucceeds(subir("client-itau", doAnexo, PDF, "application/pdf"));
+    await assertSucceeds(subir("ops-a", daFoto, JPEG, "image/jpeg"));
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "client_access", "ITAU"), { customer_code: "ITAU", modules: ["wms", "financeiro"], portal_ativo: false });
+    });
+    await assertFails(subir("client-itau", anexo("ITAU", nome("an", 9, 3, "pdf")), PDF, "application/pdf"));
+    await assertFails(ler("client-itau", doAnexo));
+    await assertFails(ler("client-itau", daFoto));
+    await assertSucceeds(ler("ops-a", doAnexo));
+    await assertSucceeds(ler("ops-a", daFoto));
+  });
 });
