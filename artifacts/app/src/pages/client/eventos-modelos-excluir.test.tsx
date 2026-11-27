@@ -50,7 +50,7 @@ vi.mock("./events-api", async (importOriginal) => {
   return { ...original, useClientEvents: () => ({ isLoading: false, isError: false, data: [EVENTO] }) };
 });
 
-import { ClienteEventos } from "./eventos";
+import { ClienteEventosModelos } from "./eventos-modelos";
 
 let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -98,7 +98,7 @@ beforeEach(async () => {
     raiz!.render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } })}>
         <Router>
-          <ClienteEventos />
+          <ClienteEventosModelos />
         </Router>
       </QueryClientProvider>,
     ),

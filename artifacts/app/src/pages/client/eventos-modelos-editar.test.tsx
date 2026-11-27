@@ -21,7 +21,7 @@ const estado = vi.hoisted(() => ({
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: (aviso: unknown) => estado.toasts.push(aviso) }) }));
 
-import { EventEditDialog } from "./eventos";
+import { EventEditDialog } from "./eventos-modelos";
 
 const EVENTO: ClientEvent = {
   id: "ev_1",

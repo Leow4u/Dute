@@ -62,7 +62,10 @@ function cartaoDe(evento: EventoView, edicoes: readonly EdicaoView[], precos: Re
     evento,
     atual,
     anteriores: edicoes.filter((edicao) => edicao !== atual).sort(porLabel),
-    quando: periodo ? { texto: periodo, rotulo: emAndamento ? "Em andamento" : rotuloDoPeriodo(atual.cronograma, hoje) } : null,
+    // A cancelada não é próxima nem última: o selo já diz.
+    quando: periodo
+      ? { texto: periodo, rotulo: atual.status === "cancelado" ? null : emAndamento ? "Em andamento" : rotuloDoPeriodo(atual.cronograma, hoje) }
+      : null,
     local: atual.onde.local ? [atual.onde.local, atual.onde.endereco].filter(Boolean).join(" · ") : null,
     cronograma: aberta ? linhaDoCronograma(atual.cronograma) : null,
     itens: linhaDosItens(atual),

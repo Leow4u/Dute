@@ -217,9 +217,9 @@ describe("telas do portal pelos módulos contratados (parte 2.7)", () => {
       faturas: exige("client_invoices"),
       nfs: exige("client_faturas"),
     }).toEqual({ estoque: "wms", pedidos: "wms", solicitacoes: "wms", documentos: "wms", servicos: "operacao", faturas: "financeiro", nfs: "financeiro" });
-    expect(leiturasDoPortal(["wms"])).toEqual({ estoque: true, pedidos: true, solicitacoes: true, documentos: true, servicos: false, faturas: false });
-    expect(leiturasDoPortal(["financeiro"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, servicos: false, faturas: true });
-    expect(leiturasDoPortal(["operacao"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, servicos: true, faturas: false });
+    expect(leiturasDoPortal(["wms"])).toEqual({ estoque: true, pedidos: true, solicitacoes: true, documentos: true, eventos: true, servicos: false, faturas: false });
+    expect(leiturasDoPortal(["financeiro"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, eventos: false, servicos: false, faturas: true });
+    expect(leiturasDoPortal(["operacao"])).toEqual({ estoque: false, pedidos: false, solicitacoes: false, documentos: false, eventos: false, servicos: true, faturas: false });
   });
 });
 
