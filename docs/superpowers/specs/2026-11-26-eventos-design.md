@@ -646,7 +646,7 @@ contagens e instantes, sem valor, nome de pessoa nem contato:
 `evento.edicao_separada`, `evento.edicao_no_evento`,
 `evento.momento_registrado`, `evento.momento_corrigido`,
 `evento.foto_anexada`, `evento.documento_anexado`,
-`evento.documento_retirado`, `evento.retorno_recebido`,
+`evento.documento_retirado`, `evento.retorno_registrado`,
 `evento.preco_fechado`, `evento.edicao_fechada`, `evento.edicao_cancelada`,
 `evento.edicao_excluida`, `evento.arquivado`.
 
