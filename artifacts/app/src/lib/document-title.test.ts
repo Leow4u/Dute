@@ -61,6 +61,8 @@ describe("título da aba do navegador", () => {
     ["/portal/faturas/relatorio", "Dutelog | Relatório"],
     ["/portal/recebimentos", "Dutelog | Envios para a Dutelog"],
     ["/portal/eventos", "Dutelog | Eventos"],
+    ["/portal/eventos/novo", "Dutelog | Novo evento"],
+    ["/portal/eventos/edicao", "Dutelog | Edição do evento"],
     ["/portal/documentos", "Dutelog | Documentos"],
     ["/portal/agente", "Dutelog | Agent Dute"],
     ["/configuracoes", "Dutelog | Minha conta"],

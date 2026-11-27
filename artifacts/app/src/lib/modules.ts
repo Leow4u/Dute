@@ -960,6 +960,9 @@ const MERGED_SCREEN_PATHS: Array<{ path: string; roles: ProfileRole[] }> = [
   { path: "/portal/faturas/relatorio", roles: CLIENT_ROLES },
   // O comprovante da OS concluída, aberto pelo painel de Minhas OS (parte 4.3d).
   { path: "/portal/servicos/comprovante", roles: CLIENT_ROLES },
+  // O formulário da edição do evento (Eventos, parte 4): o novo e o rascunho pelo id.
+  { path: "/portal/eventos/novo", roles: CLIENT_ROLES },
+  { path: "/portal/eventos/edicao", roles: CLIENT_ROLES },
   // Endereços antigos do portal que redirecionam.
   { path: "/portal/solicitacoes", roles: CLIENT_ROLES },
   { path: "/portal/agente/operacional", roles: CLIENT_ROLES },

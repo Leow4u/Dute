@@ -108,6 +108,8 @@ const ROUTE_ACCESS: Array<[string, ProfileRole[]]> = [
   ["/portal", ["cliente"]],
   ["/portal/estoque", ["cliente"]],
   ["/portal/eventos", ["cliente"]],
+  ["/portal/eventos/novo", ["cliente"]],
+  ["/portal/eventos/edicao", ["cliente"]],
   ["/portal/recebimentos", ["cliente"]],
   ["/portal/solicitacoes", ["cliente"]],
   ["/portal/pedidos", ["cliente"]],
@@ -429,6 +431,8 @@ describe("menu do portal por modelo de operação", () => {
   it("cada rota do portal sabe a que módulo pertence", () => {
     expect(portalModuleForPath("/portal")).toBe("home");
     expect(portalModuleForPath("/portal/eventos")).toBe("events");
+    expect(portalModuleForPath("/portal/eventos/novo")).toBe("events");
+    expect(portalModuleForPath("/portal/eventos/edicao?id=ced_1")).toBe("events");
     expect(portalModuleForPath("/portal/faturas/fatura")).toBe("invoices");
     expect(portalModuleForPath("/portal/faturas/relatorio?de=2026-05&ate=2026-10")).toBe("invoices");
     expect(portalModuleForPath("/portal/agente?x=1")).toBe("assistant");

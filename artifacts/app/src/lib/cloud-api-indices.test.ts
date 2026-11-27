@@ -50,6 +50,7 @@ vi.mock("firebase/firestore", async (importOriginal) => {
 });
 
 import { installCloudApi } from "./cloud-api";
+import { consultaDasEdicoesDoCliente, consultaDosEventosDoCliente, consultaDosPrecosDoCliente } from "./eventos/leitura";
 import { documentsListUrl } from "./document-rows";
 
 type Indice = {
@@ -165,6 +166,13 @@ describe("o índice de cada consulta das telas", () => {
   // zeragem"): o índice nasce antes das telas. As consultas delas entram em
   // CONSULTAS_DAS_TELAS quando as telas entrarem (o portal na parte 4, a
   // agenda da Armazenagem na parte 7).
+  it("Portal › Eventos: as edições, os eventos e os preços do cliente, ao vivo, têm índice", () => {
+    const db = {} as Parameters<typeof consultaDasEdicoesDoCliente>[0];
+    const consultas = [consultaDasEdicoesDoCliente(db, "Itau"), consultaDosEventosDoCliente(db, "Itau"), consultaDosPrecosDoCliente(db, "Itau")] as unknown as Consulta[];
+    expect(consultas.map((consulta) => consulta.colecao)).toEqual(["client_event_editions", "client_events", "client_event_prices"]);
+    expect(consultas.map(indiceQueFalta).filter(Boolean)).toEqual([]);
+  });
+
   it("os Eventos: as edições do portal e da agenda, e os eventos do cliente", () => {
     const igual = (campo: string): Restricao => ({ tipo: "where", campo, op: "==" });
     const ordem = (campo: string, direcao: "asc" | "desc"): Restricao => ({ tipo: "orderBy", campo, direcao });
