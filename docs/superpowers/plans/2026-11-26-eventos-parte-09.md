@@ -63,21 +63,22 @@ bloco da ficha nem no payload.
 
 **Files:**
 - Create: `functions/wms/src/domain/eventos/retorno.ts`
-- Modify: `functions/wms/src/domain/eventos/edicao.ts` (`ROTULO_DO_CAMPO`, no mecanismo de `patch.cronograma.<n>.observacao`: `itens.<n>.observacao` → "A observação de <client_item_code ou sku_code da linha>", `itens.<n>.voltou` → "O que voltou de <código>", `itens.<n>.avariadas` → "As avariadas de <código>", `itens` → "Os itens" com unidade "itens", `coleta.voltou` → "O que voltou da coleta", `observacao` → "A observação do retorno")
+- Modify: `functions/wms/src/domain/eventos/edicao.ts` (`ROTULO_DO_CAMPO`, no mecanismo de `patch.cronograma.<n>.observacao`: `itens.<n>.observacao` → "A observação de <client_item_code ou sku_code da linha>", `itens.<n>.voltou` → "O que voltou de <código>", `itens.<n>.avariadas` → "As avariadas de <código>", `itens` → "O retorno" com unidade "itens", `coleta.voltou` → "O que voltou da coleta"; a `observacao` da raiz não entra no mapa global, porque a parte 8 usa a mesma chave para o momento: o rótulo dela vem de `ROTULOS_DO_RETORNO`, o mapa por chamada, que prevalece sobre `ROTULO_DO_CAMPO`)
 - Modify: `functions/wms/package.json` (`test:unit`: `lib/domain/eventos/retorno.test.js`; `test:integration`: `lib/domain/eventos/retorno.integration.test.js`, depois de `momentos.integration.test.js`)
 - Test: `functions/wms/src/domain/eventos/retorno.test.ts` (puro) e `functions/wms/src/domain/eventos/retorno.integration.test.ts` (emulador; T2 acrescenta os casos da devolução)
 
 **Interfaces:**
-- Consumes: `entradaDe`, `viewDaEdicao`, `type EdicaoView`, `ROTULO_DO_CAMPO` de `./edicao.js` (parte 2); `createEventoEvent` de `./eventos-auditoria.js` (parte 2; payload `retorno_recebido {edition_id, return_id, itens, voltaram, avariadas, nao_voltaram}`); `OPERATIONS_COLLECTION` de `./edicao-gravacao.js` (parte 2); `lerEdicao(transaction, db, editionId)` (a leitura da equipe, `not-found` "Edição não encontrada."), `type FeitoDoMomento`, `type ActorRef` de `./momentos.js` (parte 8); `LIMITES`, `naoVoltaram` de `./dominio.js` (parte 1); de `../operations.js`: `createMovement(transaction, db, id, {type, quantity, customerCode, skuCode, clientItemCode, productName, locationId, beforeQty, afterQty, source, occurredAt, entity}, actor)`, `movementId`, `readRows`, `skuBalancesQuery`, `clientSplit`, `balancesAfter`, `updateClientInventory` (`operations.ts:1010`), `resolveCatalogAggregateTargets`, `applyCatalogStockAggregates(transaction, target, {onHand, cost})` (`:1270`), `assertInventoryOperationsEnabled`, `type OperationalActor`, `type Row`; `resolveGuardDestination(destination, positions, customerCode)` de `../warehouse-positions.js:121`; `LOCAL_DO_CANCELADO` de `../order-cancel.js`; `nomeComTamanho({nome, codigo, tamanho})` de `../nome-do-produto.js`; `digest` e `actorRef` locais, como `count-rounds.ts` e `client-events.ts:127-129`.
+- Consumes: `entradaDe<T>(schema, raw, rotulos?: Record<string, string>)` (o mapa por chamada prevalece sobre `ROTULO_DO_CAMPO`), `viewDaEdicao`, `type EdicaoView`, `ROTULO_DO_CAMPO` de `./edicao.js` (parte 2); `createEventoEvent` de `./eventos-auditoria.js` (parte 2; payload `retorno_registrado {edition_id, return_id, itens, voltaram, avariadas, nao_voltaram}`); `EDICOES_COLLECTION` (o teste lê a edição por ela, sem o literal, e só a grava à mão onde o caso diz, como o 3), `OPERATIONS_COLLECTION`, `actorRef(actor: OperationalActor): ActorRef` e `type ActorRef = { uid: string; name: string | null; role: string }` de `./edicao-gravacao.js` (parte 2); só no teste, para o ajudante `edicaoNoEvento()` fazer a edição nascer pelo caminho real, `saveEventEditionTransaction` e `sendEventEditionTransaction(db, input, actor, deps)` de `./edicao-gravacao.js` (parte 2), `criarSolicitacaoDaEdicao(db, actor)` de `./envio.js` (parte 6) e `decideCustomerRequestTransaction` de `../operations.js`, cuja aprovação confirma a edição pelo gancho da parte 7 (`confirmarEdicaoNaAprovacao`); `lerEdicao(transaction, db, editionId)` (a leitura da equipe, `not-found` "Edição não encontrada."), `type FeitoDoMomento` de `./momentos.js` (parte 8); `LIMITES`, `naoVoltaram` de `./dominio.js` (parte 1); de `../operations.js`: `createMovement(transaction, db, id, {type, quantity, customerCode, skuCode, clientItemCode, productName, locationId, beforeQty, afterQty, source, occurredAt, entity}, actor)`, `movementId`, `readRows`, `skuBalancesQuery`, `clientSplit`, `balancesAfter`, `updateClientInventory` (`operations.ts:1010`), `resolveCatalogAggregateTargets`, `applyCatalogStockAggregates(transaction, target, {onHand, cost})` (`:1270`), `assertInventoryOperationsEnabled`, `type OperationalActor`, `type Row`; `resolveGuardDestination(destination, positions, customerCode)` de `../warehouse-positions.js:121`; `LOCAL_DO_CANCELADO` de `../order-cancel.js`; `nomeComTamanho({nome, codigo, tamanho})` de `../nome-do-produto.js`; `digest` local (sha256 hex, como `count-rounds.ts`), sem cópia de `actorRef`.
 - Produces:
   - `EVENT_RETURN_SOURCE = "functions_event_return"`.
   - `ItemDoRetornoSchema` (`.strict()`: `sku_code` 1..120, `client_item_code` ≤120 nullish, `voltou` e `avariadas` int 0..1_000_000, `observacao` ≤120 nullish); `ReceberRetornoSchema` (`.strict()`: `edition_id` 1..120, `chegou_em` string, `itens` array ≤100, `coleta: { voltou: int 0..1_000_000 }` opcional, `observacao` ≤500 nullish, `idempotency_key` 8..200); `type ReceberRetorno`.
+  - `ROTULOS_DO_RETORNO: Record<string, string> = { observacao: "A observação do retorno" }`, o mapa por chamada que toda leitura de `ReceberRetornoSchema` passa a `entradaDe` (a callable, o teste puro e o ajudante da integração); a parte 8 passa o dela, `{ observacao: "A observação do momento" }`, e nenhuma das duas grava `observacao` em `ROTULO_DO_CAMPO`.
   - `nomeDoItem(item: { product_name; client_item_code; size }): string` = `nomeComTamanho({ nome, codigo, tamanho })`.
   - `problemaDoRetorno(edicao: EdicaoView, pedido: { status: string } | null, input: ReceberRetorno): string | null`, nesta ordem: `enviado`/`confirmado`/`separado` → "A edição ainda não está no evento."; `retornado`/`fechado` ou `retorno` já gravado → "O retorno desta edição já foi registrado."; `cancelado` → "A edição foi cancelada."; `chegou_em` que não é instante → "Informe a hora da chegada"; com `pedido` e `status !== "ENTREGUE"` → "O pedido ainda não foi entregue."; linha de SKU fora da edição → "O item <sku_code> não é desta edição."; item com `foi > 0` sem linha → "Falta a linha do retorno de <nome>"; `voltou + avariadas > foi` → "<nome>: voltou e avariadas passam do que foi (<foi>)"; `coleta.quantidade > 0` sem `coleta.voltou` → "Informe o que voltou da coleta"; `coleta.voltou > quantidade` → "O que voltou da coleta passa do que foi coletado (<quantidade>)".
   - `type LinhaDoRetorno = { sku_code; client_item_code: string | null; product_name; size: string | null; foi; voltou; avariadas; nao_voltaram; observacao: string | null }`; `linhasDoRetorno(edicao, input): LinhaDoRetorno[]` (um por item com `foi > 0`, `nao_voltaram = naoVoltaram(foi, voltou, avariadas)`); `totaisDoRetorno(linhas): { itens; voltaram; avariadas; nao_voltaram }`.
   - `prateleiraDeOrigem(reservas: ReadonlyArray<{ sku_code; location_id; consumed_qty }>, skuCode): string | null` = a prateleira de onde o SKU saiu mais (empate: a primeira em ordem alfabética); sem reserva, null.
   - `type ResultadoDoRetorno = { ok: true; edition_id; status: "retornado"; return_id: string | null; itens; voltaram; avariadas; nao_voltaram; coleta: { voltou; distribuidos } | null; guardas: Array<{ putaway_task_id; sku_code; quantity; destination: string | null }>; events: OperationalEventSummary[] }`.
-  - `receiveEventReturnTransaction(db, input: ReceberRetorno, actor: OperationalActor): Promise<ResultadoDoRetorno>`, uma `db.runTransaction`, leituras antes das escritas. Lê: o recibo `op_evento_return_<digest({ edition: edition_id, nonce: idempotency_key })>` (mesma chave e `input_hash` → o `result`; outro hash → `already-exists` "A chave de idempotência já foi usada com outro conteúdo."); `assertInventoryOperationsEnabled`; `lerEdicao` e `viewDaEdicao`; com `pedido.order_id`, `orders/{id}`, `stock_reservations where order_id ==` (as `consumed`, para a origem) e `warehouse_positions`; `problemaDoRetorno` → `failed-precondition`; por SKU com `voltou > 0`, `skuBalancesQuery` e `resolveCatalogAggregateTargets`. Escreve, por SKU com `voltou > 0`: o saldo da EXPEDICAO (a linha existente pelo `location_id`, ou nova `bal_<digest({ customerCode, skuCode, locationId })>` com `source: EVENT_RETURN_SOURCE`) com `qty_on_hand + voltou`, `qty_available = on_hand − reserved` e `status`; a ENTRADA `createMovement(movementId(operationId, "return_in_<n>"), { type: "ENTRADA", quantity: voltou, locationId: LOCAL_DO_CANCELADO, source: EVENT_RETURN_SOURCE, occurredAt: chegou_em, entity: { edition_id, order_id, order_number, putaway_task_id, destino: LOCAL_DO_CANCELADO, movement_kind: "event_return_in" } })`; a guarda `putaway_tasks/put_<digest({ editionId, skuCode, motivo: "event_return" })>` como a do cancelamento (`operations.ts:7016-7080`): `source_location_id: LOCAL_DO_CANCELADO`, `location_id` e `destination_location_id` só quando `resolveGuardDestination(prateleiraDeOrigem(…), positions, customerCode)` devolve `code`, `quantity`, `total_units`, `status: "planned"`, `title: "Guardar <nome>"`, `next_action: "Devolver à prateleira o que voltou do evento."`, `source: EVENT_RETURN_SOURCE`, `event_edition_id`, `order_id`, `order_number`; `updateClientInventory({ onHandDelta: voltou, split: clientSplit(balancesAfter(rows, [a escrita da EXPEDICAO])) })` (a EXPEDICAO não entra em `qty_available` nem em `qty_receiving`); `applyCatalogStockAggregates(target, { onHand: voltou, cost: voltou × unit_cost do saldo, quando há })`. Depois, a devolução (T2) e a edição: `itens[]` com `voltou`, `avariadas`, `nao_voltaram`, `observacao`; `coleta.voltou` e `coleta.distribuidos = quantidade − voltou` (só com `coleta.quantidade > 0`); `retorno: { chegou_em, registrado_por: actorRef(actor), registrado_em, observacao, return_id }`; o momento `retorno_ao_estoque`, quando existe, ganha o `FeitoDoMomento` `{ inicio: chegou_em, fim: null, observacao: null, origem: "retorno", registrado_por, registrado_em, corrigido_em: null }`; `status: "retornado"`, `edicao + 1`, `updated_*`; `createEventoEvent({ type: "evento.retorno_recebido", customer_code, edition_id, descricao: "<event_name> · <label>", payload })`; o recibo (`kind: "evento.return"`, `input_hash`, `result` sem `undefined`).
+  - `receiveEventReturnTransaction(db, input: ReceberRetorno, actor: OperationalActor): Promise<ResultadoDoRetorno>`, uma `db.runTransaction`, leituras antes das escritas. Lê: o recibo `op_evento_return_<digest({ edition: edition_id, nonce: idempotency_key })>` (mesma chave e `input_hash` → o `result`; outro hash → `already-exists` "A chave de idempotência já foi usada com outro conteúdo."); `assertInventoryOperationsEnabled`; `lerEdicao` e `viewDaEdicao`; com `pedido.order_id`, `orders/{id}`, `stock_reservations where order_id ==` (as `consumed`, para a origem) e `warehouse_positions`; `problemaDoRetorno` → `failed-precondition`; por SKU com `voltou > 0`, `skuBalancesQuery` e `resolveCatalogAggregateTargets`. Escreve, por SKU com `voltou > 0`: o saldo da EXPEDICAO (a linha existente pelo `location_id`, ou nova `bal_<digest({ customerCode, skuCode, locationId })>` com `source: EVENT_RETURN_SOURCE`) com `qty_on_hand + voltou`, `qty_available = on_hand − reserved` e `status`; a ENTRADA `createMovement(movementId(operationId, "return_in_<n>"), { type: "ENTRADA", quantity: voltou, locationId: LOCAL_DO_CANCELADO, source: EVENT_RETURN_SOURCE, occurredAt: chegou_em, entity: { edition_id, order_id, order_number, putaway_task_id, destino: LOCAL_DO_CANCELADO, movement_kind: "event_return_in" } })`; a guarda `putaway_tasks/put_<digest({ editionId, skuCode, motivo: "event_return" })>` como a do cancelamento (`operations.ts:7016-7080`): `source_location_id: LOCAL_DO_CANCELADO`, `location_id` e `destination_location_id` só quando `resolveGuardDestination(prateleiraDeOrigem(…), positions, customerCode)` devolve `code`, `quantity`, `total_units`, `status: "planned"`, `title: "Guardar <nome>"`, `next_action: "Devolver à prateleira o que voltou do evento."`, `source: EVENT_RETURN_SOURCE`, `event_edition_id`, `order_id`, `order_number`; `updateClientInventory({ onHandDelta: voltou, split: clientSplit(balancesAfter(rows, [a escrita da EXPEDICAO])) })` (a EXPEDICAO não entra em `qty_available` nem em `qty_receiving`); `applyCatalogStockAggregates(target, { onHand: voltou, cost: voltou × unit_cost do saldo, quando há })`. Depois, a devolução (T2) e a edição: `itens[]` com `voltou`, `avariadas`, `nao_voltaram`, `observacao`; `coleta.voltou` e `coleta.distribuidos = quantidade − voltou` (só com `coleta.quantidade > 0`); `retorno: { chegou_em, registrado_por: actorRef(actor), registrado_em, observacao, return_id }`; o momento `retorno_ao_estoque`, quando existe, ganha o `FeitoDoMomento` `{ inicio: chegou_em, fim: null, observacao: null, origem: "retorno", registrado_por, registrado_em, corrigido_em: null }`; `status: "retornado"`, `edicao + 1`, `updated_*`; `createEventoEvent({ type: "evento.retorno_registrado", customer_code, edition_id, descricao: "<event_name> · <label>", payload })`; o recibo (`kind: "evento.return"`, `input_hash`, `result` sem `undefined`).
 
 - [ ] **Step 1: Write the failing unit test**
 
@@ -102,9 +103,11 @@ it("a prateleira de origem é de onde o SKU saiu mais; sem reserva, nenhuma", ()
   assert.equal(prateleiraDeOrigem(reservas, "BTG-000102"), null);
 });
 it("a entrada recusa dizendo o campo", () => {
-  assert.throws(() => entradaDe(ReceberRetornoSchema, comLinha({ sku_code: "BTG-000101", client_item_code: "A.01.0809.002", voltou: 996, avariadas: 2, observacao: "x".repeat(121) })), { code: "invalid-argument", message: "A observação de A.01.0809.002 passa de 120 caracteres" });
-  assert.throws(() => entradaDe(ReceberRetornoSchema, { ...ENTRADA, observacao: "x".repeat(501) }), { message: "A observação do retorno passa de 500 caracteres" });
-  for (const errada of [comLinha({ sku_code: "BTG-000101", voltou: -1, avariadas: 0 }), { ...ENTRADA, extra: 1 }]) assert.throws(() => entradaDe(ReceberRetornoSchema, errada), { code: "invalid-argument" });
+  const entrada = (raw: unknown) => entradaDe(ReceberRetornoSchema, raw, ROTULOS_DO_RETORNO); // como a callable lê
+  assert.throws(() => entrada(comLinha({ sku_code: "BTG-000101", client_item_code: "A.01.0809.002", voltou: 996, avariadas: 2, observacao: "x".repeat(121) })), { code: "invalid-argument", message: "A observação de A.01.0809.002 passa de 120 caracteres" });
+  assert.throws(() => entrada({ ...ENTRADA, observacao: "x".repeat(501) }), { message: "A observação do retorno passa de 500 caracteres" });
+  assert.equal("observacao" in ROTULO_DO_CAMPO, false); // a parte 8 usa a mesma chave para o momento: o rótulo vem da chamada
+  for (const errada of [comLinha({ sku_code: "BTG-000101", voltou: -1, avariadas: 0 }), { ...ENTRADA, extra: 1 }]) assert.throws(() => entrada(errada), { code: "invalid-argument" });
 });
 ```
 
@@ -113,7 +116,7 @@ it("a entrada recusa dizendo o campo", () => {
 Run: `cd C:\DEV\Dute\functions\wms; npm run build:test; node --test lib/domain/eventos/retorno.test.js`
 Expected: FAIL (`./retorno.js` não existe).
 
-- [ ] **Step 3: Implement the pure part of `retorno.ts`, the `ROTULO_DO_CAMPO` paths, and register the unit test**
+- [ ] **Step 3: Implement the pure part of `retorno.ts`, `ROTULOS_DO_RETORNO`, the `ROTULO_DO_CAMPO` paths, and register the unit test**
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -128,28 +131,41 @@ posições `A-01` e `A-02` da zona da BTG e os saldos: `BTG-000101`
 (`A.01.0809.002`, "Polo Masculino Piquet Arpoador", `size: "G"`) 600 na A-01
 e 400 na A-02; `BTG-000102` (`J.0149.003`, "Sacola Quadrada BTG", "N1") 700
 na A-02; `BTG-000103` (`B.0412.001`, "Caneca Necton") 300 na A-01. O ajudante
-`edicaoNoEvento()`: a solicitação com os três itens (2.000 peças) e
-`event_edition_id: "ced_necton2027"` (parte 6) por
-`createCustomerRequestTransaction`, aprovada por
-`decideCustomerRequestTransaction`; `client_events/cve_necton` e a edição
-`client_event_editions/ced_necton2027` em `confirmado`, no documento da spec
-(os três itens com `foi: null`; o cronograma com `entrega_no_local`, `evento`
-e `retorno_ao_estoque` em `mo_retorno`; a coleta de 2.190; `pedido` com os
-ids da solicitação e do pedido; `edicao: 3`; `event_name: "B2B Conference
-Necton"`, `label: "2027"`); `separarEEmbalar`; a entrega por
-`avancar("shipping:<id>", "ready_to_dispatch", { carrier: "Dutelog" })` e
-`avancar("shipping:<id>", "dispatched", { proof_reference: "Recebido na doca do hotel", delivery_notes: "Recebido pelo cliente." })`;
-confere que os ganchos da parte 7 deixaram `no_evento` e `foi` `[1000, 700, 300]`.
-`CHEGOU = "2027-01-30T12:30:00.000Z"`; `retornar(chave, input?)` chama a
-transação com `armazem`.
+`edicaoNoEvento()` faz a edição nascer pelo caminho real, como
+`confirmacao.integration.test.ts` (parte 7), sem gravar a edição à mão:
+`saveEventEditionTransaction` com `cliente` (`name` "B2B Conference Necton"
+e, no `patch`, `label: "2027"`, `onde.local` "Hotel Unique", o cronograma
+`coleta_no_cliente` 2027-01-28 05:00, `entrega_no_local` 2027-01-28 08:30,
+`evento` 2027-01-28 09:00 até 18:00 e `retorno_ao_estoque` 2027-01-30 09:00,
+os três itens, 2.000 peças, e `coleta.quantidade: 2190`); o envio por
+`sendEventEditionTransaction(db, { id, expected_edicao, idempotency_key, customer_code }, cliente, { criarSolicitacao: criarSolicitacaoDaEdicao(db, cliente) })`,
+que cria a solicitação com os três itens e o `event_edition_id` na mesma
+transação (parte 6); a aprovação por
+`decideCustomerRequestTransaction(db, { request_id, action: "approve", expected_status: "open", idempotency_key }, coordenacao)`,
+sem opção, que confirma a edição pelo gancho da parte 7, com o "separar
+até" padrão (como o caso 6 de `confirmacao.integration.test.ts`); a
+separação e o packing de sempre, `separarEEmbalar(order_id, pick_task_id)`
+com os ids da aprovação, cujo gancho deixa a edição `separado` com o `foi`;
+e a entrega de sempre, `entregar(shipmentId)`, com o `shipmentId` que
+`separarEEmbalar` devolve:
+`avancar("shipping:<shipmentId>", "ready_to_dispatch", { carrier: "Dutelog" })` e
+`avancar("shipping:<shipmentId>", "dispatched", { proof_reference: "Recebido na doca do hotel", delivery_notes: "Recebido pelo cliente." })`.
+Nenhum id é fixo: o ajudante devolve o `id` da edição, que
+`saveEventEditionTransaction` gera, e o `order_id` e o `order_number` da
+aprovação, e confere que os ganchos da parte 7 deixaram `no_evento` e `foi`
+`[1000, 700, 300]`.
+`CHEGOU = "2027-01-30T12:30:00.000Z"`; `retornar(chave, input?)` lê a
+entrada por `entradaDe(ReceberRetornoSchema, …, ROTULOS_DO_RETORNO)`, como a
+callable, com o `edition_id` que o ajudante devolveu, e chama a transação
+com `armazem`.
 
 ```ts
 it("1. o retorno da Necton: a ENTRADA na EXPEDICAO, a guarda de volta à origem, a edição retornada e o evento", ...)
 // result: voltaram 1994, avariadas 3, nao_voltaram 3, coleta { voltou: 1930, distribuidos: 260 }; guardas: polo → A-01 (600 > 400), sacola → A-02, caneca → A-01
 // stock_balances EXPEDICAO 996, 699, 299, as prateleiras em 0; client_inventory do polo: qty_on_hand 996, qty_available 0, qty_receiving 0
 // movements: três ENTRADA, source "functions_event_return", occurred_at CHEGOU, entity.edition_id; billingMovementDirection(cada um, { snapshot: false }) === null
-// a edição: retornado, itens[].voltou/avariadas/nao_voltaram, coleta 1930/260, retorno.chegou_em, retorno.registrado_por.uid "wms-1", cronograma[mo_retorno].feito { inicio: CHEGOU, origem: "retorno" }, edicao 4
-// events: um "evento.retorno_recebido" com payload { edition_id, return_id, itens: 3, voltaram: 1994, avariadas: 3, nao_voltaram: 3 }
+// a edição: retornado, itens[].voltou/avariadas/nao_voltaram, coleta 1930/260, retorno.chegou_em, retorno.registrado_por.uid "wms-1", o momento retorno_ao_estoque do cronograma (o id que o save gerou) com feito { inicio: CHEGOU, origem: "retorno" }, edicao = a lida logo antes do retorno + 1 (sem número fixo: os ganchos da parte 7 também somam)
+// events: um "evento.retorno_registrado" com payload { edition_id, return_id, itens: 3, voltaram: 1994, avariadas: 3, nao_voltaram: 3 }
 it("2. a mesma chave devolve o mesmo; outra chave recusa 'O retorno desta edição já foi registrado.' e os movimentos continuam três", ...)
 it("3. com o pedido EXPEDIDO (a edição posta em no_evento à mão) recusa 'O pedido ainda não foi entregue.' e nada muda", ...)
 it("4. a linha que falta e a que passa do que foi recusam dizendo o item", ...)
@@ -190,7 +206,7 @@ git commit -m "feat(wms): o retorno da edição do evento, com a ENTRADA na EXPE
 
 **Interfaces:**
 - Consumes: `createReturnReceiptTransaction` de `../operations.js:3681` (só no teste, para a paridade); as coleções `returns` e `return_items`.
-- Produces: `RETORNO_DO_EVENTO_FONTE = "retorno_do_evento"`, `chaveDaDevolucaoDoEvento(editionId) = "evento:<editionId>"`, `returnIdDoEvento(customerCode, editionId) = "ret_" + digest({ customer: customerCode, nonce: chaveDaDevolucaoDoEvento(editionId) })` (a fórmula de `createReturnReceiptTransaction`); `devolucaoDasAvariadas(transaction, db, { customerCode, edicao: EdicaoView, linhas: LinhaDoRetorno[], chegouEm, observacao, operationId }, actor): { return_id: string; event: OperationalEventSummary } | null` — só com alguma linha `avariadas > 0`; grava `returns/{returnIdDoEvento}` com os campos de `createReturnReceiptTransaction` (`source: RETORNO_DO_EVENTO_FONTE`, `reference: "Evento <event_name> · <label> · <order_number>"`, `notes` = a observação do retorno, `status: "received"`, `item_count`, `qty_total`, `qty_pending_disposition`, `received_at: chegouEm`, `created_by`, carimbos), um `return_items/reti_<returnId>_<nn>` por linha com `avariadas > 0` (`quantity: avariadas`, `condition: "damaged_return"`, `notes: observacao`, `status: "pending_disposition"`, `disposition: "pending"`, `source: "wms_return"`, `received_at`, `line_number`, `sku_code`, `client_item_code`, `product_name`) e o evento `return.received` (`title: "Devolução recebida para triagem"`, `severity: "attention"`, `entity_type: "return"`, id `evt_<digest({ operationId, suffix: "return_received" })>`, payload `{ return_id, reference, source, item_count, qty_total, items }`), tudo na transação do retorno. A edição grava `retorno.return_id`; o resultado e o `evento.retorno_recebido` levam o `return_id`.
+- Produces: `RETORNO_DO_EVENTO_FONTE = "retorno_do_evento"`, `chaveDaDevolucaoDoEvento(editionId) = "evento:<editionId>"`, `returnIdDoEvento(customerCode, editionId) = "ret_" + digest({ customer: customerCode, nonce: chaveDaDevolucaoDoEvento(editionId) })` (a fórmula de `createReturnReceiptTransaction`); `devolucaoDasAvariadas(transaction, db, { customerCode, edicao: EdicaoView, linhas: LinhaDoRetorno[], chegouEm, observacao, operationId }, actor): { return_id: string; event: OperationalEventSummary } | null` — só com alguma linha `avariadas > 0`; grava `returns/{returnIdDoEvento}` com os campos de `createReturnReceiptTransaction` (`source: RETORNO_DO_EVENTO_FONTE`, `reference: "Evento <event_name> · <label> · <order_number>"`, `notes` = a observação do retorno, `status: "received"`, `item_count`, `qty_total`, `qty_pending_disposition`, `received_at: chegouEm`, `created_by`, carimbos), um `return_items/reti_<returnId>_<nn>` por linha com `avariadas > 0` (`quantity: avariadas`, `condition: "damaged_return"`, `notes: observacao`, `status: "pending_disposition"`, `disposition: "pending"`, `source: "wms_return"`, `received_at`, `line_number`, `sku_code`, `client_item_code`, `product_name`) e o evento `return.received` (`title: "Devolução recebida para triagem"`, `severity: "attention"`, `entity_type: "return"`, id `evt_<digest({ operationId, suffix: "return_received" })>`, payload `{ return_id, reference, source, item_count, qty_total, items }`), tudo na transação do retorno. A edição grava `retorno.return_id`; o resultado e o `evento.retorno_registrado` levam o `return_id`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -230,8 +246,8 @@ git commit -m "feat(wms): as avariadas do retorno do evento nascem como devoluç
 - Test: `artifacts/app/src/lib/wms/eventos.test.ts` (um `it`); `artifacts/app/src/lib/platform-lists.test.ts` já percorre a lista
 
 **Interfaces:**
-- Consumes: `getProfile`, `requireWarehouseWrite`, `PROJECT_ID`, `db` do `index.ts`; `assertEventosLiberado` (parte 1); `ARMAZEM` e `SO_ARMAZEM` da matriz; `semCamposVazios`, `erroDaCallable`, `functionsDoApp`, `firebaseApp` como em `lib/wms/mover-caixa.ts`.
-- Produces: `export const receiveEventReturn = onCall(async (request) => { const profile = await getProfile(request); requireWarehouseWrite(profile); assertEventosLiberado(PROJECT_ID); return receiveEventReturnTransaction(db, entradaDe(ReceberRetornoSchema, request.data ?? {}), profile); });` numa linha; `receiveEventReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM }`; no app, `"receiveEventReturn"` em `CALLABLES_DOS_EVENTOS`, os tipos `ItemDoRetorno`, `ReceberRetorno`, `ResultadoDoRetorno` em `lib/eventos/tipos.ts` e `receberRetorno(entrada: ReceberRetorno): Promise<ResultadoDoRetorno>`.
+- Consumes: `getProfile`, `requireWarehouseWrite`, `PROJECT_ID`, `db` do `index.ts`; `assertEventosLiberado` (parte 1); `entradaDe(schema, raw, rotulos?)` (parte 2); `ReceberRetornoSchema`, `ROTULOS_DO_RETORNO`, `receiveEventReturnTransaction` (T1); `ARMAZEM` e `SO_ARMAZEM` da matriz; `semCamposVazios`, `erroDaCallable`, `functionsDoApp`, `firebaseApp` como em `lib/wms/mover-caixa.ts`.
+- Produces: `export const receiveEventReturn = onCall(async (request) => { const profile = await getProfile(request); requireWarehouseWrite(profile); assertEventosLiberado(PROJECT_ID); return receiveEventReturnTransaction(db, entradaDe(ReceberRetornoSchema, request.data ?? {}, ROTULOS_DO_RETORNO), profile); });` numa linha (o mapa por chamada dá "A observação do retorno"); `receiveEventReturn: { passam: ARMAZEM, recusa: SO_ARMAZEM }`; no app, `"receiveEventReturn"` em `CALLABLES_DOS_EVENTOS`, os tipos `ItemDoRetorno`, `ReceberRetorno`, `ResultadoDoRetorno` em `lib/eventos/tipos.ts` e `receberRetorno(entrada: ReceberRetorno): Promise<ResultadoDoRetorno>`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -266,13 +282,15 @@ git commit -m "feat(wms): a callable receiveEventReturn, a matriz e o wrapper do
 **Files:**
 - Create: `artifacts/app/src/lib/eventos/retorno.ts`
 - Create: `artifacts/app/src/features/eventos/retorno-da-edicao.tsx`
-- Modify: `artifacts/app/src/lib/eventos/ficha.ts` (`acaoDoMomento`: `retorno_ao_estoque` em `no_evento` com `opera` → `"registrar_retorno"`), `artifacts/app/src/pages/evento-view.tsx` e `artifacts/app/src/pages/evento.tsx` (parte 8: o bloco abaixo de "A edição, momento a momento" em `no_evento`, `retornado` e `fechado`; a mutação)
-- Test: `artifacts/app/src/lib/eventos/retorno.test.ts`, `artifacts/app/src/features/eventos/retorno-da-edicao.test.tsx` (textos, `axe` e a interação), `artifacts/app/src/lib/eventos/ficha.test.ts` e `artifacts/app/src/pages/evento-view.test.tsx` (duas asserções cada)
+- Modify: `artifacts/app/src/lib/eventos/ficha.ts` (parte 8: `LinhaDaFicha["acao"]` ganha `"registrar_retorno"`; `acaoDoMomento`: `retorno_ao_estoque` em `no_evento` com `opera` → `"registrar_retorno"`), `artifacts/app/src/pages/evento-view.tsx` e `artifacts/app/src/pages/evento.tsx` (parte 8: `PropsDaFicha` ganha `retorno: PropsDoRetorno | null`; o bloco abaixo de "A edição, momento a momento" em `no_evento`, `retornado` e `fechado`, nos dois últimos só com o `retorno` gravado; a mutação)
+- Test: `artifacts/app/src/lib/eventos/retorno.test.ts`, `artifacts/app/src/features/eventos/retorno-da-edicao.test.tsx` (textos, `axe` e a interação); `artifacts/app/src/lib/eventos/ficha.test.ts` (parte 8: o `it` "as linhas na ordem da prancha" passa a esperar `"registrar_retorno"` na oitava posição, a Necton em `no_evento`; e duas asserções) e `artifacts/app/src/pages/evento-view.test.tsx` (parte 8: os cinco estados dela passam `retorno: null`, porque a prop é obrigatória; a lista `PERMITIDOS` ganha os textos do bloco do retorno e o "Registrar retorno" da linha do momento; e três asserções)
 
 **Interfaces:**
-- Consumes: `EdicaoView`, `ReceberRetorno` de `lib/eventos/tipos.ts`; `naoVoltaram`, `LIMITES`, `nomeComTamanho` de `@workspace/dominio`; `textoDoMostrando(mostrando, total)`, `textoDoVerMais(proximos)`, `PAGINA_DO_VER_MAIS` de `lib/eventos/itens.ts` (parte 4); `acaoDoMomento`, `textoDoPrevisto` de `lib/eventos/ficha.ts` e `EventoView(props: PropsDaFicha)` com `opera`, `onAdicionarFotos(momento_id, files)` (parte 8); `receberRetorno` (T3); `BotaoDeAcao`, `useTentativaDaEscrita`, `desfechoDoErro`; `canOperateWarehouse` de `lib/permissions`.
-- Produces (`lib/eventos/retorno.ts`): `LINHAS_A_VISTA_NO_RETORNO = 8`; `type LinhaDaTela = { sku_code; client_item_code: string | null; nome; foi; voltou: number | null; avariadas: number | null; observacao: string; tocada: boolean }`; `linhasIniciais(edicao)` (os itens com `foi > 0`, `nome = nomeComTamanho`); `preencherIguais(linhas)` (as não tocadas ganham `voltou = foi`, `avariadas = 0`, `tocada`); `comDiferenca(linha)` (tocada e `voltou + avariadas < foi` ou `avariadas > 0`); `contagens(linhas): { todos; comDiferenca; porConferir }`; `filtrarLinhas(linhas, filtro: "todos" | "diferenca" | "conferir", busca)` (nome ou código, sem acento e caixa); `problemaDaLinha(linha)` = "Voltou e avariadas passam do que foi (<foi>)"; `totaisDaTela(linhas): { foi; voltou; avariadas; naoVoltaram }`; `fraseDoRodape(totais)` = "<foi> peças foram · <voltou> voltam ao estoque · <n> não voltaram · <a> avariadas · a devolução nasce com elas" (com 1: "1 não voltou", "1 avariada · a devolução nasce com ela"; sem avariadas: "nenhuma avariada"; números em pt-BR); `distribuidosDaColeta(quantidade, voltou)`; `podeConfirmar(linhas, coleta): string | null` = "Confira os N itens por conferir, ou marque que os outros voltaram iguais." ou "Informe o que voltou da coleta"; `entradaDoRetorno({ editionId, chegouEm: Date, linhas, coletaVoltou, observacao, chave }): ReceberRetorno` (sem `undefined`; `coleta` só com quantidade).
-- Produces (`retorno-da-edicao.tsx`): `RetornoDaEdicao({ edicao, podeRegistrar, estado: EstadoDaAcao, erro: string | null, onConfirmar: (entrada: ReceberRetorno) => Promise<void>, onFotos: () => void })`. Em `no_evento` com `podeRegistrar`, o cartão da prancha: "Registrar o retorno ao estoque", "<textoDoPrevisto do momento> · <N> itens · <M> peças foram", "Chegou em" (`datetime-local`, aria "Quando o retorno chegou", padrão agora), a busca ("Item ou código"; aria "Buscar item ou código"), os filtros `aria-pressed` "Todos", "Com diferença", "Por conferir" com o número, "Os outros N voltaram iguais", a tabela Item, Código, Foi, Voltou, Avariadas, Observação (inputs com aria "Voltou: <nome>", "Avariadas: <nome>", "Observação: <nome>", `maxLength` 120), a linha "Produtos coletados no cliente" (Foi, "Voltou: produtos coletados no cliente", "<n> distribuídos"), oito linhas à vista com `textoDoMostrando` e `textoDoVerMais`, o rodapé com `fraseDoRodape`, "Fotos do retorno" (`onFotos`: o "Adicionar fotos" da parte 8 com `mo_retorno`) e "Confirmar retorno" (`BotaoDeAcao`, andamento "Registrando…"); a recusa (`podeConfirmar` ou `erro`) numa linha `role="alert"` do rodapé, com o foco na primeira linha por conferir; o "Registrar retorno" da linha do momento leva o foco a "Chegou em". Em `retornado` e `fechado`, só leitura: "O que voltou ao estoque", "Chegou em <data hora> · <quem registrou>", a tabela como dados e o rodapé.
+- Consumes: `EdicaoView`, `ReceberRetorno` de `lib/eventos/tipos.ts`; `naoVoltaram`, `LIMITES`, `nomeComTamanho` de `@workspace/dominio`; `textoDoMostrando(mostrando, total)`, `textoDoVerMais(proximos)`, `PAGINA_DO_VER_MAIS` de `lib/eventos/itens.ts` (parte 4); `LinhaDaFicha`, `linhasDaFicha`, `acaoDoMomento`, `textoDoPrevisto` de `lib/eventos/ficha.ts` e `EventoView(props: PropsDaFicha)` com `opera`, `onAdicionarFotos(momento_id, files)` (parte 8); `receberRetorno` (T3); `BotaoDeAcao`/`EstadoDaAcao`, `useTentativaDaEscrita`, `desfechoDoErro`; `canOperateWarehouse` de `lib/permissions`.
+- Produces (`lib/eventos/ficha.ts`, parte 8, modificado): `LinhaDaFicha["acao"]` ganha `"registrar_retorno"`; `acaoDoMomento(momento, status, opera)` devolve `"registrar_retorno"` para o `retorno_ao_estoque` em `no_evento` com `opera` e, nos outros status ou sem `opera`, null, como na parte 8; a linha "Retorno ao estoque Dutelog" de `linhasDaFicha` leva essa ação, que a ficha desenha como "Registrar retorno".
+- Produces (`lib/eventos/retorno.ts`): `LINHAS_A_VISTA_NO_RETORNO = 8`; `type LinhaDaTela = { sku_code; client_item_code: string | null; nome; foi; voltou: number | null; avariadas: number | null; observacao: string; tocada: boolean }`; `linhasIniciais(edicao)` (os itens com `foi > 0`, `nome = nomeComTamanho`); `preencherIguais(linhas)` (as não tocadas ganham `voltou = foi`, `avariadas = 0`, `tocada`); `comDiferenca(linha)` (tocada e `voltou + avariadas < foi` ou `avariadas > 0`); `contagens(linhas): { todos; comDiferenca; porConferir }`; `filtrarLinhas(linhas, filtro: "todos" | "diferenca" | "conferir", busca)` (nome ou código, sem acento e caixa); `problemaDaLinha(linha)` = "Voltou e avariadas passam do que foi (<foi>)"; `totaisDaTela(linhas): { foi; voltou; avariadas; naoVoltaram }`; `fraseDoRodape(totais)` = "<foi> peças foram · <voltou> voltam ao estoque · <n> não voltaram · <a> avariadas · a devolução nasce com elas" (com 1: "1 não voltou", "1 avariada · a devolução nasce com ela"; sem avariadas: "nenhuma avariada"; números em pt-BR); `distribuidosDaColeta(quantidade, voltou)`; `podeConfirmarRetorno(linhas, coleta): string | null` = "Confira os N itens por conferir, ou marque que os outros voltaram iguais." ou "Informe o que voltou da coleta" (o nome não repete o `podeConfirmar(role)` de `agenda.ts`, parte 7); `entradaDoRetorno({ editionId, chegouEm: Date, linhas, coletaVoltou, observacao, chave }): ReceberRetorno` (sem `undefined`; `coleta` só com quantidade).
+- Produces (`retorno-da-edicao.tsx`): `type PropsDoRetorno = { podeRegistrar: boolean; estado: EstadoDaAcao; erro: string | null; onConfirmar: (entrada: ReceberRetorno) => Promise<void>; onFotos: () => void }`, exportado (o que a ficha recebe em `PropsDaFicha.retorno`), e `RetornoDaEdicao({ edicao, ...retorno }: { edicao: EdicaoView } & PropsDoRetorno)`. Em `no_evento` com `podeRegistrar`, o cartão da prancha: "Registrar o retorno ao estoque", "<textoDoPrevisto do momento> · <N> itens · <M> peças foram", "Chegou em" (`datetime-local`, aria "Quando o retorno chegou", padrão agora), a busca ("Item ou código"; aria "Buscar item ou código"), os filtros `aria-pressed` "Todos", "Com diferença", "Por conferir" com o número, "Os outros N voltaram iguais", a tabela Item, Código, Foi, Voltou, Avariadas, Observação (inputs com aria "Voltou: <nome>", "Avariadas: <nome>", "Observação: <nome>", `maxLength` 120), a linha "Produtos coletados no cliente" (Foi, "Voltou: produtos coletados no cliente", "<n> distribuídos"), oito linhas à vista com `textoDoMostrando` e `textoDoVerMais`, o rodapé com `fraseDoRodape`, "Fotos do retorno" (`onFotos`: o "Adicionar fotos" da parte 8, `onAdicionarFotos`, com o `id` do momento `retorno_ao_estoque`) e "Confirmar retorno" (`BotaoDeAcao`, andamento "Registrando…"); a recusa (`podeConfirmarRetorno` ou `erro`) numa linha `role="alert"` do rodapé, com o foco na primeira linha por conferir; o "Registrar retorno" da linha do momento leva o foco a "Chegou em". Em `retornado` e `fechado`, só leitura, com o `retorno` gravado: "O que voltou ao estoque", "Chegou em <data hora> · <quem registrou>", a tabela como dados e o rodapé (sem o `retorno` gravado, a ficha não desenha o bloco).
+- Produces (`pages/evento-view.tsx` e `pages/evento.tsx`, parte 8, modificados): `PropsDaFicha` ganha `retorno: PropsDoRetorno | null`; a página o dá `null` fora de `no_evento` a `fechado` (de `rascunho` a `separado` e em `cancelado`) e, em `no_evento`, `retornado` e `fechado`, `{ podeRegistrar, estado, erro, onConfirmar, onFotos }`; `EventoView` desenha `RetornoDaEdicao({ edicao, ...retorno })` abaixo de "A edição, momento a momento" quando `retorno` não é null, menos em `retornado` e `fechado` sem o `retorno` gravado (`edicao.retorno` null), onde o bloco não aparece.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -282,12 +300,17 @@ avariadas 2` no polo, `comDiferenca: 1`, `porConferir: 2`;
 `preencherIguais` → `porConferir: 0`; `fraseDoRodape` → "2.000 peças foram ·
 1.994 voltam ao estoque · 3 não voltaram · 3 avariadas · a devolução nasce
 com elas" e, sem avariadas, termina em "nenhuma avariada"; `problemaDaLinha`
-com 999 + 2 → "Voltou e avariadas passam do que foi (1000)"; `podeConfirmar`
-com duas por conferir → "Confira os 2 itens por conferir, ou marque que os
-outros voltaram iguais."; `entradaDoRetorno` sem `undefined`, `chegou_em` em
-ISO, `coleta: { voltou: 1930 }`; `distribuidosDaColeta(2190, 1930) === 260`.
+com 999 + 2 → "Voltou e avariadas passam do que foi (1000)";
+`podeConfirmarRetorno` com duas por conferir → "Confira os 2 itens por
+conferir, ou marque que os outros voltaram iguais."; `entradaDoRetorno` sem
+`undefined`, `chegou_em` em ISO, `coleta: { voltou: 1930 }`;
+`distribuidosDaColeta(2190, 1930) === 260`.
 `ficha.test.ts`: `acaoDoMomento(retorno, "no_evento", true) === "registrar_retorno"`
-e, em `confirmado`, null.
+e, em `confirmado`, null; e o `it` "as linhas na ordem da prancha" da parte 8
+passa a esperar, para `admin`, as ações
+`[null, "ver_pedido", "editar", "editar", "editar", "registrar_fim", "registrar", "registrar_retorno", "registrar", null]`
+(a oitava, "Retorno ao estoque Dutelog", deixa de ser null; a lista do
+`suporte` não muda).
 
 `retorno-da-edicao.test.tsx`, no molde de `estoque-mapa-mover-view.test.tsx`
 (`renderToStaticMarkup`; `textosDaTela` com as camadas do `BotaoDeAcao`
@@ -300,10 +323,24 @@ itens", o rodapé por regex); `textosForaDaLista` vazio e nenhum texto com
 `suporte`), nenhum input nem botão; a interação (como
 `guarda-da-caixa.interacao.test.tsx`): 996 e 2 no polo mudam "Com diferença"
 para 1, "Os outros 2 voltaram iguais" zera "Por conferir", "Confirmar
-retorno" antes disso mostra a frase de `podeConfirmar` e não chama
-`onConfirmar`; depois, chama com a entrada da tela. Em `evento-view.test.tsx`:
-a ficha em `no_evento` tem "Registrar o retorno ao estoque" e "Registrar
-retorno"; em `confirmado`, nenhum dos dois.
+retorno" antes disso mostra a frase de `podeConfirmarRetorno` e não chama
+`onConfirmar`; depois, chama com a entrada da tela.
+
+`evento-view.test.tsx` (parte 8): os cinco estados dela passam
+`retorno: null` (a prop é obrigatória; com ela null, o bloco não aparece);
+a lista `PERMITIDOS` ganha "Registrar retorno" (a ação da linha "Retorno ao
+estoque Dutelog") e os textos do bloco do retorno com os dados do fixture:
+os rótulos e as regex da lista de `retorno-da-edicao.test.tsx`, os nomes e
+os códigos dos itens, os números, as camadas do `BotaoDeAcao` de "Confirmar
+retorno" ("Registrando…" e "Conferir") e, do bloco só de leitura, "O que
+voltou ao estoque" e `/^Chegou em .+ · .+$/`; `foraDaLista(html, PERMITIDOS)`
+continua `[]` em cada estado do teste e na Necton em `no_evento` com o
+bloco. As três asserções: a ficha da Necton em `no_evento`, com `retorno`
+(`podeRegistrar: true`), tem "Registrar o retorno ao estoque" e "Registrar
+retorno"; em `confirmado`, com `retorno: null`, nenhum dos dois; e a
+`fechado` com `edicao.retorno` null (a da parte 8, que nasce antes do
+retorno), mesmo com `retorno` (`podeRegistrar: false`), não tem "O que
+voltou ao estoque".
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -316,7 +353,11 @@ Em `evento.tsx`: `useMutation({ mutationFn: receberRetorno })` com a chave
 de `useTentativaDaEscrita`; sucesso → toast "Retorno registrado" (a edição
 ao vivo já chega em `retornado`); erro → `desfechoDoErro`, a frase do
 servidor no bloco; `podeRegistrar = canOperateWarehouse(role) && status ===
-"no_evento"`. Carregamento v2 e a trava `lib/carregando/trava.test.ts`.
+"no_evento"`; o `retorno` de `PropsDaFicha` é `null` fora de `no_evento`,
+`retornado` e `fechado` e, nos três, `{ podeRegistrar, estado, erro, onConfirmar, onFotos }`,
+com o `estado` e o `erro` da mutação e o `onFotos` do "Adicionar fotos" da
+parte 8 no momento `retorno_ao_estoque`. Carregamento v2 e a trava
+`lib/carregando/trava.test.ts`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -333,12 +374,12 @@ git commit -m "feat(app): o bloco do retorno ao estoque na ficha da edição"
 ### Task 5: "Retorno do evento para registrar" no Início
 
 **Files:**
-- Modify: `artifacts/app/src/lib/eventos/agenda.ts` (`HomeEventEdition` e `edicoesNoEvento`), `artifacts/app/src/lib/home-inbox.ts` (o item), `artifacts/app/src/lib/inicio-do-wms.ts` (`ICONE_DO_ITEM`), `artifacts/app/src/lib/use-inicio-do-wms.ts` (a segunda leitura)
+- Modify: `artifacts/app/src/lib/eventos/agenda.ts` (`edicoesNoEvento`, ao lado de `edicoesEnviadas`; `HomeEventEdition` já nasce com `status` na parte 7), `artifacts/app/src/lib/home-inbox.ts` (o item), `artifacts/app/src/lib/inicio-do-wms.ts` (`ICONE_DO_ITEM`), `artifacts/app/src/lib/use-inicio-do-wms.ts` (a segunda leitura)
 - Test: `artifacts/app/src/lib/home-inbox.test.ts`, `artifacts/app/src/pages/home-view.test.tsx` (uma asserção)
 
 **Interfaces:**
-- Consumes: `buildHomeInbox({ …, eventEditions?: HomeEventEdition[] })`, `HomeEventEdition = { id; event_name; label; customer_code }`, o item `event-editions` (que passa a filtrar `status === "enviado"`), `consultaDaAgenda(db, "em_andamento")`, `edicoesEnviadas`, `edicaoLida`, `CONFIRMA_EDICAO_ROLES` (parte 7); `WMS_OPERATOR_ROLES` de `lib/modules.ts`; `EVENTOS_LIBERADO` (parte 1).
-- Produces: `HomeEventEdition` ganha `status: StatusDaEdicao` (a parte 10 conta com ele para "Edição para fechar"); `edicoesNoEvento(): Promise<HomeEventEdition[]>` = `getDocs(consultaDaAgenda(firestore, "em_andamento"))`; em `buildHomeInbox`, logo depois de `receipts` e só para `role` em `WMS_OPERATOR_ROLES`, `{ id: "event-returns", tone: "attention", title: "Retorno do evento para registrar" | "<n> retornos de evento para registrar", detail: listPreview(["<cliente> · <evento> · <label>", …], 2), href: "/eventos", actionLabel: "Registrar retorno" }` para as edições com `status === "no_evento"`; `ICONE_DO_ITEM["event-returns"] = RotateCcw`; em `useInicioDoWms`, `seesRetornos = ligado && EVENTOS_LIBERADO && canAccessModule(role, WMS_OPERATOR_ROLES)` e `useQuery({ queryKey: ["eventos", "em-andamento"], queryFn: edicoesNoEvento, enabled: seesRetornos, refetchInterval: 60_000, refetchOnWindowFocus: false })`, concatenada às enviadas em `eventEditions` e tratada como a leitura da parte 7 em `carregando`, `relendo`, `falhaSoNaReleitura`, `reler` e `falhas` ("eventos"), fora de `leiturasDaApi`.
+- Consumes: `buildHomeInbox({ …, eventEditions?: HomeEventEdition[] })`, `HomeEventEdition = { id; event_name; label; customer_code; status: StatusDaEdicao }`, o item `event-editions` (que já filtra `status === "enviado"`), `consultaDaAgenda(db, "em_andamento")`, `edicoesEnviadas` (cada documento por `edicaoDaLeitura`, na forma `{ id, event_name, label, customer_code, status }`), `CONFIRMA_EDICAO_ROLES` (parte 7); `edicaoDaLeitura(id, data): EdicaoView | null` de `lib/eventos/leitura.ts` (parte 4); `WMS_OPERATOR_ROLES` de `lib/modules.ts`; `EVENTOS_LIBERADO` (parte 1).
+- Produces: nada muda em `HomeEventEdition` nem no item `event-editions`, que nascem com o `status` na parte 7; o Início lê uma lista só, `eventEditions`, e esta parte só concatena a ela as edições no evento, como a parte 10 concatena as retornadas e filtra `status === "retornado"` para "Edição para fechar", sem parâmetro à parte; `edicoesNoEvento(): Promise<HomeEventEdition[]>` = `getDocs(consultaDaAgenda(firestore, "em_andamento"))`, cada documento por `edicaoDaLeitura(doc.id, doc.data())` (o que volta `null` sai) e a view em `{ id, event_name, label, customer_code, status }`, como `edicoesEnviadas` (parte 7); em `buildHomeInbox`, logo depois de `receipts` e só para `role` em `WMS_OPERATOR_ROLES`, `{ id: "event-returns", tone: "attention", title: "Retorno do evento para registrar" | "<n> retornos de evento para registrar", detail: listPreview(["<cliente> · <evento> · <label>", …], 2), href: "/eventos", actionLabel: "Registrar retorno" }` para as edições com `status === "no_evento"`; `ICONE_DO_ITEM["event-returns"] = RotateCcw`; em `useInicioDoWms`, `seesRetornos = ligado && EVENTOS_LIBERADO && canAccessModule(role, WMS_OPERATOR_ROLES)` e `useQuery({ queryKey: ["eventos", "em-andamento"], queryFn: edicoesNoEvento, enabled: seesRetornos, refetchInterval: 60_000, refetchOnWindowFocus: false })`, concatenada às enviadas em `eventEditions` e tratada como a leitura da parte 7 em `carregando`, `relendo`, `falhaSoNaReleitura`, `reler` e `falhas` ("eventos"), fora de `leiturasDaApi`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -352,7 +393,7 @@ it("a edição no evento pede o retorno a quem opera, de todos os clientes", () 
   expect([item?.tone, item?.title, item?.detail, item?.href, item?.actionLabel]).toEqual(["attention", "2 retornos de evento para registrar", "BTG Pactual · B2B Conference Necton · 2027 · Itaú · Convenção regional · 2027", "/eventos", "Registrar retorno"]);
   expect(buildHomeInbox({ role: "admin", eventEditions: eventEditions.slice(0, 1) }).items.map((i) => i.title)).toContain("Retorno do evento para registrar");
   expect(buildHomeInbox({ role: "suporte", eventEditions }).items.map((i) => i.id)).not.toContain("event-returns");
-  // a enviada é da parte 7: só ela conta em "event-editions", e só para a coordenação
+  // a enviada é da parte 7, que já filtra status === "enviado": só ela conta em "event-editions", e só para a coordenação
   expect(buildHomeInbox({ role: "admin", eventEditions }).items.find((i) => i.id === "event-editions")?.title).toBe("1 evento para confirmar");
   expect(buildHomeInbox({ role: "wms", eventEditions: eventEditions.slice(2) }).items.map((i) => i.id)).not.toContain("event-returns");
 });
@@ -366,7 +407,7 @@ Em `home-view.test.tsx`, no `it("cada item tem o ícone do que é")`:
 Run: `cd C:\DEV\Dute\artifacts\app; npx vitest run src/lib/home-inbox.test.ts src/pages/home-view.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement the status, the read, the item and the icon**
+- [ ] **Step 3: Implement the read, the item and the icon**
 
 A leitura é direta no Firestore, fora de `cloud-api.ts` (como a da parte 7):
 `CONSULTAS_DAS_TELAS` não a vê, e `status == "no_evento"` é uma igualdade só,
