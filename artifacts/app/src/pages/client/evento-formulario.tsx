@@ -64,6 +64,7 @@ import { cn } from "@/lib/utils";
 import { enviarEdicao, salvarEdicao } from "@/lib/wms/eventos";
 
 import { groupInventoryProducts } from "./estoque";
+import { ItensDoEventoDialogo } from "./evento-itens-dialogo";
 import { ClientDataBoundary, getInventoryItems } from "./shared";
 
 const TITULO = "Novo evento";
@@ -820,6 +821,8 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
   const { profile } = useOperationProfile();
   const leituras = profile ? leiturasDoPortal(profile.modules) : null;
   const rascunho = useRascunhoDaEdicao({ id, eventoId, customerCode: user?.publicMetadata.customer_code, ligado: Boolean(leituras?.eventos), produtos });
+  const [vendoItens, setVendoItens] = useState(false);
+  const [, navegar] = useLocation();
   if (rascunho.lendo) {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
@@ -828,7 +831,9 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
       </div>
     );
   }
+  const base = rascunho.edicao ?? rascunho.viva;
   return (
+    <>
     <FormularioDaEdicaoView
       form={rascunho.form}
       eventos={rascunho.eventos}
@@ -845,9 +850,23 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
         escolherEvento: rascunho.escolherEvento,
         salvarAgora: rascunho.salvarAgora,
         enviar: rascunho.enviar,
-        verItens: () => undefined,
+        verItens: () => setVendoItens(true),
       }}
     />
+    {vendoItens && base ? (
+      <ItensDoEventoDialogo
+        // Os itens do formulário (o que a pessoa já mudou) sobre a edição gravada.
+        edicao={{ ...base, event_name: rascunho.form.nome.trim() || base.event_name, itens: rascunho.form.itens as EdicaoView["itens"] }}
+        produtos={produtos}
+        onMudar={(itens) => rascunho.mudar("itens", itens)}
+        onFechar={() => setVendoItens(false)}
+        onEscolherMais={() => {
+          setVendoItens(false);
+          if (id) navegar(hrefDoEstoqueDoEvento(id));
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 

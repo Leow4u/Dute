@@ -305,6 +305,31 @@ describe("o salvamento automático", () => {
     expect(ultimoPatch().expected_edicao).toBe(4);
   });
 
+  it("a mudança nos itens pelo diálogo grava aos 1 000 ms os itens só com as seis chaves de entrada; Escolher mais no Estoque leva ao Estoque montando o evento", async () => {
+    await abrirANecton();
+    await clicar("Ver os 100 itens");
+    const dialogo = () => document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialogo()?.textContent).toContain("Itens do evento · B2B Conference Necton");
+    const gg = dialogo()!.querySelector<HTMLInputElement>('input[aria-label="Polo Masculino Piquet Arpoador GG"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(gg, "0");
+      gg.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      gg.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await avancar(1_000);
+    const itens = ultimoPatch().patch.itens as Array<Record<string, unknown>>;
+    expect(itens).toHaveLength(99);
+    for (const item of itens) expect(Object.keys(item).sort()).toEqual(["category", "client_item_code", "product_name", "quantity", "size", "sku_code"]);
+    await act(async () => {
+      Array.from(dialogo()!.querySelectorAll("button"))
+        .find((item) => item.textContent?.trim() === "Escolher mais no Estoque")!
+        .click();
+    });
+    expect(memoria.history.at(-1)).toBe(`/portal/estoque?evento=${NECTON.id}`);
+  });
+
   it("'A edição mudou em outra aba' refaz o formulário com o documento vivo e mostra a frase", async () => {
     await abrirANecton();
     await digitar("#evento-local", "Texto da aba velha");
