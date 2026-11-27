@@ -169,6 +169,21 @@ service firebase.storage {
         && portalDoClienteAtivo(code);
     }
 
+    // Os arquivos da edição do evento (docs/superpowers/specs/2026-11-26-eventos-design.md,
+    // "Fotos e documentos"): o espelho de clienteComOperacao com a armazenagem.
+    function clienteComArmazenagem(code) {
+      return hasProfile()
+        && profileRole() == 'cliente'
+        && firestore.get(userDoc()).data.get('customer_code', '') == code
+        && 'wms' in modulosDoCliente(code)
+        && portalDoClienteAtivo(code);
+    }
+
+    // Quem lê valores: a mesma lista de canReadPrices do firestore.rules.
+    function leValores() {
+      return hasProfile() && profileRole() in ['owner', 'admin', 'comercial', 'financeiro'];
+    }
+
     match /portal/{code}/solicitacoes/{arquivo} {
       allow read: if coordenaOperacao()
         || (hasProfile() && profileRole() == 'suporte')
@@ -178,6 +193,65 @@ service firebase.storage {
         && arquivo.matches('^an_[a-f0-9]{16}[.](pdf|jpg|png|webp)$')
         && request.resource.size <= 10 * 1024 * 1024
         && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
+    // Fotos da edição do evento (os momentos e o retorno): quem opera o
+    // armazém sobe; a equipe interna e o cliente dono, com a armazenagem,
+    // leem. Regravar é create (resource == null): nada se troca nem se apaga.
+    // A foto só vale na edição depois de attachEventPhoto, que confere o arquivo.
+    match /eventos/{code}/{edition}/fotos/{arquivo} {
+      allow read: if isInternal() || clienteComArmazenagem(code);
+      allow create: if resource == null
+        && canWritePhotos()
+        && edition.matches('^ced_[a-f0-9]{16}$')
+        && arquivo.matches('^ft_[a-f0-9]{16}[.](jpg|png|webp)$')
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
+    // Documentos da Dutelog na edição (o layout recebido por telefone, a
+    // planilha, o comprovante de entrega): quem opera o armazém sobe; a
+    // equipe interna e o cliente dono leem. Regravar é create. Vale na edição
+    // depois de attachEventDocument.
+    match /eventos/{code}/{edition}/docs/{arquivo} {
+      allow read: if isInternal() || clienteComArmazenagem(code);
+      allow create: if resource == null
+        && canWritePhotos()
+        && edition.matches('^ced_[a-f0-9]{16}$')
+        && arquivo.matches('^dc_[a-f0-9]{16}[.](pdf|jpg|png|webp|xlsx)$')
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)|application/vnd[.]openxmlformats-officedocument[.]spreadsheetml[.]sheet');
+      allow update, delete: if false;
+    }
+
+    // Documentos com valor (a proposta, parte 10): só quem lê valores sobe e
+    // lê; o cliente dono lê. O wms e o resto da equipe não abrem. Regravar é
+    // create.
+    match /eventos/{code}/{edition}/valores/{arquivo} {
+      allow read: if leValores() || clienteComArmazenagem(code);
+      allow create: if resource == null
+        && leValores()
+        && edition.matches('^ced_[a-f0-9]{16}$')
+        && arquivo.matches('^dc_[a-f0-9]{16}[.](pdf|jpg|png|webp)$')
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
+    // Anexo do cliente na edição (o layout, a planilha dos produtos): o
+    // cliente com a armazenagem no contrato sobe no caminho do próprio
+    // código; a equipe interna e ele leem. Regravar é create. Vale na edição
+    // depois de attachEventDocument.
+    match /portal/{code}/eventos/{edition}/{arquivo} {
+      allow read: if isInternal() || clienteComArmazenagem(code);
+      allow create: if resource == null
+        && clienteComArmazenagem(code)
+        && edition.matches('^ced_[a-f0-9]{16}$')
+        && arquivo.matches('^an_[a-f0-9]{16}[.](pdf|jpg|png|webp|xlsx)$')
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(jpeg|png|webp)|application/vnd[.]openxmlformats-officedocument[.]spreadsheetml[.]sheet');
       allow update, delete: if false;
     }
 
