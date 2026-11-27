@@ -76,11 +76,13 @@ Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
 11. **A zeragem recusa com edição em aberto** (26/11, PR 645): com uma
     edição de `enviado` a `no_evento`, a zeragem para antes de qualquer
     escrita, no ensaio e na execução, e aponta as edições que impedem.
-12. **A hora do cronograma é obrigatória só na entrega no local** (27/11,
-    PR 647): no rascunho toda linha grava com o dia, até a entrega no local
-    sem a hora; a hora da entrega é exigida no envio e nas mudanças depois
-    dele, e a tela só pede a hora na entrega. Na ordem das datas, vale o
-    dia para todos e a hora só entre os momentos que a têm.
+12. **A hora do cronograma é obrigatória só na entrega no local, e só no
+    envio** (27/11: "Só na entrega", no PR 647, e "só no envio", à
+    pergunta se a hora da entrega era exigida só no envio ou em toda
+    gravação do rascunho): no rascunho toda linha grava com o dia, e a hora
+    da entrega no local é exigida no envio e nas mudanças depois dele; a
+    tela só pede a hora na entrega. Na ordem das datas, vale o dia para
+    todos e a hora só entre os momentos que a têm.
 13. **Um `evento.edicao_salva` a cada gravação** (27/11, PR 647), também
     no salvamento automático, como esta spec pede; agrupar na tela fica
     para depois.
