@@ -12,7 +12,16 @@ vi.mock("../firebase", () => ({ firebaseApp: {} }));
 vi.mock("../firebase-functions", () => ({ functionsDoApp: () => ({}) }));
 
 import { detalheDaRecusa } from "./erro-da-callable";
-import { CALLABLES_DOS_EVENTOS, arquivarEvento, cancelarEdicao, enviarEdicao, salvarEdicao } from "./eventos";
+import {
+  CALLABLES_DOS_EVENTOS,
+  anexarDocumento,
+  anexarFoto,
+  arquivarEvento,
+  cancelarEdicao,
+  enviarEdicao,
+  salvarEdicao,
+  tirarDocumento,
+} from "./eventos";
 
 /**
  * As chamadas dos Eventos (eventos, parte 2): uma por callable do WMS.
@@ -70,15 +79,46 @@ describe("salvarEdicao", () => {
   });
 });
 
-describe("as quatro chamadas são as quatro callables da lista", () => {
+describe("os arquivos da edição (eventos, parte 3)", () => {
+  it("anexarFoto chama attachEventPhoto sem a legenda nem o instante que não vieram", async () => {
+    await anexarFoto({
+      edition_id: EDICAO,
+      arquivo: "ft_0123456789abcdef.jpg",
+      momento_id: "mo_0a1b2c3d",
+      legenda: undefined,
+      instante: undefined,
+      idempotency_key: "foto-0001",
+    });
+    expect(nome.atual).toBe("attachEventPhoto");
+    expect(enviado()).toEqual({ edition_id: EDICAO, arquivo: "ft_0123456789abcdef.jpg", momento_id: "mo_0a1b2c3d", idempotency_key: "foto-0001" });
+  });
+
+  it("anexarDocumento chama attachEventDocument com o nome e sem o momento que não veio", async () => {
+    await anexarDocumento({ edition_id: EDICAO, arquivo: "an_0123456789abcdef.pdf", nome: "layout-necton.pdf", momento_id: undefined, idempotency_key: "anexo-0001" });
+    expect(nome.atual).toBe("attachEventDocument");
+    expect(enviado()).toEqual({ edition_id: EDICAO, arquivo: "an_0123456789abcdef.pdf", nome: "layout-necton.pdf", idempotency_key: "anexo-0001" });
+  });
+
+  it("tirarDocumento chama removeEventDocument com o id do documento", async () => {
+    await tirarDocumento({ edition_id: EDICAO, documento_id: "an_0123456789abcdef", idempotency_key: "tirar-0001", customer_code: undefined });
+    expect(nome.atual).toBe("removeEventDocument");
+    expect(enviado()).toEqual({ edition_id: EDICAO, documento_id: "an_0123456789abcdef", idempotency_key: "tirar-0001" });
+  });
+});
+
+describe("as sete chamadas são as sete callables da lista", () => {
   it("cada wrapper chama a callable do mesmo nome, e a lista não tem outra", async () => {
     const chamadas: Record<(typeof CALLABLES_DOS_EVENTOS)[number], () => Promise<unknown>> = {
       saveEventEdition: () => salvarEdicao({ id: EDICAO, expected_edicao: 1, patch: {} }),
       sendEventEdition: () => enviarEdicao({ id: EDICAO, expected_edicao: 4, idempotency_key: "enviar-0001" }),
       cancelEventEdition: () => cancelarEdicao({ id: EDICAO, idempotency_key: "cancelar-0001", motivo: undefined }),
+      attachEventDocument: () => anexarDocumento({ edition_id: EDICAO, arquivo: "dc_0123456789abcdef.xlsx", nome: "planilha.xlsx", idempotency_key: "anexo-0002" }),
+      removeEventDocument: () => tirarDocumento({ edition_id: EDICAO, documento_id: "dc_0123456789abcdef", idempotency_key: "tirar-0002" }),
+      attachEventPhoto: () => anexarFoto({ edition_id: EDICAO, arquivo: "ft_0123456789abcdef.webp", momento_id: "mo_0a1b2c3d", idempotency_key: "foto-0002" }),
       archiveClientEvent: () => arquivarEvento({ event_id: "cve_fedcba9876543210", idempotency_key: "arquivar-0001" }),
     };
     expect(Object.keys(chamadas).sort()).toEqual([...CALLABLES_DOS_EVENTOS].sort());
+    expect(CALLABLES_DOS_EVENTOS).toHaveLength(7);
     for (const [callable, chamar] of Object.entries(chamadas)) {
       await chamar();
       expect(nome.atual).toBe(callable);

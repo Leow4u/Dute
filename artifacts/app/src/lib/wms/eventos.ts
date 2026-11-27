@@ -1,15 +1,21 @@
 import { httpsCallable } from "firebase/functions";
 
 import type {
+  AnexarDocumento,
+  AnexarFoto,
   ArquivarEvento,
   CancelarEdicao,
   CriarEdicao,
   EnviarEdicao,
   PatchDaEdicao,
+  ResultadoDaFoto,
+  ResultadoDaRetirada,
+  ResultadoDoAnexo,
   ResultadoDoArquivamento,
   ResultadoDoCancelamento,
   ResultadoDoEnvio,
   ResultadoDoSalvar,
+  TirarDocumento,
 } from "../eventos/tipos";
 import { firebaseApp } from "../firebase";
 import { functionsDoApp } from "../firebase-functions";
@@ -29,7 +35,15 @@ import { semCamposVazios } from "./separacao";
  * `detalhe`.
  */
 
-export const CALLABLES_DOS_EVENTOS = ["saveEventEdition", "sendEventEdition", "cancelEventEdition", "archiveClientEvent"] as const;
+export const CALLABLES_DOS_EVENTOS = [
+  "saveEventEdition",
+  "sendEventEdition",
+  "cancelEventEdition",
+  "archiveClientEvent",
+  "attachEventDocument",
+  "removeEventDocument",
+  "attachEventPhoto",
+] as const;
 export type CallableDosEventos = (typeof CALLABLES_DOS_EVENTOS)[number];
 
 async function chamarEventos<T>(nome: CallableDosEventos, dados: object): Promise<T> {
@@ -58,4 +72,19 @@ export function cancelarEdicao(entrada: CancelarEdicao): Promise<ResultadoDoCanc
 
 export function arquivarEvento(entrada: ArquivarEvento): Promise<ResultadoDoArquivamento> {
   return chamarEventos("archiveClientEvent", entrada);
+}
+
+/** O arquivo que já subiu ao Storage entra na edição (o cliente, o an_; a Dutelog, o dc_). */
+export function anexarDocumento(entrada: AnexarDocumento): Promise<ResultadoDoAnexo> {
+  return chamarEventos("attachEventDocument", entrada);
+}
+
+/** Tira o documento da edição; o arquivo fica no bucket. */
+export function tirarDocumento(entrada: TirarDocumento): Promise<ResultadoDaRetirada> {
+  return chamarEventos("removeEventDocument", entrada);
+}
+
+/** A foto que já subiu entra na edição, no momento dela. */
+export function anexarFoto(entrada: AnexarFoto): Promise<ResultadoDaFoto> {
+  return chamarEventos("attachEventPhoto", entrada);
 }

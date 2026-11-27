@@ -208,3 +208,41 @@ export type ResultadoDoSalvar = { id: string; edicao: number; created: boolean; 
 export type ResultadoDoEnvio = { id: string; status: "enviado"; request_id: string | null; edition: EdicaoView };
 export type ResultadoDoCancelamento = { id: string; resultado: "excluida" | "cancelada" };
 export type ResultadoDoArquivamento = { event_id: string; changed: boolean };
+
+// Os arquivos da edição (parte 3): o espelho de functions/wms/src/domain/eventos/arquivos.ts.
+
+export type OrigemDoDocumento = "cliente" | "dutelog";
+
+/** O documento como a callable o grava: o `id` é o nome do arquivo sem a extensão; o tipo e o tamanho vêm do bucket. */
+export type DocumentoDaEdicao = {
+  id: string;
+  caminho: string;
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  origem: OrigemDoDocumento;
+  momento_id: string | null;
+  registrado_por: ActorRef;
+  registrado_em: string;
+};
+
+/** A foto como a callable a grava: sempre de um momento; o instante é o da entrada ou o do registro. */
+export type FotoDaEdicao = {
+  id: string;
+  caminho: string;
+  momento_id: string;
+  legenda: string | null;
+  instante: string;
+  registrado_por: ActorRef;
+  registrado_em: string;
+};
+
+/** O arquivo já subiu: a callable confere no bucket. O cliente manda o an_, a Dutelog o dc_. */
+export type AnexarDocumento = { edition_id: string; customer_code?: string; arquivo: string; nome: string; momento_id?: string; idempotency_key: string };
+export type TirarDocumento = { edition_id: string; customer_code?: string; documento_id: string; idempotency_key: string };
+/** Só a Dutelog fotografa; `instante` em ISO com fuso. */
+export type AnexarFoto = { edition_id: string; arquivo: string; momento_id: string; legenda?: string; instante?: string; idempotency_key: string };
+
+export type ResultadoDoAnexo = { id: string; edicao: number; documento: DocumentoDaEdicao; documentos: number };
+export type ResultadoDaRetirada = { id: string; edicao: number; documentos: number };
+export type ResultadoDaFoto = { id: string; edicao: number; foto: FotoDaEdicao; fotos: number };
