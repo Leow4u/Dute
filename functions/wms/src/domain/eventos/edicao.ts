@@ -155,7 +155,7 @@ export type MomentoPrevistoEntrada = z.output<typeof MomentoPrevistoSchema>;
 export type ItemDaEdicao = z.output<typeof ItemDaEdicaoSchema>;
 export type Coleta = z.output<typeof ColetaSchema>;
 export type Onde = z.output<typeof OndeSchema>;
-export type ConteudoDaEdicao = z.output<typeof ConteudoDaEdicaoSchema>;
+export type Conteudo = z.output<typeof ConteudoDaEdicaoSchema>;
 export type CriarEdicao = z.output<typeof CriarEdicaoSchema>;
 export type PatchDaEdicao = z.output<typeof PatchDaEdicaoSchema>;
 export type EnviarEdicao = z.output<typeof EnviarEdicaoSchema>;
@@ -171,17 +171,20 @@ type ContextoDoRotulo = {
   indice: number;
   /** "de Montagem", "de Ensaio" (o outro com rótulo) ou "do momento 3". */
   deMomento: string;
-  /** "de Polo Masculino Piquet Preto" ou "do item 3". */
-  deItem: string;
+  /** "de A.01.0809.002" (o código do cliente da linha, senão o SKU) ou "do item 3": o nome se repete entre os tamanhos. */
+  deCodigo: string;
+  /** "de BTG-000002" (o SKU da linha) ou "do item 3". */
+  deSku: string;
 };
 
 type Rotulo = string | ((contexto: ContextoDoRotulo) => string);
 
 /**
- * O rótulo de cada campo, pelo caminho da issue com `*` no lugar da
- * posição. Começa pelo artigo, que decide a concordância ("passa" ou
- * "passam", "inválido" ou "inválida"). A chave `observacao` da raiz fica de
- * fora: cada callable que a tem passa o rótulo dela na chamada.
+ * O rótulo de cada campo, pelo caminho da issue com `<n>` no lugar da
+ * posição; vale a chave mais longa que é prefixo do caminho. Começa pelo
+ * artigo, que decide a concordância ("passa" ou "passam", "inválido" ou
+ * "inválida"). A chave `observacao` da raiz fica de fora: cada callable que
+ * a tem passa o rótulo dela na chamada.
  */
 export const ROTULO_DO_CAMPO: Record<string, Rotulo> = {
   idempotency_key: "a chave da operação",
@@ -202,24 +205,24 @@ export const ROTULO_DO_CAMPO: Record<string, Rotulo> = {
   "patch.onde.contato.nome": "o contato no local",
   "patch.onde.contato.telefone": "o telefone do contato",
   "patch.cronograma": "o cronograma",
-  "patch.cronograma.*": ({ indice }) => `o ${indice + 1}º momento do cronograma`,
-  "patch.cronograma.*.id": ({ deMomento }) => `o momento ${deMomento}`,
-  "patch.cronograma.*.tipo": "o tipo do momento",
-  "patch.cronograma.*.rotulo": "o nome do outro momento",
-  "patch.cronograma.*.data": ({ deMomento }) => `a data ${deMomento}`,
-  "patch.cronograma.*.hora": ({ deMomento }) => `a hora ${deMomento}`,
-  "patch.cronograma.*.ate": ({ deMomento }) => `a hora final ${deMomento}`,
-  "patch.cronograma.*.local": ({ deMomento }) => `o local ${deMomento}`,
-  "patch.cronograma.*.observacao": ({ deMomento }) => `a observação ${deMomento}`,
+  "patch.cronograma.<n>": ({ indice }) => `o ${indice + 1}º momento do cronograma`,
+  "patch.cronograma.<n>.id": ({ deMomento }) => `o momento ${deMomento}`,
+  "patch.cronograma.<n>.tipo": "o tipo do momento",
+  "patch.cronograma.<n>.rotulo": "o nome do outro momento",
+  "patch.cronograma.<n>.data": ({ deMomento }) => `a data ${deMomento}`,
+  "patch.cronograma.<n>.hora": ({ deMomento }) => `a hora ${deMomento}`,
+  "patch.cronograma.<n>.ate": ({ deMomento }) => `a hora final ${deMomento}`,
+  "patch.cronograma.<n>.local": ({ deMomento }) => `o local ${deMomento}`,
+  "patch.cronograma.<n>.observacao": ({ deMomento }) => `a observação ${deMomento}`,
   // "Os itens leva até 100 itens" não concorda: quem leva os itens é a edição.
   "patch.itens": "a edição",
-  "patch.itens.*": ({ indice }) => `o ${indice + 1}º item`,
-  "patch.itens.*.sku_code": ({ deItem }) => `o código ${deItem}`,
-  "patch.itens.*.client_item_code": ({ deItem }) => `o código do cliente ${deItem}`,
-  "patch.itens.*.product_name": ({ indice }) => `o nome do ${indice + 1}º item`,
-  "patch.itens.*.size": ({ deItem }) => `o tamanho ${deItem}`,
-  "patch.itens.*.category": ({ deItem }) => `o tipo ${deItem}`,
-  "patch.itens.*.quantity": ({ deItem }) => `a quantidade ${deItem}`,
+  "patch.itens.<n>": ({ indice }) => `o ${indice + 1}º item`,
+  "patch.itens.<n>.sku_code": ({ indice }) => `o código do item ${indice + 1}`,
+  "patch.itens.<n>.client_item_code": ({ deSku }) => `o código do cliente ${deSku}`,
+  "patch.itens.<n>.product_name": ({ deCodigo }) => `o nome ${deCodigo}`,
+  "patch.itens.<n>.size": ({ deCodigo }) => `o tamanho ${deCodigo}`,
+  "patch.itens.<n>.category": ({ deCodigo }) => `o tipo ${deCodigo}`,
+  "patch.itens.<n>.quantity": ({ deCodigo }) => `a quantidade ${deCodigo}`,
   "patch.coleta": "a coleta no cliente",
   "patch.coleta.onde": "o lugar da coleta",
   "patch.coleta.quantidade": "a quantidade da coleta",
@@ -272,21 +275,31 @@ function contextoDe(caminho: Caminho, raw: unknown): ContextoDoRotulo {
         ? texto(linha.rotulo) ?? ROTULO_DO_MOMENTO.outro
         : ROTULO_DO_MOMENTO[tipo as TipoDeMomento]
       : null;
-  const nomeDoItem = texto(linha.product_name);
+  const sku = texto(linha.sku_code);
+  const codigo = texto(linha.client_item_code) ?? sku;
   return {
     indice,
     deMomento: nomeDoMomento ? `de ${nomeDoMomento}` : `do momento ${indice + 1}`,
-    deItem: nomeDoItem ? `de ${nomeDoItem}` : `do item ${indice + 1}`,
+    deCodigo: codigo ? `de ${codigo}` : `do item ${indice + 1}`,
+    deSku: sku ? `de ${sku}` : `do item ${indice + 1}`,
   };
 }
 
+/** O rótulo da chave mais longa que é prefixo do caminho, com a posição como está ou como `<n>`. */
+function rotuloNoMapa(mapa: Record<string, Rotulo | undefined>, caminho: Caminho): Rotulo | undefined {
+  const exato = caminho.map(String);
+  const generico = caminho.map((parte) => (typeof parte === "number" ? "<n>" : String(parte)));
+  for (let tamanho = caminho.length; tamanho > 0; tamanho -= 1) {
+    const rotulo = mapa[exato.slice(0, tamanho).join(".")] ?? mapa[generico.slice(0, tamanho).join(".")];
+    if (rotulo !== undefined) return rotulo;
+  }
+  return undefined;
+}
+
+/** O rótulo do campo: primeiro o mapa da chamada, depois ROTULO_DO_CAMPO. */
 function rotuloDoCaminho(caminho: Caminho, raw: unknown, rotulos: Record<string, string>): string {
-  const exato = caminho.join(".");
-  const generico = caminho.map((parte) => (typeof parte === "number" ? "*" : parte)).join(".");
-  const daChamada: Record<string, Rotulo | undefined> = rotulos;
-  const doCampo: Record<string, Rotulo | undefined> = ROTULO_DO_CAMPO;
-  const rotulo = daChamada[exato] ?? daChamada[generico] ?? doCampo[exato] ?? doCampo[generico];
-  if (rotulo === undefined) return `o campo ${exato || "da entrada"}`;
+  const rotulo = rotuloNoMapa(rotulos, caminho) ?? rotuloNoMapa(ROTULO_DO_CAMPO, caminho);
+  if (rotulo === undefined) return `o campo ${caminho.join(".") || "da entrada"}`;
   return typeof rotulo === "function" ? rotulo(contextoDe(caminho, raw)) : rotulo;
 }
 

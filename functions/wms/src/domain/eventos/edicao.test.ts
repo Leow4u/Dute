@@ -15,6 +15,7 @@ import {
   problemaDoPatch,
   problemaParaEnviar,
   viewDaEdicao,
+  type Conteudo,
   type EdicaoView,
 } from "./edicao.js";
 
@@ -107,11 +108,43 @@ describe("entradaDe: a recusa diz o campo e o limite", () => {
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ onde: { contato: { telefone: "1".repeat(41) } } })), "O telefone do contato passa de 40 caracteres");
     recusa(
       () => entradaDe(PatchDaEdicaoSchema, patch({ itens: [{ sku_code: "BTG-000001", product_name: "Polo Masculino Piquet Preto", quantity: 1_000_001 }] })),
-      "A quantidade de Polo Masculino Piquet Preto passa de 1.000.000",
+      "A quantidade de BTG-000001 passa de 1.000.000",
     );
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: [momento("montagem", "27/01/2027")] })), "A data de Montagem inválida");
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: [{ tipo: "montagem", data: "2027-01-27" }] })), "Informe a hora de Montagem");
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ evento: { name: "n".repeat(121) } })), "O nome do evento passa de 120 caracteres");
+  });
+
+  it("cada campo do item diz a linha pelo código: o nome se repete entre os tamanhos", () => {
+    const linha = (campos: Record<string, unknown>) =>
+      entradaDe(PatchDaEdicaoSchema, patch({ itens: [{ sku_code: "BTG-000001", product_name: "Polo", quantity: 1 }, { sku_code: "BTG-000002", product_name: "Polo", quantity: 1, ...campos }] }));
+    recusa(() => linha({ client_item_code: "A.01.0809.002", quantity: 0 }), "Informe a quantidade de A.01.0809.002");
+    recusa(() => linha({ client_item_code: "A.01.0809.002", quantity: 2_000_000 }), "A quantidade de A.01.0809.002 passa de 1.000.000");
+    recusa(() => linha({ sku_code: "s".repeat(121) }), "O código do item 2 passa de 120 caracteres");
+    recusa(() => linha({ client_item_code: "A.01.0809.002", product_name: "" }), "Informe o nome de A.01.0809.002");
+    recusa(() => linha({ size: "t".repeat(81) }), "O tamanho de BTG-000002 passa de 80 caracteres");
+    recusa(() => linha({ category: "c".repeat(121) }), "O tipo de BTG-000002 passa de 120 caracteres");
+    recusa(() => linha({ client_item_code: "c".repeat(121) }), "O código do cliente de BTG-000002 passa de 120 caracteres");
+  });
+
+  it("o rótulo é o da chave mais longa que é prefixo do caminho, primeiro no mapa da chamada", () => {
+    const preco = z
+      .object({ preco: z.object({ fechado_cents: z.number().int(), proposta: z.object({ arquivo: z.string().regex(/^eventos\//) }).strict().nullish() }).strict() })
+      .strict();
+    const mapa = { "preco.fechado_cents": "O preço fechado", "preco.proposta": "A proposta" };
+    recusa(() => entradaDe(preco, { preco: {} }, mapa), "Informe o preço fechado");
+    recusa(() => entradaDe(preco, { preco: { fechado_cents: 1, proposta: { arquivo: "x.pdf" } } }, mapa), "A proposta inválida");
+    recusa(() => entradaDe(CriarEdicaoSchema, { idempotency_key: "cria-teste-1", name: "x".repeat(121) }), "O nome do evento passa de 120 caracteres");
+    recusa(() => entradaDe(z.object({ itens: z.array(z.object({ observacao: z.string().max(120) }).strict()) }).strict(), { itens: [{ observacao: "o".repeat(121) }] }, { "itens.<n>.observacao": "A observação do item" }), "A observação do item passa de 120 caracteres");
+    const Preco = z.object({ preco: z.object({ proposta: z.object({ arquivo: z.string().regex(/^dc_[0-9a-f]{16}\.pdf$/) }).strict() }).strict() }).strict();
+    recusa(() => entradaDe(Preco, { preco: { proposta: { arquivo: "proposta.pdf" } } }, { "preco.proposta": "o arquivo da proposta" }), "O arquivo da proposta inválido");
+    recusa(() => entradaDe(Preco, { preco: { proposta: {} } }, { "preco.proposta": "o arquivo da proposta" }), "Informe o arquivo da proposta");
+    recusa(() => entradaDe(Preco, { preco: { proposta: { arquivo: "proposta.pdf" } } }), "O campo preco.proposta.arquivo inválido");
+  });
+
+  it("o patch tem o tipo Conteudo, o dos campos que a edição aceita", () => {
+    const conteudo: Conteudo = entradaDe(PatchDaEdicaoSchema, patch({ label: "2027" })).patch;
+    assert.equal(conteudo.label, "2027");
   });
 
   it("campo fora do schema recusa, também a observação da coleta, que saiu", () => {

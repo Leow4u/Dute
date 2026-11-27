@@ -435,16 +435,18 @@ describe("a edição do evento no servidor", () => {
         momento("desmontagem", "2027-01-29", "20:00"),
       ],
     });
+    // Na ordem dos tipos: a desmontagem nova entra antes do outro momento.
     const segundo = (await gravada(r.id)).cronograma as Array<Record<string, any>>;
-    assert.deepEqual(segundo.slice(0, 4).map((m) => m.id), [entrega, montagem, evento, ensaio]);
+    assert.deepEqual(segundo.map((m) => m.tipo), ["entrega_no_local", "montagem", "evento", "desmontagem", "outro"]);
+    assert.deepEqual([segundo[0]!.id, segundo[1]!.id, segundo[2]!.id, segundo[4]!.id], [entrega, montagem, evento, ensaio]);
     assert.deepEqual(segundo[1]!.feito, feito);
     assert.deepEqual(segundo[1]!.previsto, { data: "2027-01-27", hora: "11:00", ate: "19:00", local: null, observacao: null });
     assert.equal(segundo[0]!.previsto.hora, "07:30");
     assert.equal(segundo[2]!.previsto.hora, "09:00");
-    assert.equal(segundo[3]!.rotulo, "Ensaio geral");
-    assert.match(segundo[4]!.id, /^mo_[0-9a-f]{8}$/);
-    assert.ok(!primeiro.some((m) => m.id === segundo[4]!.id));
-    assert.equal(segundo[4]!.feito, null);
+    assert.equal(segundo[4]!.rotulo, "Ensaio geral");
+    assert.match(segundo[3]!.id, /^mo_[0-9a-f]{8}$/);
+    assert.ok(!primeiro.some((m) => m.id === segundo[3]!.id));
+    assert.equal(segundo[3]!.feito, null);
 
     const semMontagem = segundo.filter((m) => m.id !== montagem).map((m) => ({ id: m.id, tipo: m.tipo, ...(m.rotulo ? { rotulo: m.rotulo } : {}), data: m.previsto.data, hora: m.previsto.hora }));
     await recusa(mudar(r.id, 3, { cronograma: semMontagem }), "failed-precondition", "Montagem já tem registro e não sai do cronograma");
@@ -483,6 +485,49 @@ describe("a edição do evento no servidor", () => {
     assert.equal(confirmada.event_name, "Necton 2027");
     assert.equal(confirmada.separar_ate, "2027-01-26");
     assert.equal(confirmada.pedido, null);
+  });
+
+  it("15. depois do envio, o patch da coordenação não tira o que o envio exigiu; o rascunho grava aos poucos", async () => {
+    const r = await prontaParaEnviar("necton-2027-0030");
+    await enviar(r.id, 1, "enviar-0015");
+    const gravado = (await gravada(r.id)).cronograma as Array<Record<string, any>>;
+    const linhas = (troca: (m: Record<string, any>) => Record<string, unknown> = () => ({})) =>
+      gravado.map((m) => ({ id: m.id, tipo: m.tipo, data: m.previsto.data, hora: m.previsto.hora, ...troca(m) }));
+    await recusa(mudar(r.id, 2, { cronograma: linhas().filter((m) => m.tipo !== "evento") }, manoel), "failed-precondition", "Informe a data do evento");
+    await recusa(
+      mudar(r.id, 2, { cronograma: linhas((m) => (m.tipo === "retorno_ao_estoque" ? { data: "2027-01-26" } : {})) }, manoel),
+      "failed-precondition",
+      "Retorno ao estoque Dutelog está antes de Evento",
+    );
+    await recusa(mudar(r.id, 2, { onde: { local: null, endereco: "Av. Brigadeiro Luís Antônio, 4700" } }, manoel), "failed-precondition", "Informe o local");
+    assert.equal((await gravada(r.id)).edicao, 2);
+    await mudar(r.id, 2, { cronograma: linhas((m) => (m.tipo === "evento" ? { hora: "09:00" } : {})) }, manoel);
+    assert.equal((await gravada(r.id)).edicao, 3);
+
+    const rascunho = await criar({ idempotency_key: "necton-2027-0031", name: "Workshop de líderes" });
+    await mudar(rascunho.id, 1, { cronograma: [momento("montagem", "2027-01-27", "10:00")], onde: { local: null } });
+    assert.equal((await gravada(rascunho.id)).edicao, 2);
+  });
+
+  it("16. o cronograma grava na ordem dos tipos, com os outros por último, como o formulário mostra", async () => {
+    const r = await criar({ idempotency_key: "necton-2027-0032", name: "B2B Conference Necton" });
+    await mudar(r.id, 1, {
+      cronograma: [
+        momento("outro", "2027-01-26", "15:00", { rotulo: "Vistoria do salão" }),
+        momento("retorno_ao_estoque", "2027-01-30", "09:00"),
+        momento("evento", "2027-01-28", "08:00"),
+        momento("entrega_no_local", "2027-01-27", "08:30"),
+        momento("outro", "2027-01-29", "07:00", { rotulo: "Café da equipe" }),
+      ],
+      onde: { local: "Hotel Unique" },
+      itens: [{ sku_code: sku(1), product_name: "Polo 1", quantity: 20 }],
+    });
+    const cronograma = (await gravada(r.id)).cronograma as Array<Record<string, any>>;
+    assert.deepEqual(
+      cronograma.map((m) => m.rotulo ?? m.tipo),
+      ["entrega_no_local", "evento", "retorno_ao_estoque", "Vistoria do salão", "Café da equipe"],
+    );
+    assert.equal((await enviar(r.id, 2, "enviar-0016")).status, "enviado");
   });
 
   it("a edição da Necton nasce, muda em dois patches e é enviada; a segunda edição do evento é excluída e o evento fica", async () => {

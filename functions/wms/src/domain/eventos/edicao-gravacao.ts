@@ -5,7 +5,7 @@ import { HttpsError } from "firebase-functions/https";
 
 import type { OperationalActor } from "../operations.js";
 
-import { ROTULO_DO_MOMENTO, edicaoAberta, labelPadrao, type MomentoPrevisto, type StatusDaEdicao, type TipoDeMomento } from "./dominio.js";
+import { ROTULO_DO_MOMENTO, TIPOS_DE_MOMENTO, edicaoAberta, labelPadrao, type MomentoPrevisto, type StatusDaEdicao, type TipoDeMomento } from "./dominio.js";
 import {
   problemaDaFormaDoCronograma,
   problemaDoPatch,
@@ -14,7 +14,7 @@ import {
   type ActorRef,
   type ArquivarEvento,
   type CancelarEdicao,
-  type ConteudoDaEdicao,
+  type Conteudo,
   type CriarEdicao,
   type EdicaoView,
   type EnviarEdicao,
@@ -161,7 +161,7 @@ export async function tamanhoETipoDosItens(
 
 // ------------------------------------------------------- o documento gravado
 
-function ondeGravada(onde: ConteudoDaEdicao["onde"]) {
+function ondeGravada(onde: Conteudo["onde"]) {
   return {
     local: onde?.local ?? null,
     endereco: onde?.endereco ?? null,
@@ -169,7 +169,7 @@ function ondeGravada(onde: ConteudoDaEdicao["onde"]) {
   };
 }
 
-function coletaGravada(coleta: ConteudoDaEdicao["coleta"]) {
+function coletaGravada(coleta: Conteudo["coleta"]) {
   return { onde: coleta?.onde ?? null, quantidade: coleta?.quantidade ?? 0, voltou: null, distribuidos: null };
 }
 
@@ -225,7 +225,9 @@ function momentosLigados(edicao: Data): Set<string> {
  * id (e do mesmo tipo) ou, sem id e fora do outro, com o do mesmo tipo; o
  * casado mantém o id e o feito e troca só o previsto (e o rótulo, no outro);
  * a linha sem par ganha id novo e feito null. O momento gravado que fica sem
- * linha e tem feito, foto ou documento recusa.
+ * linha e tem feito, foto ou documento recusa. Grava na ordem dos tipos, com
+ * os outros por último, como o formulário mostra: a ordem das datas do
+ * domínio (problemaDoCronograma) lê a ordem da lista.
  */
 export function fundirCronograma(gravado: readonly Data[], linhas: readonly MomentoPrevistoEntrada[], ligados: ReadonlySet<string>): Data[] {
   const usados = new Set<string>();
@@ -256,7 +258,8 @@ export function fundirCronograma(gravado: readonly Data[], linhas: readonly Mome
       throw new HttpsError("failed-precondition", `${nomeDoMomento(momento)} já tem registro e não sai do cronograma`);
     }
   }
-  return fundido;
+  const ordem = (tipo: TipoDeMomento) => TIPOS_DE_MOMENTO.indexOf(tipo);
+  return fundido.sort((a, b) => ordem(a.tipo) - ordem(b.tipo));
 }
 
 /**
@@ -264,7 +267,7 @@ export function fundirCronograma(gravado: readonly Data[], linhas: readonly Mome
  * volta ao padrão) ou, com o cronograma novo, o ano do evento enquanto o
  * label for o padrão (o vazio ou o ano da data de antes).
  */
-function labelDoPatch(edicao: Data, patch: ConteudoDaEdicao, cronogramaNovo: readonly Data[] | null): string | null | undefined {
+function labelDoPatch(edicao: Data, patch: Conteudo, cronogramaNovo: readonly Data[] | null): string | null | undefined {
   const cronograma = cronogramaNovo ?? lista(edicao.cronograma);
   if (patch.label !== undefined) return texto(patch.label) ?? labelPadrao(previstos(cronograma));
   if (!cronogramaNovo) return undefined;
@@ -275,7 +278,7 @@ function labelDoPatch(edicao: Data, patch: ConteudoDaEdicao, cronogramaNovo: rea
 }
 
 /** O que o patch muda na capa: só o nome e a descrição que diferem do gravado. */
-function mudancaDaCapa(capa: Data, evento: ConteudoDaEdicao["evento"]): Data {
+function mudancaDaCapa(capa: Data, evento: Conteudo["evento"]): Data {
   const mudanca: Data = {};
   if (!evento) return mudanca;
   if (evento.name !== undefined && evento.name !== capa.name) mudanca.name = evento.name;
@@ -299,7 +302,7 @@ export async function saveEventEditionTransaction(
   return "idempotency_key" in input ? criarEdicao(db, input, actor) : mudarEdicao(db, input, actor);
 }
 
-function conferirForma(conteudo: ConteudoDaEdicao) {
+function conferirForma(conteudo: Conteudo) {
   if (!conteudo.cronograma) return;
   const forma = problemaDaFormaDoCronograma(conteudo.cronograma);
   if (forma) throw new HttpsError("invalid-argument", forma);
@@ -307,7 +310,7 @@ function conferirForma(conteudo: ConteudoDaEdicao) {
 
 async function criarEdicao(db: Firestore, input: NoCliente<CriarEdicao>, actor: AtorDoCliente): Promise<ResultadoDoSalvar> {
   const customerCode = input.customer_code;
-  const conteudo: ConteudoDaEdicao = input.patch ?? {};
+  const conteudo: Conteudo = input.patch ?? {};
   const problema = problemaDoPatch("rascunho", actor.role, conteudo);
   if (problema) throw new HttpsError("failed-precondition", problema);
   conferirForma(conteudo);
@@ -497,6 +500,12 @@ async function mudarEdicao(db: Firestore, input: NoCliente<PatchDaEdicao>, actor
     mudancas.edicao = Number(data.edicao) + 1;
     mudancas.updated_by = autor;
     mudancas.updated_at = agora;
+    const depois = { ...data, ...mudancas };
+    // Depois do envio, a coordenação ajusta onde e o cronograma sem tirar o que o envio exigiu.
+    if (data.status !== "rascunho" && (patch.onde !== undefined || patch.cronograma !== undefined)) {
+      const falta = problemaParaEnviar(viewDaEdicao(ref.id, depois));
+      if (falta) throw new HttpsError("failed-precondition", falta);
+    }
     transaction.update(ref, carimbar(mudancas, agora));
 
     if (patch.coleta !== undefined) {
@@ -517,7 +526,6 @@ async function mudarEdicao(db: Firestore, input: NoCliente<PatchDaEdicao>, actor
       }
     }
 
-    const depois = { ...data, ...mudancas };
     createEventoEvent(
       transaction,
       db,
