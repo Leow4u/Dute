@@ -7,7 +7,7 @@
  * O rascunho continua no formulário ("Continuar") ou é excluído; as outras
  * abrem a edição. Nada aqui movimenta estoque.
  */
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { ROTULO_DO_STATUS, type StatusDaEdicao } from "@workspace/dominio";
 import { Banknote, CalendarDays, Clock, Copy, MapPin, Package, Plus, Search } from "lucide-react";
 import { Link } from "wouter";
@@ -15,18 +15,22 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
 import { Chip } from "@/components/ui/chip";
+import { Confirmacao } from "@/components/ui/confirmacao";
 import { FaixaAoVivo, FalhaAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { cartoesDaLista, contagemDosFiltros, filtrarCartoes, type CartaoDoEvento } from "@/lib/eventos/lista";
 import { ROTA_NOVO_EVENTO, hrefDaEdicao, hrefDoNovoDoEvento } from "@/lib/eventos/navegacao";
 import { ETAPAS_DA_EDICAO, FILTROS_DA_LISTA, ROTULO_DO_FILTRO, type FiltroDaLista } from "@/lib/eventos/rotulos";
 import { useEdicoesDoCliente, useEventosDoCliente, usePrecosDoCliente } from "@/lib/eventos/use-eventos";
 import { hojeIso } from "@/lib/operacao/fila";
+import { novaChave } from "@/lib/operacao/api";
 import { novaTentativaDe } from "@/lib/operacao/leitura";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { leiturasDoPortal } from "@/lib/operations";
 import { cn } from "@/lib/utils";
+import { cancelarEdicao } from "@/lib/wms/eventos";
 
 import { ClientDataBoundary, ClientModuleShell } from "./shared";
 
@@ -257,7 +261,28 @@ export function ListaDeEventos() {
   const precos = usePrecosDoCliente(codigo, ligado);
   const [escolhido, setEscolhido] = useState<FiltroDaLista | null>(null);
   const [busca, setBusca] = useState("");
-  const [, setExcluindo] = useState<CartaoDoEvento | null>(null);
+  const [excluindo, setExcluindo] = useState<CartaoDoEvento | null>(null);
+  const [ocupada, setOcupada] = useState(false);
+  // A mesma chave na nova tentativa de excluir o mesmo rascunho: a exclusão repetida não apaga outra coisa.
+  const chaves = useRef(new Map<string, string>());
+  const { toast } = useToast();
+
+  async function excluir(cartao: CartaoDoEvento) {
+    const id = cartao.atual.id;
+    const chave = chaves.current.get(id) ?? novaChave();
+    chaves.current.set(id, chave);
+    setOcupada(true);
+    try {
+      await cancelarEdicao({ id, idempotency_key: chave });
+      // Quem fecha a confirmação é o sucesso; na falha, ela fica, com o aviso (parte 13a).
+      setExcluindo(null);
+      toast({ title: "Rascunho excluído", description: cartao.evento.name });
+    } catch (erro) {
+      toast({ title: "Não foi possível excluir", description: erro instanceof Error ? erro.message : "", variant: "destructive" });
+    } finally {
+      setOcupada(false);
+    }
+  }
 
   const leiturasAoVivo = [eventos, edicoes, precos];
   const tentativa = novaTentativaDe(leiturasAoVivo);
@@ -273,15 +298,29 @@ export function ListaDeEventos() {
   return (
     <ClientDataBoundary titulo={TITULO}>
       {() => (
-        <ListaDeEventosView
-          estado={estado}
-          leitura={tentativa}
-          cartoes={cartoes}
-          contagens={contagens}
-          filtro={filtro}
-          busca={busca}
-          acoes={{ filtrar: setEscolhido, buscar: setBusca, excluir: setExcluindo }}
-        />
+        <>
+          <ListaDeEventosView
+            estado={estado}
+            leitura={tentativa}
+            cartoes={cartoes}
+            contagens={contagens}
+            filtro={filtro}
+            busca={busca}
+            acoes={{ filtrar: setEscolhido, buscar: setBusca, excluir: setExcluindo }}
+          />
+          <Confirmacao
+            aberta={Boolean(excluindo)}
+            ocupada={ocupada}
+            titulo={`Excluir o rascunho de ${excluindo?.evento.name ?? ""}?`}
+            confirmar="Excluir"
+            confirmando="Excluindo…"
+            perigo
+            onConfirmar={() => {
+              if (excluindo) void excluir(excluindo);
+            }}
+            onFechar={() => setExcluindo(null)}
+          />
+        </>
       )}
     </ClientDataBoundary>
   );
