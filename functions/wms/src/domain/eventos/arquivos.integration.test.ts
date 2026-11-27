@@ -36,6 +36,8 @@ let app: ReturnType<typeof initializeApp>;
 
 const cristiane = { uid: "cli-1", role: "cliente", customer_code: BTG, name: "Cristiane" };
 const outraCliente = { uid: "cli-2", role: "cliente", customer_code: "Outro", name: "Paula" };
+/** Outra pessoa do mesmo cliente: o rascunho e o envio são da empresa, não de quem anexou. */
+const colegaDaBtg = { uid: "cli-3", role: "cliente", customer_code: BTG, name: "Joana" };
 const manoel = { uid: "manoel", role: "interno", name: "Manoel" };
 const rafael = { uid: "rafael", role: "wms", name: "Rafael" };
 const bruno = { uid: "bruno", role: "wms", name: "Bruno" };
@@ -160,7 +162,7 @@ after(async () => {
 });
 
 describe("os arquivos da edição do evento no servidor", () => {
-  it("1. o cliente anexa o layout no rascunho: id, caminho portal/…, tipo e tamanho do bucket, origem cliente, edicao + 1 e o evento documento_anexado sem o nome do arquivo; a mesma chave devolve o mesmo; o mesmo arquivo com outra chave recusa 'O arquivo já está na edição.'", async () => {
+  it("1. o cliente anexa o layout no rascunho: id, caminho portal/…, tipo e tamanho do bucket, origem cliente, a edicao igual (o anexo não sobe o CAS) e o evento documento_anexado sem o nome do arquivo; a mesma chave devolve o mesmo; o mesmo arquivo com outra chave recusa 'O arquivo já está na edição.'", async () => {
     const edicao = await edicaoDaNecton("necton-arquivos-0001");
     const arquivo = `an_${hex(0xa1)}.pdf`;
     subiu(anexoDoCliente(edicao.id, arquivo), "application/pdf", 1_234_567);
@@ -168,7 +170,7 @@ describe("os arquivos da edição do evento no servidor", () => {
 
     const r = await anexar(cristiane, entrada);
     assert.equal(r.id, edicao.id);
-    assert.equal(r.edicao, edicao.edicao + 1);
+    assert.equal(r.edicao, edicao.edicao);
     assert.equal(r.documentos, 1);
     assert.match(r.documento.registrado_em, ISO);
     assert.deepEqual(r.documento, {
@@ -184,7 +186,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     });
 
     const depois = await gravada(edicao.id);
-    assert.equal(depois.edicao, edicao.edicao + 1);
+    assert.equal(depois.edicao, edicao.edicao);
     assert.deepEqual(depois.documentos, [r.documento]);
     assert.deepEqual(depois.updated_by, { uid: "cli-1", name: "Cristiane", role: "cliente" });
     const anexados = await eventosDoTipo(edicao.id, "evento.documento_anexado");
@@ -194,7 +196,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     assert.equal(anexados[0]!.description, "B2B Conference Necton · 2027");
     assert.doesNotMatch(JSON.stringify(anexados[0]), /layout-necton/);
     const [recibo] = (await recibosDe(edicao.id)).filter((op) => op.kind === "evento.documento.attach");
-    assert.deepEqual(recibo?.result, { id: edicao.id, edicao: edicao.edicao + 1, documento_id: `an_${hex(0xa1)}`, documentos: 1 });
+    assert.deepEqual(recibo?.result, { id: edicao.id, edicao: edicao.edicao, documento_id: `an_${hex(0xa1)}`, documentos: 1 });
     assert.equal(recibo?.customer_code, BTG);
 
     // O clique duplo: a mesma chave devolve o mesmo registro, sem segunda entrada nem segundo evento.
@@ -277,7 +279,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     assert.equal(r2.documento.tipo, PLANILHA);
     assert.equal(r2.documento.tamanho, 48_000);
     assert.equal(r2.documentos, 2);
-    assert.equal(r2.edicao, r1.edicao + 1);
+    assert.equal(r2.edicao, r1.edicao);
     const [recibo] = (await recibosDe(edicao.id)).filter((op) => op.kind === "evento.documento.attach" && op.result?.documento_id === `dc_${hex(0xc2)}`);
     assert.equal(recibo?.customer_code, BTG);
 
@@ -328,7 +330,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     assert.equal((await gravada(edicao.id)).documentos.length, 20);
   });
 
-  it("5. tirar: o cliente tira o próprio em enviado (sai de documentos, edicao + 1, evento documento_retirado, nada apagado); em confirmado, 'Depois da confirmação, só a Dutelog retira documentos.'; o da Dutelog, permission-denied; o wms tira só o que anexou; o interno tira qualquer um; o id que não existe, not-found 'Documento não encontrado.'", async () => {
+  it("5. tirar: o cliente tira o próprio em enviado (sai de documentos, a edicao igual, evento documento_retirado, nada apagado) e a colega da mesma empresa tira o que ela anexou; em confirmado, 'Depois da confirmação, só a Dutelog retira documentos.'; o da Dutelog, permission-denied; o wms tira só o que anexou; o interno tira qualquer um; o id que não existe, not-found 'Documento não encontrado.'", async () => {
     const edicao = await edicaoDaNecton("necton-arquivos-0005");
     const sobe = async (ator: Ator, arquivo: string, chave: string) => {
       subiu(arquivo.startsWith("an_") ? anexoDoCliente(edicao.id, arquivo) : docDaDutelog(edicao.id, arquivo), "application/pdf");
@@ -337,19 +339,20 @@ describe("os arquivos da edição do evento no servidor", () => {
     await sobe(cristiane, `an_${hex(0xe1)}.pdf`, "anexar-0005-a");
     await sobe(cristiane, `an_${hex(0xe2)}.pdf`, "anexar-0005-b");
     await sobe(rafael, `dc_${hex(0xe3)}.pdf`, "anexar-0005-c");
-    const ultimo = await sobe(bruno, `dc_${hex(0xe4)}.pdf`, "anexar-0005-d");
+    await sobe(bruno, `dc_${hex(0xe4)}.pdf`, "anexar-0005-d");
+    const ultimo = await sobe(cristiane, `an_${hex(0xe5)}.pdf`, "anexar-0005-e");
     const noBucketAntes = noBucket.size;
 
     await mudarStatus(edicao.id, "enviado");
     const retirada = { edition_id: edicao.id, documento_id: `an_${hex(0xe1)}`, idempotency_key: "tirar-0005-a" };
     const r = await tirar(cristiane, retirada);
-    assert.deepEqual(r, { id: edicao.id, edicao: ultimo.edicao + 1, documentos: 3 });
+    assert.deepEqual(r, { id: edicao.id, edicao: ultimo.edicao, documentos: 4 });
     const depois = await gravada(edicao.id);
     assert.deepEqual(
       depois.documentos.map((documento: { id: string }) => documento.id),
-      [`an_${hex(0xe2)}`, `dc_${hex(0xe3)}`, `dc_${hex(0xe4)}`],
+      [`an_${hex(0xe2)}`, `dc_${hex(0xe3)}`, `dc_${hex(0xe4)}`, `an_${hex(0xe5)}`],
     );
-    assert.equal(depois.edicao, ultimo.edicao + 1);
+    assert.equal(depois.edicao, ultimo.edicao);
     const retirados = await eventosDoTipo(edicao.id, "evento.documento_retirado");
     assert.equal(retirados.length, 1);
     assert.deepEqual(retirados[0]!.payload, { edition_id: edicao.id, documento_id: `an_${hex(0xe1)}` });
@@ -359,6 +362,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     // A repetição da mesma chave devolve o mesmo, sem segundo evento.
     assert.deepEqual(await tirar(cristiane, retirada), r);
     assert.equal((await eventosDoTipo(edicao.id, "evento.documento_retirado")).length, 1);
+    assert.equal((await tirar(colegaDaBtg, { edition_id: edicao.id, documento_id: `an_${hex(0xe5)}`, idempotency_key: "tirar-0005-i" })).documentos, 3);
 
     await recusa(
       tirar(cristiane, { edition_id: edicao.id, documento_id: `dc_${hex(0xe3)}`, idempotency_key: "tirar-0005-b" }),
@@ -398,7 +402,7 @@ describe("os arquivos da edição do evento no servidor", () => {
     await mudarStatus(edicao.id, "confirmado");
     const r = await fotografar(rafael, entrada);
     assert.equal(r.fotos, 1);
-    assert.equal(r.edicao, edicao.edicao + 1);
+    assert.equal(r.edicao, edicao.edicao);
     assert.match(r.foto.registrado_em, ISO);
     assert.deepEqual(r.foto, {
       id: `ft_${hex(0xf1)}`,
@@ -558,4 +562,41 @@ describe("os arquivos da edição do evento no servidor", () => {
     assert.deepEqual(recibos.map((op) => op.kind).sort(), ["evento.documento.attach", "evento.documento.remove", "evento.foto.attach"]);
     assert.doesNotMatch(JSON.stringify(recibos), /layout-necton|Carga na doca/);
   });
+  it("10. anexar, tirar e fotografar não sobem a edicao: o salvamento da aba com a edicao lida antes grava, sem 'A edição mudou em outra aba'", async () => {
+    const edicao = await edicaoDaNecton("necton-arquivos-0010");
+    const layout = `an_${hex(0x101)}.pdf`;
+    subiu(anexoDoCliente(edicao.id, layout), "application/pdf");
+    const anexo = await anexar(cristiane, { edition_id: edicao.id, arquivo: layout, nome: "layout.pdf", idempotency_key: "anexar-0010-a" });
+    assert.equal(anexo.edicao, edicao.edicao);
+    // A cliente digitava nas observações enquanto o layout subia: o salvamento leva a edicao de antes do anexo.
+    const salvo = await saveEventEditionTransaction(
+      db,
+      { ...entradaDoSalvar({ id: edicao.id, expected_edicao: edicao.edicao, patch: { observacoes: "Montagem no salão nobre" } }), customer_code: BTG },
+      cristiane,
+    );
+    assert.equal(salvo.edicao, edicao.edicao + 1);
+    assert.equal(salvo.edition.observacoes, "Montagem no salão nobre");
+    assert.deepEqual(salvo.edition.documentos.map((documento) => documento.id), [`an_${hex(0x101)}`]);
+    const tirado = await tirar(cristiane, { edition_id: edicao.id, documento_id: `an_${hex(0x101)}`, idempotency_key: "tirar-0010-a" });
+    assert.equal(tirado.edicao, salvo.edicao);
+
+    await mudarStatus(edicao.id, "confirmado");
+    const foto = `ft_${hex(0x102)}.jpg`;
+    subiu(fotoDaDutelog(edicao.id, foto), "image/jpeg");
+    const fotografada = await fotografar(rafael, { edition_id: edicao.id, arquivo: foto, momento_id: edicao.entrega, idempotency_key: "foto-0010-a" });
+    assert.equal(fotografada.edicao, salvo.edicao);
+    // O "Editar" da coordenação na ficha, aberto antes da foto, também grava.
+    const ajuste = await saveEventEditionTransaction(
+      db,
+      { ...entradaDoSalvar({ id: edicao.id, expected_edicao: salvo.edicao, patch: { separar_ate: "2027-01-26" } }), customer_code: BTG },
+      { ...manoel, customer_code: BTG },
+    );
+    assert.equal(ajuste.edicao, salvo.edicao + 1);
+    const depois = await gravada(edicao.id);
+    assert.equal(depois.edicao, salvo.edicao + 1);
+    assert.equal(depois.fotos.length, 1);
+    assert.deepEqual(depois.documentos, []);
+    assert.deepEqual(depois.updated_by, { uid: "manoel", name: "Manoel", role: "interno" });
+  });
+
 });

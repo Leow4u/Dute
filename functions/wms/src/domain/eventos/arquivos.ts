@@ -19,6 +19,12 @@ import { createEventoEvent } from "./eventos-auditoria.js";
  * por geração e recusado; o documento retirado sai do registro e o arquivo
  * fica no bucket. O bucket chega por dependência: index.ts o liga ao de
  * verdade, e os testes passam um falso.
+ *
+ * Os anexos e as fotos não sobem a `edicao`: o CAS protege o que o patch e a
+ * equipe gravam, e nenhum dos dois grava `documentos` nem `fotos` (o momento
+ * citado se lê dentro das duas transações). Subir a versão aqui só faria o
+ * salvamento automático do formulário recusar "A edição mudou em outra aba"
+ * numa aba só, logo depois de um anexo.
  */
 
 export const TIPOS_DE_FOTO = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -203,8 +209,10 @@ export function problemaParaAnexarFoto(status: string): string | null {
 export type RecusaDaRetirada = { code: "failed-precondition" | "permission-denied"; mensagem: string };
 
 /**
- * Quem tira o documento: quem anexou, ou a coordenação. O cliente só tira em
- * rascunho e enviado, e nunca o da Dutelog.
+ * Quem tira o documento: quem anexou, ou a coordenação. Do lado do cliente,
+ * quem anexou é a empresa (quem muda e exclui o rascunho também tira o layout
+ * que a colega anexou), só em rascunho e enviado e nunca o da Dutelog; do
+ * lado da Dutelog, a pessoa que anexou, ou a coordenação.
  */
 export function problemaParaTirarDocumento(status: string, actor: { uid: string; role: string }, documento: DocumentoDaEdicao): RecusaDaRetirada | null {
   if (!edicaoAberta(status)) return { code: "failed-precondition", mensagem: "A edição já está fechada." };
@@ -212,7 +220,7 @@ export function problemaParaTirarDocumento(status: string, actor: { uid: string;
     if (status !== "rascunho" && status !== "enviado") return { code: "failed-precondition", mensagem: "Depois da confirmação, só a Dutelog retira documentos." };
     if (documento.origem === "dutelog") return { code: "permission-denied", mensagem: "Só a Dutelog retira os documentos dela." };
   }
-  if (!COORDENACAO.includes(actor.role) && documento.registrado_por.uid !== actor.uid) {
+  if (actor.role !== "cliente" && !COORDENACAO.includes(actor.role) && documento.registrado_por.uid !== actor.uid) {
     return { code: "permission-denied", mensagem: "Só quem anexou o documento, ou a coordenação, o retira." };
   }
   return null;
@@ -367,7 +375,8 @@ type ReciboDoAnexo = { id: string; edicao: number; documento_id: string; documen
  * attachEventDocument: o documento que já subiu entra em `documentos[]`. O
  * cliente anexa o an_ do portal e a Dutelog o dc_, de rascunho a retornado.
  * O recibo guarda só ids e contagens: a repetição da chave relê a edição e
- * devolve o registro vivo (o documento retirado depois não volta).
+ * devolve o registro e a `edicao` vivos (o documento retirado depois não
+ * volta).
  */
 export async function attachEventDocumentTransaction(
   db: Firestore,
@@ -394,7 +403,7 @@ export async function attachEventDocumentTransaction(
       const gravado = previous.get("result") as ReciboDoAnexo;
       const documento = documentosLidos(data).find((registrado) => registrado.id === gravado.documento_id);
       if (!documento) throw new HttpsError("not-found", "Documento não encontrado.");
-      return { id: gravado.id, edicao: gravado.edicao, documento, documentos: gravado.documentos };
+      return { id: gravado.id, edicao: Number(data.edicao ?? 0), documento, documentos: gravado.documentos };
     }
     const problema = problemaParaAnexarDocumento(String(data.status ?? ""));
     if (problema) throw new HttpsError("failed-precondition", problema);
@@ -418,8 +427,8 @@ export async function attachEventDocumentTransaction(
       registrado_em: new Date().toISOString(),
     };
     const documentos = [...atuais, documento];
-    const edicao = Number(data.edicao ?? 0) + 1;
-    transaction.update(ref, { documentos, edicao, updated_by: autor, updated_at: FieldValue.serverTimestamp() });
+    const edicao = Number(data.edicao ?? 0);
+    transaction.update(ref, { documentos, updated_by: autor, updated_at: FieldValue.serverTimestamp() });
     createEventoEvent(
       transaction,
       db,
@@ -463,8 +472,8 @@ export async function removeEventDocumentTransaction(db: Firestore, input: Tirar
     if (recusa) throw new HttpsError(recusa.code, recusa.mensagem);
 
     const documentos = atuais.filter((registrado) => registrado.id !== documento.id);
-    const edicao = Number(data.edicao ?? 0) + 1;
-    transaction.update(ref, { documentos, edicao, updated_by: actorRef(actor), updated_at: FieldValue.serverTimestamp() });
+    const edicao = Number(data.edicao ?? 0);
+    transaction.update(ref, { documentos, updated_by: actorRef(actor), updated_at: FieldValue.serverTimestamp() });
     createEventoEvent(
       transaction,
       db,
@@ -512,7 +521,7 @@ export async function attachEventPhotoTransaction(
       const gravado = previous.get("result") as ReciboDaFoto;
       const foto = fotosLidas(data).find((registrada) => registrada.id === gravado.foto_id);
       if (!foto) throw new HttpsError("not-found", "Foto não encontrada.");
-      return { id: gravado.id, edicao: gravado.edicao, foto, fotos: gravado.fotos };
+      return { id: gravado.id, edicao: Number(data.edicao ?? 0), foto, fotos: gravado.fotos };
     }
     const problema = problemaParaAnexarFoto(String(data.status ?? ""));
     if (problema) throw new HttpsError("failed-precondition", problema);
@@ -533,8 +542,8 @@ export async function attachEventPhotoTransaction(
       registrado_em: registradoEm,
     };
     const fotos = [...atuais, foto];
-    const edicao = Number(data.edicao ?? 0) + 1;
-    transaction.update(ref, { fotos, edicao, updated_by: autor, updated_at: FieldValue.serverTimestamp() });
+    const edicao = Number(data.edicao ?? 0);
+    transaction.update(ref, { fotos, updated_by: autor, updated_at: FieldValue.serverTimestamp() });
     createEventoEvent(
       transaction,
       db,

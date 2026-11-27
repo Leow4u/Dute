@@ -104,7 +104,7 @@ describe("os arquivos da edição do evento", () => {
     assert.equal(problemaParaAnexarFoto(""), "A edição já está fechada.");
   });
 
-  it("tirar: as quatro recusas com o code de cada uma; o interno tira qualquer um", () => {
+  it("tirar: as quatro recusas com o code de cada uma; o interno tira qualquer um; a colega do mesmo cliente tira o documento do cliente", () => {
     assert.deepEqual(problemaParaTirarDocumento("fechado", manoel, daDutelog), { code: "failed-precondition", mensagem: "A edição já está fechada." });
     assert.deepEqual(problemaParaTirarDocumento("cancelado", cristiane, doCliente), { code: "failed-precondition", mensagem: "A edição já está fechada." });
     assert.deepEqual(problemaParaTirarDocumento("confirmado", cristiane, doCliente), {
@@ -116,10 +116,10 @@ describe("os arquivos da edição do evento", () => {
       code: "permission-denied",
       mensagem: "Só quem anexou o documento, ou a coordenação, o retira.",
     });
-    assert.deepEqual(problemaParaTirarDocumento("rascunho", outraDaBtg, doCliente), {
-      code: "permission-denied",
-      mensagem: "Só quem anexou o documento, ou a coordenação, o retira.",
-    });
+    // Do lado do cliente, quem anexou é a empresa: a colega tira o layout que a outra anexou.
+    assert.equal(problemaParaTirarDocumento("rascunho", outraDaBtg, doCliente), null);
+    assert.equal(problemaParaTirarDocumento("enviado", outraDaBtg, doCliente), null);
+    assert.deepEqual(problemaParaTirarDocumento("enviado", outraDaBtg, daDutelog), { code: "permission-denied", mensagem: "Só a Dutelog retira os documentos dela." });
     assert.deepEqual(problemaParaTirarDocumento("enviado", rafael, doCliente), {
       code: "permission-denied",
       mensagem: "Só quem anexou o documento, ou a coordenação, o retira.",
