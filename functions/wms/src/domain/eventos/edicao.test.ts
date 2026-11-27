@@ -115,7 +115,7 @@ describe("entradaDe: a recusa diz o campo e o limite", () => {
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ evento: { name: "n".repeat(121) } })), "O nome do evento passa de 120 caracteres");
   });
 
-  it("a hora só é obrigatória na entrega no local: os outros momentos gravam com o dia e sem a hora", () => {
+  it("no rascunho toda linha grava com o dia, até a entrega no local sem a hora", () => {
     const cronograma = (linhas: Array<Record<string, unknown>>) => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: linhas })).patch.cronograma ?? [];
     const [montagem, evento] = cronograma([
       { tipo: "montagem", data: "2027-01-27" },
@@ -123,8 +123,8 @@ describe("entradaDe: a recusa diz o campo e o limite", () => {
     ]);
     assert.equal(montagem?.hora ?? null, null);
     assert.equal(evento?.hora ?? null, null);
-    recusa(() => cronograma([{ tipo: "entrega_no_local", data: "2027-01-27" }]), "Informe a hora de Entrega no local");
-    recusa(() => cronograma([{ tipo: "montagem", data: "2027-01-27" }, { tipo: "entrega_no_local", data: "2027-01-27", hora: "" }]), "Informe a hora de Entrega no local");
+    assert.equal(cronograma([{ tipo: "entrega_no_local", data: "2027-01-27" }])[0]?.hora ?? null, null);
+    assert.equal(cronograma([{ tipo: "montagem", data: "2027-01-27" }, { tipo: "entrega_no_local", data: "2027-01-27", hora: "" }])[1]?.hora ?? null, null);
     assert.equal(cronograma([{ tipo: "entrega_no_local", data: "2027-01-27", hora: "08:30" }])[0]?.hora, "08:30");
   });
 
@@ -245,6 +245,19 @@ describe("problemaParaEnviar", () => {
     });
     assert.equal(comMontagem.cronograma[1]?.previsto.hora, null);
     assert.equal(problemaParaEnviar(comMontagem), null);
+  });
+
+  it("a hora da entrega no local é exigida no envio, com itens do estoque e sem eles", () => {
+    const semHora = (cronograma: EdicaoView["cronograma"]) =>
+      cronograma.map((m) => (m.tipo === "entrega_no_local" ? { ...m, previsto: { ...m.previsto, hora: null } } : m));
+    assert.equal(problemaParaEnviar(vista({ cronograma: semHora(vista().cronograma) })), "Informe a data e a hora da entrega no local");
+    const soColeta = vista({ itens: [], coleta: { onde: "BTG Faria Lima", quantidade: 30, voltou: null, distribuidos: null } });
+    const comColeta = [
+      { id: "mo_00000005", tipo: "coleta_no_cliente" as const, rotulo: null, previsto: { data: "2027-01-26", hora: "05:00", ate: null, local: null, observacao: null }, feito: null },
+      ...soColeta.cronograma,
+    ];
+    assert.equal(problemaParaEnviar({ ...soColeta, cronograma: semHora(comColeta) }), "Informe a data e a hora da entrega no local");
+    assert.equal(problemaParaEnviar({ ...soColeta, cronograma: comColeta }), null);
   });
 
   it("só com a coleta, pede a data da coleta no cliente e não pede a entrega", () => {

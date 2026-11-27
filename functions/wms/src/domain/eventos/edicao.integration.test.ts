@@ -548,25 +548,47 @@ describe("a edição do evento no servidor", () => {
     assert.equal((await gravada(r.id)).coleta.quantidade, 0);
   });
 
-  it("18. a hora só é obrigatória na entrega: o rascunho grava a montagem e o evento sem hora, e a edição é enviada", async () => {
+  it("18. no rascunho toda linha grava com o dia, até a entrega sem a hora; a hora da entrega é exigida no envio e depois dele", async () => {
     const r = await criar({ idempotency_key: "necton-2027-0034", name: "B2B Conference Necton" });
-    await recusa(mudar(r.id, 1, { cronograma: [{ tipo: "entrega_no_local", data: "2027-01-28" }] }), "invalid-argument", "Informe a hora de Entrega no local");
     await mudar(r.id, 1, {
       onde: { local: "Hotel Unique" },
       itens: [{ sku_code: sku(1), product_name: "Polo 1", quantity: 20 }],
       cronograma: [
-        { tipo: "entrega_no_local", data: "2027-01-28", hora: "08:30" },
+        { tipo: "entrega_no_local", data: "2027-01-28" },
         { tipo: "montagem", data: "2027-01-28" },
         { tipo: "evento", data: "2027-01-29", hora: "" },
         { tipo: "retorno_ao_estoque", data: "2027-01-30" },
       ],
     });
     const cronograma = (await gravada(r.id)).cronograma as Array<Record<string, any>>;
-    assert.deepEqual(cronograma.map((m) => m.previsto.hora), ["08:30", null, null, null]);
+    assert.deepEqual(cronograma.map((m) => m.previsto.hora), [null, null, null, null]);
     assert.equal((await gravada(r.id)).label, "2027");
-    const enviado = await enviar(r.id, 2, "enviar-0018");
+    await recusa(enviar(r.id, 2, "enviar-0018a"), "failed-precondition", "Informe a data e a hora da entrega no local");
+    const comHora = cronograma.map((m) => ({ id: m.id, tipo: m.tipo, data: m.previsto.data, ...(m.tipo === "entrega_no_local" ? { hora: "08:30" } : {}) }));
+    await mudar(r.id, 2, { cronograma: comHora });
+    const enviado = await enviar(r.id, 3, "enviar-0018b");
     assert.equal(enviado.status, "enviado");
     assert.equal(enviado.edition.cronograma[1]?.previsto.hora, null);
+    // Depois do envio, a coordenação não tira a hora da entrega.
+    const semHora = comHora.map((m) => (m.tipo === "entrega_no_local" ? { ...m, hora: null } : m));
+    await recusa(mudar(r.id, 4, { cronograma: semHora }, manoel), "failed-precondition", "Informe a data e a hora da entrega no local");
+    assert.equal((await gravada(r.id)).edicao, 4);
+
+    // Só com a coleta, a entrega no local que está no cronograma também leva a hora no envio.
+    const soColeta = await criar({
+      idempotency_key: "necton-2027-0035",
+      name: "Workshop de líderes",
+      patch: {
+        onde: { local: "BTG Faria Lima" },
+        coleta: { onde: "BTG Faria Lima, 3477", quantidade: 30 },
+        cronograma: [
+          { tipo: "coleta_no_cliente", data: "2027-01-27", hora: "05:00" },
+          { tipo: "entrega_no_local", data: "2027-01-28" },
+          { tipo: "evento", data: "2027-01-29" },
+        ],
+      },
+    });
+    await recusa(enviar(soColeta.id, 1, "enviar-0018c"), "failed-precondition", "Informe a data e a hora da entrega no local");
   });
 
   it("a edição da Necton nasce, muda em dois patches e é enviada; a segunda edição do evento é excluída e o evento fica", async () => {
