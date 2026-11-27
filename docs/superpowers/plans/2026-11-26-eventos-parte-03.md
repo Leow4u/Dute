@@ -30,6 +30,26 @@ grava em `retornado`; nada em `fechado` e `cancelado`), "Eventos de
 auditoria", "Documentação" (`lgpd.md`). Índice:
 `docs/superpowers/plans/2026-11-26-eventos.md`.
 
+**O que mudou na execução (PR 651, 27/11/2026).** Vale sobre o texto
+abaixo:
+
+- Decisões 14 a 16 da spec (Leonardo, 27/11/2026: "aceito as duas
+  decisões; sem retirada de foto por enquanto"): o anexo, a retirada e a
+  foto não sobem a `edicao` (onde abaixo está `edicao + 1`, a resposta leva
+  a `edicao` viva); do lado do cliente, quem tira o documento é a empresa
+  (qualquer pessoa do cliente, em `rascunho` e `enviado`; a conferência do
+  `registrado_por.uid` fica só para quem opera fora da coordenação); e não
+  há retirada de foto.
+- `ArquivoNoBucket` leva `generation?` e `apagar(caminho, generation)`
+  apaga só a geração conferida (a spec: "apagado por geração"), pela
+  `conferirNoBucket(bucket, caminho, problemaDe)`; `codigoDaEdicao` lê a
+  edição também para o cliente (o de outro código recebe `not-found` antes
+  do bucket); o `result` dos recibos dos anexos guarda só ids e contagens,
+  e a repetição relê a edição.
+- A matriz de papéis é alfabética: as três linhas entram na ordem da
+  tabela. Os nove casos da integração (e o 10, o da decisão 14) foram
+  escritos juntos, antes do código.
+
 ## Global Constraints
 
 As do índice. Nesta parte, ainda:
