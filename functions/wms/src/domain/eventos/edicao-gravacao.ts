@@ -113,8 +113,8 @@ function carimbar(dados: Data, agora: Date): Data {
 const edicaoNaoEncontrada = () => new HttpsError("not-found", "Edição não encontrada.");
 const eventoNaoEncontrado = () => new HttpsError("not-found", "Evento não encontrado.");
 
-/** "<nome do evento> · <label>", a descrição dos eventos de auditoria, sem contato nem valor. */
-function descricaoDaEdicao(nome: unknown, label: unknown): string {
+/** "<nome do evento> · <label>", a descrição dos eventos de auditoria, sem contato nem valor (também a dos arquivos, parte 3). */
+export function descricaoDaEdicao(nome: unknown, label: unknown): string {
   const rotulo = texto(label);
   return rotulo ? `${String(nome ?? "")} · ${rotulo}` : String(nome ?? "");
 }
