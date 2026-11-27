@@ -11,7 +11,7 @@
  */
 import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { LIMITES, ROTULO_DO_MOMENTO } from "@workspace/dominio";
-import { ChevronLeft, Package, Plus, Send } from "lucide-react";
+import { ChevronLeft, Package, Paperclip, Plus, Send, X } from "lucide-react";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
@@ -24,7 +24,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { horaDaLeitura } from "@/lib/conexao";
+import { documentosDoCliente, linhaDoDocumento, problemaDoAnexo } from "@/lib/eventos/anexos";
 import { adicionarOutro, type LinhaDoCronograma } from "@/lib/eventos/cronograma";
+import { enviarAnexoDoEvento } from "@/lib/eventos/enviar-anexo";
 import {
   ATRASO_DO_AUTOSAVE_MS,
   campoDaMensagem,
@@ -54,14 +56,14 @@ import {
 import type { EventoView } from "@/lib/eventos/leitura";
 import { ROTA_EVENTOS, eventoDaBusca, hrefDaEdicao, hrefDoEstoqueDoEvento, idDaEdicaoNaBusca } from "@/lib/eventos/navegacao";
 import { CAMPOS_DO_MOMENTO, ROTULO_DO_OUTRO } from "@/lib/eventos/rotulos";
-import type { ConteudoDaEdicao, CriarEdicao, EdicaoView } from "@/lib/eventos/tipos";
+import type { ConteudoDaEdicao, CriarEdicao, DocumentoView, EdicaoView } from "@/lib/eventos/tipos";
 import { useEdicaoDoEvento, useEventosDoCliente, usePrecosDoCliente } from "@/lib/eventos/use-eventos";
 import { hojeIso } from "@/lib/operacao/fila";
 import { novaChave } from "@/lib/operacao/api";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { leiturasDoPortal } from "@/lib/operations";
 import { cn } from "@/lib/utils";
-import { enviarEdicao, salvarEdicao } from "@/lib/wms/eventos";
+import { enviarEdicao, salvarEdicao, tirarDocumento } from "@/lib/wms/eventos";
 
 import { groupInventoryProducts } from "./estoque";
 import { ItensDoEventoDialogo } from "./evento-itens-dialogo";
@@ -83,9 +85,8 @@ export type FormularioDaEdicaoViewProps = {
   salvando: boolean;
   enviando: boolean;
   erros: Partial<Record<CampoDoFormulario, string>>;
-  /** Os anexos (parte 4, tarefa 5) e o diálogo dos itens (tarefa 4) ficam no lugar deles. */
-  anexosDoLayout?: ReactNode;
-  anexosDaPlanilha?: ReactNode;
+  /** O layout e a planilha do cliente, do documento vivo; travados antes do nascimento. */
+  anexos: { layout: AnexosNaTela; planilhas: AnexosNaTela };
   idDaEdicao: string | null;
   acoes: {
     mudar: <K extends keyof FormularioDaEdicao>(campo: K, valor: FormularioDaEdicao[K]) => void;
@@ -96,6 +97,63 @@ export type FormularioDaEdicaoViewProps = {
     verItens: () => void;
   };
 };
+
+/** Os anexos de uma seção: os documentos dela, a subida que anda e a recusa antes de subir. */
+export type AnexosNaTela = {
+  documentos: DocumentoView[];
+  enviando: boolean;
+  problema: string | null;
+  onEscolher: (arquivo: File) => void;
+  onTirar: (documento: DocumentoView) => void;
+};
+
+const ACEITA_O_LAYOUT = "application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp";
+const ACEITA_A_PLANILHA = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function AnexosDaSecao({ uso, titulo, botao, aceita, travado, anexos }: { uso: string; titulo: string; botao: string; aceita: string; travado: boolean; anexos: AnexosNaTela }) {
+  const entrada = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-sm font-medium leading-none">{titulo}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        {anexos.documentos.map((documento) => (
+          <span key={documento.id} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-muted pl-3 pr-1 text-sm font-semibold">
+            <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+            {linhaDoDocumento(documento)}
+            <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label={`Tirar ${documento.nome}`} onClick={() => anexos.onTirar(documento)}>
+              <X aria-hidden="true" />
+            </Button>
+          </span>
+        ))}
+        <BotaoDeAcao
+          type="button"
+          variant="outline"
+          size="sm"
+          estado={anexos.enviando ? "andamento" : "repouso"}
+          icone={<Paperclip aria-hidden="true" />}
+          rotulo={botao}
+          andamento="Enviando…"
+          bloqueado={travado}
+          onClick={() => entrada.current?.click()}
+        />
+        <input
+          ref={entrada}
+          type="file"
+          hidden
+          data-anexo={uso}
+          accept={aceita}
+          disabled={travado}
+          onChange={(evento) => {
+            const arquivo = evento.target.files?.[0];
+            evento.target.value = "";
+            if (arquivo) anexos.onEscolher(arquivo);
+          }}
+        />
+      </div>
+      {anexos.problema ? <p className="text-xs font-semibold text-destructive-soft-foreground">{anexos.problema}</p> : null}
+    </div>
+  );
+}
 
 function Campo({ id, rotulo, obrigatorio = false, problema, className, children }: { id: string; rotulo: string; obrigatorio?: boolean; problema?: string; className?: string; children: ReactNode }) {
   return (
@@ -300,7 +358,7 @@ export function FormularioDaEdicaoView(props: FormularioDaEdicaoViewProps) {
                 <Input id="evento-telefone" type="tel" value={form.onde.contatoTelefone} maxLength={LIMITES.contatoTelefone} onChange={(evento) => onde("contatoTelefone", evento.target.value)} />
               </Campo>
             </div>
-            {props.anexosDoLayout ?? null}
+            <AnexosDaSecao uso="layout" titulo="Layout do evento" botao="Anexar layout" aceita={ACEITA_O_LAYOUT} travado={!nascida} anexos={props.anexos.layout} />
           </Secao>
 
           <Secao titulo="Cronograma">
@@ -371,7 +429,7 @@ export function FormularioDaEdicaoView(props: FormularioDaEdicaoViewProps) {
               </Campo>
             </div>
             <ProblemaDaSecao id="coleta-problema" texto={erros.coleta} />
-            {props.anexosDaPlanilha ?? null}
+            <AnexosDaSecao uso="planilha" titulo="Planilha dos produtos" botao="Anexar planilha" aceita={ACEITA_A_PLANILHA} travado={!nascida} anexos={props.anexos.planilhas} />
           </Secao>
 
           <Secao titulo="Observações para a Dutelog">
@@ -823,6 +881,35 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
   const rascunho = useRascunhoDaEdicao({ id, eventoId, customerCode: user?.publicMetadata.customer_code, ligado: Boolean(leituras?.eventos), produtos });
   const [vendoItens, setVendoItens] = useState(false);
   const [, navegar] = useLocation();
+  const { toast } = useToast();
+  const codigo = user?.publicMetadata.customer_code ?? null;
+  type Subida = { enviando: boolean; problema: string | null };
+  const [subidas, setSubidas] = useState<Record<"layout" | "planilhas", Subida>>({ layout: { enviando: false, problema: null }, planilhas: { enviando: false, problema: null } });
+  const comDocumentos = rascunho.viva ?? rascunho.edicao;
+  const documentos = documentosDoCliente(comDocumentos);
+  const mudarSubida = (uso: "layout" | "planilhas", subida: Subida) => setSubidas((atual) => ({ ...atual, [uso]: subida }));
+  function escolher(uso: "layout" | "planilhas", arquivo: File) {
+    const problema = problemaDoAnexo(arquivo, comDocumentos?.documentos.length ?? 0);
+    if (problema || !id || !codigo) {
+      mudarSubida(uso, { enviando: false, problema });
+      return;
+    }
+    mudarSubida(uso, { enviando: true, problema: null });
+    // O documento aparece pelo documento vivo; aqui só a subida e a recusa.
+    enviarAnexoDoEvento(codigo, id, arquivo)
+      .then(() => mudarSubida(uso, { enviando: false, problema: null }))
+      .catch((erro: unknown) => mudarSubida(uso, { enviando: false, problema: `${arquivo.name}: ${erro instanceof Error ? erro.message : "não subiu"}` }));
+  }
+  function tirar(documento: DocumentoView) {
+    if (!id) return;
+    tirarDocumento({ edition_id: id, documento_id: documento.id, idempotency_key: novaChave() }).catch((erro: unknown) =>
+      toast({ title: "Não foi possível tirar o documento", description: erro instanceof Error ? erro.message : undefined, variant: "destructive" }),
+    );
+  }
+  const anexos = {
+    layout: { documentos: documentos.layout, ...subidas.layout, onEscolher: (arquivo: File) => escolher("layout", arquivo), onTirar: tirar },
+    planilhas: { documentos: documentos.planilhas, ...subidas.planilhas, onEscolher: (arquivo: File) => escolher("planilhas", arquivo), onTirar: tirar },
+  };
   if (rascunho.lendo) {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
@@ -844,6 +931,7 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
       salvando={rascunho.salvando}
       enviando={rascunho.enviando}
       erros={rascunho.erros}
+      anexos={anexos}
       acoes={{
         mudar: rascunho.mudar,
         sairDoNome: rascunho.sairDoNome,

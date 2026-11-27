@@ -10,7 +10,9 @@ import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { OBSERVACOES_DA_NECTON, edicaoDaNecton, produtosDaNecton } from "@/test/eventos-necton";
 import { textosForaDaLista } from "@/test/textos";
 
-import { FormularioDaEdicaoView, type FormularioDaEdicaoViewProps } from "./evento-formulario";
+import type { DocumentoView } from "@/lib/eventos/tipos";
+
+import { FormularioDaEdicaoView, type AnexosNaTela, type FormularioDaEdicaoViewProps } from "./evento-formulario";
 
 /**
  * Portal › Eventos, o formulário da edição (docs/mockups/EventosPortalNovo.dc.html):
@@ -31,6 +33,19 @@ const CAPA: EventoView = {
   last_edition_label: "2027",
 };
 
+function documento(id: string, nome: string, tipo: string, tamanho: number): DocumentoView {
+  return { id, caminho: `portal/BTG/eventos/${NECTON.id}/${id}`, nome, tipo, tamanho, origem: "cliente", momento_id: null, registrado_por: null, registrado_em: null };
+}
+
+function anexos(documentos: DocumentoView[]): AnexosNaTela {
+  return { documentos, enviando: false, problema: null, onEscolher: () => undefined, onTirar: () => undefined };
+}
+
+const ANEXOS = {
+  layout: anexos([documento("an_0000000000000001", "layout-necton-2027.pdf", "application/pdf", 1_258_291)]),
+  planilhas: anexos([documento("an_0000000000000002", "produtos-b2b-conference.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 519_168)]),
+};
+
 function props(extra: Partial<FormularioDaEdicaoViewProps> = {}): FormularioDaEdicaoViewProps {
   return {
     form: formularioDaEdicao(NECTON, CAPA, { id: NECTON.id, valor_declarado_cents: 10_000_000, fechado_cents: null }),
@@ -42,6 +57,7 @@ function props(extra: Partial<FormularioDaEdicaoViewProps> = {}): FormularioDaEd
     salvando: false,
     enviando: false,
     erros: {},
+    anexos: ANEXOS,
     acoes: {
       mudar: () => undefined,
       sairDoNome: () => undefined,
@@ -77,6 +93,9 @@ const TEXTOS = [
   "Endereço",
   "Contato no local",
   "Telefone do contato",
+  "Layout do evento",
+  "layout-necton-2027.pdf · 1,2 MB",
+  "Anexar layout",
   "Cronograma",
   "Momento",
   "Data",
@@ -112,6 +131,9 @@ const TEXTOS = [
   "Onde buscar",
   "Quantidade",
   "Valor declarado",
+  "Planilha dos produtos",
+  "produtos-b2b-conference.xlsx · 507 KB",
+  "Anexar planilha",
   "Observações para a Dutelog",
   "O que mais a Dutelog precisa saber",
   OBSERVACOES_DA_NECTON.replace(/\s+/g, " "),
@@ -154,6 +176,8 @@ describe("Portal › Eventos, o formulário", () => {
     }
     expect(html).toContain(`href="/portal/estoque?evento=${NECTON.id}"`);
     expect(html).not.toContain("Falta saldo");
+    expect(html).toContain('aria-label="Tirar layout-necton-2027.pdf"');
+    expect(html).toContain('aria-label="Tirar produtos-b2b-conference.xlsx"');
   });
 
   it("com o GG da primeira família acima do disponível, a linha 'Falta saldo em 1 item: …' sob a seção, nos textos e sem violação do axe", async () => {
