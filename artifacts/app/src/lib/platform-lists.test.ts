@@ -51,6 +51,7 @@ import * as FICHA_DO_RH from "./rh/ficha";
 import { PRIMEIRO_DIA, TAMANHO_MAXIMO_DO_ARQUIVO as TAMANHO_DO_ARQUIVO_NO_APP, TIPOS_DE_ARQUIVO as TIPOS_DE_ARQUIVO_NO_APP, ULTIMO_DIA } from "./rh/formulario";
 import { RH_ROLES as RH_ROLES_DO_APP, RH_WRITE_ROLES as RH_WRITE_ROLES_DO_APP } from "./rh/navegacao";
 import { TV_ROLES } from "./tv/navegacao";
+import { CALLABLES_DOS_EVENTOS } from "./wms/eventos";
 
 /**
  * As Functions e as regras do Firestore não importam lib/dominio: guardam
@@ -324,6 +325,25 @@ describe("os Eventos iguais em todo lugar (eventos, parte 1)", () => {
     expect(tsList(liberacao, "EVENTOS_PROJECTS")).toEqual([...EVENTOS_AMBIENTES_LIBERADOS]);
     expect([...EVENTOS_AMBIENTES_LIBERADOS]).toEqual(["dute-homolog"]);
     expect([eventosLiberado("dute-homolog"), eventosLiberado("dute-prod"), eventosLiberado("dute-btg"), eventosLiberado(undefined)]).toEqual([true, false, false, false]);
+  });
+
+  it("cada callable dos Eventos existe numa linha do index.ts e confere a liberação", () => {
+    const fonte = read("functions/wms/src/index.ts");
+    for (const nome of CALLABLES_DOS_EVENTOS) {
+      const inicio = fonte.indexOf(`export const ${nome} = onCall(`);
+      expect(inicio, nome).toBeGreaterThan(-1);
+      const corpo = fonte.slice(inicio, fonte.indexOf("\nexport const ", inicio + 1));
+      expect(corpo, nome).toContain("assertEventosLiberado(PROJECT_ID)");
+    }
+  });
+
+  it("toda callable do index.ts que confere a liberação dos Eventos está na lista do app", () => {
+    const fonte = read("functions/wms/src/index.ts");
+    const declaradas = [...fonte.matchAll(/^export const (\w+) = onCall\(/gm)].map((match) => ({ nome: match[1], inicio: match.index ?? 0 }));
+    const dosEventos = declaradas
+      .filter(({ inicio }, posicao) => fonte.slice(inicio, declaradas[posicao + 1]?.inicio ?? fonte.length).includes("assertEventosLiberado(PROJECT_ID)"))
+      .map(({ nome }) => nome);
+    expect(dosEventos.sort()).toEqual([...CALLABLES_DOS_EVENTOS].sort());
   });
 });
 
