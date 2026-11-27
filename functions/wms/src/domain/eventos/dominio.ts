@@ -84,7 +84,6 @@ export const LIMITES = {
   observacaoDoMomento: 300,
   observacoes: 2000,
   coletaOnde: 300,
-  coletaObservacao: 500,
   itens: 100,
   quantidade: 1_000_000,
   momentos: 12,
