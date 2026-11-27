@@ -508,7 +508,9 @@ async function mudarEdicao(db: Firestore, input: NoCliente<PatchDaEdicao>, actor
     }
     transaction.update(ref, carimbar(mudancas, agora));
 
-    if (patch.coleta !== undefined) {
+    // O valor declarado só muda quando vem (o null apaga): quem não lê valores (o interno, em nome do
+    // cliente) muda a coleta sem saber o valor, e a coleta sem a chave não o apaga.
+    if (patch.coleta === null || patch.coleta?.valor_declarado_cents !== undefined) {
       transaction.set(
         db.collection(PRECOS_COLLECTION).doc(ref.id),
         carimbar(

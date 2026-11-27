@@ -530,6 +530,24 @@ describe("a edição do evento no servidor", () => {
     assert.equal((await enviar(r.id, 2, "enviar-0016")).status, "enviado");
   });
 
+  it("17. o patch da coleta sem o valor declarado mantém o valor; o null apaga", async () => {
+    const r = await criar({ idempotency_key: "necton-2027-0033", name: "B2B Conference Necton" });
+    const valor = async () => (await db.collection(PRECOS_COLLECTION).doc(r.id).get()).data()?.valor_declarado_cents;
+    await mudar(r.id, 1, { coleta: { onde: "BTG Faria Lima, 3477", quantidade: 2190, valor_declarado_cents: 10_000_000 } });
+    assert.equal(await valor(), 10_000_000);
+    // A coordenação, que não lê o valor, muda a quantidade em nome do cliente.
+    await mudar(r.id, 2, { coleta: { onde: "BTG Faria Lima, 3477", quantidade: 2000 } }, manoel);
+    assert.equal(await valor(), 10_000_000);
+    assert.equal((await gravada(r.id)).coleta.quantidade, 2000);
+    await mudar(r.id, 3, { coleta: { quantidade: 2000, valor_declarado_cents: null } });
+    assert.equal(await valor(), null);
+    await mudar(r.id, 4, { coleta: { quantidade: 2190, valor_declarado_cents: 9_000_000 } });
+    assert.equal(await valor(), 9_000_000);
+    await mudar(r.id, 5, { coleta: null });
+    assert.equal(await valor(), null);
+    assert.equal((await gravada(r.id)).coleta.quantidade, 0);
+  });
+
   it("a edição da Necton nasce, muda em dois patches e é enviada; a segunda edição do evento é excluída e o evento fica", async () => {
     const r = await criar({ idempotency_key: "necton-2027-0100", name: "B2B Conference Necton" });
     const eventId = String((await gravada(r.id)).event_id);
