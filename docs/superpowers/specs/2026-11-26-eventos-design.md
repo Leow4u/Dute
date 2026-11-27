@@ -810,7 +810,8 @@ aprovada é a referência; divergência vira pergunta.
   servidor declara nullish: os textos livres opcionais (vazio vira `null`,
   como `optionalText` faz) e, de propósito, `ate`, `local`, `observacao`,
   `fim`, `separar_ate`, `rotulo`, os quatro campos de `equipe`,
-  `evento.description` e a `hora` do momento no rascunho (decisão 12).
+  `evento.description` e a `hora` do momento (a da entrega no local, só
+  no rascunho: decisão 12).
 
 ### Testes e travas
 
