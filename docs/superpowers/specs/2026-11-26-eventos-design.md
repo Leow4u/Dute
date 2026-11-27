@@ -429,11 +429,11 @@ gravação, no molde de `count-rounds.ts`.
 | `sendEventEdition` | cliente e coordenação | `rascunho` → `enviado`. Com itens, cria a solicitação (`createCustomerRequestTransaction`) na mesma transação. |
 | `cancelEventEdition` | cliente (`rascunho`: exclui; `enviado`: cancela) e coordenação (`rascunho`: exclui em nome do cliente; `enviado`, `confirmado`, `separado`: cancela, com motivo) | Exclusão ou `cancelado`, com a solicitação ou o pedido tratados como acima. |
 | `archiveClientEvent` | cliente e coordenação | Arquiva o evento sem edição aberta (`rascunho` a `retornado`); o rascunho precisa ser excluído antes. |
-| `attachEventDocument` | cliente (origem `cliente`, até `retornado`) e quem opera (origem `dutelog`, até `fechado`) | Confere o arquivo no bucket e o acrescenta a `documentos`, com o momento quando houver. |
+| `attachEventDocument` | cliente (origem `cliente`) e quem opera (origem `dutelog`), os dois de `rascunho` a `retornado` | Confere o arquivo no bucket e o acrescenta a `documentos`, com o momento quando houver. |
 | `removeEventDocument` | quem anexou o documento, ou a coordenação | Tira o registro de `documentos` (o arquivo fica no bucket). O cliente só em `rascunho` e `enviado`. |
 | `confirmEventEdition` | coordenação; o preço só para quem também passa em `requireBillingWrite` | `enviado` → `confirmado`, com `separar_ate` e, opcionais, `fechado_cents`, `fechado_observacao` e a proposta; aprova a solicitação na mesma transação. Preço vindo de quem não escreve valores: recusa ("Só quem vê valores fecha o preço."). |
 | `registerEventMoment` | quem opera | Grava `feito` de um momento (início, ou fim como segunda escrita) ou, com `corrigir: true` e `expected_edicao`, corrige início, fim e observação de um momento registrado à mão. Em `entrega_no_local` com pedido ainda não entregue, roda `dispatched` e `delivered` antes (abaixo). |
-| `attachEventPhoto` | quem opera | Confere a foto no bucket e a acrescenta a `fotos`, com o momento. Até `fechado`. |
+| `attachEventPhoto` | quem opera | Confere a foto no bucket e a acrescenta a `fotos`, com o momento. De `confirmado` a `retornado`: é foto da execução. |
 | `saveEventEditionTeam` | quem opera | `equipe` e `observacoes_dutelog`, até `fechado`. |
 | `receiveEventReturn` | quem opera | `no_evento` → `retornado`: o retorno item a item, a ENTRADA, a guarda de volta e a devolução das avariadas, numa transação. |
 | `setEventEditionPrice` | owner, admin, financeiro (`requireBillingWrite`) | `fechado_cents`, a observação e a proposta em `client_event_prices`, de `confirmado` até `retornado`; "Alterar" é a mesma callable. |
@@ -736,15 +736,19 @@ aprovada é a referência; divergência vira pergunta.
   como linha só de leitura, "Rascunho do cliente · ainda sem envio"), "Em
   andamento" (no evento) e "Para fechar" (retornadas, com o que falta como
   dado); cada linha com o cliente, o evento, as datas, o pedido e a ação do
-  grupo ("Confirmar" ou "Confirmar e fechar preço", "Ver pedido",
-  "Registrar retorno", "Fechar"). Lê `client_event_editions` por status.
+  grupo, como na prancha: "Confirmar" ou "Confirmar e fechar preço" (o
+  diálogo) com "Abrir" ao lado em "Para confirmar", "Abrir" em "Próximos",
+  "Registrar" em "Em andamento" e "Fechar edição" em "Para fechar", cada
+  link levando à ficha; quem não pode registrar ou fechar vê "Abrir". O
+  "Ver pedido" fica na ficha. Lê `client_event_editions` por status.
   O "Novo evento" da prancha fica para depois (decisão 9). Entra em
   `TELAS_DO_WMS_NA_V3`, no menu (`lib/modules.ts`, papéis `WMS_ROLES`;
   escrita por `WMS_OPERATOR_ROLES`) e em `ROUTE_ACCESS`.
 - **`/eventos/edicao?id=`** (`EventosWmsFicha.dc.html`): a ficha. O
-  cabeçalho com o cliente, o evento, o pedido e o status; em `enviado` e
-  `confirmado`, "Onde" e o previsto de cada momento têm "Editar" (o
-  `patch` da coordenação); "A edição, momento a momento" com Pedido
+  cabeçalho com o cliente, o evento, o pedido e o status; em `rascunho` a
+  ficha só mostra os dados e "Anexar", e "Registrar" e "Adicionar fotos"
+  valem de `confirmado` a `retornado`; em `enviado` e `confirmado`, "Onde"
+  e o previsto de cada momento têm "Editar" (o `patch` da coordenação); "A edição, momento a momento" com Pedido
   confirmado ("Separar até" com "Editar" até separado), Separado (só
   leitura, "Ver pedido", "Romaneio"), os sete
   momentos com previsto, feito, quem, "Registrar", "Registrar fim" ou
@@ -771,7 +775,8 @@ aprovada é a referência; divergência vira pergunta.
   clientes, por `buildHomeInbox`, com o ícone em `ICONE_DO_ITEM` e o
   `href` em `/eventos` para o contador do menu.
 - **Pedidos**: a linha do pedido de evento diz "Evento · nome · label"; a
-  agenda liga para o pedido e o pedido liga para a edição ("Evento").
+  ficha liga para o pedido ("Ver pedido") e a solicitação e o pedido ligam
+  para a ficha ("Evento").
 
 ### Limites e mensagens
 
@@ -786,9 +791,11 @@ aprovada é a referência; divergência vira pergunta.
   informe a coleta no cliente"), nunca a frase genérica de hoje. O servidor
   manda a frase; a tela mostra no campo.
 - Nenhuma chamada manda campo `undefined` (`semCamposVazios` nos
-  wrappers de `lib/wms/eventos.ts`); `null` só onde o servidor o aceita de
-  propósito (`ate`, `local`, `observacao`, `fim`, `separar_ate`, `rotulo`
-  e os quatro campos de `equipe`).
+  wrappers de `lib/wms/eventos.ts`); `null` só em campo que o schema do
+  servidor declara nullish: os textos livres opcionais (vazio vira `null`,
+  como `optionalText` faz) e, de propósito, `ate`, `local`, `observacao`,
+  `fim`, `separar_ate`, `rotulo`, os quatro campos de `equipe` e
+  `evento.description`.
 
 ### Testes e travas
 
