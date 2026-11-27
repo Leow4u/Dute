@@ -111,8 +111,21 @@ describe("entradaDe: a recusa diz o campo e o limite", () => {
       "A quantidade de BTG-000001 passa de 1.000.000",
     );
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: [momento("montagem", "27/01/2027")] })), "A data de Montagem inválida");
-    recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: [{ tipo: "montagem", data: "2027-01-27" }] })), "Informe a hora de Montagem");
+    recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: [{ tipo: "montagem", data: "2027-01-27", hora: "9h" }] })), "A hora de Montagem inválida");
     recusa(() => entradaDe(PatchDaEdicaoSchema, patch({ evento: { name: "n".repeat(121) } })), "O nome do evento passa de 120 caracteres");
+  });
+
+  it("a hora só é obrigatória na entrega no local: os outros momentos gravam com o dia e sem a hora", () => {
+    const cronograma = (linhas: Array<Record<string, unknown>>) => entradaDe(PatchDaEdicaoSchema, patch({ cronograma: linhas })).patch.cronograma ?? [];
+    const [montagem, evento] = cronograma([
+      { tipo: "montagem", data: "2027-01-27" },
+      { tipo: "evento", data: "2027-01-28", hora: "" },
+    ]);
+    assert.equal(montagem?.hora ?? null, null);
+    assert.equal(evento?.hora ?? null, null);
+    recusa(() => cronograma([{ tipo: "entrega_no_local", data: "2027-01-27" }]), "Informe a hora de Entrega no local");
+    recusa(() => cronograma([{ tipo: "montagem", data: "2027-01-27" }, { tipo: "entrega_no_local", data: "2027-01-27", hora: "" }]), "Informe a hora de Entrega no local");
+    assert.equal(cronograma([{ tipo: "entrega_no_local", data: "2027-01-27", hora: "08:30" }])[0]?.hora, "08:30");
   });
 
   it("cada campo do item diz a linha pelo código: o nome se repete entre os tamanhos", () => {
@@ -220,6 +233,18 @@ describe("problemaParaEnviar", () => {
     assert.equal(problemaParaEnviar(vista({ itens: [] })), "Escolha ao menos um item ou informe a coleta no cliente");
     assert.equal(problemaParaEnviar(vista({ cronograma: vista().cronograma.filter((m) => m.tipo !== "evento") })), "Informe a data do evento");
     assert.equal(problemaParaEnviar(vista()), null);
+  });
+
+  it("o momento sem hora no dia da entrega não está antes dela: a hora vazia compara só o dia", () => {
+    const comMontagem = vista({
+      cronograma: [
+        ...vista().cronograma.slice(0, 1),
+        { id: "mo_00000004", tipo: "montagem", rotulo: null, previsto: { data: "2027-01-27", hora: null, ate: null, local: null, observacao: null }, feito: null },
+        ...vista().cronograma.slice(1),
+      ],
+    });
+    assert.equal(comMontagem.cronograma[1]?.previsto.hora, null);
+    assert.equal(problemaParaEnviar(comMontagem), null);
   });
 
   it("só com a coleta, pede a data da coleta no cliente e não pede a entrega", () => {

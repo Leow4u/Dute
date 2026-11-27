@@ -44,6 +44,8 @@ const idDaEdicao = z.string().trim().min(1).max(120);
 /**
  * Um momento do cronograma como a tela o manda: o `id` só no momento já
  * gravado (o patch funde por ele), o tipo, o rótulo do `outro` e o previsto.
+ * A hora só é obrigatória na entrega no local (decisão 12 da spec): nos outros
+ * momentos a linha grava com o dia e sem a hora.
  */
 export const MomentoPrevistoSchema = z
   .object({
@@ -51,12 +53,17 @@ export const MomentoPrevistoSchema = z
     tipo: z.enum(TIPOS_DE_MOMENTO),
     rotulo: optionalText(LIMITES.rotulo),
     data: z.string().trim().min(1).regex(DATA),
-    hora: z.string().trim().min(1).regex(HORA),
+    hora: z.preprocess((value) => (typeof value === "string" && !value.trim() ? null : value), z.string().trim().regex(HORA).nullish()),
     ate: z.preprocess((value) => (value === "" ? null : value), z.string().trim().regex(HORA).nullish()),
     local: optionalText(LIMITES.local),
     observacao: optionalText(LIMITES.observacaoDoMomento),
   })
-  .strict();
+  .strict()
+  .superRefine((momento, ctx) => {
+    if (momento.tipo === "entrega_no_local" && !momento.hora) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hora"], message: `Informe a hora de ${ROTULO_DO_MOMENTO.entrega_no_local}` });
+    }
+  });
 
 export const ItemDaEdicaoSchema = z
   .object({
@@ -418,7 +425,8 @@ export type MomentoView = {
   id: string;
   tipo: TipoDeMomento;
   rotulo: string | null;
-  previsto: { data: string; hora: string; ate: string | null; local: string | null; observacao: string | null };
+  /** `hora` null fora da entrega no local, quando a pessoa não a deu (decisão 12). */
+  previsto: { data: string; hora: string | null; ate: string | null; local: string | null; observacao: string | null };
   feito: FeitoDoMomentoView | null;
 };
 
@@ -579,7 +587,7 @@ function momentoDe(dados: Record<string, unknown>): MomentoView {
     rotulo: texto(dados.rotulo),
     previsto: {
       data: String(previsto.data ?? ""),
-      hora: String(previsto.hora ?? ""),
+      hora: texto(previsto.hora),
       ate: texto(previsto.ate),
       local: texto(previsto.local),
       observacao: texto(previsto.observacao),

@@ -198,14 +198,14 @@ function pecas(itens: ReadonlyArray<{ quantity: number }>): number {
 }
 
 function previstoGravado(linha: MomentoPrevistoEntrada) {
-  return { data: linha.data, hora: linha.hora, ate: linha.ate ?? null, local: linha.local ?? null, observacao: linha.observacao ?? null };
+  return { data: linha.data, hora: linha.hora ?? null, ate: linha.ate ?? null, local: linha.local ?? null, observacao: linha.observacao ?? null };
 }
 
 /** O cronograma gravado como o domínio o lê (labelPadrao). */
 function previstos(cronograma: readonly Data[]): MomentoPrevisto[] {
   return cronograma.map((momento) => {
     const previsto = registro(momento.previsto);
-    return { tipo: momento.tipo as TipoDeMomento, data: String(previsto.data ?? ""), hora: String(previsto.hora ?? "") };
+    return { tipo: momento.tipo as TipoDeMomento, data: String(previsto.data ?? ""), hora: texto(previsto.hora) };
   });
 }
 

@@ -548,6 +548,27 @@ describe("a edição do evento no servidor", () => {
     assert.equal((await gravada(r.id)).coleta.quantidade, 0);
   });
 
+  it("18. a hora só é obrigatória na entrega: o rascunho grava a montagem e o evento sem hora, e a edição é enviada", async () => {
+    const r = await criar({ idempotency_key: "necton-2027-0034", name: "B2B Conference Necton" });
+    await recusa(mudar(r.id, 1, { cronograma: [{ tipo: "entrega_no_local", data: "2027-01-28" }] }), "invalid-argument", "Informe a hora de Entrega no local");
+    await mudar(r.id, 1, {
+      onde: { local: "Hotel Unique" },
+      itens: [{ sku_code: sku(1), product_name: "Polo 1", quantity: 20 }],
+      cronograma: [
+        { tipo: "entrega_no_local", data: "2027-01-28", hora: "08:30" },
+        { tipo: "montagem", data: "2027-01-28" },
+        { tipo: "evento", data: "2027-01-29", hora: "" },
+        { tipo: "retorno_ao_estoque", data: "2027-01-30" },
+      ],
+    });
+    const cronograma = (await gravada(r.id)).cronograma as Array<Record<string, any>>;
+    assert.deepEqual(cronograma.map((m) => m.previsto.hora), ["08:30", null, null, null]);
+    assert.equal((await gravada(r.id)).label, "2027");
+    const enviado = await enviar(r.id, 2, "enviar-0018");
+    assert.equal(enviado.status, "enviado");
+    assert.equal(enviado.edition.cronograma[1]?.previsto.hora, null);
+  });
+
   it("a edição da Necton nasce, muda em dois patches e é enviada; a segunda edição do evento é excluída e o evento fica", async () => {
     const r = await criar({ idempotency_key: "necton-2027-0100", name: "B2B Conference Necton" });
     const eventId = String((await gravada(r.id)).event_id);
