@@ -76,6 +76,13 @@ Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
 11. **A zeragem recusa com edição em aberto** (26/11, PR 645): com uma
     edição de `enviado` a `no_evento`, a zeragem para antes de qualquer
     escrita, no ensaio e na execução, e aponta as edições que impedem.
+12. **A hora do cronograma é obrigatória só na entrega no local** (27/11,
+    PR 647): nos outros momentos a linha grava no rascunho com o dia e sem
+    a hora, e a tela só pede a hora na entrega. Na ordem das datas, vale o
+    dia para todos e a hora só entre os momentos que a têm.
+13. **Um `evento.edicao_salva` a cada gravação** (27/11, PR 647), também
+    no salvamento automático, como esta spec pede; agrupar na tela fica
+    para depois.
 
 ## Objetivos
 
@@ -330,7 +337,7 @@ momento: {
   id            "mo_" e 8 hex
   tipo          coleta_no_cliente | entrega_no_local | montagem | evento | desmontagem | retorno_ao_estoque | entrega_de_volta | outro
   rotulo        só no tipo outro (até 60)
-  previsto: { data (AAAA-MM-DD), hora (HH:MM), ate (HH:MM | null), local (até 160 | null), observacao (até 300 | null) }
+  previsto: { data (AAAA-MM-DD), hora (HH:MM | null; obrigatória só na entrega no local), ate (HH:MM | null), local (até 160 | null), observacao (até 300 | null) }
   feito:    { inicio (ISO), fim (ISO | null), observacao (até 300 | null), origem: registro | pedido | retorno,
               registrado_por, registrado_em, corrigido_em | null } | null
 }
@@ -346,6 +353,10 @@ Regras:
 - As datas dos sete tipos fixos crescem na ordem da lista; a recusa diz
   qual momento está antes do anterior. O `outro` fica fora da ordem
   (decisão 10): o formulário o põe depois dos sete, com a data que tiver.
+- A hora só é obrigatória na entrega no local (decisão 12): nos outros
+  momentos a linha grava com o dia e sem a hora. Na ordem, vale o dia para
+  todos e a hora só entre os que a têm: o momento sem hora não fica antes
+  de um do mesmo dia.
 - O `feito` com `origem: pedido` (a entrega, quando veio da expedição) e
   `origem: retorno` (o retorno ao estoque) tem o instante do fato: a hora
   não se corrige, só a observação. Os outros são registrados à mão, um por
@@ -794,8 +805,9 @@ aprovada é a referência; divergência vira pergunta.
   wrappers de `lib/wms/eventos.ts`); `null` só em campo que o schema do
   servidor declara nullish: os textos livres opcionais (vazio vira `null`,
   como `optionalText` faz) e, de propósito, `ate`, `local`, `observacao`,
-  `fim`, `separar_ate`, `rotulo`, os quatro campos de `equipe` e
-  `evento.description`.
+  `fim`, `separar_ate`, `rotulo`, os quatro campos de `equipe`,
+  `evento.description` e a `hora` do momento fora da entrega no local
+  (decisão 12).
 
 ### Testes e travas
 

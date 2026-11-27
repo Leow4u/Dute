@@ -317,6 +317,50 @@
       ],
       "contexto": { "comItensDoEstoque": false, "comColeta": false },
       "problema": null
+    },
+    {
+      "caso": "a hora só é exigida na entrega: a montagem e o evento sem hora valem, a montagem no dia da entrega",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": "" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": null },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": null
+    },
+    {
+      "caso": "sem a hora, o dia ainda ordena: a montagem sem hora na véspera da entrega",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-27", "hora": "" },
+        { "tipo": "evento", "data": "2027-01-29", "hora": "08:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": "Montagem está antes de Entrega no local"
+    },
+    {
+      "caso": "a hora ordena entre os que têm hora, mesmo com um momento sem hora no meio",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "10:00" },
+        { "tipo": "montagem", "data": "2027-01-28", "hora": null },
+        { "tipo": "evento", "data": "2027-01-28", "hora": "09:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": "Evento está antes de Entrega no local"
+    },
+    {
+      "caso": "o dia de um momento sem hora vale para os seguintes",
+      "momentos": [
+        { "tipo": "entrega_no_local", "data": "2027-01-28", "hora": "08:30" },
+        { "tipo": "montagem", "data": "2027-01-29", "hora": "" },
+        { "tipo": "evento", "data": "2027-01-28", "hora": "20:00" },
+        { "tipo": "retorno_ao_estoque", "data": "2027-01-30", "hora": "09:00" }
+      ],
+      "contexto": { "comItensDoEstoque": true, "comColeta": false },
+      "problema": "Evento está antes de Montagem"
     }
   ],
   "retornos": [

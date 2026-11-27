@@ -91,6 +91,8 @@ const MATRIZ: Record<string, Linha> = {
     passam: ["owner", "admin", "interno", "financeiro"],
     recusa: "Perfil sem permissao para aprovar conhecimento do Agent Dute.",
   },
+  // Os Eventos (docs/superpowers/specs/2026-11-26-eventos-design.md): o cliente e a coordenação em nome dele; fora da liberação, quem passa para no failed-precondition.
+  archiveClientEvent: { passam: [...COORDENACAO, "cliente"], recusa: SO_EVENTOS_DO_CLIENTE },
   archiveClientEventTemplate: {
     passam: [...COORDENACAO, "cliente"],
     recusa: SO_EVENTOS_DO_CLIENTE,
@@ -98,6 +100,7 @@ const MATRIZ: Record<string, Linha> = {
   },
   assignRequestNumbers: { passam: OWNER, recusa: "Só o owner roda esta manutenção." },
   cancelCustomerOrder: { passam: CLIENTE, recusa: "Cancelamento disponível no portal do cliente." },
+  cancelEventEdition: { passam: [...COORDENACAO, "cliente"], recusa: SO_EVENTOS_DO_CLIENTE },
   cancelInboundReceipt: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   cancelShipmentNotice: {
     passam: CLIENTE,
@@ -252,6 +255,7 @@ const MATRIZ: Record<string, Linha> = {
     recusa: SO_EVENTOS_DO_CLIENTE,
     entrada: { name: "Feira", venue: "Galpão", items: [{ sku_code: "BTG-000001", product_name: "Camisa", quantity: 1 }] },
   },
+  saveEventEdition: { passam: [...COORDENACAO, "cliente"], recusa: SO_EVENTOS_DO_CLIENTE },
   saveInboundBoxLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   saveOpeningConferenceLine: { passam: ARMAZEM, recusa: SO_ARMAZEM },
   saveSystemInfraSettings: { passam: OWNER, recusa: SO_PAINEL },
@@ -262,6 +266,7 @@ const MATRIZ: Record<string, Linha> = {
   },
   seedAgentPlaybooks: { passam: AGENTE, recusa: SO_PLAYBOOKS },
   seedWarehouseLayout: { passam: COORDENACAO, recusa: SO_POSICOES },
+  sendEventEdition: { passam: [...COORDENACAO, "cliente"], recusa: SO_EVENTOS_DO_CLIENTE },
   setClientItemArchived: {
     passam: [...COORDENACAO, "cliente"],
     recusa: "Perfil sem permissão para arquivar itens do cliente.",
