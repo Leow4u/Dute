@@ -27,6 +27,9 @@ const estado = vi.hoisted(() => ({
   eventos: [] as unknown[],
   precos: [] as unknown[],
   overview: {} as Record<string, unknown>,
+  falhaEventos: false,
+  falhaPrecos: false,
+  tentativas: [] as string[],
   versao: 0,
   ouvintes: new Set<() => void>(),
 }));
@@ -55,10 +58,12 @@ vi.mock("@/lib/eventos/use-eventos", async () => {
     },
     useEventosDoCliente: () => {
       ouvir();
+      if (estado.falhaEventos) return { ...aoVivo, erro: true, falta: "servidor", itens: null, tentar: () => estado.tentativas.push("eventos") };
       return { ...aoVivo, itens: estado.eventos };
     },
     usePrecosDoCliente: () => {
       ouvir();
+      if (estado.falhaPrecos) return { ...aoVivo, erro: true, falta: "servidor", itens: null, tentar: () => estado.tentativas.push("precos") };
       return { ...aoVivo, itens: estado.precos };
     },
     useEdicoesDoCliente: () => {
@@ -222,6 +227,9 @@ beforeEach(() => {
   estado.eventos = [CAPA];
   estado.precos = [PRECO];
   estado.overview = overviewCom();
+  estado.falhaEventos = false;
+  estado.falhaPrecos = false;
+  estado.tentativas = [];
   estado.versao = 0;
 });
 
@@ -442,6 +450,111 @@ describe("o envio", () => {
     expect(estado.enviar).toHaveLength(1);
     await recusar(estado.enviar[0], "failed-precondition", `Saldo insuficiente para o SKU ${gg}. Disponível: 60; solicitado: 80.`);
     expect(textoDe("#evento-itens-problema")).toBe(`Saldo insuficiente para o SKU ${gg}. Disponível: 60; solicitado: 80.`);
+  });
+});
+
+describe("os achados da revisão final", () => {
+  const FEIRA: EventoView = { ...CAPA, id: "cve_00000000000000c1", name: "Feira de Investimentos", description: null };
+  const CONVENCAO: EventoView = { ...CAPA, id: "cve_00000000000000d1", name: "Convenção de vendas", description: "Vendas" };
+  const select = () => campo("#evento-edicao-de") as unknown as HTMLSelectElement;
+
+  async function escolherEdicaoDe(valor: string) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select(), valor);
+      select().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  it("'Edição de' fica travada enquanto a edição nasce; depois da falha, outro evento faz a criação com outra chave", async () => {
+    estado.viva = new Map();
+    estado.eventos = [FEIRA, CONVENCAO];
+    await abrir("/portal/eventos/novo");
+    await escolherEdicaoDe(FEIRA.id);
+    await avancar(1_000);
+    expect(estado.salvar).toHaveLength(1);
+    expect(estado.salvar[0].entrada).toMatchObject({ event_id: FEIRA.id });
+    expect(select().disabled).toBe(true);
+    await recusar(estado.salvar[0], "unavailable", "Sem conexão.");
+    expect(select().disabled).toBe(false);
+    await escolherEdicaoDe(CONVENCAO.id);
+    await avancar(1_000);
+    expect(estado.salvar).toHaveLength(2);
+    expect(estado.salvar[1].entrada).toMatchObject({ event_id: CONVENCAO.id });
+    expect(estado.salvar[1].entrada.idempotency_key).not.toBe(estado.salvar[0].entrada.idempotency_key);
+  });
+
+  it("o id que o servidor dá ao outro momento volta à linha: a segunda gravação o leva", async () => {
+    await abrirANecton();
+    await clicar("Outro momento");
+    await digitar('[aria-label="Rótulo do outro momento"]', "Ensaio");
+    await digitar('[aria-label="Data do outro momento"]', "2027-01-27");
+    await avancar(1_000);
+    const primeiro = (ultimoPatch().patch.cronograma as Array<{ id?: string; tipo: string }>).find((momento) => momento.tipo === "outro");
+    expect(primeiro).toMatchObject({ rotulo: "Ensaio" });
+    expect(primeiro && "id" in primeiro).toBe(false);
+    const ensaio = { id: "mo_000000aa", tipo: "outro" as const, rotulo: "Ensaio", previsto: { data: "2027-01-27", hora: null, ate: null, local: null, observacao: null }, feito: null };
+    await responder(estado.salvar[0], salvo(NECTON, { edicao: 4, cronograma: [...NECTON.cronograma, ensaio] }));
+    await digitar("#evento-observacoes", "Outra observação");
+    await avancar(1_000);
+    expect((ultimoPatch().patch.cronograma as Array<{ id?: string; tipo: string }>).find((momento) => momento.tipo === "outro")).toMatchObject({ id: "mo_000000aa" });
+  });
+
+  it("depois do nascimento, as linhas têm os ids: a Montagem com documento ligado volta da recusa", async () => {
+    estado.viva = new Map();
+    await abrir("/portal/eventos/novo");
+    await digitar("#evento-nome", "Feira de Investimentos");
+    await digitar('[aria-label="Data da montagem"]', "2027-01-28");
+    await sair("#evento-nome");
+    const nascida = edicaoDeTeste({
+      id: "ced_00000000000000c7",
+      event_name: "Feira de Investimentos",
+      edicao: 1,
+      cronograma: [{ id: "mo_00000003", tipo: "montagem", rotulo: null, previsto: { data: "2027-01-28", hora: null, ate: null, local: null, observacao: null }, feito: null }],
+    });
+    await responder(estado.salvar.at(-1), { id: nascida.id, edicao: 1, created: true, edition: nascida });
+    servidor(() =>
+      estado.viva.set(nascida.id, {
+        ...nascida,
+        documentos: [
+          { id: "dc_0000000000000001", caminho: "x", nome: "montagem.pdf", tipo: "application/pdf", tamanho: 1, origem: "dutelog", momento_id: "mo_00000003", registrado_por: null, registrado_em: null },
+        ],
+      }),
+    );
+    await digitar('[aria-label="Data da montagem"]', "");
+    await avancar(1_000);
+    await recusar(estado.salvar.at(-1), "failed-precondition", "Montagem já tem registro e não sai do cronograma");
+    expect(campo('[aria-label="Data da montagem"]').value).toBe("2027-01-28");
+  });
+
+  it("sair do /novo enquanto a edição nasce não puxa de volta ao formulário: a lista fica", async () => {
+    estado.viva = new Map();
+    await abrir("/portal/eventos/novo");
+    await digitar("#evento-nome", "Feira de Investimentos");
+    await sair("#evento-nome");
+    expect(estado.salvar).toHaveLength(1);
+    await act(async () => memoria.navigate("/portal/eventos"));
+    expect(container!.textContent).toContain("Lista dos eventos");
+    const nascida = edicaoDeTeste({ id: "ced_00000000000000c8", event_name: "Feira de Investimentos", edicao: 1 });
+    await responder(estado.salvar[0], { id: nascida.id, edicao: 1, created: true, edition: nascida });
+    expect(memoria.history.at(-1)).toBe("/portal/eventos");
+    expect(container!.textContent).toContain("Lista dos eventos");
+  });
+
+  it("a leitura que falha na abertura mostra a falha com 'Tentar de novo', não a espera sem fim; no novo, a dos eventos aparece no formulário", async () => {
+    estado.falhaPrecos = true;
+    await abrirANecton();
+    expect(container!.textContent).toContain("Não foi possível carregar a edição.");
+    await clicar("Tentar de novo");
+    expect(estado.tentativas).toContain("precos");
+    act(() => raiz?.unmount());
+    container?.remove();
+
+    estado.falhaPrecos = false;
+    estado.falhaEventos = true;
+    estado.viva = new Map();
+    await abrir("/portal/eventos/novo");
+    expect(container!.textContent).toContain("Não foi possível carregar os eventos.");
+    expect(campo("#evento-nome")).toBeTruthy();
   });
 });
 

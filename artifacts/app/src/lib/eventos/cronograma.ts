@@ -88,6 +88,32 @@ export function cronogramaDasLinhas(linhas: readonly LinhaDoCronograma[]): Momen
     }));
 }
 
+/**
+ * As linhas de agora com os ids que o servidor deu aos momentos gravados
+ * (o nascimento e cada patch): a linha sem id ganha o do momento do mesmo
+ * tipo (os fixos são um por tipo) ou, no outro, o da mesma posição entre os
+ * outros enviados com data (a fusão do servidor guarda a ordem deles). A linha
+ * de outro mudada no meio da gravação fica sem id até a próxima resposta.
+ */
+export function comIdsGravados(
+  atuais: readonly LinhaDoCronograma[],
+  enviadas: readonly LinhaDoCronograma[],
+  gravado: readonly MomentoView[],
+): LinhaDoCronograma[] {
+  const outrosEnviados = enviadas.filter((linha) => linha.tipo === "outro" && linha.data.trim() !== "");
+  const outrosGravados = gravado.filter((momento) => momento.tipo === "outro");
+  const idDoOutro = new Map<LinhaDoCronograma, string>();
+  outrosEnviados.forEach((linha, posicao) => {
+    const momento = outrosGravados[posicao];
+    if (momento?.id) idDoOutro.set(linha, momento.id);
+  });
+  return atuais.map((linha) => {
+    if (linha.id) return linha;
+    const id = linha.tipo === "outro" ? idDoOutro.get(linha) : gravado.find((momento) => momento.tipo === linha.tipo)?.id;
+    return id ? { ...linha, id } : linha;
+  });
+}
+
 /** "28/01". */
 export function formatarDia(data: string): string {
   const partes = DIA.exec(data);

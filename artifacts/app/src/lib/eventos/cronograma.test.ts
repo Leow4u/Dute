@@ -5,6 +5,7 @@ import { cronogramaDaNecton, feito, momento } from "@/test/eventos-necton";
 
 import {
   adicionarOutro,
+  comIdsGravados,
   cronogramaDasLinhas,
   formatarDia,
   formatarInstante,
@@ -71,6 +72,36 @@ describe("a linha do cronograma no cartão", () => {
     expect(linhaDoCronograma(semAte)).toBe("Montagem 28/01 · Evento 29/01 · Desmontagem 29/01");
     const eventoSemAte = NECTON.map((item) => (item.tipo === "evento" ? { ...item, previsto: { ...item.previsto, ate: null } } : item));
     expect(linhaDoCronograma(eventoSemAte)).toBe("Montagem 28/01 10:00 · Evento 29/01 08:00 · Desmontagem 29/01 20:00");
+  });
+});
+
+describe("os ids que o servidor dá", () => {
+  it("comIdsGravados põe na linha sem id o id do momento gravado: o fixo pelo tipo, o outro pela ordem entre os outros enviados; a linha mudada no meio só pelo tipo", () => {
+    const enviadas = linhasDoFormulario([]).map((linha) => (linha.tipo === "montagem" || linha.tipo === "evento" ? { ...linha, data: "2027-01-28" } : linha));
+    const ensaio: LinhaDoCronograma = { id: null, tipo: "outro", rotulo: "Ensaio", data: "2027-01-27", hora: "", ate: "", local: "", observacao: "" };
+    const visita: LinhaDoCronograma = { ...ensaio, rotulo: "Visita", data: "2027-01-20" };
+    const semData: LinhaDoCronograma = { ...ensaio, rotulo: "Sem data", data: "" };
+    const linhas = [...enviadas, ensaio, semData, visita];
+    const gravado = [
+      momento("montagem", { data: "2027-01-28" }, { id: "mo_0000000a" }),
+      momento("evento", { data: "2027-01-28" }, { id: "mo_0000000b" }),
+      momento("outro", { data: "2027-01-27" }, { id: "mo_0000000c", rotulo: "Ensaio" }),
+      momento("outro", { data: "2027-01-20" }, { id: "mo_0000000d", rotulo: "Visita" }),
+    ];
+    // Durante a gravação, a pessoa mudou a observação da montagem (outra linha, outro objeto).
+    const atuais = linhas.map((linha) => (linha.tipo === "montagem" ? { ...linha, observacao: "2 estoquistas" } : linha));
+    const comIds = comIdsGravados(atuais, linhas, gravado);
+    expect(comIds.find((linha) => linha.tipo === "montagem")).toMatchObject({ id: "mo_0000000a", observacao: "2 estoquistas" });
+    expect(comIds.find((linha) => linha.tipo === "evento")?.id).toBe("mo_0000000b");
+    expect(comIds.filter((linha) => linha.tipo === "outro").map((linha) => [linha.rotulo, linha.id])).toEqual([
+      ["Ensaio", "mo_0000000c"],
+      ["Sem data", null],
+      ["Visita", "mo_0000000d"],
+    ]);
+    expect(comIds.find((linha) => linha.tipo === "coleta_no_cliente")?.id).toBeNull();
+    // A linha que já tem id fica com ele.
+    const jaTem = atuais.map((linha) => (linha.tipo === "evento" ? { ...linha, id: "mo_000000ff" } : linha));
+    expect(comIdsGravados(jaTem, linhas, gravado).find((linha) => linha.tipo === "evento")?.id).toBe("mo_000000ff");
   });
 });
 

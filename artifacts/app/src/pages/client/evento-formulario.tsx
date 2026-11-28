@@ -17,7 +17,7 @@ import { Link, Redirect, useLocation, useSearch } from "wouter";
 import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { ErroNaLeitura } from "@/components/ui/erro-na-leitura";
+import { ErroNaLeitura, FalhaAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppUser } from "@/lib/auth";
 import { horaDaLeitura } from "@/lib/conexao";
 import { documentosDoCliente, linhaDoDocumento, problemaDoAnexo } from "@/lib/eventos/anexos";
-import { adicionarOutro, type LinhaDoCronograma } from "@/lib/eventos/cronograma";
+import { adicionarOutro, comIdsGravados, type LinhaDoCronograma } from "@/lib/eventos/cronograma";
 import { enviarAnexoDoEvento } from "@/lib/eventos/enviar-anexo";
 import {
   ATRASO_DO_AUTOSAVE_MS,
@@ -60,6 +60,7 @@ import type { ConteudoDaEdicao, CriarEdicao, DocumentoView, EdicaoView } from "@
 import { useEdicaoDoEvento, useEventosDoCliente, usePrecosDoCliente } from "@/lib/eventos/use-eventos";
 import { hojeIso } from "@/lib/operacao/fila";
 import { novaChave } from "@/lib/operacao/api";
+import { novaTentativaDe, type NovaTentativa } from "@/lib/operacao/leitura";
 import { useOperationProfile } from "@/lib/operation-profile";
 import { leiturasDoPortal } from "@/lib/operations";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,8 @@ export type FormularioDaEdicaoViewProps = {
   eventos: EventoView[];
   /** A edição já nasceu: "Edição de" fica no evento dela, e os anexos e o Estoque abrem. */
   nascida: boolean;
+  /** A edição está nascendo: "Edição de" trava já, para o rascunho não nascer num evento e mostrar outro. */
+  nascendo?: boolean;
   produtos: ProdutoDoEstoque[];
   salvoAs: string | null;
   salvando: boolean;
@@ -277,7 +280,7 @@ function LinhaDoResumo({ rotulo, valor }: { rotulo: string; valor: string | null
 
 /** O formulário, só a apresentação: o estado e as ações chegam por props (useRascunhoDaEdicao). */
 export function FormularioDaEdicaoView(props: FormularioDaEdicaoViewProps) {
-  const { form, eventos, nascida, produtos, salvoAs, salvando, enviando, erros, acoes, idDaEdicao } = props;
+  const { form, eventos, nascida, nascendo = false, produtos, salvoAs, salvando, enviando, erros, acoes, idDaEdicao } = props;
   const resumo = resumoDaEdicao(form, produtos, hojeIso());
   const falta = form.itens.length ? textoDasFaltas(faltasDeSaldo(form.itens, produtos)) : null;
   const onde = <K extends keyof FormularioDaEdicao["onde"]>(campo: K, valor: string) => acoes.mudar("onde", { ...form.onde, [campo]: valor });
@@ -323,7 +326,7 @@ export function FormularioDaEdicaoView(props: FormularioDaEdicaoViewProps) {
                 <select
                   id="evento-edicao-de"
                   value={form.eventoId ?? ""}
-                  disabled={nascida}
+                  disabled={nascida || nascendo}
                   onChange={(evento) => acoes.escolherEvento(evento.target.value || null)}
                   className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground disabled:opacity-70"
                 >
@@ -557,6 +560,8 @@ type Controle = {
   gravacao: Promise<void> | null;
   timer: ReturnType<typeof setTimeout> | null;
   capa: { id: string; nome: string; descricao: string | null } | null;
+  /** O evento da última criação tentada: outro evento depois de uma falha pede outra chave. */
+  capaDaCriacao: string | null | undefined;
   chaveDaCriacao: string;
   chavesDoEnvio: Map<number, string>;
   navegou: boolean;
@@ -580,6 +585,10 @@ export type RascunhoDaEdicao = {
   enviando: boolean;
   /** O formulário ainda espera o servidor para abrir (a primeira leitura da edição). */
   lendo: boolean;
+  /** A edição está nascendo. */
+  nascendo: boolean;
+  /** As leituras ao vivo: a falha sem nada lido, com a nova tentativa. */
+  leitura: NovaTentativa;
 };
 
 /**
@@ -631,6 +640,7 @@ export function useRascunhoDaEdicao({
       gravacao: null,
       timer: null,
       capa: null,
+      capaDaCriacao: undefined,
       chaveDaCriacao: novaChave(),
       chavesDoEnvio: new Map(),
       navegou: false,
@@ -640,6 +650,7 @@ export function useRascunhoDaEdicao({
   const c = controle.current;
   const produtosRef = useRef(produtos);
   produtosRef.current = produtos;
+  const montado = useRef(true);
 
   function agendar(atraso = ATRASO_DO_AUTOSAVE_MS) {
     if (c.timer) clearTimeout(c.timer);
@@ -690,12 +701,19 @@ export function useRascunhoDaEdicao({
     c.nascendo = true;
     redesenhar();
     const formEnviado = c.form;
-    const entrada = criacaoDoFormulario(formEnviado, c.chaveDaCriacao, c.capa);
+    // A capa desta tentativa: a de depois da resposta pode ser outra.
+    const capa = c.capa;
+    // Outro evento depois de uma criação sem resposta é outra criação: a mesma chave devolveria a do evento de antes.
+    if (c.capaDaCriacao !== undefined && c.capaDaCriacao !== (capa?.id ?? null)) c.chaveDaCriacao = novaChave();
+    c.capaDaCriacao = capa?.id ?? null;
+    const entrada = criacaoDoFormulario(formEnviado, c.chaveDaCriacao, capa);
     try {
       const resposta = await salvarEdicao(entrada);
+      // A pessoa saiu da tela durante a criação ("Cancelar", outra rota): o rascunho fica, e a tela não a puxa de volta.
+      if (!montado.current) return;
       const entrega: Entrega = {
-        form: c.form,
-        gravado: gravadoDaCriacao(entrada, resposta.edition, resposta.created, c.capa),
+        form: { ...c.form, cronograma: comIdsGravados(c.form.cronograma, formEnviado.cronograma, resposta.edition.cronograma) },
+        gravado: gravadoDaCriacao(entrada, resposta.edition, resposta.created, capa),
         versao: resposta.edicao,
         edicao: resposta.edition,
         sujo: c.form !== formEnviado || !resposta.created,
@@ -706,6 +724,7 @@ export function useRascunhoDaEdicao({
       navegar(hrefDaEdicao(resposta.id), { replace: true });
     } catch (erro) {
       c.nascendo = false;
+      if (!montado.current) return;
       tratarRecusa(erro, "Rascunho não salvo");
       redesenhar();
     }
@@ -724,7 +743,8 @@ export function useRascunhoDaEdicao({
     if (!c.id) return c.form.nome.trim() ? nascer() : Promise.resolve();
     if (!c.sujo || c.versao === null || !c.gravado) return Promise.resolve();
     const id = c.id;
-    const patch = patchDoFormulario(c.form, c.gravado);
+    const formEnviado = c.form;
+    const patch = patchDoFormulario(formEnviado, c.gravado);
     c.salvando = true;
     c.sujo = false;
     redesenhar();
@@ -734,6 +754,8 @@ export function useRascunhoDaEdicao({
         c.versao = resposta.edicao;
         c.edicao = resposta.edition;
         c.gravado = gravadoDepois(c.gravado!, patch);
+        // Os ids que o servidor deu aos momentos novos: a próxima gravação funde por eles.
+        if (patch.cronograma) c.form = { ...c.form, cronograma: comIdsGravados(c.form.cronograma, formEnviado.cronograma, resposta.edition.cronograma) };
         c.salvoAs = horaDaLeitura(Date.now());
         c.errosDoServidor = {};
       } catch (erro) {
@@ -774,6 +796,7 @@ export function useRascunhoDaEdicao({
 
   /** "Edição de": o nome e a descrição vêm do evento escolhido; a escolha da pessoa faz a edição nascer, a da busca (?evento=) não. */
   function escolherEvento(eventoId: string | null, pelaPessoa = true) {
+    if (c.nascendo || c.id) return;
     const capa = eventoId ? (eventos.itens ?? []).find((evento) => evento.id === eventoId) : null;
     c.capa = capa ? { id: capa.id, nome: capa.name, descricao: capa.description } : null;
     c.form = { ...c.form, eventoId: capa?.id ?? null, ...(capa ? { nome: capa.name, descricao: capa.description ?? "" } : {}) };
@@ -810,6 +833,7 @@ export function useRascunhoDaEdicao({
   useEffect(() => {
     if (c.id && c.adotado && c.sujo && !c.salvando && !c.timer) agendar(0);
     return () => {
+      montado.current = false;
       // Saindo da tela com mudança por gravar ("Cancelar" logo depois de digitar), grava agora.
       if (c.timer) {
         clearTimeout(c.timer);
@@ -848,6 +872,8 @@ export function useRascunhoDaEdicao({
   }
 
   const erros = { ...(c.tentouEnviar ? problemasDoFormulario(c.form, produtos) : {}), ...c.errosDoServidor };
+  const doDocumento = { item: viva.edicao, erro: viva.erro, tentando: viva.tentando, tentar: viva.tentar, falta: viva.falta, lidaEm: viva.lidaEm };
+  const leitura = novaTentativaDe(c.id ? [doDocumento, eventos, precos] : [eventos]);
   return {
     form: c.form,
     mudar,
@@ -865,6 +891,8 @@ export function useRascunhoDaEdicao({
     enviar: () => void enviar(),
     enviando: c.enviando,
     lendo: !c.adotado && c.esperaVersaoMaiorQue === null,
+    nascendo: c.nascendo,
+    leitura,
   };
 }
 
@@ -910,21 +938,37 @@ function FormularioComProdutos({ id, eventoId, produtos }: { id: string | null; 
     layout: { documentos: documentos.layout, ...subidas.layout, onEscolher: (arquivo: File) => escolher("layout", arquivo), onTirar: tirar },
     planilhas: { documentos: documentos.planilhas, ...subidas.planilhas, onEscolher: (arquivo: File) => escolher("planilhas", arquivo), onTirar: tirar },
   };
+  const aoVivo: LeituraAoVivoNaTela = { tentando: rascunho.leitura.tentando, tentar: rascunho.leitura.tentar, falta: rascunho.leitura.falta, lidaEm: rascunho.leitura.lidaEm };
   if (rascunho.lendo) {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <h1 className="mb-4 text-2xl font-semibold tracking-tight">{TITULO}</h1>
-        <CarregandoNaRegiao rotulo="Carregando a edição…" />
+        {rascunho.leitura.falhou ? (
+          // A leitura que falhou não volta sozinha: a falha fica, com "Tentar de novo" (carregamento v2).
+          <FalhaAoVivo leitura={aoVivo} mensagem="Não foi possível carregar a edição." className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3" />
+        ) : (
+          <CarregandoNaRegiao rotulo="Carregando a edição…" onTentar={rascunho.leitura.tentar} />
+        )}
       </div>
     );
   }
   const base = rascunho.edicao ?? rascunho.viva;
   return (
     <>
+    {rascunho.leitura.falhou ? (
+      <div className="mx-auto w-full max-w-7xl px-4 pt-5 sm:px-6 lg:px-8">
+        <FalhaAoVivo
+          leitura={aoVivo}
+          mensagem={id ? "Não foi possível carregar a edição." : "Não foi possível carregar os eventos."}
+          className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
+        />
+      </div>
+    ) : null}
     <FormularioDaEdicaoView
       form={rascunho.form}
       eventos={rascunho.eventos}
       nascida={Boolean(id)}
+      nascendo={rascunho.nascendo}
       idDaEdicao={id}
       produtos={produtos}
       salvoAs={rascunho.salvoAs}
