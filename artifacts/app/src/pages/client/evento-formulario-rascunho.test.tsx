@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { Suspense, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Router, Switch } from "wouter";
@@ -130,7 +130,27 @@ let raiz: Root | null = null;
 let container: HTMLDivElement | null = null;
 let memoria: ReturnType<typeof memoryLocation>;
 
-async function abrir(caminho: string) {
+/**
+ * Um irmão que suspende a primeira renderização da rota da edição, como uma
+ * tela sob demanda que ainda baixa: o React descarta essa renderização e
+ * refaz a rota do zero quando a espera acaba.
+ */
+const suspensao = { liberada: false, espera: null as Promise<void> | null, liberar: () => undefined as void };
+
+function SuspendeUmaVez() {
+  if (!suspensao.liberada) {
+    suspensao.espera ??= new Promise<void>((resolver) => {
+      suspensao.liberar = () => {
+        suspensao.liberada = true;
+        resolver();
+      };
+    });
+    throw suspensao.espera;
+  }
+  return null;
+}
+
+async function abrir(caminho: string, opcoes: { edicaoQueSuspende?: boolean } = {}) {
   memoria = memoryLocation({ path: caminho, record: true });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -140,7 +160,16 @@ async function abrir(caminho: string) {
       <Router hook={memoria.hook} searchHook={memoria.searchHook}>
         <Switch>
           <Route path="/portal/eventos/novo" component={ClienteEventoNovo} />
-          <Route path="/portal/eventos/edicao" component={ClienteEventoEdicao} />
+          {opcoes.edicaoQueSuspende ? (
+            <Route path="/portal/eventos/edicao">
+              <Suspense fallback={<p>Abrindo a edição</p>}>
+                <ClienteEventoEdicao />
+                <SuspendeUmaVez />
+              </Suspense>
+            </Route>
+          ) : (
+            <Route path="/portal/eventos/edicao" component={ClienteEventoEdicao} />
+          )}
           <Route path="/portal/eventos">
             <p>Lista dos eventos</p>
           </Route>
@@ -205,6 +234,12 @@ function botao(rotulo: string): HTMLButtonElement {
   return achado;
 }
 
+function link(rotulo: string): HTMLAnchorElement {
+  const achado = Array.from(container!.querySelectorAll<HTMLAnchorElement>("a")).find((item) => item.textContent?.trim() === rotulo);
+  if (!achado) throw new Error(`Sem o link ${rotulo}`);
+  return achado;
+}
+
 async function clicar(rotulo: string) {
   await act(async () => botao(rotulo).click());
 }
@@ -231,6 +266,8 @@ beforeEach(() => {
   estado.falhaPrecos = false;
   estado.tentativas = [];
   estado.versao = 0;
+  suspensao.liberada = false;
+  suspensao.espera = null;
 });
 
 afterEach(() => {
@@ -286,6 +323,51 @@ describe("o nascimento", () => {
     await avancar(0);
     expect(ultimoPatch()).toMatchObject({ id: ja.id, expected_edicao: 2, patch: { evento: { name: "Feira de Investimentos" } } });
     expect(estado.salvar).toHaveLength(3);
+  });
+});
+
+describe("o que se digita enquanto o rascunho nasce", () => {
+  it.each([false, true])("chega à rota nova e grava uma vez, e a entrega sai do mapa quando a tela monta (a primeira renderização da rota nova descartada: %s)", async (edicaoQueSuspende) => {
+    estado.viva = new Map();
+    await abrir("/portal/eventos/novo", { edicaoQueSuspende });
+    await digitar("#evento-nome", "B2B Conference Necton");
+    await sair("#evento-nome");
+    expect(estado.salvar).toHaveLength(1);
+    // A criação ainda não respondeu e a pessoa já passou para o local.
+    await digitar("#evento-local", "Hotel Unique");
+    const nascida = edicaoDeTeste({ id: NECTON.id, event_id: NECTON.event_id, event_name: "B2B Conference Necton", edicao: 1 });
+    estado.viva = new Map([[nascida.id, nascida]]);
+    await responder(estado.salvar[0], { id: nascida.id, edicao: 1, created: true, edition: nascida });
+    expect(memoria.history).toEqual([`/portal/eventos/edicao?id=${NECTON.id}`]);
+    if (edicaoQueSuspende) await act(async () => suspensao.liberar());
+    await avancar(1_000);
+    expect(campo("#evento-local").value).toBe("Hotel Unique");
+    // "Edição de", travado depois do nascimento, mostra o evento que a criação fez.
+    expect(container!.querySelector<HTMLSelectElement>("#evento-edicao-de")?.value).toBe(NECTON.event_id);
+    expect(estado.salvar).toHaveLength(2);
+    expect(ultimoPatch()).toMatchObject({ id: NECTON.id, expected_edicao: 1, patch: { onde: { local: "Hotel Unique" } } });
+    // Quem montou tirou a entrega: a mesma edição, aberta de novo, vem do documento vivo.
+    act(() => raiz?.unmount());
+    container?.remove();
+    estado.viva = new Map([[nascida.id, { ...nascida, edicao: 2, onde: { ...nascida.onde, local: "Hotel Fasano" } }]]);
+    await abrir(`/portal/eventos/edicao?id=${NECTON.id}`);
+    expect(campo("#evento-local").value).toBe("Hotel Fasano");
+  });
+
+  it("'Cancelar' durante a criação grava, pelo patch, o que se digitou depois do nome, e a tela fica na lista", async () => {
+    estado.viva = new Map();
+    await abrir("/portal/eventos/novo");
+    await digitar("#evento-nome", "B2B Conference Necton");
+    await sair("#evento-nome");
+    await digitar("#evento-local", "Hotel Unique");
+    await act(async () => link("Cancelar").click());
+    expect(memoria.history.at(-1)).toBe("/portal/eventos");
+    const nascida = edicaoDeTeste({ id: NECTON.id, event_id: NECTON.event_id, event_name: "B2B Conference Necton", edicao: 1 });
+    await responder(estado.salvar[0], { id: nascida.id, edicao: 1, created: true, edition: nascida });
+    await avancar(0);
+    expect(estado.salvar).toHaveLength(2);
+    expect(ultimoPatch()).toMatchObject({ id: NECTON.id, expected_edicao: 1, patch: { onde: { local: "Hotel Unique" } } });
+    expect(memoria.history.at(-1)).toBe("/portal/eventos");
   });
 });
 

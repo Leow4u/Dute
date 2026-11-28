@@ -619,8 +619,10 @@ export function useRascunhoDaEdicao({
   const [, redesenhar] = useReducer((vez: number) => vez + 1, 0);
   const controle = useRef<Controle | null>(null);
   if (!controle.current) {
+    // A entrega fica no mapa até a tela montar: a renderização que o React descarta antes de
+    // montar (a concorrente que outra atualização interrompe e recomeça, um irmão que suspende)
+    // também a lê, e quem monta a tira.
     const entrega = id ? ENTREGAS.get(id) : undefined;
-    if (id) ENTREGAS.delete(id);
     controle.current = {
       id,
       form: entrega?.form ?? formularioVazio(),
@@ -648,6 +650,9 @@ export function useRascunhoDaEdicao({
     };
   }
   const c = controle.current;
+  useEffect(() => {
+    if (id) ENTREGAS.delete(id);
+  }, [id]);
   const produtosRef = useRef(produtos);
   produtosRef.current = produtos;
   const montado = useRef(true);
@@ -709,16 +714,28 @@ export function useRascunhoDaEdicao({
     const entrada = criacaoDoFormulario(formEnviado, c.chaveDaCriacao, capa);
     try {
       const resposta = await salvarEdicao(entrada);
-      // A pessoa saiu da tela durante a criação ("Cancelar", outra rota): o rascunho fica, e a tela não a puxa de volta.
-      if (!montado.current) return;
       const entrega: Entrega = {
-        form: { ...c.form, cronograma: comIdsGravados(c.form.cronograma, formEnviado.cronograma, resposta.edition.cronograma) },
+        // O evento da edição nascida (o novo ganha o id na criação), e os ids que o servidor deu aos momentos.
+        form: {
+          ...c.form,
+          eventoId: resposta.edition.event_id || c.form.eventoId,
+          cronograma: comIdsGravados(c.form.cronograma, formEnviado.cronograma, resposta.edition.cronograma),
+        },
         gravado: gravadoDaCriacao(entrada, resposta.edition, resposta.created, capa),
         versao: resposta.edicao,
         edicao: resposta.edition,
         sujo: c.form !== formEnviado || !resposta.created,
         salvoAs: horaDaLeitura(Date.now()),
       };
+      // A pessoa saiu da tela durante a criação ("Cancelar", outra rota): o rascunho fica e a tela não a
+      // puxa de volta, mas o que ela digitou depois do nome grava daqui, pelo patch, como na rota nova.
+      if (!montado.current) {
+        if (entrega.sujo) {
+          Object.assign(c, { id: resposta.id, form: entrega.form, gravado: entrega.gravado, versao: entrega.versao, edicao: entrega.edicao, sujo: true, nascendo: false, pendente: false });
+          void gravar();
+        }
+        return;
+      }
       ENTREGAS.set(resposta.id, entrega);
       c.navegou = true;
       navegar(hrefDaEdicao(resposta.id), { replace: true });
@@ -831,6 +848,7 @@ export function useRascunhoDaEdicao({
 
   // A entrega trouxe mudança que esperava a rota nova: grava logo.
   useEffect(() => {
+    montado.current = true;
     if (c.id && c.adotado && c.sujo && !c.salvando && !c.timer) agendar(0);
     return () => {
       montado.current = false;
