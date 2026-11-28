@@ -27,7 +27,7 @@ vi.mock("./shared", async (importOriginal) => {
   };
 });
 
-import { ClienteEventos } from "./eventos";
+import { ClienteEventosModelos } from "./eventos-modelos";
 
 const EVENTO: ClientEvent = {
   id: "ev_1",
@@ -93,7 +93,7 @@ async function montar() {
     raiz!.render(
       <QueryClientProvider client={cliente}>
         <Router>
-          <ClienteEventos />
+          <ClienteEventosModelos />
         </Router>
       </QueryClientProvider>,
     ),

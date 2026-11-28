@@ -132,6 +132,17 @@ describe("tempo real do portal do cliente", () => {
     expect(listenerOf("agent_conversations")).toHaveLength(1);
   });
 
+  it("os Eventos do portal não se assinam aqui: as telas leem as três coleções ao vivo, e nenhuma chave do react-query depende delas", () => {
+    appUser.current = { uid: "client-a", publicMetadata: { role: "cliente", customer_code: "Itaú" } };
+    perfil.modules = ["wms"];
+    RealtimeSyncBridge();
+
+    for (const colecao of ["client_events", "client_event_editions", "client_event_prices"]) {
+      expect(listenerOf(colecao), colecao).toHaveLength(0);
+    }
+    expect(listenerOf("client_inventory")).toHaveLength(1);
+  });
+
   it("com o perfil ainda carregando, o cliente espera para assinar", () => {
     appUser.current = { uid: "client-a", publicMetadata: { role: "cliente", customer_code: "Itaú" } };
     perfil.modules = null;

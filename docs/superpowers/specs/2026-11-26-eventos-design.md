@@ -648,9 +648,11 @@ fotos da OS. Teste das regras no emulador em
   canReadOperations() || isOwnProjectionWith('wms')`; escrita `false`.
   `client_event_prices`: `canReadPrices() || isOwnProjectionWith('wms')`;
   escrita `false`. Teste em `functions/wms/src/eventos.rules.test.ts`.
-- O portal assina as três coleções em `realtime-sync.tsx`
-  (`CUSTOMER_AUTHORIZED_COLLECTIONS`, leitura `eventos`, que exige `wms`
-  no contrato em `leiturasDoPortal`).
+- O portal lê as três coleções ao vivo nas telas (`useLeituraDoPortal`),
+  com a leitura `eventos`, que exige `wms` no contrato em
+  `leiturasDoPortal`. O `realtime-sync.tsx` não as assina: sem chave do
+  react-query para invalidar, a escuta da sessão inteira só leria (parte 4,
+  27/11/2026).
 - Índices em `firestore.indexes.json`: `client_event_editions`
   (`customer_code` asc, `updated_at` desc) e (`customer_code` asc, `status`
   asc, `updated_at` desc) para o portal; (`status` asc, `separar_ate` asc)

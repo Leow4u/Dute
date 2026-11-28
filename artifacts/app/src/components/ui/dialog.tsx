@@ -210,8 +210,10 @@ const DialogContent = React.forwardRef<
        * da raiz.
        */
       ocupado?: boolean;
+      /** O nome do X, quando o "Fechar" sozinho não diz o que fecha ("Fechar a lista de itens"). */
+      rotuloDoFechar?: string;
     }
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar, ocupado = false, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar, ocupado = false, rotuloDoFechar, ...props }, ref) => {
   const naV3 = useNaV3();
   const valor = useEstadoEmAcao(ocupado, useDialogoEmAcao());
   const { travado, esmaecido, travas } = useConteudoEmAcao({ onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, focoAoFechar }, valor);
@@ -234,7 +236,7 @@ const DialogContent = React.forwardRef<
         {...travas}
       >
         {children}
-        <BotaoFecharDoPainel travado={travado} esmaecido={esmaecido} className="right-4 top-4 celular:right-2 celular:top-2" />
+        <BotaoFecharDoPainel travado={travado} esmaecido={esmaecido} rotulo={rotuloDoFechar} className="right-4 top-4 celular:right-2 celular:top-2" />
       </DialogPrimitive.Content>
     </DialogPortal>
     </DialogoEmAcao.Provider>
@@ -248,7 +250,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
  * e o toque nele não faz nada; esmaece com o gerúndio do confirmar. O anel do
  * foco é o cheio, com o recuo, e não esmaece com o ícone.
  */
-export function BotaoFecharDoPainel({ travado, esmaecido = travado, className }: { travado: boolean; esmaecido?: boolean; className?: string }) {
+export function BotaoFecharDoPainel({ travado, esmaecido = travado, className, rotulo }: { travado: boolean; esmaecido?: boolean; className?: string; rotulo?: string }) {
   const dialogo = useDialogoEmAcao();
   return (
     <DialogPrimitive.Close
@@ -267,7 +269,8 @@ export function BotaoFecharDoPainel({ travado, esmaecido = travado, className }:
       )}
     >
       <X className="h-4 w-4" aria-hidden="true" />
-      <span className="sr-only">Fechar</span>
+      {/* "Fechar", em português; o diálogo que fecha algo próprio diz o quê ("Fechar a lista de itens"). */}
+      {rotulo ? <span className="sr-only">{rotulo}</span> : <span className="sr-only">Fechar</span>}
     </DialogPrimitive.Close>
   );
 }

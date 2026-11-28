@@ -98,6 +98,12 @@ const ClienteEstoque = telaSobDemanda("pages/client", () =>
 const ClienteEventos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteEventos })),
 );
+const ClienteEventoNovo = telaSobDemanda("pages/client", () =>
+  import("./pages/client").then((m) => ({ default: m.ClienteEventoNovo })),
+);
+const ClienteEventoEdicao = telaSobDemanda("pages/client", () =>
+  import("./pages/client").then((m) => ({ default: m.ClienteEventoEdicao })),
+);
 const ClienteServicos = telaSobDemanda("pages/client", () =>
   import("./pages/client").then((m) => ({ default: m.ClienteServicos })),
 );
@@ -167,7 +173,7 @@ import { useRole } from "./hooks/use-role";
 import { AuthProvider, useAppUser } from "./lib/auth";
 import { ActiveCustomerProvider } from "./lib/active-customer-context";
 import { useOperationProfile } from "./lib/operation-profile";
-import { MEMORIA_LIBERADA, PLATAFORMA_LIBERADA } from "./lib/liberacao";
+import { EVENTOS_LIBERADO, MEMORIA_LIBERADA, PLATAFORMA_LIBERADA } from "./lib/liberacao";
 import { SOMENTE_ARMAZENAGEM, rotaDisponivelNaArmazenagem } from "./lib/somente-armazenagem";
 import { soComComercialLiberado } from "./lib/comercial/navegacao";
 import { soComOperacaoLiberada } from "./lib/operacao/navegacao";
@@ -437,6 +443,8 @@ const PROTECTED_ROUTES: ProtectedRouteConfig[] = [
   protectedRoute("/portal", ClienteInicio),
   protectedRoute("/portal/estoque", ClienteEstoque),
   protectedRoute("/portal/eventos", ClienteEventos),
+  // O formulário da edição do evento só existe com a liberação dos Eventos (parte 4).
+  ...(EVENTOS_LIBERADO ? [protectedRoute("/portal/eventos/novo", ClienteEventoNovo), protectedRoute("/portal/eventos/edicao", ClienteEventoEdicao)] : []),
   protectedRoute("/portal/recebimentos", ClienteEnvios),
   protectedRoute("/portal/solicitacoes", ClientRequestsRedirect),
   protectedRoute("/portal/pedidos", ClientePedidos),

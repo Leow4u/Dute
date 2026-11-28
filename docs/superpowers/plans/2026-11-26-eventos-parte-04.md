@@ -79,6 +79,70 @@ hora da tela é a de São Paulo.
    `enviarEdicao` (T1, `cronograma.test.ts`; T3, `formulario.test.ts` e
    `evento-formulario-rascunho.test.tsx`).
 
+## Conferido contra o código e corrigido na execução (27/11/2026)
+
+O rascunho abaixo foi escrito antes das partes 2 e 3. A sessão da parte 4
+o conferiu contra a `main` no `8380c392` e as pranchas; o que mudou vale por
+cima do texto das tarefas:
+
+1. **O realtime-sync não assina as três coleções** (T6). Sem chave em
+   `COLLECTION_QUERY_KEYS`, a escuta da sessão inteira leria toda edição do
+   cliente sem invalidar nada; as telas já leem ao vivo
+   (`useLeituraDoPortal`). `realtime-sync.test.ts` trava que o cliente com a
+   armazenagem não as assina.
+2. **O valor declarado vem do preço** (T3). `formularioDaEdicao(edicao,
+   evento, preco)` e `gravadoDaEdicao(edicao, evento, preco)` leem
+   `client_event_prices` (`usePrecosDoCliente`); sem isso, o rascunho
+   reaberto mandaria `valor_declarado_cents: null` e apagaria o valor.
+3. **O gravado do patch** é `GravadoDaEdicao = { nome, descricao,
+   valorDeclaradoCents, itens }`: o patch leva o evento, o valor declarado e
+   os itens só quando mudaram desde a última gravação (cada patch com itens
+   relê até 100 `client_inventory` na transação do servidor). O resto do
+   formulário (onde, cronograma, coleta, observações) vai sempre.
+4. **A troca de rota no nascimento remonta a tela** (`ProtectedRoute` com
+   `key` pelo caminho): a aba entrega o formulário, o gravado e a versão à
+   tela da rota nova (`ENTREGAS`, por id, em `evento-formulario.tsx`); a
+   criação repetida (`created: false`) marca o gravado como desconhecido, e o
+   patch seguinte leva o formulário inteiro.
+5. `criacaoDoFormulario(form, chave, capa)` recebe a capa escolhida (`{ id,
+   nome, descricao }`) no lugar do `eventId`, para levar em `patch.evento` o
+   que a pessoa mudou nela. A `?evento=` preenche a capa sem fazer a edição
+   nascer; "Enviar para a Dutelog" fica bloqueado antes do nascimento, e o
+   Enter num campo não envia.
+6. **"Outro momento" é o botão da prancha** (T1, T3): `adicionarOutro(linhas)`
+   acrescenta a linha vazia, até cinco; `linhasDoFormulario` dá os sete
+   fixos e os outros gravados, sem a linha vazia à vista.
+7. **O cartão segue a prancha** (T1, T2): `CartaoDoEvento.esta` marca
+   "(esta)" só na edição aberta; as etapas e a linha do cronograma só
+   aparecem na edição aberta; `quando.rotulo` ganha "Em andamento" (no
+   evento e retornado) e fica null na cancelada; `itens` pode ser null (o
+   rascunho vazio) e, só com a coleta, "Coleta no cliente: N produtos". A
+   ordem da lista usa `limitesDoPeriodo(cronograma)`. O filtro começa em
+   Próximos, ou em Todos quando não há próximo. As ações de navegação do
+   cartão são links (`href` real); a view só recebe filtrar, buscar e
+   excluir.
+8. `faltasDeSaldo` soma o `available` dos produtos do mesmo SKU (o servidor
+   confere o saldo por SKU).
+9. **A edição apagada ou de outro cliente nega a leitura do documento** (a
+   regra lê `resource.data`): `ClienteEventoEdicao` mostra a falha com a nova
+   tentativa; a volta à lista fica para o status fora de `rascunho` e o
+   documento que a leitura recusa. A tela aberta fica aberta.
+10. `campoDaMensagem` põe a coleta antes da quantidade dos itens e reconhece
+    os campos do momento ("A data de Montagem…", "… está antes de …").
+11. O X do diálogo diz "Fechar a lista de itens": `DialogContent` ganha o
+    opcional `rotuloDoFechar`. A família de um tamanho mostra só o código
+    também no diálogo; o nome acessível do tamanho "Único" é só o nome do
+    produto; a quantidade inválida volta à de antes.
+12. Os anexos chegam à view por props (`anexos: { layout, planilhas }`,
+    `AnexosNaTela`); `tipoDoArquivo` tira o tipo da extensão quando o
+    `File.type` vem vazio (o `.xlsx` em alguns Windows).
+13. `leiturasDoPortal(...).eventos` entrou na T2, porque a lista a consome.
+14. O teste do "Carregando eventos…" usa o relógio falso (o rótulo entra aos
+    300 ms); a lista dos textos usa o espaço comum depois do "R$" (o
+    `textosDaTela` troca o espaço duro do `formatarReais`) e inclui as
+    camadas escondidas do `BotaoDeAcao` ("Salvando…", "Salvo", "Conferir",
+    "Enviando…").
+
 ---
 
 ### Task 1: `lib/eventos/`: rótulos, cronograma, itens, lista e leitura

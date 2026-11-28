@@ -1,504 +1,332 @@
 /*
- * Portal › Eventos: cada evento guarda o que vai para o local (cenografia,
- * mobiliário, brindes), onde é e como a Dutelog leva, monta e traz de volta.
- * "Usar no pedido" abre o Estoque com o pedido preenchido; quem confere e
- * envia é a pessoa. Nada aqui movimenta estoque.
+ * Portal › Eventos (docs/superpowers/specs/2026-11-26-eventos-design.md, "As
+ * telas › Portal"; prancha docs/mockups/EventosPortalLista.dc.html): um
+ * cartão por evento, com a edição da vez (o status, o período, o local, o
+ * cronograma, os itens e o preço fechado), as edições anteriores e as ações.
+ * As edições, as capas e os preços chegam ao vivo pelas regras do Firestore.
+ * O rascunho continua no formulário ("Continuar") ou é excluído; as outras
+ * abrem a edição. Nada aqui movimenta estoque.
  */
-import { useState, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { nomeComTamanho } from "@workspace/dominio";
-import {
-  AlertTriangle,
-  CalendarClock,
-  CalendarDays,
-  CheckCircle2,
-  MapPin,
-  Package,
-  Pencil,
-  Send,
-  Trash2,
-  Truck,
-  X,
-} from "lucide-react";
+import { Fragment, useRef, useState } from "react";
+import { ROTULO_DO_STATUS, type StatusDaEdicao } from "@workspace/dominio";
+import { Banknote, CalendarDays, Clock, Copy, MapPin, Package, Plus, Search } from "lucide-react";
+import { Link } from "wouter";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { BotaoDeAcao } from "@/components/ui/botao-de-acao";
 import { Button } from "@/components/ui/button";
 import { CarregandoNaRegiao } from "@/components/ui/carregando-na-regiao";
-import { BlocoSemConexao, ErroNaLeitura, useTentandoNoRelogio } from "@/components/ui/erro-na-leitura";
-import { FalhaNaSecao } from "@/components/ui/falha-na-secao";
-import { Dialog, DialogCancelar, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Chip } from "@/components/ui/chip";
+import { Confirmacao } from "@/components/ui/confirmacao";
+import { FaixaAoVivo, FalhaAoVivo, type LeituraAoVivoNaTela } from "@/components/ui/erro-na-leitura";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { relerDoZero } from "@/lib/carregando/reler-do-zero";
-import { useLeituraComFalha } from "@/lib/carregando/use-leitura-com-falha";
-import { ehFaltaDeConexao } from "@/lib/conexao";
-import {
-  eventDateLabel,
-  eventPiecesValue,
-  eventShortages,
-  isUpcoming,
-  MAX_TEXTO_DO_EVENTO,
-  productForEventItem,
-  sortEvents,
-  type ClientEvent,
-  type ClientEventItem,
-  type EventStockProduct,
-} from "@/lib/client-events";
+import { useAppUser } from "@/lib/auth";
+import { EVENTOS_LIBERADO } from "@/lib/liberacao";
+import { cartoesDaLista, contagemDosFiltros, filtrarCartoes, type CartaoDoEvento } from "@/lib/eventos/lista";
+import { ROTA_NOVO_EVENTO, hrefDaEdicao, hrefDoNovoDoEvento } from "@/lib/eventos/navegacao";
+import { ETAPAS_DA_EDICAO, FILTROS_DA_LISTA, ROTULO_DO_FILTRO, type FiltroDaLista } from "@/lib/eventos/rotulos";
+import { useEdicoesDoCliente, useEventosDoCliente, usePrecosDoCliente } from "@/lib/eventos/use-eventos";
+import { hojeIso } from "@/lib/operacao/fila";
+import { novaChave } from "@/lib/operacao/api";
+import { novaTentativaDe } from "@/lib/operacao/leitura";
+import { useOperationProfile } from "@/lib/operation-profile";
+import { leiturasDoPortal } from "@/lib/operations";
+import { cn } from "@/lib/utils";
+import { cancelarEdicao } from "@/lib/wms/eventos";
 
-import { groupInventoryProducts } from "./estoque";
-import { clientEventsQueryKey, useArchiveClientEvent, useClientEvents, useSaveClientEvent } from "./events-api";
-import {
-  ClientDataBoundary,
-  ClientModuleShell,
-  formatMoney,
-  formatNumber,
-  getInventoryItems,
-} from "./shared";
+import { ClienteEventosModelos } from "./eventos-modelos";
+import { ClientDataBoundary, ClientModuleShell } from "./shared";
 
-/** Itens à mostra antes de "ver todos": evento grande passa de 15 linhas. */
-const PREVIEW_ITEMS = 6;
+export type ListaDeEventosViewProps = {
+  estado: "carregando" | "erro" | "pronto";
+  /** A nova tentativa e a falta das três leituras ao vivo. */
+  leitura: LeituraAoVivoNaTela;
+  /** Todos os cartões (cartoesDaLista); o filtro e a busca se aplicam aqui. */
+  cartoes: CartaoDoEvento[];
+  contagens: Record<FiltroDaLista, number>;
+  filtro: FiltroDaLista;
+  busca: string;
+  acoes: {
+    filtrar: (filtro: FiltroDaLista) => void;
+    buscar: (texto: string) => void;
+    excluir: (cartao: CartaoDoEvento) => void;
+  };
+};
 
-export function ClienteEventos() {
-  const leitura = useClientEvents();
-  // A nova tentativa sem dado fica na falha, com "Tentando de novo…" e o foco no botão (parte 13f).
-  const events = useLeituraComFalha(leitura);
-  // A nova tentativa no relógio: a que falha de novo antes de 300 ms não pisca o botão (parte 13f).
-  const tentandoOsEventos = useTentandoNoRelogio(leitura.isFetching && events.isError && !events.data);
-  const queryClient = useQueryClient();
-  const archive = useArchiveClientEvent();
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [editing, setEditing] = useState<ClientEvent | null>(null);
-  const [removing, setRemoving] = useState<ClientEvent | null>(null);
+const TITULO = "Eventos";
+const DESCRICAO = "O que vai para cada evento, como a Dutelog leva, monta e traz de volta, e o registro de cada edição.";
 
-  function remove(event: ClientEvent) {
-    // Quem fecha a confirmação é o sucesso; na falha, ela fica, com o aviso (parte 13a).
-    archive.mutate(event.id, {
-      onSuccess: () => {
-        setRemoving(null);
-        toast({ title: "Evento excluído", description: event.name });
-      },
-      onError: (error) =>
-        toast({ title: "Não foi possível excluir", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-    });
-  }
+const TOM_DO_SELO: Record<StatusDaEdicao, string> = {
+  rascunho: "border-border bg-muted text-muted-foreground",
+  enviado: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  confirmado: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  separado: "border-info-soft-border bg-info-soft text-info-soft-foreground",
+  no_evento: "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
+  retornado: "border-amber-soft-border bg-amber-soft text-amber-soft-foreground",
+  fechado: "border-success-soft-border bg-success-soft text-success-soft-foreground",
+  cancelado: "border-border bg-muted text-muted-foreground",
+};
 
+function NovoEvento({ variante }: { variante: "default" | "outline" }) {
   return (
-    <ClientDataBoundary titulo="Eventos">
-      {(overview) => {
-        const products = groupInventoryProducts(getInventoryItems(overview));
-        const list = sortEvents(events.data ?? []);
-        return (
-          <ClientModuleShell
-            overview={overview}
-            title="Eventos"
-            description="Cada evento já tem a lista do que vai para o local. Na próxima edição, é só usar no pedido: a Dutelog leva, monta e traz de volta."
-            icon={CalendarDays}
-          >
-            {events.isLoading ? (
-              // O título fica; sob ele, a caixa e "Carregando eventos…" aos 300 ms (carregamento v2, parte 13f).
-              <CarregandoNaRegiao
-                rotulo="Carregando eventos…"
-                continuaARota
-                onTentar={() => void relerDoZero(queryClient, [clientEventsQueryKey])}
-              />
-            ) : events.isError && !events.data ? (
-              ehFaltaDeConexao(events.error) ? (
-                <BlocoSemConexao tentando={leitura.isFetching} onTentar={() => void leitura.refetch()} />
-              ) : (
-                <ErroNaLeitura
-                  mensagem="Não foi possível carregar os eventos."
-                  tentando={tentandoOsEventos}
-                  onTentar={() => void leitura.refetch()}
-                />
-              )
-            ) : (
-              <>
-                {events.isError && !ehFaltaDeConexao(events.error) ? (
-                  // A releitura que falhou não apaga a lista lida: fica escrita em cima dela, sem falar (momento 7).
-                  <FalhaNaSecao
-                    mensagem="Não foi possível atualizar os eventos."
-                    alerta={false}
-                    tentando={leitura.isFetching}
-                    onTentar={() => leitura.refetch()}
-                    className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3"
-                  />
-                ) : null}
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                  {list.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      products={products}
-                      open={expanded[event.id] ?? false}
-                      onToggle={() => setExpanded((current) => ({ ...current, [event.id]: !current[event.id] }))}
-                      onEdit={() => setEditing(event)}
-                      onRemove={() => setRemoving(event)}
-                      onUse={() => navigate(`/portal/estoque?evento=${encodeURIComponent(event.id)}`)}
-                    />
-                  ))}
-                  <article className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center">
-                    <CalendarDays className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-                    <p className="font-medium">{list.length ? "Criar outro evento" : "Nenhum evento ainda"}</p>
-                    <p className="max-w-sm text-sm text-muted-foreground">
-                      Monte o pedido no Estoque com tudo o que vai para o local, preencha onde entregar e clique em Salvar como evento.
-                    </p>
-                    <Button type="button" variant="outline" size="sm" className="mt-1 cursor-pointer" onClick={() => navigate("/portal/estoque")}>
-                      Ir para o Estoque
-                    </Button>
-                  </article>
-                </div>
-              </>
-            )}
-
-            {editing ? <EventEditDialog event={editing} onClose={() => setEditing(null)} /> : null}
-
-            <AlertDialog open={Boolean(removing)} ocupado={archive.isPending} onOpenChange={(open) => (!open ? setRemoving(null) : null)}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir {removing?.name}?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    O evento sai da lista. Pedidos já enviados com ele continuam como estão.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    estado={archive.isPending ? "andamento" : "repouso"}
-                    rotulo="Excluir"
-                    andamento="Excluindo…"
-                    onClick={() => {
-                      if (removing) remove(removing);
-                    }}
-                  />
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </ClientModuleShell>
-        );
-      }}
-    </ClientDataBoundary>
+    <Button asChild variant={variante} size={variante === "default" ? "lg" : "sm"} className="shrink-0">
+      <Link href={ROTA_NOVO_EVENTO}>
+        <Plus aria-hidden="true" />
+        Novo evento
+      </Link>
+    </Button>
   );
 }
 
-function EventCard({
-  event,
-  products,
-  open,
-  onToggle,
-  onEdit,
-  onRemove,
-  onUse,
-}: {
-  event: ClientEvent;
-  products: EventStockProduct[];
-  open: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-  onRemove: () => void;
-  onUse: () => void;
-}) {
-  const pieces = event.items.reduce((sum, item) => sum + item.quantity, 0);
-  const value = eventPiecesValue(event, products);
-  const shortages = eventShortages(event, products);
-  const shown = open ? event.items : event.items.slice(0, PREVIEW_ITEMS);
-  const when = eventDateLabel(event.next_date);
-  const upcoming = isUpcoming(event);
-
+function Etapas({ etapa }: { etapa: number }) {
   return (
-    <article className="flex flex-col rounded-lg border border-border bg-card">
-      <header className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3.5">
-        <div className="min-w-0">
-          <h2 className="font-semibold">{event.name}</h2>
-          {event.description ? <p className="mt-0.5 text-sm text-muted-foreground">{event.description}</p> : null}
-        </div>
-        {when ? (
+    <ol aria-label="Etapas da edição" className="flex items-start px-4 pb-3">
+      {ETAPAS_DA_EDICAO.map((status, indice) => (
+        <li key={status} aria-current={indice === etapa ? "step" : undefined} className="relative flex min-w-0 flex-1 flex-col items-center gap-1">
+          {indice < ETAPAS_DA_EDICAO.length - 1 ? (
+            <span aria-hidden="true" className={cn("absolute left-1/2 top-1.5 h-0.5 w-full", indice < etapa ? "bg-success-soft-border" : "bg-border")} />
+          ) : null}
           <span
-            className={
-              upcoming
-                ? "shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary-texto"
-                : "shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground"
-            }
-          >
-            {upcoming ? "Próxima edição" : "Última data"} · {when}
+            aria-hidden="true"
+            className={cn(
+              "relative z-10 size-3 rounded-full border-2",
+              indice < etapa ? "border-success-soft-foreground bg-success-soft-foreground" : indice === etapa ? "border-primary-fundo bg-primary ring-4 ring-primary/15" : "border-border bg-card",
+            )}
+          />
+          <span className={cn("whitespace-nowrap text-xs font-semibold", indice <= etapa ? "text-foreground" : "text-muted-foreground")}>{ROTULO_DO_STATUS[status]}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Cartao({ cartao, onExcluir }: { cartao: CartaoDoEvento; onExcluir: () => void }) {
+  const { evento, atual } = cartao;
+  const idDoTitulo = `evento-${evento.id}`;
+  const edicoes = [...cartao.anteriores, atual].sort((a, b) => (a.label ?? "").localeCompare(b.label ?? "", "pt-BR", { numeric: true }));
+  return (
+    <article aria-labelledby={idDoTitulo} className="flex flex-col rounded-lg border border-border bg-card">
+      <header className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3.5">
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <h2 id={idDoTitulo} className="text-lg font-bold tracking-tight">
+            {evento.name}
+          </h2>
+          <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-xs font-bold", TOM_DO_SELO[atual.status])}>
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+            {cartao.selo}
+          </span>
+        </div>
+        {cartao.quando ? (
+          <span className="shrink-0 whitespace-nowrap text-right text-sm font-bold">
+            {cartao.quando.texto}
+            {cartao.quando.rotulo ? <span className="block text-xs font-semibold text-muted-foreground">{cartao.quando.rotulo}</span> : null}
           </span>
         ) : null}
       </header>
 
-      <div className="flex flex-col gap-1.5 border-b border-border/60 px-4 py-3 text-sm text-muted-foreground">
-        <span className="flex items-start gap-2">
-          <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>
-            <span className="font-medium text-foreground">{event.venue}</span>
-            {event.address ? ` · ${event.address}` : null}
+      <div className="flex flex-col gap-1.5 px-4 py-3 text-sm text-muted-foreground">
+        {cartao.local ? (
+          <span className="flex items-start gap-2">
+            <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {cartao.local}
           </span>
+        ) : null}
+        {cartao.cronograma ? (
+          <span className="flex items-start gap-2">
+            <Clock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {cartao.cronograma}
+          </span>
+        ) : null}
+        {cartao.itens ? (
+          <span className="flex items-start gap-2">
+            <Package aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {cartao.itens}
+          </span>
+        ) : null}
+        {cartao.fechamento ? (
+          <span className="flex items-start gap-2">
+            <Banknote aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {cartao.fechamento}
+          </span>
+        ) : null}
+      </div>
+
+      {cartao.etapa !== null ? <Etapas etapa={cartao.etapa} /> : null}
+
+      <footer className="mt-auto flex flex-wrap items-center justify-between gap-2.5 border-t border-border/60 px-4 py-3">
+        <span className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+          <CalendarDays aria-hidden="true" className="size-4 shrink-0" />
+          Edições:
+          {edicoes.map((edicao, indice) => (
+            <Fragment key={edicao.id}>
+              {indice > 0 ? <span aria-hidden="true">·</span> : null}
+              {edicao === atual ? (
+                <b className="font-bold text-foreground">{edicao.label ?? "—"}</b>
+              ) : (
+                <Link href={hrefDaEdicao(edicao.id)} aria-label={`Edição ${edicao.label ?? ""}`.trim()} className="font-bold text-primary-texto hover:underline">
+                  {edicao.label ?? "—"}
+                </Link>
+              )}
+              {edicao === atual && cartao.esta ? <span>(esta)</span> : null}
+            </Fragment>
+          ))}
         </span>
-        {event.schedule ? (
-          <span className="flex items-start gap-2">
-            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {event.schedule}
-          </span>
-        ) : null}
-        {event.logistics ? (
-          <span className="flex items-start gap-2">
-            <Truck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {event.logistics}
-          </span>
-        ) : null}
-      </div>
-
-      <ul className="flex flex-1 flex-col divide-y divide-border/50 px-4">
-        {shown.map((item, index) => {
-          const photo = productForEventItem(item, products)?.photoUrl;
-          return (
-            <li key={`${item.sku_code}-${item.client_item_code ?? ""}-${index}`} className="flex items-center gap-3 py-2">
-              <span className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
-                {photo ? (
-                  <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                  <Package className="m-2.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{nomeComTamanho({ nome: item.product_name, codigo: item.client_item_code })}</span>
-                {item.client_item_code ? (
-                  <span className="block truncate text-xs text-muted-foreground">{item.client_item_code}</span>
-                ) : null}
-              </span>
-              <span className="shrink-0 text-sm font-medium">× {formatNumber(item.quantity)}</span>
-            </li>
-          );
-        })}
-      </ul>
-      {event.items.length > PREVIEW_ITEMS ? (
-        <Button type="button" variant="ghost" size="sm" className="mx-2 mb-2 cursor-pointer self-start text-primary-texto" onClick={onToggle}>
-          {open ? "Mostrar menos" : `Ver os ${formatNumber(event.items.length)} itens`}
-        </Button>
-      ) : null}
-
-      <div className="border-t border-border/60 px-4 py-3 text-sm">
-        {shortages.length ? (
-          <p className="flex items-start gap-2 text-warning-soft-foreground">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>
-              Falta no estoque de hoje:{" "}
-              {shortages
-                .map((item) => `${item.name} (precisa ${formatNumber(item.need)}, há ${formatNumber(item.have)})`)
-                .join("; ")}
-            </span>
-          </p>
-        ) : (
-          <p className="flex items-center gap-2 text-success-soft-foreground">
-            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Tudo disponível no estoque de hoje
-          </p>
-        )}
-        <p className="mt-1 text-muted-foreground">
-          {formatNumber(event.items.length)} {event.items.length === 1 ? "item" : "itens"} · {formatNumber(pieces)} peças
-          {value > 0 ? ` · ${formatMoney(value)} em peças (base do seguro de transporte)` : ""}
-        </p>
-      </div>
-
-      <footer className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="cursor-pointer text-muted-foreground"
-          aria-label={`Excluir ${event.name}`}
-          onClick={onRemove}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="cursor-pointer" onClick={onEdit}>
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          Editar
-        </Button>
-        <Button type="button" size="sm" className="cursor-pointer" onClick={onUse}>
-          <Send className="h-4 w-4" aria-hidden="true" />
-          Usar no pedido
-        </Button>
+        <span className="flex flex-wrap gap-2">
+          {cartao.acoes.excluirRascunho ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onExcluir}>
+              Excluir rascunho
+            </Button>
+          ) : null}
+          {cartao.acoes.continuar ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={hrefDaEdicao(atual.id)}>Continuar</Link>
+            </Button>
+          ) : null}
+          {cartao.acoes.abrir ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={hrefDaEdicao(atual.id)}>Abrir</Link>
+            </Button>
+          ) : null}
+          {cartao.acoes.novaEdicaoAPartirDe ? (
+            <Button asChild size="sm">
+              <Link href={hrefDoNovoDoEvento(evento.id)}>
+                <Copy aria-hidden="true" />
+                Nova edição a partir de {cartao.acoes.novaEdicaoAPartirDe}
+              </Link>
+            </Button>
+          ) : null}
+        </span>
       </footer>
     </article>
   );
 }
 
-/** Editar dados e quantidades. Item novo entra pelo Estoque (Salvar como evento). */
-export function EventEditDialog({ event, onClose }: { event: ClientEvent; onClose: () => void }) {
-  const save = useSaveClientEvent();
-  const { toast } = useToast();
-  const [form, setForm] = useState({
-    name: event.name,
-    description: event.description ?? "",
-    venue: event.venue,
-    address: event.address ?? "",
-    next_date: event.next_date ?? "",
-    schedule: event.schedule ?? "",
-    logistics: event.logistics ?? "",
-  });
-  const [items, setItems] = useState<ClientEventItem[]>(() => event.items.map((item) => ({ ...item })));
-  const set = (field: keyof typeof form) => (value: string) => setForm((current) => ({ ...current, [field]: value }));
-  const valid = form.name.trim() && form.venue.trim() && items.length > 0 && items.every((item) => item.quantity >= 1);
+/** A lista, só a apresentação: os dados chegam por props (ListaDeEventos). */
+export function ListaDeEventosView({ estado, leitura, cartoes, contagens, filtro, busca, acoes }: ListaDeEventosViewProps) {
+  const visiveis = filtrarCartoes(cartoes, filtro, busca);
+  return (
+    <ClientModuleShell overview={{}} title={TITULO} description={DESCRICAO} icon={CalendarDays} headerAction={<NovoEvento variante="default" />}>
+      {estado === "carregando" ? (
+        // O título fica; sob ele, a caixa e "Carregando eventos…" aos 300 ms (carregamento v2).
+        <CarregandoNaRegiao rotulo="Carregando eventos…" continuaARota onTentar={leitura.tentar} />
+      ) : estado === "erro" ? (
+        <FalhaAoVivo leitura={leitura} mensagem="Não foi possível carregar os eventos." className="rounded-lg border border-destructive-soft-border bg-destructive-soft px-5 py-3" />
+      ) : (
+        <>
+          <FaixaAoVivo leitura={leitura} />
+          <div className="flex flex-wrap items-center gap-2">
+            {FILTROS_DA_LISTA.map((item) => (
+              <Chip key={item} selected={item === filtro} count={`· ${contagens[item]}`} onClick={() => acoes.filtrar(item)}>
+                {ROTULO_DO_FILTRO[item]}
+              </Chip>
+            ))}
+            <label className="relative block w-full min-w-0 sm:ml-auto sm:w-80">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                aria-label="Buscar evento ou local"
+                placeholder="Buscar evento ou local"
+                value={busca}
+                onChange={(evento) => acoes.buscar(evento.target.value)}
+                className="pl-9"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {visiveis.map((cartao) => (
+              <Cartao key={cartao.evento.id} cartao={cartao} onExcluir={() => acoes.excluir(cartao)} />
+            ))}
+            <article className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-7 text-center">
+              <CalendarDays aria-hidden="true" className="size-6 text-muted-foreground" />
+              <p className="font-bold">{cartoes.length ? "Criar outro evento" : "Nenhum evento ainda"}</p>
+              <NovoEvento variante="outline" />
+            </article>
+          </div>
+        </>
+      )}
+    </ClientModuleShell>
+  );
+}
 
-  function submit() {
-    if (!valid) return;
-    save.mutate(
-      {
-        id: event.id,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        venue: form.venue.trim(),
-        address: form.address.trim() || null,
-        next_date: form.next_date || null,
-        schedule: form.schedule.trim() || null,
-        logistics: form.logistics.trim() || null,
-        items,
-      },
-      {
-        onSuccess: () => {
-          toast({ title: "Evento salvo", description: form.name.trim() });
-          onClose();
-        },
-        onError: (error) =>
-          toast({ title: "Evento não salvo", description: error instanceof Error ? error.message : "", variant: "destructive" }),
-      },
-    );
+/**
+ * A página da lista: as três leituras ao vivo pelo código do cliente da
+ * conta, só com a armazenagem no contrato (leiturasDoPortal). O filtro
+ * começa em Próximos, ou em Todos quando não há próximo.
+ */
+export function ListaDeEventos() {
+  const { user } = useAppUser();
+  const { profile } = useOperationProfile();
+  const leituras = profile ? leiturasDoPortal(profile.modules) : null;
+  const codigo = user?.publicMetadata.customer_code;
+  const ligado = Boolean(leituras?.eventos);
+  const eventos = useEventosDoCliente(codigo, ligado);
+  const edicoes = useEdicoesDoCliente(codigo, ligado);
+  const precos = usePrecosDoCliente(codigo, ligado);
+  const [escolhido, setEscolhido] = useState<FiltroDaLista | null>(null);
+  const [busca, setBusca] = useState("");
+  const [excluindo, setExcluindo] = useState<CartaoDoEvento | null>(null);
+  const [ocupada, setOcupada] = useState(false);
+  // A mesma chave na nova tentativa de excluir o mesmo rascunho: a exclusão repetida não apaga outra coisa.
+  const chaves = useRef(new Map<string, string>());
+  const { toast } = useToast();
+
+  async function excluir(cartao: CartaoDoEvento) {
+    const id = cartao.atual.id;
+    const chave = chaves.current.get(id) ?? novaChave();
+    chaves.current.set(id, chave);
+    setOcupada(true);
+    try {
+      await cancelarEdicao({ id, idempotency_key: chave });
+      // Quem fecha a confirmação é o sucesso; na falha, ela fica, com o aviso (parte 13a).
+      setExcluindo(null);
+      toast({ title: "Rascunho excluído", description: cartao.evento.name });
+    } catch (erro) {
+      toast({ title: "Não foi possível excluir", description: erro instanceof Error ? erro.message : "", variant: "destructive" });
+    } finally {
+      setOcupada(false);
+    }
   }
 
+  const leiturasAoVivo = [eventos, edicoes, precos];
+  const tentativa = novaTentativaDe(leiturasAoVivo);
+  const estado = leiturasAoVivo.some((leitura) => leitura.erro && leitura.itens === null)
+    ? "erro"
+    : leiturasAoVivo.every((leitura) => leitura.itens !== null)
+      ? "pronto"
+      : "carregando";
+  const cartoes = cartoesDaLista(eventos.itens ?? [], edicoes.itens ?? [], precos.itens ?? [], hojeIso());
+  const contagens = contagemDosFiltros(cartoes);
+  const filtro = escolhido ?? (contagens.proximos ? "proximos" : "todos");
+
   return (
-    // Só fecha depois do retorno: fechar no meio desmontava a janela, e o
-    // aviso do salvo (ou da falha) do mutate não chegava (parte 13a).
-    <Dialog open ocupado={save.isPending} onOpenChange={(open) => (!open ? onClose() : null)}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
-        <DialogHeader>
-          <DialogTitle>Editar evento</DialogTitle>
-          <DialogDescription>Mude a data da próxima edição, o local, a montagem e as quantidades.</DialogDescription>
-        </DialogHeader>
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(submitEvent) => {
-            submitEvent.preventDefault();
-            submit();
-          }}
-        >
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-            <Field id="event-name" label="Nome" required>
-              <Input id="event-name" value={form.name} onChange={(change) => set("name")(change.target.value)} maxLength={120} />
-            </Field>
-            <Field id="event-date" label="Próxima edição">
-              <Input id="event-date" type="date" value={form.next_date} onChange={(change) => set("next_date")(change.target.value)} />
-            </Field>
-          </div>
-          <Field id="event-description" label="Descrição">
-            <Input
-              id="event-description"
-              value={form.description}
-              onChange={(change) => set("description")(change.target.value)}
-              placeholder="Ex.: palco, lounge e área de fotos"
-              maxLength={MAX_TEXTO_DO_EVENTO}
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field id="event-venue" label="Local" required>
-              <Input id="event-venue" value={form.venue} onChange={(change) => set("venue")(change.target.value)} maxLength={160} />
-            </Field>
-            <Field id="event-address" label="Endereço">
-              <Input id="event-address" value={form.address} onChange={(change) => set("address")(change.target.value)} maxLength={MAX_TEXTO_DO_EVENTO} />
-            </Field>
-          </div>
-          <Field id="event-schedule" label="Montagem e retorno">
-            <Textarea
-              id="event-schedule"
-              rows={2}
-              value={form.schedule}
-              onChange={(change) => set("schedule")(change.target.value)}
-              placeholder="Ex.: montagem na véspera a partir das 7h, retorno ao galpão no dia seguinte"
-              maxLength={MAX_TEXTO_DO_EVENTO}
-            />
-          </Field>
-          <Field id="event-logistics" label="Transporte e equipe">
-            <Textarea
-              id="event-logistics"
-              rows={2}
-              value={form.logistics}
-              onChange={(change) => set("logistics")(change.target.value)}
-              placeholder="Ex.: 1 caminhão baú e 4 montadores"
-              maxLength={MAX_TEXTO_DO_EVENTO}
-            />
-          </Field>
-
-          <div className="space-y-1.5">
-            <Label>Itens</Label>
-            <ul className="divide-y divide-border/50 rounded-lg border border-border">
-              {items.map((item, index) => (
-                <li key={`${item.sku_code}-${item.client_item_code ?? ""}-${index}`} className="flex items-center gap-3 px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-sm">{nomeComTamanho({ nome: item.product_name, codigo: item.client_item_code })}</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    aria-label={`Quantidade de ${nomeComTamanho({ nome: item.product_name, codigo: item.client_item_code })}`}
-                    className="h-9 w-24"
-                    value={item.quantity}
-                    onChange={(change) => {
-                      const quantity = Math.max(0, Math.floor(Number(change.target.value) || 0));
-                      setItems((current) => current.map((entry, at) => (at === index ? { ...entry, quantity } : entry)));
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="cursor-pointer text-muted-foreground"
-                    aria-label={`Tirar ${item.product_name} do evento`}
-                    disabled={items.length === 1}
-                    onClick={() => setItems((current) => current.filter((_, at) => at !== index))}
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">Para incluir itens, use no pedido, ajuste no Estoque e salve como um novo evento.</p>
-          </div>
-
-          <DialogFooter>
-            <DialogCancelar onClick={onClose} />
-            <BotaoDeAcao type="submit" estado={save.isPending ? "andamento" : "repouso"} rotulo="Salvar" andamento="Salvando…" bloqueado={!save.isPending && !valid} />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <ClientDataBoundary titulo={TITULO}>
+      {() => (
+        <>
+          <ListaDeEventosView
+            estado={estado}
+            leitura={tentativa}
+            cartoes={cartoes}
+            contagens={contagens}
+            filtro={filtro}
+            busca={busca}
+            acoes={{ filtrar: setEscolhido, buscar: setBusca, excluir: setExcluindo }}
+          />
+          <Confirmacao
+            aberta={Boolean(excluindo)}
+            ocupada={ocupada}
+            titulo={`Excluir o rascunho de ${excluindo?.evento.name ?? ""}?`}
+            confirmar="Excluir"
+            confirmando="Excluindo…"
+            perigo
+            onConfirmar={() => {
+              if (excluindo) void excluir(excluindo);
+            }}
+            onFechar={() => setExcluindo(null)}
+          />
+        </>
+      )}
+    </ClientDataBoundary>
   );
 }
 
-function Field({ id, label, required, children }: { id: string; label: string; required?: boolean; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>
-        {label}
-        {required ? (
-          <span className="text-destructive" aria-hidden="true">
-            {" "}
-            *
-          </span>
-        ) : null}
-      </Label>
-      {children}
-    </div>
-  );
-}
+/** Portal › Eventos: a lista nova só com a liberação dos Eventos; fora dela, a tela de hoje (o legado, até a parte 12). */
+export const ClienteEventos = () => (EVENTOS_LIBERADO ? <ListaDeEventos /> : <ClienteEventosModelos />);

@@ -157,6 +157,8 @@ export function leiturasDoPortal(modules: readonly ModuloContratavel[]) {
     pedidos: armazenagem,
     solicitacoes: armazenagem,
     documentos: armazenagem,
+    // Os Eventos do portal (client_events, client_event_editions, client_event_prices): a regra pede a armazenagem.
+    eventos: armazenagem,
     servicos: !SOMENTE_ARMAZENAGEM && modules.includes("operacao"),
     faturas: modules.includes("financeiro"),
   };

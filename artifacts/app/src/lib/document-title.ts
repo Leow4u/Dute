@@ -38,6 +38,8 @@ const EXTRA_RULES: TitleRule[] = [
   { path: "/faturamento/fatura", label: "Fatura" },
   { path: "/portal/faturas/fatura", label: "Fatura" },
   { path: "/portal/faturas/relatorio", label: "Relatório" },
+  { path: "/portal/eventos/novo", label: "Novo evento" },
+  { path: "/portal/eventos/edicao", label: "Edição do evento" },
   { path: "/agente/conhecimento", label: "Conhecimento" },
   { path: "/solicitacoes", label: "Solicitações" },
   { path: "/movements", label: "Histórico de movimentos" },
