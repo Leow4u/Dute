@@ -129,6 +129,10 @@ jobs:
       - name: Testes do acerto-btg-2026-10 (node --test)
         working-directory: .
         run: node --test "tools/acerto-btg-2026-10/*.test.mjs"
+      # Usa as contas compiladas do WMS (functions/wms/lib), do passo "Unitários do WMS".
+      - name: Testes do tirar-chegada-da-cobranca (node --test)
+        working-directory: .
+        run: node --test "tools/tirar-chegada-da-cobranca/*.test.mjs"
       - name: Install Java (emulador do blog)
         uses: actions/setup-java@v4
         with:
