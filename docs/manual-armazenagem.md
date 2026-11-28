@@ -360,6 +360,14 @@ mínimo), "Reservados", "Sem foto", "Zerados" e, onde a memória roda,
   entrada. O `RECEBIMENTO` e a `EXPEDICAO` vêm no fim, sem data. Enquanto as
   datas carregam, ou se a leitura falha, aparece a quantidade de cada local.
 
+- **"Últimos movimentos"**: os 5 mais recentes do item, cada um com o tipo, o
+  motivo (o pedido, o recebimento, a guarda, a contagem ou o motivo digitado
+  no ajuste, como em "Pedido PED-0012" e "Ajuste: Avaria"), quem fez e
+  quando. O motivo e quem fez seguem a regra de Relatórios › Movimentações; a
+  mudança de prateleira diz só "Mudança de prateleira", sem caixa nem
+  prateleira. No "Histórico", os dois ficam nas colunas "Motivo" e
+  "Operador".
+
 - **Ações:** "Adicionar foto" ou "Mais fotos" (`owner`, `admin`, `interno` e
   `wms`, até 4 por vez); "Contar este item"; "Editar cadastro" (os dois
   códigos só se leem: são a identidade do item; o código do cliente digitado

@@ -795,6 +795,21 @@ v3 de uma caixa. Desenho em
 | O Mapa depois, no emulador | `mover-caixa/07-mapa-depois.png` | A tela de verdade contra o emulador (19/11/2026), depois de mover três caixas: a CX-000121 de A-01 para B-09 pela sugestão, e a CX-000140 e a CX-000141 de A-02 para C-02. Mostra "Mover caixa" no cabeçalho e, na ficha da B-09, as duas caixas com "Etiqueta" e "Mover" no rodapé. |
 | A caixa movida, no emulador | `mover-caixa/08-movida-emulador.png` | A tela de verdade contra o emulador: "CX-000141 em C-02", de onde saiu, as unidades, a hora e quem moveu, com "Etiquetas para trocar · 2" no topo (as caixas movidas ainda sem etiqueta nova). |
 
+### Armazenagem · Quem fez e por quê na ficha e no Histórico (28/11/2026)
+
+A ficha do item e o Histórico do Estoque liam o `responsavel` do razão de
+antes das Functions, que nenhuma Function grava, e não diziam o motivo.
+Passaram a ler o `actor` e os vínculos do movimento pela mesma regra de
+Relatórios › Movimentações (`quemFezOMovimento` e `motivoDoMovimento`, em
+`artifacts/app/src/lib/reports.ts`). Render dos componentes reais com dados
+de exemplo; entra na `main` com o OK do Leonardo.
+
+| Tela | Arquivo | O que mostra |
+|---|---|---|
+| Estoque › Itens, a ficha do item | `estoque-quem-e-motivo/01-ficha.png` | Os "Últimos movimentos" com o tipo e o motivo ("Pedido PED-0043", "Ajuste: Achado na conferência", "Guarda RECEBIMENTO → B-02"), quem fez e quando; a mudança de prateleira só com o rótulo, sem caixa nem prateleira. |
+| Estoque › Histórico | `estoque-quem-e-motivo/02-historico.png` | As colunas "Motivo" e "Operador" no fim da tabela, com o pedido, a mudança de prateleira com as prateleiras, o ajuste, a contagem, a guarda e o recebimento. |
+| Estoque › Histórico no celular | `estoque-quem-e-motivo/03-historico-celular.png` | O motivo e quem fez na linha de detalhes de cada cartão. |
+
 ## Regras da v3
 
 - Menu lateral preto `#161616` com logo branco; item ativo com marcador
