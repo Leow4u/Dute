@@ -559,9 +559,8 @@ entrega?, corrigir?, expected_edicao?, idempotency_key })`:
 As fotos vão por `attachEventPhoto` com o `momento_id`; a ficha mostra as
 fotos agrupadas por momento. A foto anexada por engano sai por
 `removeEventPhoto`, só pela coordenação (decisão 16). O comprovante de
-entrega assinado, quando
-houver, é um documento anexado pela Dutelog com o momento
-`entrega_no_local`; sem ele, o comprovante é o texto da expedição.
+entrega assinado, quando houver, é um documento anexado pela Dutelog com o
+momento `entrega_no_local`; sem ele, o comprovante é o texto da expedição.
 
 ### O retorno ao estoque
 

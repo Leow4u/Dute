@@ -330,9 +330,8 @@ para 1, "Os outros 2 voltaram iguais" zera "Por conferir", "Confirmar
 retorno" antes disso mostra a frase de `podeConfirmarRetorno` e não chama
 `onConfirmar`; depois, chama com a entrada da tela.
 
-`evento-view.test.tsx` (parte 8): os estados dela (os cinco da T4 e o das
-três fotos da T6) passam `retorno: null` (a prop é obrigatória; com ela
-null, o bloco não aparece);
+`evento-view.test.tsx` (parte 8): os seis estados dela passam
+`retorno: null` (a prop é obrigatória; com ela null, o bloco não aparece);
 a lista `PERMITIDOS` ganha "Registrar retorno" (a ação da linha "Retorno ao
 estoque Dutelog") e os textos do bloco do retorno com os dados do fixture:
 os rótulos e as regex da lista de `retorno-da-edicao.test.tsx`, os nomes e

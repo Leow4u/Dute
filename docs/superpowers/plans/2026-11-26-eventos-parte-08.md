@@ -106,7 +106,7 @@ no bucket, como o do documento retirado, e a retirada grava o evento
 
 **Files:**
 - Create: `functions/wms/src/domain/eventos/momentos.ts`
-- Modify: `functions/wms/src/domain/eventos/edicao.ts` (`ROTULO_DO_CAMPO` ganha `momento_id` → "o momento", `inicio` → "o início", `fim` → "o fim", `entrega.quem_levou` → "quem levou", `entrega.placa` → "a placa", `entrega.quem_recebeu` → "Quem recebeu"; a `observacao` fica fora do mapa global: a callable passa `{ observacao: "A observação do momento" }` no terceiro argumento de `entradaDe`, porque a parte 9 dá à mesma chave o rótulo do retorno)
+- Modify: `functions/wms/src/domain/eventos/edicao.ts` (`ROTULO_DO_CAMPO` ganha `inicio` → "o início", `fim` → "o fim", `entrega.quem_levou` → "quem levou", `entrega.placa` → "a placa", `entrega.quem_recebeu` → "Quem recebeu"; `momento_id` → "o momento" já está lá desde a parte 3; a `observacao` fica fora do mapa global: a callable passa `{ observacao: "A observação do momento" }` no terceiro argumento de `entradaDe`, porque a parte 9 dá à mesma chave o rótulo do retorno)
 - Test: `functions/wms/src/domain/eventos/momentos.test.ts` (`test:unit`, ao fim da lista)
 - Test: `functions/wms/src/domain/eventos/momentos.integration.test.ts` (T5; escreva os casos 1 a 7 já aqui, para dirigir a transação)
 
@@ -522,7 +522,7 @@ git commit -m "test(wms): a ficha registra, corrige e fotografa os momentos da e
 - Produces (`index.ts` e a matriz): `export const removeEventPhoto = onCall(async (request) => { const profile = await getProfile(request); requireOperationsCoordinator(profile); assertEventosLiberado(PROJECT_ID); return removeEventPhotoTransaction(db, entradaDe(RetirarFotoSchema, request.data ?? {}), profile); });` (pela callable, quem não é da coordenação recebe a frase do gate; "Só a coordenação retira fotos." é a do domínio, que os testes chamam direto) e, na `MATRIZ`, `removeEventPhoto: { passam: COORDENACAO, recusa: SO_COORDENACAO },`.
 - Produces (app, `lib/eventos/tipos.ts` e `lib/wms/eventos.ts`): `type RetirarFoto = { edition_id: string; foto_id: string; idempotency_key: string }` e `type ResultadoDaRetiradaDaFoto = { id: string; edicao: number; fotos: number }`; `retirarFoto(entrada: RetirarFoto): Promise<ResultadoDaRetiradaDaFoto>` (`chamarEventos("removeEventPhoto", entrada)`); `"removeEventPhoto"` em `CALLABLES_DOS_EVENTOS`.
 - Produces (`lib/eventos/ficha.ts`, puro): `podeRetirarFoto(papel: string | null | undefined, status: StatusDaEdicao): boolean` = owner, admin ou interno, de `confirmado` a `retornado`; `rotuloDaFoto(edicao: EdicaoView, fotoId: string): string | null` = "foto 2 de Montagem": a posição da foto entre as do mesmo momento, na ordem de `edicao.fotos`, com o rótulo de `ROTULO_DO_MOMENTO` ou o `rotulo` do `outro`; `null` para a foto que não está na edição e para a foto sem momento no cronograma (`momento_id` `null` ou de um momento que não está nele).
-- Produces (`pages/evento-view.tsx` e `pages/evento.tsx`, T4, modificados): `PropsDaFicha` ganha `retiraFoto: boolean` e `onRetirarFoto(foto_id: string): void`. Com `retiraFoto`, cada miniatura do bloco "Fotos" tem no canto o botão de retirar, só ícone (`Trash2`), com o `aria-label` "Retirar foto 2 de Montagem" ("Retirar " + `rotuloDaFoto`); sem `retiraFoto`, nenhuma tem. A página dá `retiraFoto` = `podeRetirarFoto(papel, edicao.status)` e, no clique, abre a `Confirmacao`: `titulo` "Retirar a foto 2 de Montagem?", `confirmar` "Retirar foto", `confirmando` "Retirando…", `perigo`, sem `descricao` (nada de legenda); fecha só no sucesso, com o toast "Foto retirada", e na recusa fica aberta, com o toast "Foto não retirada" e a frase do servidor na descrição. A prancha não desenha esse botão (a spec o pede, como o bloco "Onde").
+- Produces (`pages/evento-view.tsx` e `pages/evento.tsx`, T4, modificados): `PropsDaFicha` ganha `retiraFoto: boolean` e `onRetirarFoto(foto_id: string): void`. Com `retiraFoto`, cada miniatura do bloco "Fotos" tem no canto o botão de retirar, só ícone (`Trash2`), com o `aria-label` "Retirar foto 2 de Montagem" ("Retirar " + `rotuloDaFoto`); a miniatura da foto sem rótulo (`null`) fica sem botão; sem `retiraFoto`, nenhuma tem. A página dá `retiraFoto` = `podeRetirarFoto(papel, edicao.status)` e, no clique, abre a `Confirmacao`: `titulo` "Retirar a foto 2 de Montagem?", `confirmar` "Retirar foto", `confirmando` "Retirando…", `perigo`, sem `descricao` (nada de legenda); fecha só no sucesso, com o toast "Foto retirada", e na recusa fica aberta, com o toast "Foto não retirada" e a frase do servidor na descrição. A prancha não desenha esse botão (a spec o pede, como o bloco "Onde").
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -564,8 +564,8 @@ mesma posição, e "os títulos são os da timeline" confere o título:
 `arquivos.integration.test.ts`: o ajudante `retirarFoto` ao lado de `tirar` e
 `fotografar`, e o caso 11 depois do 10. A edição de `edicaoDaNecton` não tem
 Montagem (coleta, entrega, evento e retorno): a foto anexada por engano, a
-`errada`, é a da coleta.
-As duas fotos são do `rafael`, para o `wms` recusar também na que anexou.
+`errada`, é a da coleta. As duas fotos são do `rafael`, para o `wms` recusar
+também na que anexou.
 
 ```ts
 async function retirarFoto(ator: Ator, raw: Record<string, unknown>) {
@@ -711,8 +711,8 @@ it("sem retiraFoto (o wms e o suporte) e na fechada, nenhum botão de retirar", 
 
 `tela(estado, extra)` é o do molde (`estoque-mapa-mover-view.test.tsx`), com
 o nome que T4 deu a ele; `noEvento`, `noEventoComTresFotos` e `fechada` são
-os estados acima, `necton`, a edição do primeiro, e `PERMITIDOS`, a lista de
-T4, sem texto novo: o botão é só ícone.
+os estados acima; `necton` é a edição do primeiro; `PERMITIDOS` é a lista de
+T4, sem texto novo, porque o botão é só ícone.
 
 `evento.test.tsx` (T5), quatro `it` novos. Nos três primeiros o
 `useDocumento` simulado devolve a Necton em `no_evento` com as três fotos da
@@ -729,16 +729,20 @@ it("com as onze fotos da Necton, 'Ver as 11 fotos' deixa as onze com o botão de
 No primeiro, `retirarFoto` é chamado uma vez, com `edition_id` (o id da
 edição lida), `foto_id: "ft_0000000000000003"` e a `idempotency_key` da
 tentativa, e só essas três chaves; enquanto a promessa não resolve, a
-confirmação continua na tela; resolvida, ela sai e o `toast` leva
-`title: "Foto retirada"`. No segundo, `retirarFoto` rejeita com o código
-`not-found` e a frase "Foto não encontrada.": a confirmação continua na
-tela e o `toast` leva `title: "Foto não retirada"`,
+confirmação continua na tela; resolvida a promessa, a confirmação sai e o
+`toast` leva `title: "Foto retirada"`. No segundo, `retirarFoto` rejeita com
+o código `not-found` e a frase "Foto não encontrada.": a confirmação
+continua na tela e o `toast` leva `title: "Foto não retirada"`,
 `variant: "destructive"` e `description: "Foto não encontrada."`. No
 terceiro, com o papel `wms` no `@/lib/auth` simulado, nenhum botão tem o
 nome começado por "Retirar foto", e "Adicionar fotos" continua na tela. No
 quarto, o `useDocumento` simulado devolve a Necton das onze fotos da
-prancha: depois do clique em "Ver as 11 fotos", os botões de nome começado
-por "Retirar foto" são onze, um por foto, onde quer que T4 as abra.
+prancha: depois do clique em "Ver as 11 fotos", os nomes dos botões
+começados por "Retirar foto", sem repetir, são os onze de
+`necton.fotos.map((foto) => "Retirar " + rotuloDaFoto(necton, foto.id))`,
+um por foto, onde quer que T4 as abra. A conta é dos nomes, não dos botões:
+se as miniaturas do bloco continuarem na tela atrás do que abriu, o mesmo
+nome aparece duas vezes.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -773,8 +777,8 @@ ganha o botão de retirar, no molde do de remover foto do Receber (só o ícone
 que chama `onRetirarFoto(foto.id)`; a miniatura sem rótulo (`null`) fica sem
 botão. A tarefa conta com o que a T4 desenhou no bloco "Fotos": uma miniatura
 por foto, com o `id` dela (o de `edicao.fotos`) à mão na view. O botão entra
-em toda foto que a ficha mostra, também nas que "Ver as N fotos" abre, no
-bloco ou fora dele. A página dá `retiraFoto` =
+em toda foto que a ficha mostra e que tem rótulo, também nas que "Ver as N
+fotos" abre, no bloco ou fora dele. A página dá `retiraFoto` =
 `podeRetirarFoto(papel, edicao.status)`, guarda a foto em confirmação (o `id`
 e o rótulo, lidos no clique: a foto pode sair da leitura ao vivo com a
 confirmação aberta) e abre a `Confirmacao`: `titulo` "Retirar a " + o
@@ -825,10 +829,10 @@ inteiro verde. O retorno, o preço e o botão "Fechar edição" da ficha ficam
 para as partes 9 e 10. O PR registra em
 `docs/superpowers/plans/2026-11-26-eventos.md` o que mudou de nome, se mudou.
 O botão de retirar a foto e a confirmação ("Retirar a foto 2 de Montagem?",
-"Retirar foto") não estão na prancha: a sessão anexa ao PR a foto do bloco
-"Fotos" com o botão e a da confirmação aberta e pede o OK do Leonardo antes
-do merge; aprovadas, as fotos entram no PR em
-`docs/mockups/eventos-wms-ficha/`, com uma linha na tabela dos Eventos de
-`docs/mockups/README.md` (a tela, o arquivo e o que mostra, como as fotos de
-`contagem-entrada/`), num commit próprio
+"Retirar foto") não estão na prancha: a sessão anexa ao PR duas fotos da
+tela, a do bloco "Fotos" com o botão e a da confirmação aberta, e pede o OK
+do Leonardo antes do merge; aprovadas, as duas entram no PR em
+`docs/mockups/eventos-wms-ficha/`, cada uma com a sua linha na tabela dos
+Eventos de `docs/mockups/README.md` (a tela, o arquivo e o que mostra, como
+as fotos de `contagem-entrada/`), num commit próprio
 (`git add docs/mockups/eventos-wms-ficha docs/mockups/README.md`).
