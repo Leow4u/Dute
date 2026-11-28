@@ -13,7 +13,7 @@ apagadas à mão antes de cada publicação.
 tela nova. `assertClientEventEditor` muda de `domain/client-events.ts` para
 `domain/eventos/edicao.ts` com as mesmas frases: as quatro linhas da matriz
 da parte 2 (`saveEventEdition`, `sendEventEdition`, `cancelEventEdition`,
-`archiveClientEvent`) recusam com `SO_EVENTOS_DO_CLIENTE`; as outras nove
+`archiveClientEvent`) recusam com `SO_EVENTOS_DO_CLIENTE`; as outras dez
 usam `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam. O app perde
 a liberação dos Eventos inteira: as rotas do portal e da Armazenagem, o
 módulo do menu, o Estoque, as leituras do Início e o "Evento" de Pedidos
@@ -65,7 +65,7 @@ Leonardo registrado, com a data; a T4 só com o CI do PR verde.
    ("Cliente sem código operacional.", "Perfil sem acesso aos eventos do
    cliente."): na `MATRIZ`, as quatro linhas da parte 2 (`saveEventEdition`,
    `sendEventEdition`, `cancelEventEdition`, `archiveClientEvent`) recusam
-   com a segunda (`SO_EVENTOS_DO_CLIENTE`); as outras nove usam
+   com a segunda (`SO_EVENTOS_DO_CLIENTE`); as outras dez usam
    `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam; o
    `edicao.test.ts` cobre as duas frases (T1).
 3. Os oito testes do Estoque montam `CartPanel` com `isSavingEvent` e
@@ -92,7 +92,7 @@ Leonardo registrado, com a data; a T4 só com o CI do PR verde.
 - Modify: `functions/wms/src/index.ts` (o `import { … } from "./domain/client-events.js"`, hoje linhas 172-178; `requestedCustomer` e as três callables com os comentários, hoje 7221-7253, só elas o usam; o import de `assertClientEventEditor` que a parte 2 trouxe passa a `./domain/eventos/edicao.js`)
 - Modify: `functions/wms/src/domain/eventos/edicao.ts` (recebe `assertClientEventEditor` e `INTERNAL_EDITORS`, hoje `client-events.ts` 24 e 81-89)
 - Modify: `functions/wms/src/domain/eventos/edicao-gravacao.ts` (o import de `assertClientEventEditor` de `../client-events.js`, que a parte 2 trouxe na T3, passa a `./edicao.js`; sem isso, apagar `client-events.ts` quebra o `typecheck`, e a trava de `platform-lists.test.ts` reprova o import antigo)
-- Modify: `functions/wms/src/callables-papeis.integration.test.ts` (as linhas `archiveClientEventTemplate`, hoje 94-98, `listClientEventTemplates`, 181, e `saveClientEventTemplate`, 250-254; `SO_EVENTOS_DO_CLIENTE`, linha 65, fica: as quatro linhas da parte 2, `saveEventEdition`, `sendEventEdition`, `cancelEventEdition` e `archiveClientEvent`, o usam; as outras nove dos Eventos usam `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam)
+- Modify: `functions/wms/src/callables-papeis.integration.test.ts` (as linhas `archiveClientEventTemplate`, hoje 94-98, `listClientEventTemplates`, 181, e `saveClientEventTemplate`, 250-254; `SO_EVENTOS_DO_CLIENTE`, linha 65, fica: as quatro linhas da parte 2, `saveEventEdition`, `sendEventEdition`, `cancelEventEdition` e `archiveClientEvent`, o usam; as outras dez dos Eventos usam `SO_ARMAZEM`, `SO_COORDENACAO` e `SO_FATURA` e não mudam)
 - Modify: `functions/wms/src/firestore.rules.test.ts` (a semente `client_event_templates/cev-a`, hoje 191-197, e o caso "eventos do portal só passam pelas Cloud Functions…", 628-642: coleção sem regra e sem código)
 - Modify: `functions/wms/package.json` (`lib/domain/client-events.integration.test.js` sai de `test:integration`)
 - Delete: `artifacts/app/src/pages/client/events-api.ts`, `artifacts/app/src/lib/client-events.ts`, `artifacts/app/src/lib/client-events.test.ts`; a tela legada que a parte 4 moveu, `pages/client/eventos-modelos.tsx` (`ClienteEventosModelos`, `EventEditDialog`), com `eventos-modelos-carregando.test.tsx`, `eventos-modelos-editar.test.tsx` e `eventos-modelos-excluir.test.tsx`; e `pages/client/eventos-liberacao.test.tsx` (parte 4, T7: só compara o novo com o legado)
@@ -227,12 +227,12 @@ git commit -m "feat: o legado dos eventos do portal sai (as três callables, o d
 - Modify: `docs/manual-portal.md` (a linha "Eventos" da tabela do menu, hoje 61; o bullet "Salvar como evento" do Estoque, 138-139, vira o modo "montando o evento"; a seção "## Eventos", 164-184, refeita)
 - Modify: `docs/manual-armazenagem.md` (a tabela do menu, hoje 13-24, ganha "Eventos"; "O cliente ativo", 51-54: "Mostram todos" ganha a agenda dos Eventos; a tabela do Início, 63-71, ganha as três linhas; seção nova "## Eventos" entre "## A entrega do pedido" e "## Receber", hoje 234; "## Devoluções", 521-529, a devolução que nasce do retorno; "## Quem vê valor", 554-561, o bloco "Preço fechado")
 - Modify: `CLAUDE.md` (bullet novo em "Verdades do projeto", antes de "**`pnpm` não está no PATH.**", hoje linha 593)
-- Modify: `docs/contrato-eventos-ai-native.md` (as três linhas `client_event_template.*`, hoje 43-45, saem; grupo novo "Eventos do cliente (a edição):" com os dezesseis tipos `evento.*` que as partes 2 a 11 gravam; o 17º de `EVENTO_EVENT_TYPES`, `evento.pedido_adotado`, entra no grupo na parte 13, que o grava)
+- Modify: `docs/contrato-eventos-ai-native.md` (as três linhas `client_event_template.*`, hoje 43-45, saem; grupo novo "Eventos do cliente (a edição):" com os dezessete tipos `evento.*` que as partes 2 a 11 gravam (com o `evento.foto_retirada`, da parte 8); o 18º de `EVENTO_EVENT_TYPES`, `evento.pedido_adotado`, entra no grupo na parte 13, que o grava)
 - Modify: `docs/api-cobertura.md` (linha 10, a coluna "Explicitamente fora desta versão" da Armazenagem ganha "; Eventos do cliente (`client_events`, `client_event_editions`, `client_event_prices`): não cobertos")
 - Modify: `docs/mockups/README.md` (hoje 834, "(nada no código ainda)" vira o registro: as partes 1 a 11 na `main`, com os PRs, e a parte 12; cada linha da tabela das oito pranchas ganha ao fim "No código desde DD/MM/2026 (PR N)", como a linha da Folha de contagem, 771)
 
 **Interfaces:**
-- Consumes: os nomes do índice: as três coleções, as treze callables, `op_evento_<ação>_<digest>`, `functions_client_events`, `EVENTO_EVENT_TYPES` (parte 2), `EVENTOS_COLLECTIONS` (parte 1), `functions_event_return` (parte 9), as rotas `/portal/eventos*` e `/eventos*`, `EVENTOS_AMBIENTES_LIBERADOS`.
+- Consumes: os nomes do índice: as três coleções, as catorze callables, `op_evento_<ação>_<digest>`, `functions_client_events`, `EVENTO_EVENT_TYPES` (parte 2), `EVENTOS_COLLECTIONS` (parte 1), `functions_event_return` (parte 9), as rotas `/portal/eventos*` e `/eventos*`, `EVENTOS_AMBIENTES_LIBERADOS`.
 - Produces: a seção "## Eventos" dos dois manuais e o bullet "Eventos do cliente" do CLAUDE.md, que a T3 e a T4 completam com as datas.
 
 - [ ] **Step 1: Write the six files**
@@ -279,13 +279,15 @@ nem explicação de código nos manuais:
   recebeu), "Registrar o retorno ao estoque" (Foi, Voltou, Avariadas, "Os
   outros N voltaram iguais", "Confirmar retorno"; a ENTRADA na EXPEDICAO e a
   guarda de volta; as avariadas nascem em Devoluções), "Fechar a edição" com
-  o que falta como dado, Fotos, Documentos, "Equipe e veículo", Histórico.
+  o que falta como dado, Fotos (a coordenação retira a foto anexada por
+  engano, pelo botão no canto da foto, com a confirmação "Retirar foto"; o
+  `wms` não retira), Documentos, "Equipe e veículo", Histórico.
   Devoluções: a linha "Retorno do evento" que nasce das avariadas. Quem vê
   valor: "Preço fechado" só para owner, admin e financeiro; o `wms` não vê o
   preço nem a proposta.
-- `CLAUDE.md`, o bullet diz: o que o evento é (decisões 1 a 13, a spec e as
+- `CLAUDE.md`, o bullet diz: o que o evento é (decisões 1 a 16, a spec e as
   pranchas); as três coleções, só o WMS escreve, o dinheiro só em
-  `client_event_prices`, nunca lida pelo `wms`; as treze callables de uma
+  `client_event_prices`, nunca lida pelo `wms`; as catorze callables de uma
   linha em `functions/wms/src/index.ts` com `assertEventosLiberado`, o
   domínio em `functions/wms/src/domain/eventos/`, os recibos `op_evento_*` e
   os eventos `evento.*` (`functions_client_events`, payload estrito sem
@@ -433,7 +435,7 @@ verde.
 - [ ] **Step 5: Depois de publicar**
 
 `cd C:\DEV\Dute; pwsh tools/check_functions_invoker.ps1 -ProjectId dute-prod`
-verde; `firebase functions:list --project dute-prod` com as treze callables
+verde; `firebase functions:list --project dute-prod` com as catorze callables
 dos Eventos e nenhuma `ClientEventTemplate`;
 `gcloud firestore indexes composite list --project dute-prod` com os cinco
 índices das edições `READY`; com um login da BTG, Eventos abre a lista nova

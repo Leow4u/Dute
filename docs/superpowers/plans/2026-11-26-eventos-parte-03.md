@@ -39,7 +39,8 @@ abaixo:
   a `edicao` viva); do lado do cliente, quem tira o documento é a empresa
   (qualquer pessoa do cliente, em `rascunho` e `enviado`; a conferência do
   `registrado_por.uid` fica só para quem opera fora da coordenação); e não
-  há retirada de foto.
+  há retirada de foto. A retirada entra depois, na parte 8: a decisão 16
+  foi revista no mesmo dia, e quem retira a foto é a coordenação.
 - `ArquivoNoBucket` leva `generation?` e `apagar(caminho, generation)`
   apaga só a geração conferida (a spec: "apagado por geração"), pela
   `conferirNoBucket(bucket, caminho, problemaDe)`; `codigoDaEdicao` lê a

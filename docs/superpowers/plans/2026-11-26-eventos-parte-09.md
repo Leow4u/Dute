@@ -283,7 +283,7 @@ git commit -m "feat(wms): a callable receiveEventReturn, a matriz e o wrapper do
 - Create: `artifacts/app/src/lib/eventos/retorno.ts`
 - Create: `artifacts/app/src/features/eventos/retorno-da-edicao.tsx`
 - Modify: `artifacts/app/src/lib/eventos/ficha.ts` (parte 8: `LinhaDaFicha["acao"]` ganha `"registrar_retorno"`; `acaoDoMomento`: `retorno_ao_estoque` em `no_evento` com `opera` → `"registrar_retorno"`), `artifacts/app/src/pages/evento-view.tsx` e `artifacts/app/src/pages/evento.tsx` (parte 8: `PropsDaFicha` ganha `retorno: PropsDoRetorno | null`; o bloco abaixo de "A edição, momento a momento" em `no_evento`, `retornado` e `fechado`, nos dois últimos só com o `retorno` gravado; a mutação)
-- Test: `artifacts/app/src/lib/eventos/retorno.test.ts`, `artifacts/app/src/features/eventos/retorno-da-edicao.test.tsx` (textos, `axe` e a interação); `artifacts/app/src/lib/eventos/ficha.test.ts` (parte 8: o `it` "as linhas na ordem da prancha" passa a esperar `"registrar_retorno"` na oitava posição, a Necton em `no_evento`; e duas asserções) e `artifacts/app/src/pages/evento-view.test.tsx` (parte 8: os cinco estados dela passam `retorno: null`, porque a prop é obrigatória; a lista `PERMITIDOS` ganha os textos do bloco do retorno e o "Registrar retorno" da linha do momento; e três asserções)
+- Test: `artifacts/app/src/lib/eventos/retorno.test.ts`, `artifacts/app/src/features/eventos/retorno-da-edicao.test.tsx` (textos, `axe` e a interação); `artifacts/app/src/lib/eventos/ficha.test.ts` (parte 8: o `it` "as linhas na ordem da prancha" passa a esperar `"registrar_retorno"` na oitava posição, a Necton em `no_evento`; e duas asserções) e `artifacts/app/src/pages/evento-view.test.tsx` (parte 8: os estados dela, os cinco da T4 e o das três fotos da T6, passam `retorno: null`, porque a prop é obrigatória; a lista `PERMITIDOS` ganha os textos do bloco do retorno e o "Registrar retorno" da linha do momento; e três asserções)
 
 **Interfaces:**
 - Consumes: `EdicaoView`, `ReceberRetorno` de `lib/eventos/tipos.ts`; `naoVoltaram`, `LIMITES`, `nomeComTamanho` de `@workspace/dominio`; `textoDoMostrando(mostrando, total)`, `textoDoVerMais(proximos)`, `PAGINA_DO_VER_MAIS` de `lib/eventos/itens.ts` (parte 4); `LinhaDaFicha`, `linhasDaFicha`, `acaoDoMomento`, `textoDoPrevisto` de `lib/eventos/ficha.ts` e `EventoView(props: PropsDaFicha)` com `opera`, `onAdicionarFotos(momento_id, files)` (parte 8); `receberRetorno` (T3); `BotaoDeAcao`/`EstadoDaAcao`, `useTentativaDaEscrita`, `desfechoDoErro`; `canOperateWarehouse` de `lib/permissions`.
@@ -330,7 +330,7 @@ para 1, "Os outros 2 voltaram iguais" zera "Por conferir", "Confirmar
 retorno" antes disso mostra a frase de `podeConfirmarRetorno` e não chama
 `onConfirmar`; depois, chama com a entrada da tela.
 
-`evento-view.test.tsx` (parte 8): os cinco estados dela passam
+`evento-view.test.tsx` (parte 8): os seis estados dela passam
 `retorno: null` (a prop é obrigatória; com ela null, o bloco não aparece);
 a lista `PERMITIDOS` ganha "Registrar retorno" (a ação da linha "Retorno ao
 estoque Dutelog") e os textos do bloco do retorno com os dados do fixture:
