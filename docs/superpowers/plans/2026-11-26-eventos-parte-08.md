@@ -5,14 +5,16 @@
 **Goal:** o Guilherme registra a edição pela Armazenagem: cada momento com
 hora, fim e observação, a correção da hora digitada errada, a entrega do
 pedido feita pela própria ficha (a remessa sai e chega), a equipe e o
-veículo, as fotos por momento e os documentos; o cliente lê tudo depois
-(parte 11).
+veículo, as fotos por momento e os documentos; a coordenação retira a foto
+anexada por engano; o cliente lê tudo depois (parte 11).
 
 **Architecture:** o domínio em `functions/wms/src/domain/eventos/momentos.ts`
 (regras puras e a transação do registro; a entrega encadeia
 `advanceWarehouseTaskTransaction` antes, como `completeOrderSeparation`) e
-`equipe.ts` (CAS por `edicao`, sem recibo, como o `patch`); duas callables
-de uma linha no `index.ts`; a ficha `/eventos/edicao?id=` no shell v3
+`equipe.ts` (CAS por `edicao`, sem recibo, como o `patch`); três callables
+de uma linha no `index.ts` (`registerEventMoment`, `saveEventEditionTeam` e
+`removeEventPhoto`, a retirada de foto, cujo domínio entra em `arquivos.ts`,
+da parte 3); a ficha `/eventos/edicao?id=` no shell v3
 (`pages/evento.tsx` lê a edição e os `events` dela ao vivo pelas regras,
 `pages/evento-view.tsx` só desenha), com as regras da tela em
 `lib/eventos/ficha.ts`. As fotos e os documentos usam as callables da parte
@@ -27,10 +29,13 @@ e axe-core no app.
 **Spec:** `docs/superpowers/specs/2026-11-26-eventos-design.md`, seções "O
 cronograma", "Os status e quem move cada um", "As callables", "O registro
 dos momentos", "Fotos e documentos", "As telas › Armazenagem" (a ficha, o
-link da agenda e o "Evento" de Pedidos), "Limites e mensagens". Índice:
+link da agenda e o "Evento" de Pedidos), "Limites e mensagens" e "Decisões
+do Leonardo" (a 16, a retirada de foto). Índice:
 `docs/superpowers/plans/2026-11-26-eventos.md`.
 Prancha: `docs/mockups/EventosWmsFicha.dc.html` (os textos dela são os da
-lista do teste) e `EventosWmsLista.dc.html` (os rótulos dos links da agenda).
+lista do teste; ela não desenha o botão de retirar a foto, que segue o de
+remover foto do Receber) e `EventosWmsLista.dc.html` (os rótulos dos links
+da agenda).
 
 ## Global Constraints
 
@@ -57,12 +62,21 @@ todo texto da ficha que mostra o previsto mostra então só o dia. No
 no local sem hora é recusada pelo servidor (`failed-precondition`, "Informe
 a data e a hora da entrega no local"), e o diálogo mostra a frase e fica
 aberto. O `feito` não muda: `inicio` e `fim` continuam instantes inteiros.
+A foto anexada por engano sai por `removeEventPhoto` (decisão 16 da spec,
+revista em 27/11/2026): só a coordenação (owner, admin, interno) retira,
+pelo gate `requireOperationsCoordinator`, e o `wms` não retira nem a que
+anexou; vale na edição aberta, que para a foto é de `confirmado` a
+`retornado` (em `fechado` e `cancelado`, "A edição já está fechada."; a
+foto que não está em `fotos`, "Foto não encontrada."); o registro sai de
+`fotos` com `updated_*`, sem subir a `edicao` (decisão 14), o arquivo fica
+no bucket, como o do documento retirado, e a retirada grava o evento
+`evento.foto_retirada` e o recibo `evento.foto.remove`.
 
 ## Review Focus
 
 1. A remessa já em `dispatched` (saiu, não chegou): a ficha roda só o passo
    `delivered`; a repetição com outra chave não cria segundo `op_advance_`
-   nem segunda SAÍDA (T5, caso 7).
+   nem segunda SAÍDA (T5, casos 7 e 8).
 2. `corrigir` em `entrega_no_local` com `origem: pedido`: `inicio` recusa
    com a frase; só `observacao` aceita, grava `corrigido_em` e não mexe no
    `inicio` (T5, caso 4).
@@ -78,6 +92,13 @@ aberto. O `feito` não muda: `inicio` e `fim` continuam instantes inteiros.
    recusa é a do servidor (`failed-precondition`, "Informe a data e a hora
    da entrega no local"), mostrada no diálogo, que fica aberto (T4,
    `ficha.test.ts`; T5, o caso do previsto sem hora da página).
+7. A retirada de foto (decisão 16 da spec): só a coordenação retira, na
+   callable (`requireOperationsCoordinator`) e no domínio
+   (`problemaParaRetirarFoto`), e o `wms` não retira nem a que anexou; a
+   `edicao` não sobe; nada se apaga no bucket; a repetição da chave devolve
+   o mesmo, sem segundo evento; a foto que já saiu recusa `not-found` "Foto
+   não encontrada.", também na repetição do anexo dela (T6: o caso 11 de
+   `arquivos.integration.test.ts` e a linha `removeEventPhoto` da matriz).
 
 ---
 
@@ -475,6 +496,320 @@ git add functions/wms/src/domain/eventos/momentos.integration.test.ts functions/
 git commit -m "test(wms): a ficha registra, corrige e fotografa os momentos da edição no emulador"
 ```
 
+### Task 6: a retirada de foto pela coordenação (`removeEventPhoto`) e o botão na ficha
+
+**Files:**
+- Modify: `functions/wms/src/domain/eventos/arquivos.ts` (parte 3: `RetirarFotoSchema` ao lado de `AnexarFotoSchema`, `problemaParaRetirarFoto` depois de `problemaParaTirarDocumento` e `removeEventPhotoTransaction` depois de `attachEventPhotoTransaction`)
+- Modify: `functions/wms/src/domain/eventos/eventos-auditoria.ts` (`"evento.foto_retirada"` logo depois de `"evento.foto_anexada"`, em `EVENTO_EVENT_TYPES`, `PAYLOAD_DO_EVENTO` e `TITULO_DO_EVENTO`)
+- Modify: `functions/wms/src/domain/eventos/edicao.ts` (`ROTULO_DO_CAMPO`: `foto_id` → "a foto", depois de `documento_id`)
+- Test: `functions/wms/src/domain/eventos/arquivos.test.ts` e `functions/wms/src/domain/eventos/eventos-auditoria.test.ts` (`test:unit`, os dois já na lista)
+- Test: `functions/wms/src/domain/eventos/arquivos.integration.test.ts` (`test:integration`, já na lista: o caso 11, depois do 10)
+- Modify: `functions/wms/src/index.ts` (uma linha no bloco "Eventos", logo depois de `attachEventPhoto`; `RetirarFotoSchema` e `removeEventPhotoTransaction` no import de `./domain/eventos/arquivos.js`)
+- Modify: `functions/wms/src/callables-papeis.integration.test.ts` (uma linha na `MATRIZ`, depois de `removeEventDocument`)
+- Modify: `artifacts/app/src/lib/eventos/tipos.ts` (`RetirarFoto` e `ResultadoDaRetiradaDaFoto`, ao fim, com os espelhos da parte 3) e `artifacts/app/src/lib/wms/eventos.ts` (o wrapper `retirarFoto`, depois de `anexarFoto`; `CALLABLES_DOS_EVENTOS` ganha `"removeEventPhoto"`)
+- Test: `artifacts/app/src/lib/wms/eventos.test.ts`
+- Modify: `artifacts/app/src/lib/eventos/ficha.ts` (T4: `podeRetirarFoto` e `rotuloDaFoto`), `artifacts/app/src/pages/evento-view.tsx` (T4: o botão de retirar em cada miniatura do bloco "Fotos") e `artifacts/app/src/pages/evento.tsx` (T4: a confirmação, a chamada e o toast)
+- Test: `artifacts/app/src/lib/eventos/ficha.test.ts` e `artifacts/app/src/pages/evento-view.test.tsx` (T4), `artifacts/app/src/pages/evento.test.tsx` (T5)
+- Modify: `docs/plataforma/lgpd.md` (a linha "Fotos da edição do evento" da tabela 1.8: `removeEventPhoto`, só a coordenação, retira o registro e deixa o arquivo, e o evento `evento.foto_retirada` e o recibo não levam a legenda; o item 5 de 4.1: o documento e a foto retirados somem do registro e o arquivo fica no bucket)
+
+**Interfaces:**
+- Consumes: de `arquivos.ts` (parte 3), `type RecusaDaRetirada = { code: "failed-precondition" | "permission-denied"; mensagem: string }`, `type FotoDaEdicao`, `fotosLidas(data: Record<string, unknown>): FotoDaEdicao[]`, `codigoDaEdicao(db: Firestore, editionId: string, actor: OperationalActor): Promise<string>`, `lerEdicaoParaArquivos(transaction: Transaction, db: Firestore, editionId: string, actor: OperationalActor): Promise<{ ref: DocumentReference; data: Record<string, unknown> }>` e os locais do módulo `idDaEdicao`, `idempotencyKey`, `COORDENACAO`, `digest(value: unknown, length = 32)`, `chaveUsada()` e `reciboDe(id: string, kind: string, customerCode: string, inputHash: string, actor: OperationalActor, result: Record<string, unknown>)`, com `removeEventDocumentTransaction` e `problemaParaTirarDocumento` como molde; `edicaoAberta(status: unknown): boolean` de `./dominio.js` (parte 1); `OPERATIONS_COLLECTION`, `actorRef(actor: OperationalActor): ActorRef` e `descricaoDaEdicao(nome: unknown, label: unknown): string` de `./edicao-gravacao.js` (parte 2); `createEventoEvent(transaction: Transaction, db: Firestore, evento: EventoDeAuditoria, actor: OperationalActor)` e os locais `id` e `contagem` de `./eventos-auditoria.js` (parte 2); `entradaDe` e `ROTULO_DO_CAMPO` de `./edicao.js` (parte 2); `getProfile`, `requireOperationsCoordinator(profile: Profile)` (recusa "Ação permitida somente para administração ou coordenação operacional."), `PROJECT_ID` e `db` do `index.ts`; `assertEventosLiberado` (parte 1); `COORDENACAO` e `SO_COORDENACAO` da matriz; em `arquivos.integration.test.ts`, os ajudantes `fotografar`, `edicaoDaNecton` (devolve `{ id, edicao, coleta, entrega, evento }`), `mudarStatus`, `gravada`, `eventosDoTipo`, `recibosDe`, `recusa`, `subiu`, `fotoDaDutelog` e `hex`, o bucket falso (`noBucket`, `apagados`) e os atores `manoel` (`interno`) e `rafael` (`wms`). No app: `chamarEventos<T>(nome: CallableDosEventos, dados: object): Promise<T>` e `CALLABLES_DOS_EVENTOS` de `lib/wms/eventos.ts`; `EdicaoView`, `FotoView` e `StatusDaEdicao` de `lib/eventos/tipos.ts`; `ROTULO_DO_MOMENTO` de `@workspace/dominio`; `PropsDaFicha` e `EventoView` (T4); `Confirmacao` de `components/ui/confirmacao.tsx` (`aberta`, `ocupada`, `titulo`, `descricao?`, `confirmar`, `confirmando`, `perigo?`, `onConfirmar`, `onFechar`, `focoAoFechar?`); `useTentativaDaEscrita` e `avisoDoErroDaEscrita(erro: unknown, naRecusa: string): { title: string; variant?: "destructive" }` de `lib/carregando/tentativa-da-escrita.ts`; `Trash2` de `lucide-react` e o botão de remover foto do Receber (`features/warehouse-ops/receiving.tsx`, linhas 1277-1290) como molde.
+- Produces (`arquivos.ts`):
+  - `RetirarFotoSchema` (`.strict()`): `edition_id` 1..120, `foto_id` regex `/^ft_[a-f0-9]{16}$/`, `idempotency_key` 8..200; sem `customer_code`, como `AnexarFotoSchema`. `type RetirarFoto = z.output<typeof RetirarFotoSchema>`.
+  - `problemaParaRetirarFoto(status: string, actor: { role: string }): RecusaDaRetirada | null`, primeiro o status, depois o papel, como `problemaParaTirarDocumento`: fora de `edicaoAberta` → `failed-precondition` "A edição já está fechada."; papel fora de owner, admin e interno → `permission-denied` "Só a coordenação retira fotos."; senão `null`.
+  - `type ResultadoDaRetiradaDaFoto = { id: string; edicao: number; fotos: number }` e `removeEventPhotoTransaction(db: Firestore, input: RetirarFoto, actor: OperationalActor): Promise<ResultadoDaRetiradaDaFoto>`: recibo `op_evento_remove_photo_<digest({ customer, nonce: idempotency_key })>`, `kind` `evento.foto.remove`, `result` `{ id, edicao, fotos }` (`fotos` = quantas ficaram); a mesma chave com a mesma entrada devolve o `result` do recibo, sem segunda escrita; com outra entrada → `already-exists` "A chave de idempotência já foi usada com outro conteúdo."; a foto que não está em `fotos` → `not-found` "Foto não encontrada."; o registro sai de `fotos` com `updated_by` e `updated_at`, a `edicao` não sobe (decisão 14 da spec) e o arquivo fica no bucket.
+- Produces (`eventos-auditoria.ts` e `edicao.ts`): `"evento.foto_retirada"` em `EVENTO_EVENT_TYPES`, logo depois de `"evento.foto_anexada"` (os tipos passam de dezessete a dezoito; o `evento.pedido_adotado` continua o último); `PAYLOAD_DO_EVENTO["evento.foto_retirada"]` = `z.object({ edition_id: id, foto_id: id, momento_id: id, fotos: contagem }).strict()`; `TITULO_DO_EVENTO["evento.foto_retirada"]` = "Foto retirada"; `ROTULO_DO_CAMPO.foto_id` = "a foto" (a recusa diz "A foto inválida" ou "Informe a foto").
+- Produces (`index.ts` e a matriz): `export const removeEventPhoto = onCall(async (request) => { const profile = await getProfile(request); requireOperationsCoordinator(profile); assertEventosLiberado(PROJECT_ID); return removeEventPhotoTransaction(db, entradaDe(RetirarFotoSchema, request.data ?? {}), profile); });` (pela callable, quem não é da coordenação recebe a frase do gate; "Só a coordenação retira fotos." é a do domínio, que os testes chamam direto) e, na `MATRIZ`, `removeEventPhoto: { passam: COORDENACAO, recusa: SO_COORDENACAO },`.
+- Produces (app, `lib/eventos/tipos.ts` e `lib/wms/eventos.ts`): `type RetirarFoto = { edition_id: string; foto_id: string; idempotency_key: string }` e `type ResultadoDaRetiradaDaFoto = { id: string; edicao: number; fotos: number }`; `retirarFoto(entrada: RetirarFoto): Promise<ResultadoDaRetiradaDaFoto>` (`chamarEventos("removeEventPhoto", entrada)`); `"removeEventPhoto"` em `CALLABLES_DOS_EVENTOS`.
+- Produces (`lib/eventos/ficha.ts`, puro): `podeRetirarFoto(papel: string | null | undefined, status: StatusDaEdicao): boolean` = owner, admin ou interno, de `confirmado` a `retornado`; `rotuloDaFoto(edicao: EdicaoView, fotoId: string): string | null` = "foto 2 de Montagem": a posição da foto entre as do mesmo momento, na ordem de `edicao.fotos`, com o rótulo de `ROTULO_DO_MOMENTO` ou o `rotulo` do `outro`; `null` para a foto que não está na edição e para a foto sem momento no cronograma (`momento_id` `null` ou de um momento que não está nele).
+- Produces (`pages/evento-view.tsx` e `pages/evento.tsx`, T4, modificados): `PropsDaFicha` ganha `retiraFoto: boolean` e `onRetirarFoto(foto_id: string): void`. Com `retiraFoto`, cada miniatura do bloco "Fotos" tem no canto o botão de retirar, só ícone (`Trash2`), com o `aria-label` "Retirar foto 2 de Montagem" ("Retirar " + `rotuloDaFoto`); sem `retiraFoto`, nenhuma tem. A página dá `retiraFoto` = `podeRetirarFoto(papel, edicao.status)` e, no clique, abre a `Confirmacao`: `titulo` "Retirar a foto 2 de Montagem?", `confirmar` "Retirar foto", `confirmando` "Retirando…", `perigo`, sem `descricao` (nada de legenda); fecha só no sucesso, com o toast "Foto retirada", e na recusa fica aberta, com o toast "Foto não retirada" e a frase do servidor na descrição. A prancha não desenha esse botão (a spec o pede, como o bloco "Onde").
+
+- [ ] **Step 1: Write the failing tests**
+
+`arquivos.test.ts` (node:test, puro; o `recusa` do arquivo confere o
+`invalid-argument`):
+
+```ts
+const RETIRAR_FOTO = { edition_id: EDICAO, foto_id: "ft_0123456789abcdef", idempotency_key: "retirar-foto-0001" };
+
+it("retirar a foto: fechada ou cancelada recusa antes do papel; fora da coordenação, 'Só a coordenação retira fotos.'; owner, admin e interno retiram de confirmado a retornado", () => {
+  assert.deepEqual(problemaParaRetirarFoto("fechado", { role: "admin" }), { code: "failed-precondition", mensagem: "A edição já está fechada." });
+  assert.deepEqual(problemaParaRetirarFoto("cancelado", { role: "admin" }), { code: "failed-precondition", mensagem: "A edição já está fechada." });
+  assert.deepEqual(problemaParaRetirarFoto("fechado", { role: "wms" }), { code: "failed-precondition", mensagem: "A edição já está fechada." });
+  assert.deepEqual(problemaParaRetirarFoto("no_evento", { role: "wms" }), { code: "permission-denied", mensagem: "Só a coordenação retira fotos." });
+  assert.deepEqual(problemaParaRetirarFoto("no_evento", { role: "cliente" }), { code: "permission-denied", mensagem: "Só a coordenação retira fotos." });
+  for (const role of ["owner", "admin", "interno"]) {
+    for (const status of ["confirmado", "separado", "no_evento", "retornado"]) assert.equal(problemaParaRetirarFoto(status, { role }), null, `${role} em ${status}`);
+  }
+});
+it("a entrada de retirar a foto diz o campo: foto_id 'foto.jpg' (invalid-argument com /foto/), sem foto_id ('Informe a foto'), customer_code ('Campo não aceito: customer_code')", () => {
+  recusa(() => entradaDe(RetirarFotoSchema, { ...RETIRAR_FOTO, foto_id: "foto.jpg" }), /foto/);
+  const { foto_id: _semFoto, ...semFoto } = RETIRAR_FOTO;
+  recusa(() => entradaDe(RetirarFotoSchema, semFoto), "Informe a foto");
+  recusa(() => entradaDe(RetirarFotoSchema, { ...RETIRAR_FOTO, customer_code: BTG }), "Campo não aceito: customer_code");
+  assert.deepEqual(entradaDe(RetirarFotoSchema, RETIRAR_FOTO), RETIRAR_FOTO);
+});
+```
+
+`eventos-auditoria.test.ts`: o `it` da lista passa a "são os dezoito tipos,
+na ordem da spec, e o da adoção por último", com `"evento.foto_retirada"`
+logo depois de `"evento.foto_anexada"`; `EXEMPLOS` ganha a linha do tipo, na
+mesma posição, e "os títulos são os da timeline" confere o título:
+
+```ts
+  "evento.foto_retirada": { edition_id: EDICAO, foto_id: "ft_0123456789abcdef", momento_id: "mo_0a1b2c3d", fotos: 2 },
+    assert.equal(TITULO_DO_EVENTO["evento.foto_retirada"], "Foto retirada");
+```
+
+`arquivos.integration.test.ts`: o ajudante `retirarFoto` ao lado de `tirar` e
+`fotografar`, e o caso 11 depois do 10. A edição de `edicaoDaNecton` não tem
+Montagem (coleta, entrega, evento e retorno): a foto anexada por engano, a
+`errada`, é a da coleta.
+As duas fotos são do `rafael`, para o `wms` recusar também na que anexou.
+
+```ts
+async function retirarFoto(ator: Ator, raw: Record<string, unknown>) {
+  return removeEventPhotoTransaction(db, entradaDe(RetirarFotoSchema, raw), ator);
+}
+
+it("11. retirar a foto: a coordenação retira a foto anexada por engano em no_evento (sai de fotos, a edicao igual, evento foto_retirada { fotos: 1 } e recibo evento.foto.remove, os dois sem a legenda, nada apagado); a mesma chave devolve o mesmo; a foto que já saiu, not-found 'Foto não encontrada.', também na repetição do anexo dela; o wms, 'Só a coordenação retira fotos.', também na que ele anexou; em fechado, 'A edição já está fechada.'", async () => {
+  const edicao = await edicaoDaNecton("necton-arquivos-0011");
+  await mudarStatus(edicao.id, "no_evento");
+  const errada = `ft_${hex(0x111)}.jpg`;
+  const certa = `ft_${hex(0x112)}.jpg`;
+  subiu(fotoDaDutelog(edicao.id, errada), "image/jpeg");
+  subiu(fotoDaDutelog(edicao.id, certa), "image/jpeg");
+  await fotografar(rafael, { edition_id: edicao.id, arquivo: errada, momento_id: edicao.coleta, legenda: "Carga na doca", idempotency_key: "foto-0011-a" });
+  const fica = await fotografar(rafael, { edition_id: edicao.id, arquivo: certa, momento_id: edicao.entrega, idempotency_key: "foto-0011-b" });
+  const noBucketAntes = noBucket.size;
+
+  const retirada = { edition_id: edicao.id, foto_id: `ft_${hex(0x111)}`, idempotency_key: "retirar-foto-0011-a" };
+  const r = await retirarFoto(manoel, retirada);
+  assert.deepEqual(r, { id: edicao.id, edicao: edicao.edicao, fotos: 1 });
+  const depois = await gravada(edicao.id);
+  assert.deepEqual(depois.fotos, [fica.foto]);
+  assert.equal(depois.edicao, edicao.edicao);
+  assert.deepEqual(depois.updated_by, { uid: "manoel", name: "Manoel", role: "interno" });
+  const retiradas = await eventosDoTipo(edicao.id, "evento.foto_retirada");
+  assert.equal(retiradas.length, 1);
+  assert.equal(retiradas[0]!.title, "Foto retirada");
+  assert.deepEqual(retiradas[0]!.payload, { edition_id: edicao.id, foto_id: `ft_${hex(0x111)}`, momento_id: edicao.coleta, fotos: 1 });
+  const [recibo] = (await recibosDe(edicao.id)).filter((op) => op.kind === "evento.foto.remove");
+  assert.match(String(recibo?.id), /^op_evento_remove_photo_[0-9a-f]{32}$/);
+  assert.deepEqual(recibo?.result, r);
+  assert.equal(recibo?.customer_code, BTG);
+  assert.doesNotMatch(JSON.stringify([retiradas[0], recibo]), /Carga na doca/);
+  // O arquivo fica no bucket: só o registro sai.
+  assert.deepEqual(apagados, []);
+  assert.equal(noBucket.size, noBucketAntes);
+
+  // A mesma chave devolve o mesmo, sem segunda escrita nem segundo evento; com outra entrada, recusa.
+  assert.deepEqual(await retirarFoto(manoel, retirada), r);
+  assert.equal((await eventosDoTipo(edicao.id, "evento.foto_retirada")).length, 1);
+  await recusa(retirarFoto(manoel, { ...retirada, foto_id: `ft_${hex(0x112)}` }), "already-exists", "A chave de idempotência já foi usada com outro conteúdo.");
+  // A foto que já saiu, com outra chave.
+  await recusa(retirarFoto(manoel, { ...retirada, idempotency_key: "retirar-foto-0011-b" }), "not-found", "Foto não encontrada.");
+
+  // O wms não retira, nem a que ele anexou; o papel vem antes da foto: na que já saiu a recusa é a mesma.
+  await recusa(retirarFoto(rafael, { edition_id: edicao.id, foto_id: `ft_${hex(0x112)}`, idempotency_key: "retirar-foto-0011-c" }), "permission-denied", "Só a coordenação retira fotos.");
+  await recusa(retirarFoto(rafael, { ...retirada, idempotency_key: "retirar-foto-0011-d" }), "permission-denied", "Só a coordenação retira fotos.");
+
+  // A repetição do anexo da foto que saiu (a mesma chave) não a traz de volta.
+  await recusa(fotografar(rafael, { edition_id: edicao.id, arquivo: errada, momento_id: edicao.coleta, legenda: "Carga na doca", idempotency_key: "foto-0011-a" }), "not-found", "Foto não encontrada.");
+
+  await mudarStatus(edicao.id, "fechado");
+  await recusa(retirarFoto(manoel, { edition_id: edicao.id, foto_id: `ft_${hex(0x112)}`, idempotency_key: "retirar-foto-0011-e" }), "failed-precondition", "A edição já está fechada.");
+  assert.deepEqual((await gravada(edicao.id)).fotos, [fica.foto]);
+});
+```
+
+A matriz (`callables-papeis.integration.test.ts`), depois de
+`removeEventDocument`, sem `entrada` (a checagem de papel vem antes dela):
+
+```ts
+  removeEventPhoto: { passam: COORDENACAO, recusa: SO_COORDENACAO },
+```
+
+`lib/wms/eventos.test.ts` do app, no `describe` dos arquivos da edição:
+
+```ts
+it("retirarFoto chama removeEventPhoto com a edição, a foto e a chave", async () => {
+  await retirarFoto({ edition_id: EDICAO, foto_id: "ft_0123456789abcdef", idempotency_key: "retirar-foto-0001" });
+  expect(nome.atual).toBe("removeEventPhoto");
+  expect(enviado()).toEqual({ edition_id: EDICAO, foto_id: "ft_0123456789abcdef", idempotency_key: "retirar-foto-0001" });
+});
+```
+
+O `it` "cada wrapper chama a callable do mesmo nome, e a lista não tem
+outra" ganha no mapa `chamadas` a linha abaixo, logo depois da de
+`attachEventPhoto`, nunca ao fim do mapa (a asserção final do `it` lê a
+última chamada); o `toHaveLength` da lista sobe um, e o número no título do
+`describe`, com ele (os dois partem do que as partes anteriores deixaram).
+
+```ts
+      removeEventPhoto: () => retirarFoto({ edition_id: EDICAO, foto_id: "ft_0123456789abcdef", idempotency_key: "retirar-foto-0002" }),
+```
+
+`ficha.test.ts` (T4). A `comTresFotos` é a `necton` com `fotos` trocado por
+três, nesta ordem: `ft_0000000000000001` na Coleta no cliente e
+`ft_0000000000000002` e `ft_0000000000000003` na Montagem (o `momento_id` é
+o `id` de `coleta` e de `montagem`, os momentos que o teste já usa). A
+`comOutro` é a `comTresFotos` com mais um momento no cronograma, do tipo
+`outro` com `rotulo: "Ensaio"`, e a foto `ft_0000000000000004` nele.
+
+```ts
+it("retira a foto só a coordenação, de confirmado a retornado", () => {
+  for (const papel of ["owner", "admin", "interno"]) {
+    expect((["confirmado", "separado", "no_evento", "retornado"] as const).map((status) => podeRetirarFoto(papel, status))).toEqual([true, true, true, true]);
+    expect((["rascunho", "enviado", "fechado", "cancelado"] as const).map((status) => podeRetirarFoto(papel, status))).toEqual([false, false, false, false]);
+  }
+  expect(["wms", "suporte", "cliente", null].map((papel) => podeRetirarFoto(papel, "no_evento"))).toEqual([false, false, false, false]);
+});
+it("o rótulo da foto: a posição entre as do mesmo momento, com o nome dele; a foto de fora da edição e a sem momento no cronograma não têm rótulo", () => {
+  expect(rotuloDaFoto(comTresFotos, "ft_0000000000000003")).toBe("foto 2 de Montagem");
+  expect(rotuloDaFoto(comTresFotos, "ft_0000000000000002")).toBe("foto 1 de Montagem");
+  expect(rotuloDaFoto(comTresFotos, "ft_0000000000000001")).toBe("foto 1 de Coleta no cliente");
+  expect(rotuloDaFoto(comOutro, "ft_0000000000000004")).toBe("foto 1 de Ensaio");
+  expect(rotuloDaFoto(comTresFotos, "ft_ffffffffffffffff")).toBeNull();
+  expect(rotuloDaFoto({ ...comTresFotos, fotos: comTresFotos.fotos.map((foto) => ({ ...foto, momento_id: null })) }, "ft_0000000000000001")).toBeNull();
+});
+```
+
+`evento-view.test.tsx` (T4), com os estados que ele já monta (a Necton em
+`no_evento`, com as onze fotos da prancha, e a `fechado`) e mais um, a
+Necton em `no_evento` com as três fotos da `comTresFotos`. A prancha mostra
+seis miniaturas e "Ver as 11 fotos": quantas ficam à vista é escolha de T4,
+e por isso a conta exata é a das três.
+
+```ts
+/** Os aria-label dos botões de retirar a foto, na ordem da tela. */
+function rotulosDeRetirar(html: string): string[] {
+  const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+  const rotulos = [...dom.window.document.querySelectorAll('button[aria-label^="Retirar foto "]')].map((botao) => botao.getAttribute("aria-label") ?? "");
+  dom.window.close();
+  return rotulos;
+}
+
+it("com retiraFoto, as miniaturas de Fotos têm o botão de retirar com o rótulo da foto, só ícone: os textos da tela não mudam", async () => {
+  const html = tela(noEvento, { retiraFoto: true });
+  const rotulos = rotulosDeRetirar(html);
+  const nomes = necton.fotos.map((foto) => `Retirar ${rotuloDaFoto(necton, foto.id)}`);
+  expect(rotulos.length).toBeGreaterThan(0);
+  expect(new Set(rotulos).size).toBe(rotulos.length);
+  expect(rotulos.filter((rotulo) => !nomes.includes(rotulo))).toEqual([]);
+  expect(foraDaLista(html, PERMITIDOS)).toEqual([]);
+  expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+});
+it("com três fotos, cada miniatura tem o seu botão", () => {
+  expect(rotulosDeRetirar(tela(noEventoComTresFotos, { retiraFoto: true })).sort()).toEqual(["Retirar foto 1 de Coleta no cliente", "Retirar foto 1 de Montagem", "Retirar foto 2 de Montagem"]);
+});
+it("sem retiraFoto (o wms e o suporte) e na fechada, nenhum botão de retirar", () => {
+  for (const papel of ["wms", "suporte"]) expect(rotulosDeRetirar(tela(noEvento, { retiraFoto: podeRetirarFoto(papel, "no_evento") }))).toEqual([]);
+  expect(rotulosDeRetirar(tela(fechada, { retiraFoto: podeRetirarFoto("admin", "fechado") }))).toEqual([]);
+});
+```
+
+`tela(estado, extra)` é o do molde (`estoque-mapa-mover-view.test.tsx`), com
+o nome que T4 deu a ele; `noEvento`, `noEventoComTresFotos` e `fechada` são
+os estados acima, `necton`, a edição do primeiro, e `PERMITIDOS`, a lista de
+T4, sem texto novo: o botão é só ícone.
+
+`evento.test.tsx` (T5), quatro `it` novos. Nos três primeiros o
+`useDocumento` simulado devolve a Necton em `no_evento` com as três fotos da
+`comTresFotos`, todas à vista, e o `vi.mock` de `@/lib/wms/eventos` ganha
+`retirarFoto`.
+
+```ts
+it("o admin retira a foto: 'Retirar foto 2 de Montagem' abre a confirmação 'Retirar a foto 2 de Montagem?'; 'Retirar foto' chama retirarFoto com edition_id, foto_id e a chave, sem campo undefined; a confirmação não fecha em andamento e fecha no sucesso, com o toast 'Foto retirada'", ...)
+it("a recusa do servidor (not-found, 'Foto não encontrada.') deixa a confirmação aberta, e o toast diz 'Foto não retirada' com a frase na descrição", ...)
+it("o wms não vê o botão de retirar a foto", ...)
+it("com as onze fotos da Necton, 'Ver as 11 fotos' deixa as onze com o botão de retirar", ...)
+```
+
+No primeiro, `retirarFoto` é chamado uma vez, com `edition_id` (o id da
+edição lida), `foto_id: "ft_0000000000000003"` e a `idempotency_key` da
+tentativa, e só essas três chaves; enquanto a promessa não resolve, a
+confirmação continua na tela; resolvida, ela sai e o `toast` leva
+`title: "Foto retirada"`. No segundo, `retirarFoto` rejeita com o código
+`not-found` e a frase "Foto não encontrada.": a confirmação continua na
+tela e o `toast` leva `title: "Foto não retirada"`,
+`variant: "destructive"` e `description: "Foto não encontrada."`. No
+terceiro, com o papel `wms` no `@/lib/auth` simulado, nenhum botão tem o
+nome começado por "Retirar foto", e "Adicionar fotos" continua na tela. No
+quarto, o `useDocumento` simulado devolve a Necton das onze fotos da
+prancha: depois do clique em "Ver as 11 fotos", os botões de nome começado
+por "Retirar foto" são onze, um por foto, onde quer que T4 as abra.
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd C:\DEV\Dute\functions\wms; npm run build:test; node --test lib/domain/eventos/arquivos.test.js lib/domain/eventos/eventos-auditoria.test.js; firebase emulators:exec --project demo-dute-operations --only firestore,storage,auth "node --test --test-concurrency=1 lib/domain/eventos/arquivos.integration.test.js lib/callables-papeis.integration.test.js"` e
+`cd C:\DEV\Dute\artifacts\app; npx vitest run src/lib/wms/eventos.test.ts src/lib/eventos/ficha.test.ts src/pages/evento-view.test.tsx src/pages/evento.test.tsx`
+Expected: FAIL (`RetirarFotoSchema`, `problemaParaRetirarFoto` e `removeEventPhotoTransaction` não existem, e `"evento.foto_retirada"` não é um tipo; a matriz tem uma linha sem callable; no app, `retirarFoto`, `podeRetirarFoto` e `rotuloDaFoto` não existem, e a ficha não tem o botão).
+
+- [ ] **Step 3: Implement the removal, the callable, the wrapper, the button and the confirmation**
+
+No servidor, `removeEventPhotoTransaction` segue
+`removeEventDocumentTransaction`, com a foto no lugar do documento e uma
+troca na ordem. `codigoDaEdicao` roda fora da transação e dá o `customer` do
+recibo e o `customer_code` do `input_hash`
+(`digest({ ...input, customer_code }, 64)`). Dentro dela: o recibo primeiro
+(o mesmo hash devolve o `result` gravado, sem ler a edição; outro hash,
+`chaveUsada()`); depois `lerEdicaoParaArquivos` e `problemaParaRetirarFoto`,
+com o `code` que ele diz; só então a foto pelo `foto_id` em
+`fotosLidas(data)`, senão `not-found`. O status e o papel vêm antes da foto
+porque não dependem dela (no documento a regra lê a origem e quem anexou, e
+por isso lá o registro vem antes). Grava `fotos` sem ela, `updated_by` e
+`updated_at`, e não toca a `edicao`; chama `createEventoEvent` com
+`evento.foto_retirada`, o payload `{ edition_id, foto_id, momento_id, fotos }`
+(o `momento_id` da foto que saiu; `fotos`, quantas ficaram) e a `descricao`
+de `descricaoDaEdicao`; o recibo por último, por `reciboDe`. A função não
+recebe o bucket, e o `storage.rules` não muda. Em `eventos-auditoria.ts`, o
+tipo entra na mesma posição nas três tabelas. No `index.ts`, só a linha e o
+import; na `MATRIZ`, a linha sem `entrada`.
+
+No app, a view só desenha: com `retiraFoto`, cada miniatura do bloco "Fotos"
+ganha o botão de retirar, no molde do de remover foto do Receber (só o ícone
+`Trash2`, com o `aria-label` "Retirar " + `rotuloDaFoto(edicao, foto.id)`),
+que chama `onRetirarFoto(foto.id)`; a miniatura sem rótulo (`null`) fica sem
+botão. A tarefa conta com o que a T4 desenhou no bloco "Fotos": uma miniatura
+por foto, com o `id` dela (o de `edicao.fotos`) à mão na view. O botão entra
+em toda foto que a ficha mostra, também nas que "Ver as N fotos" abre, no
+bloco ou fora dele. A página dá `retiraFoto` =
+`podeRetirarFoto(papel, edicao.status)`, guarda a foto em confirmação (o `id`
+e o rótulo, lidos no clique: a foto pode sair da leitura ao vivo com a
+confirmação aberta) e abre a `Confirmacao`: `titulo` "Retirar a " + o
+rótulo + "?", `confirmar` "Retirar foto", `confirmando` "Retirando…",
+`perigo`, sem `descricao`. "Retirar foto" grava por `useTentativaDaEscrita`,
+como os diálogos de T4:
+`retirarFoto({ edition_id, foto_id, idempotency_key })`, só esses três
+campos. A confirmação fica `ocupada` enquanto grava e fecha só no sucesso,
+com o toast "Foto retirada" e `focoAoFechar` no "Adicionar" das Fotos (a
+miniatura que abriu a confirmação sai da tela com a foto); na recusa fica
+aberta, e o aviso é o toast no molde das outras telas
+(`toast({ ...avisoDoErroDaEscrita(erro, "Foto não retirada"), description: erro.message })`:
+o título é o da tela e a frase do servidor vai na descrição; no resultado
+incerto, o título é o de `avisoDoErroDaEscrita`, sem o vermelho). O Histórico
+ganha "Foto retirada" sem código novo (mostra o título de todo evento lido),
+e nada muda para o cliente: ele lê `fotos` ao vivo e não lê `events`.
+
+Em `docs/plataforma/lgpd.md`, as duas mudanças de Files; a coluna Fonte da
+linha leva `caminho:linha` do commit desta tarefa, e a nota "Data e base" do
+topo passa a dizer que a linha das fotos e o item 5 de 4.1 foram revistos na
+parte 8 dos Eventos, com as fontes dela.
+
+- [ ] **Step 4: Run the whole lists again**
+
+Run: `cd C:\DEV\Dute; corepack pnpm run typecheck; npm --prefix functions/wms run test:unit; npm --prefix functions/wms run test:integration` e
+`cd C:\DEV\Dute\artifacts\app; npx vitest run src/lib/wms/eventos.test.ts src/lib/eventos/ficha.test.ts src/pages/evento-view.test.tsx src/pages/evento.test.tsx src/lib/platform-lists.test.ts`
+Expected: PASS, inclusive `callables-papeis` (quem passa do papel recebe `failed-precondition` da liberação no emulador, não `permission-denied`), `callables-auth` (a callable entra sozinha na descoberta), o caso 9 de `arquivos.integration.test.ts` (as listas exatas de eventos e de recibos dele não mudam: ele não retira foto) e `platform-lists` (a linha do `index.ts` com `assertEventosLiberado(PROJECT_ID)` e o nome na lista do app). Nenhuma consulta nova: a edição e o recibo são lidos pelo id.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add functions/wms/src/domain/eventos/arquivos.ts functions/wms/src/domain/eventos/arquivos.test.ts functions/wms/src/domain/eventos/arquivos.integration.test.ts functions/wms/src/domain/eventos/eventos-auditoria.ts functions/wms/src/domain/eventos/eventos-auditoria.test.ts functions/wms/src/domain/eventos/edicao.ts functions/wms/src/index.ts functions/wms/src/callables-papeis.integration.test.ts artifacts/app/src/lib/wms/eventos.ts artifacts/app/src/lib/wms/eventos.test.ts artifacts/app/src/lib/eventos/tipos.ts artifacts/app/src/lib/eventos/ficha.ts artifacts/app/src/lib/eventos/ficha.test.ts artifacts/app/src/pages/evento-view.tsx artifacts/app/src/pages/evento-view.test.tsx artifacts/app/src/pages/evento.tsx artifacts/app/src/pages/evento.test.tsx docs/plataforma/lgpd.md
+git commit -m "feat(wms): a coordenação retira da edição a foto anexada por engano, pela ficha"
+```
+
 ### Pronto quando
 
 No emulador, pela ficha, com a edição da Necton confirmada e separada: a
@@ -484,6 +819,16 @@ o layout anexado e a equipe gravada; a ficha aberta pela agenda ("Abrir",
 "Registrar", "Fechar edição", e "Abrir" para quem não registra nem fecha) e
 pelo "Evento" de Pedidos, também sem a Operação, como na produção; o
 rascunho abre só com "Anexar"; no celular, "Adicionar fotos" abre a câmera;
-o `suporte` lê sem ação; o CI inteiro verde. O retorno, o preço e o botão
-"Fechar edição" da ficha ficam para as partes 9 e 10. O PR registra em
+o `suporte` lê sem ação; a coordenação retira uma foto anexada por engano, e
+ela some da ficha e da leitura do cliente; o `wms` não vê o botão; o CI
+inteiro verde. O retorno, o preço e o botão "Fechar edição" da ficha ficam
+para as partes 9 e 10. O PR registra em
 `docs/superpowers/plans/2026-11-26-eventos.md` o que mudou de nome, se mudou.
+O botão de retirar a foto e a confirmação ("Retirar a foto 2 de Montagem?",
+"Retirar foto") não estão na prancha: a sessão anexa ao PR a foto do bloco
+"Fotos" com o botão e a da confirmação aberta e pede o OK do Leonardo antes
+do merge; aprovadas, as fotos entram no PR em
+`docs/mockups/eventos-wms-ficha/`, com uma linha na tabela dos Eventos de
+`docs/mockups/README.md` (a tela, o arquivo e o que mostra, como as fotos de
+`contagem-entrada/`), num commit próprio
+(`git add docs/mockups/eventos-wms-ficha docs/mockups/README.md`).

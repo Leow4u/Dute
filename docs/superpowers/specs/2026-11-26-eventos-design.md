@@ -3,7 +3,7 @@
 Desenho do Eventos do portal refeito (aprovado pelo Leonardo em 26/11/2026): o evento do cliente como registro
 completo de cada edição, aberto pelo cliente no portal, executado e
 registrado pela Dutelog na Armazenagem, lido pelo cliente no ano seguinte.
-Decisões do Leonardo de 24 a 26/11/2026 (abaixo). Prancha aprovada em
+Decisões do Leonardo de 24 a 27/11/2026 (abaixo). Prancha aprovada em
 25/11/2026 "como está": `docs/mockups/Eventos*.dc.html` (canvas privado
 "Eventos · do portal ao histórico", seção própria em
 `docs/mockups/README.md`). Conferido por três construtores em 26/11/2026
@@ -96,9 +96,13 @@ Guilherme, operador do WMS, registra pela Armazenagem; o cliente lê.
     651): qualquer pessoa do cliente tira o documento de origem cliente,
     em `rascunho` e `enviado`, e nunca o da Dutelog; do lado da Dutelog, o
     `wms` tira só o que anexou, e a coordenação tira qualquer um.
-16. **Sem retirada de foto por enquanto** (27/11, PR 651): a foto anexada
-    fica na edição e aparece no portal; uma retirada de foto, se vier, é
-    parte própria.
+16. **A coordenação retira a foto anexada por engano, pela ficha** (27/11:
+    no PR 651, "sem retirada de foto por enquanto"; no mesmo dia, com a
+    parte 3 na `main`, "foto pela coordenação na parte 8"):
+    `removeEventPhoto`, só owner, admin e interno, na edição aberta. A foto
+    sai de `fotos` e deixa de aparecer no portal; o arquivo fica no bucket,
+    como o do documento retirado, e a retirada não sobe a `edicao` (decisão
+    14). O `wms` não retira foto, nem a que anexou. Entra na parte 8.
 
 ## Objetivos
 
@@ -302,7 +306,7 @@ client_event_editions/{ced_…}
   id, customer_code, event_id, event_name          (cópia, para listar)
   label                                            "2027" (até 40; padrão: o ano do momento "evento")
   status                                           rascunho | enviado | confirmado | separado | no_evento | retornado | fechado | cancelado
-  edicao                                           inteiro, +1 a cada escrita (CAS: expected_edicao); o anexo, a retirada e a foto não sobem (decisão 14)
+  edicao                                           inteiro, +1 a cada escrita (CAS: expected_edicao); o anexo, a foto e as duas retiradas (a do documento e a da foto) não sobem (decisão 14)
   origem_edicao_id                                 a edição copiada em "Nova edição a partir desta", ou null
   onde: { local (até 160), endereco (até 300), contato: { nome (até 120), telefone (até 40) } }
   cronograma: [ momento ]                          até 12 (abaixo)
@@ -442,7 +446,7 @@ no primeiro momento registrado entre `entrega_no_local` e `evento`.
 Todas em `functions/wms/src/index.ts`, uma linha cada, começando por
 `getProfile`, com evento de auditoria na mesma transação e, nas que criam
 ou transitam (enviar, cancelar, arquivar, confirmar, registrar momento,
-anexar, retorno, preço, fechar), recibo em `operational_operations`
+anexar e retirar, retorno, preço, fechar), recibo em `operational_operations`
 (`op_evento_…`); salvar a edição e a equipe usam o CAS `expected_edicao`
 (a repetição incerta recusa e a tela relê o documento vivo), e a criação,
 o id determinístico pela `idempotency_key`. O domínio fica em
@@ -462,6 +466,7 @@ gravação, no molde de `count-rounds.ts`.
 | `confirmEventEdition` | coordenação; o preço só para quem também passa em `requireBillingWrite` | `enviado` → `confirmado`, com `separar_ate` e, opcionais, `fechado_cents`, `fechado_observacao` e a proposta; aprova a solicitação na mesma transação. Preço vindo de quem não escreve valores: recusa ("Só quem vê valores fecha o preço."). |
 | `registerEventMoment` | quem opera | Grava `feito` de um momento (início, ou fim como segunda escrita) ou, com `corrigir: true` e `expected_edicao`, corrige início, fim e observação de um momento registrado à mão. Em `entrega_no_local` com pedido ainda não entregue, roda `dispatched` e `delivered` antes (abaixo). |
 | `attachEventPhoto` | quem opera | Confere a foto no bucket e a acrescenta a `fotos`, com o momento. De `confirmado` a `retornado`: é foto da execução. |
+| `removeEventPhoto` | coordenação | Retira o registro de `fotos` (o arquivo fica no bucket), na edição aberta (decisão 16). |
 | `saveEventEditionTeam` | quem opera | `equipe` e `observacoes_dutelog`, até `fechado`. |
 | `receiveEventReturn` | quem opera | `no_evento` → `retornado`: o retorno item a item, a ENTRADA, a guarda de volta e a devolução das avariadas, numa transação. |
 | `setEventEditionPrice` | owner, admin, financeiro (`requireBillingWrite`) | `fechado_cents`, a observação e a proposta em `client_event_prices`, de `confirmado` até `retornado`; "Alterar" é a mesma callable. |
@@ -552,7 +557,9 @@ entrega?, corrigir?, expected_edicao?, idempotency_key })`:
   a edição a `no_evento`.
 
 As fotos vão por `attachEventPhoto` com o `momento_id`; a ficha mostra as
-fotos agrupadas por momento. O comprovante de entrega assinado, quando
+fotos agrupadas por momento. A foto anexada por engano sai por
+`removeEventPhoto`, só pela coordenação (decisão 16). O comprovante de
+entrega assinado, quando
 houver, é um documento anexado pela Dutelog com o momento
 `entrega_no_local`; sem ele, o comprovante é o texto da expedição.
 
@@ -624,7 +631,9 @@ admin, comercial, financeiro, pelo papel em `users/{uid}`):
 | `eventos/{code}/{edition}/valores/dc_<16 hex>.(pdf\|jpg\|png\|webp)` | `leValores()` | PDF ou imagem, ≤ 10 MiB | `leValores()` ou `clienteComArmazenagem(code)` |
 | `portal/{code}/eventos/{edition}/an_<16 hex>.(pdf\|jpg\|png\|webp\|xlsx)` | `clienteComArmazenagem(code)` | PDF, imagem ou planilha, ≤ 10 MiB | `isInternal()` ou `clienteComArmazenagem(code)` |
 
-Sem update nem delete pelo navegador ("regravar é create"). A callable
+Sem update nem delete pelo navegador ("regravar é create"). O documento e
+a foto retirados saem do registro e o arquivo fica no bucket; nenhuma
+callable apaga arquivo aceito. A callable que anexa
 confere o objeto com o Admin SDK (existe, tipo, tamanho) antes de gravar o
 registro, como `attachPhoto` da Operação; arquivo errado é apagado por
 geração e recusado. O navegador comprime a imagem com `compactarFoto` e
@@ -673,7 +682,7 @@ contagens e instantes, sem valor, nome de pessoa nem contato:
 `evento.edicao_salva`, `evento.edicao_enviada`, `evento.edicao_confirmada`,
 `evento.edicao_separada`, `evento.edicao_no_evento`,
 `evento.momento_registrado`, `evento.momento_corrigido`,
-`evento.foto_anexada`, `evento.documento_anexado`,
+`evento.foto_anexada`, `evento.foto_retirada`, `evento.documento_anexado`,
 `evento.documento_retirado`, `evento.retorno_registrado`,
 `evento.preco_fechado`, `evento.edicao_fechada`, `evento.edicao_cancelada`,
 `evento.edicao_excluida`, `evento.arquivado`.
@@ -783,7 +792,9 @@ aprovada é a referência; divergência vira pergunta.
   "Editar" (a correção), e "Fechar a edição" com o que falta como linha de
   dado; "Registrar o retorno ao estoque" (abaixo); "Preço fechado" só para
   quem lê valores; Fotos por momento com "Adicionar fotos" (também no
-  celular, com `capture`); Documentos ("Anexar", com o momento);
+  celular, com `capture`) e, só para a coordenação, o botão de retirar a
+  foto, com a confirmação "Retirar foto" (decisão 16);
+  Documentos ("Anexar", com o momento);
   "Equipe e veículo" ("Editar"); Histórico (os `events` da edição, que
   `canReadObservability` já abre). Os diálogos de "Confirmar" (separar até
   e, para quem escreve valores, o preço e a proposta), "Registrar" (hora,
@@ -839,7 +850,7 @@ aprovada é a referência; divergência vira pergunta.
   o cancelamento nos três estágios e a exclusão do rascunho; as regras do
   Firestore e do Storage; a linha da régua de cobrança.
 - Os dois testes de porta do WMS (`callables-auth`, `callables-papeis`)
-  com as treze linhas; `customer-request.integration.test.ts`,
+  com as catorze linhas; `customer-request.integration.test.ts`,
   `order-return.integration.test.ts` (a recusa do pedido de evento) e
   `operations.integration.test.ts` continuam verdes.
 - No app: textos e `axe` de cada tela; `modules.test.ts` (`ROUTE_ACCESS`),
@@ -877,7 +888,7 @@ registro de que entrou).
 | 5 | Estoque do portal, modo "montando o evento"; o "Salvar como evento" e o `applyEvent` saem com a liberação | Os oito testes do Estoque verdes; 100 itens escolhidos no emulador |
 | 6 | O envio com pedido: `event_edition_id` na solicitação e no pedido, `sendEventEdition` criando a solicitação, o cancelamento pelo cliente cancelando a solicitação, a recusa de `receiveOrderReturn`, a linha "Evento · …" em Pedidos | `customer-request`, `order-return` e a régua verdes; o pedido nasce ligado à edição |
 | 7 | Armazenagem: `/eventos` (agenda de todos os clientes), `confirmEventEdition` com o "separar até" (o preço fica para a 10), a confirmação e a recusa a partir de Pedidos, o cancelamento pela coordenação, o packing concluído (volumes e foi) e a entrega escrevendo a edição, o item "Evento para confirmar"; `TELAS_DO_WMS_NA_V3`, menu | A edição vai de enviada a no evento só pelo pedido, no emulador |
-| 8 | Armazenagem: a ficha `/eventos/edicao`, `registerEventMoment` (com a entrega do pedido e a correção), `saveEventEditionTeam`, as fotos por momento e os documentos | A ficha registra, corrige e fotografa os sete momentos no emulador, no celular também |
+| 8 | Armazenagem: a ficha `/eventos/edicao`, `registerEventMoment` (com a entrega do pedido e a correção), `saveEventEditionTeam`, `removeEventPhoto` (a retirada de foto pela coordenação), as fotos por momento e os documentos | A ficha registra, corrige e fotografa os sete momentos no emulador, no celular também; a coordenação retira uma foto anexada por engano |
 | 9 | O retorno: `receiveEventReturn`, a ENTRADA na EXPEDICAO com a guarda de volta, a devolução das avariadas para Devoluções, não voltaram, a coleta; o bloco do retorno na ficha; o item "Retorno do evento para registrar"; a linha da régua | Retorno da Necton no emulador: de 2.000, 1.994 voltaram, 3 avariadas em Devoluções, 3 não voltaram; o Mapa e o Estoque batem |
 | 10 | O preço: `client_event_prices` nas regras, `setEventEditionPrice`, o preço e a proposta no "Confirmar" de quem escreve valores, o caminho `valores/`; `closeEventEdition` com o que falta como dado; o bloco do preço na ficha (só para quem lê valores); o item "Edição para fechar" | O `wms` não vê o preço nem a proposta no emulador (regra e tela); a edição fecha |
 | 11 | Portal: a edição registrada (`EventosPortalEvento`), o romaneio do cliente, o preço, o valor declarado e a proposta, as fotos, os documentos e "Nova edição a partir desta" | Textos e `axe` verdes; a Necton lida de ponta a ponta no emulador |
