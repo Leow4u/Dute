@@ -42,6 +42,7 @@ import { useActiveCustomer } from "@/lib/active-customer-context";
 import { useAppUser } from "@/lib/auth";
 import { canOperateWarehouse } from "@/lib/permissions";
 import { ROTULO_DO_MOVER, movimentoDoMover } from "@/lib/warehouse-ops/mover-caixa";
+import { motivoDoMovimento, quemFezOMovimento } from "@/lib/reports";
 import { cn } from "@/lib/utils";
 import {
   StockFilterChip,
@@ -204,12 +205,14 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
     Boolean((data as { has_more?: boolean } | undefined)?.has_more) ||
     (page + 1) * limit < total;
 
-  // Colunas sem dado em nenhuma linha da página não aparecem.
+  // Colunas sem dado em nenhuma linha da página não aparecem. O motivo e quem fez, pela regra das Movimentações.
   const showRoute = movements.some((mov) => mov.origem || mov.destino);
   const showBalance = movements.some((mov) => mov.estoque_resultante != null);
   const showDoc = movements.some((mov) => mov.doc_nf);
-  const showOperator = movements.some((mov) => mov.responsavel);
-  const columnCount = 5 + Number(showRoute) + Number(showBalance) + Number(showDoc) + Number(showOperator);
+  const showReason = movements.some((mov) => motivoDoMovimento(mov));
+  const showOperator = movements.some((mov) => quemFezOMovimento(mov));
+  const columnCount =
+    5 + Number(showRoute) + Number(showBalance) + Number(showDoc) + Number(showReason) + Number(showOperator);
 
   const content = (
     <>
@@ -275,6 +278,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                   {showRoute ? <th className="px-3 py-2.5 font-semibold">Trajeto</th> : null}
                   {showBalance ? <th className="px-3 py-2.5 text-right font-semibold">Saldo</th> : null}
                   {showDoc ? <th className="px-3 py-2.5 font-semibold">Doc/NF</th> : null}
+                  {showReason ? <th className="px-3 py-2.5 font-semibold">Motivo</th> : null}
                   {showOperator ? <th className="px-3 py-2.5 font-semibold">Operador</th> : null}
                 </tr>
               </thead>
@@ -290,6 +294,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                     const isPositive = mov.sinal > 0;
                     const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
                     const produto = produtoDoMovimento(mov);
+                    const motivo = motivoDoMovimento(mov);
                     return (
                       <tr key={mov.id} className="border-b border-border/40 last:border-0 hover:bg-muted/60">
                         <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
@@ -332,8 +337,13 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
                         {showDoc ? (
                           <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">{mov.doc_nf || "-"}</td>
                         ) : null}
+                        {showReason ? (
+                          <td className="max-w-[280px] truncate px-3 py-3 text-xs text-muted-foreground" title={motivo || undefined}>
+                            {motivo || "-"}
+                          </td>
+                        ) : null}
                         {showOperator ? (
-                          <td className="whitespace-nowrap px-3 py-3 text-xs text-foreground">{mov.responsavel || "-"}</td>
+                          <td className="whitespace-nowrap px-3 py-3 text-xs text-foreground">{quemFezOMovimento(mov) || "-"}</td>
                         ) : null}
                       </tr>
                     );
@@ -378,7 +388,7 @@ export default function Movements({ embedded = false }: { embedded?: boolean } =
   );
 }
 
-/** Abaixo de 768px a tabela vira esta lista: produto, quantidade, código, tipo, data e trajeto. */
+/** Abaixo de 768px a tabela vira esta lista: produto, quantidade, código, tipo, data, trajeto, motivo e quem fez. */
 function MovementCard({ movement: mov }: { movement: Movement }) {
   const isPositive = mov.sinal > 0;
   const Arrow = isPositive ? ArrowDownRight : ArrowUpRight;
@@ -388,7 +398,8 @@ function MovementCard({ movement: mov }: { movement: Movement }) {
     mov.origem || mov.destino ? `${mov.origem || "-"} → ${mov.destino || "-"}` : null,
     mov.estoque_resultante != null ? `saldo ${mov.estoque_resultante.toLocaleString("pt-BR")}` : null,
     mov.doc_nf || null,
-    mov.responsavel || null,
+    motivoDoMovimento(mov) || null,
+    quemFezOMovimento(mov) || null,
   ].filter(Boolean);
   return (
     <li className="flex items-start gap-3 px-4 py-3">

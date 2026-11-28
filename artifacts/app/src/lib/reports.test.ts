@@ -8,8 +8,10 @@ import {
   formatDateCell,
   idleReport,
   monthRange,
+  motivoDoMovimento,
   movementsReport,
   positionReport,
+  quemFezOMovimento,
   requestsReport,
   toExcelCsv,
 } from "./reports";
@@ -140,6 +142,53 @@ describe("movimentações", () => {
     ]);
     expect(report.rows[2].who).toBe("Rafael");
     expect(report.summary.map((entry) => entry.value)).toEqual(["+60 un.", "−4 un.", "0"]);
+  });
+});
+
+/**
+ * Quem fez e por quê, como as Movimentações: a ficha do item e o Histórico do
+ * Estoque leem daqui (anotado em 18/11/2026: as duas telas liam o
+ * `responsavel`, que nenhuma Function grava).
+ */
+describe("quem fez o movimento e por quê", () => {
+  it("quem fez: o nome do ator que o servidor grava, o e-mail sem o nome e, no movimento antigo, o responsavel", () => {
+    expect(
+      quemFezOMovimento({ actor: { uid: "u-1", email: "guilherme@dutelog.com.br", name: "Guilherme Dantas", role: "admin" } }),
+    ).toBe("Guilherme Dantas");
+    expect(quemFezOMovimento({ actor: { uid: "u-2", email: "rafael@dutelog.com.br", role: "interno" } })).toBe("rafael@dutelog.com.br");
+    expect(quemFezOMovimento({ responsavel: "João Operador" })).toBe("João Operador");
+    expect(quemFezOMovimento({ actor: { uid: "u-3", name: " ", email: "" }, responsavel: "" })).toBe("");
+    expect(quemFezOMovimento({})).toBe("");
+  });
+
+  it("as Movimentações dizem quem pela mesma regra", () => {
+    const [comAtor, antigo] = movementsReport([
+      { data: "2026-11-27T15:00:00.000Z", tipo_mov: "SAIDA", quantity: 4, order_id: "o", actor: { uid: "u-2", email: "rafael@dutelog.com.br" } },
+      { data: "2026-11-26T15:00:00.000Z", tipo_mov: "ENTRADA", quantity: 6, receipt_id: "r", responsavel: "João Operador" },
+    ]).rows;
+    expect([comAtor.who, antigo.who]).toEqual(["rafael@dutelog.com.br", "João Operador"]);
+  });
+
+  it("por quê: a origem das Movimentações, pelo vínculo ou pelo motivo digitado", () => {
+    expect(motivoDoMovimento({ tipo_mov: "SAIDA", order_id: "creq_1", order_number: "PED-0012", source: "wms_shipping" })).toBe("Pedido PED-0012");
+    expect(motivoDoMovimento({ tipo_mov: "ENTRADA", receipt_id: "rcp_1", receipt_number: "AVL-1A2B3C4D", source: "wms_receiving" })).toBe(
+      "Recebimento AVL-1A2B3C4D",
+    );
+    expect(
+      motivoDoMovimento({ tipo_mov: "SAIDA", reason: "Avaria na caixa", operational_operation_id: "op_1", source: "functions_manual_inventory" }),
+    ).toBe("Ajuste: Avaria na caixa");
+    expect(motivoDoMovimento({ tipo_mov: "SAIDA", putaway_task_id: "pt_1", origem: "RECEBIMENTO", destino: "B-05", source: "wms_putaway" })).toBe(
+      "Guarda RECEBIMENTO → B-05",
+    );
+    expect(motivoDoMovimento({ tipo_mov: "ENTRADA", cycle_count_id: "cc_1", reason: "Recontagem geral", source: "functions_cycle_count" })).toBe(
+      "Contagem",
+    );
+  });
+
+  it("sem vínculo nem motivo, nada: o source é um nome técnico (as Movimentações seguem com ele)", () => {
+    expect(motivoDoMovimento({ tipo_mov: "ENTRADA", source: "wms_receiving", responsavel: "João Operador" })).toBe("");
+    expect(motivoDoMovimento({})).toBe("");
+    expect(classifyMovement({ tipo_mov: "ENTRADA", source: "wms_receiving" })).toEqual({ kind: "Entrada", origin: "wms_receiving" });
   });
 });
 

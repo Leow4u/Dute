@@ -212,9 +212,27 @@ export function idleReport(
 
 export type MovementKind = "Entrada" | "Saída" | "Ajuste" | "Transferência";
 
+function entrou(movement: AnyRecord) {
+  return text(movement.tipo_mov).toUpperCase() === "ENTRADA" || num(movement.sign ?? movement.sinal) > 0;
+}
+
 /** O que gerou a movimentação, pelo vínculo que o backend grava nela. */
 export function classifyMovement(movement: AnyRecord): { kind: MovementKind; origin: string } {
-  const inbound = text(movement.tipo_mov).toUpperCase() === "ENTRADA" || num(movement.sign ?? movement.sinal) > 0;
+  return peloVinculo(movement) ?? { kind: entrou(movement) ? "Entrada" : "Saída", origin: text(movement.source) };
+}
+
+/**
+ * Por que o movimento aconteceu, para a ficha do item e o Histórico do
+ * Estoque: a origem das Movimentações (o recebimento, o pedido, a guarda, a
+ * contagem ou o motivo digitado). Sem vínculo nem motivo, nada: o `source` é
+ * um nome técnico.
+ */
+export function motivoDoMovimento(movement: object): string {
+  return peloVinculo(movement as AnyRecord)?.origin ?? "";
+}
+
+/** O vínculo ou o motivo que o servidor grava no movimento; null no que não tem nenhum dos dois. */
+function peloVinculo(movement: AnyRecord): { kind: MovementKind; origin: string } | null {
   // O mover caixa (19/11/2026): a caixa muda de prateleira, como a guarda, sem entrar nos totais nem nos ajustes.
   if (movimentoDoMover(movement)) {
     return { kind: "Transferência", origin: `${ROTULO_DO_MOVER} ${text(movement.from_location_id)} → ${text(movement.to_location_id)}` };
@@ -229,7 +247,7 @@ export function classifyMovement(movement: AnyRecord): { kind: MovementKind; ori
     return { kind: "Saída", origin: `Pedido ${text(movement.order_number) || text(movement.order_id)}` };
   }
   if (movement.return_id) {
-    return { kind: inbound ? "Entrada" : "Saída", origin: "Devolução" };
+    return { kind: entrou(movement) ? "Entrada" : "Saída", origin: "Devolução" };
   }
   if (movement.opening_inventory_session_id || movement.cycle_count_id) {
     return {
@@ -241,7 +259,7 @@ export function classifyMovement(movement: AnyRecord): { kind: MovementKind; ori
   if (movement.operational_operation_id || reason) {
     return { kind: "Ajuste", origin: reason ? `Ajuste: ${reason}` : "Ajuste manual" };
   }
-  return { kind: inbound ? "Entrada" : "Saída", origin: text(movement.source) };
+  return null;
 }
 
 function actorName(value: unknown) {
@@ -252,12 +270,20 @@ function actorName(value: unknown) {
   return text(value);
 }
 
+/**
+ * Quem fez o movimento: o ator que o servidor grava (o nome ou, sem ele, o
+ * e-mail) e, no razão de antes das Functions, o `responsavel`.
+ */
+export function quemFezOMovimento(movement: { actor?: unknown; responsavel?: unknown }): string {
+  return actorName(movement.actor) || text(movement.responsavel);
+}
+
 export function movementsReport(movements: AnyRecord[]): ReportResult {
   const rows = movements
     .map((movement) => {
       const { kind, origin } = classifyMovement(movement);
       const quantity = Math.abs(num(movement.quantity ?? movement.qtde));
-      const inbound = text(movement.tipo_mov).toUpperCase() === "ENTRADA" || num(movement.sign ?? movement.sinal) > 0;
+      const inbound = entrou(movement);
       return {
         date: movementDate(movement),
         kind,
@@ -269,7 +295,7 @@ export function movementsReport(movements: AnyRecord[]): ReportResult {
         before: movement.qty_before ?? movement.estoque_anterior ?? null,
         after: movement.qty_after ?? movement.estoque_resultante ?? null,
         origin,
-        who: actorName(movement.actor) || text(movement.responsavel),
+        who: quemFezOMovimento(movement),
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));

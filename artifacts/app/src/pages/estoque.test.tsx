@@ -370,3 +370,135 @@ describe("o mover nos Últimos movimentos do item", () => {
     expect(html).not.toContain("Mudança de prateleira");
   });
 });
+
+/**
+ * Um movimento como o servidor grava (`createMovement`, em
+ * functions/wms/src/domain/operations.ts): o ator e os vínculos, sem o
+ * `responsavel` nem o `motivo` do razão de antes das Functions.
+ */
+function movimentoGravado(campos: Record<string, unknown>) {
+  return {
+    id: "mov_op_1",
+    data: "2026-11-27T15:00:00.000Z",
+    occurred_at: "2026-11-27T15:00:00.000Z",
+    type: "inventory.shipped",
+    tipo_mov: "SAIDA",
+    sign: -1,
+    sinal: -1,
+    quantity: 4,
+    qtde: 4,
+    customer_code: "BTG Pactual",
+    cod_cliente: "BTG Pactual",
+    sku_code: "BTG-000126",
+    cod_sku: "BTG-000126",
+    client_item_code: "A.01.0806.005.XG",
+    product_name: "Polo Masculino Piquet Preto",
+    produto: "Polo Masculino Piquet Preto",
+    location_id: "B-05",
+    qty_before: 30,
+    estoque_anterior: 30,
+    qty_after: 26,
+    estoque_resultante: 26,
+    saldo_delta: -4,
+    source: "wms_shipping",
+    actor: { uid: "u-guilherme", email: "guilherme@dutelog.com.br", name: "Guilherme Dantas", role: "admin" },
+    created_at: { seconds: 1_764_255_600, nanoseconds: 0 },
+    ...campos,
+  };
+}
+
+/** Quem fez e por quê nos Últimos movimentos do item, como nas Movimentações (anotado em 18/11/2026). */
+describe("quem fez e por quê nos Últimos movimentos do item", () => {
+  it("o movimento gravado pelo servidor diz quem fez e por quê", async () => {
+    const saidaDoPedido = movimentoGravado({
+      order_id: "creq_1",
+      order_number: "PED-0012",
+      shipment_id: "shp_1",
+      stock_reservation_id: "res_1",
+      origem: "B-05",
+      destino: "Faria Lima",
+    });
+    const ajusteManual = movimentoGravado({
+      id: "mov_op_2",
+      type: "inventory.received",
+      tipo_mov: "ENTRADA",
+      sign: 1,
+      sinal: 1,
+      quantity: 2,
+      qtde: 2,
+      qty_before: 26,
+      estoque_anterior: 26,
+      qty_after: 28,
+      estoque_resultante: 28,
+      saldo_delta: 2,
+      source: "functions_manual_inventory",
+      actor: { uid: "u-rafael", email: "rafael@dutelog.com.br", role: "interno" },
+      reason: "Achado na conferência",
+      operational_operation_id: "op_inventory_1",
+    });
+    const html = renderToStaticMarkup(
+      <div>
+        <LinhaDoMovimento row={saidaDoPedido} />
+        <LinhaDoMovimento row={ajusteManual} />
+      </div>,
+    );
+    expect(textosDaTela(html)).toEqual([
+      "saida",
+      "· Pedido PED-0012",
+      expect.stringMatching(/^Guilherme Dantas · 27\/11\/2026, \d\d:\d\d$/),
+      "−4",
+      "entrada",
+      "· Ajuste: Achado na conferência",
+      expect.stringMatching(/^rafael@dutelog\.com\.br · 27\/11\/2026, \d\d:\d\d$/),
+      "+2",
+    ]);
+    expect(await violacoesDeAcessibilidade(html)).toEqual([]);
+  });
+
+  it("o mover diz quem fez, sem caixa nem prateleira", () => {
+    const comum = {
+      reason: "Mudança de prateleira",
+      box_code: "CX-000121",
+      from_location_id: "A-01",
+      to_location_id: "B-09",
+      box_move_id: "bmv_1",
+      operational_operation_id: "op_box_move_1",
+      source: "functions_box_move",
+    };
+    const html = renderToStaticMarkup(
+      <div>
+        <LinhaDoMovimento row={movimentoGravado({ ...comum, movement_kind: "box_move_out", location_id: "A-01" })} />
+        <LinhaDoMovimento
+          row={movimentoGravado({
+            ...comum,
+            id: "mov_op_3",
+            type: "inventory.received",
+            tipo_mov: "ENTRADA",
+            sign: 1,
+            sinal: 1,
+            movement_kind: "box_move_in",
+            location_id: "B-09",
+            fifo_day: "2026-10-22",
+            fifo_from_location_id: "A-01",
+          })}
+        />
+      </div>,
+    );
+    expect(textosDaTela(html)).toEqual([
+      "Mudança de prateleira",
+      expect.stringMatching(/^Guilherme Dantas · 27\/11\/2026, \d\d:\d\d$/),
+      "−4",
+      "+4",
+    ]);
+    expect(html).not.toMatch(/CX-|A-01|B-09/);
+  });
+
+  it("o movimento antigo segue com o responsavel e o documento", () => {
+    const html = renderToStaticMarkup(
+      <LinhaDoMovimento
+        row={{ id: "m4", tipo_mov: "ENTRADA", qtde: 6, sinal: 1, data: "2026-07-30T15:00:00.000Z", doc_nf: "NF 7.640", responsavel: "João Operador", source: "wms_receiving" }}
+      />,
+    );
+    expect(textosDaTela(html)).toEqual(["entrada", "· NF 7.640", expect.stringMatching(/^João Operador · 30\/07\/2026, \d\d:\d\d$/), "+6"]);
+  });
+});

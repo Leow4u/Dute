@@ -36,6 +36,7 @@ import {
 import { ROTA_DA_ABERTURA } from "@/lib/opening-inventory";
 import { contarOItem } from "@/lib/warehouse-ops/recontagem-por-caixa";
 import { ROTULO_DO_MOVER, movimentoDoMover } from "@/lib/warehouse-ops/mover-caixa";
+import { motivoDoMovimento, quemFezOMovimento } from "@/lib/reports";
 import { type ProductPhoto, uploadProductPhoto } from "@/features/warehouse-ops/shared";
 import { ProductPhotoStudio } from "@/features/warehouse-ops/product-photo-studio";
 import { ProductPhotoManager } from "@/features/warehouse-ops/product-photo-manager";
@@ -696,19 +697,22 @@ type MovementRow = {
   sinal?: number;
   data?: unknown;
   doc_nf?: string | null;
-  motivo?: string | null;
   responsavel?: string | null;
+  /** O movimento como o servidor grava: o `actor` e os vínculos que dizem o motivo (lib/reports.ts). */
+  [campo: string]: unknown;
 };
 
 /**
- * Uma linha de "Últimos movimentos": o tipo, o documento, quem e quando, e a
- * quantidade com o sinal. O mover caixa diz "Mudança de prateleira" nas duas
- * linhas (a saída da origem e a entrada do destino), sem caixa nem prateleira.
+ * Uma linha de "Últimos movimentos": o tipo, o motivo e o documento, quem e
+ * quando, e a quantidade com o sinal; quem e o motivo pela mesma regra das
+ * Movimentações. O mover caixa diz "Mudança de prateleira" nas duas linhas (a
+ * saída da origem e a entrada do destino), sem caixa nem prateleira.
  */
 export function LinhaDoMovimento({ row }: { row: MovementRow }) {
   const quantity = Number(row.qtde ?? 0);
   const positive = /ENTRADA|DEVOLUCAO/i.test(String(row.tipo_mov ?? "")) || Number(row.sinal) > 0;
-  const who = row.responsavel;
+  const who = quemFezOMovimento(row);
+  const motivo = movimentoDoMover(row) ? "" : motivoDoMovimento(row);
   return (
     <div className="flex items-center gap-3 py-1.5 text-sm">
       <span
@@ -725,6 +729,7 @@ export function LinhaDoMovimento({ row }: { row: MovementRow }) {
         ) : (
           <span className="capitalize">{String(row.tipo_mov ?? "").toLowerCase().replace(/_/g, " ")}</span>
         )}
+        {motivo ? ` · ${motivo}` : ""}
         {row.doc_nf ? ` · ${row.doc_nf}` : ""}
         <span className="block text-xs text-foreground/50">{[who, movementDate(row.data)].filter(Boolean).join(" · ")}</span>
       </span>
