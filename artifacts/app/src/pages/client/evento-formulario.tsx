@@ -209,11 +209,11 @@ function LinhaDoMomento({ linha, onMudar }: { linha: LinhaDoCronograma; onMudar:
   const campos = CAMPOS_DO_MOMENTO[linha.tipo];
   const mudar = (campo: keyof LinhaDoCronograma) => (evento: { target: { value: string } }) => onMudar({ ...linha, [campo]: evento.target.value });
   return (
-    <div className="grid grid-cols-2 items-center gap-2.5 md:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem_minmax(0,1fr)]">
+    <div className="grid grid-cols-2 items-center gap-x-2.5 gap-y-1.5 @min-[31rem]:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem] @3xl:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem_minmax(0,1fr)]">
       {linha.tipo === "outro" ? (
-        <Input aria-label={ROTULO_DO_OUTRO} value={linha.rotulo} maxLength={LIMITES.rotulo} onChange={mudar("rotulo")} className="col-span-2 md:col-span-1" />
+        <Input aria-label={ROTULO_DO_OUTRO} value={linha.rotulo} maxLength={LIMITES.rotulo} onChange={mudar("rotulo")} className="col-span-2 @min-[31rem]:col-span-1" />
       ) : (
-        <span className="col-span-2 text-sm font-semibold md:col-span-1">{ROTULO_DO_MOMENTO[linha.tipo]}</span>
+        <span className="col-span-2 text-sm font-semibold @min-[31rem]:col-span-1">{ROTULO_DO_MOMENTO[linha.tipo]}</span>
       )}
       <Input type="date" aria-label={campos.data} value={linha.data} onChange={mudar("data")} />
       <Input type="time" aria-label={campos.hora} value={linha.hora} onChange={mudar("hora")} />
@@ -224,7 +224,14 @@ function LinhaDoMomento({ linha, onMudar }: { linha: LinhaDoCronograma; onMudar:
           —
         </span>
       )}
-      <Input aria-label={campos.observacao} value={linha.observacao} maxLength={LIMITES.observacaoDoMomento} onChange={mudar("observacao")} />
+      <Input
+        aria-label={campos.observacao}
+        placeholder="Observação"
+        value={linha.observacao}
+        maxLength={LIMITES.observacaoDoMomento}
+        onChange={mudar("observacao")}
+        className="@min-[31rem]:col-span-3 @min-[31rem]:col-start-2 @3xl:col-span-1 @3xl:col-start-auto @3xl:placeholder:text-transparent"
+      />
     </div>
   );
 }
@@ -365,13 +372,17 @@ export function FormularioDaEdicaoView(props: FormularioDaEdicaoViewProps) {
           </Secao>
 
           <Secao titulo="Cronograma">
-            <div className="flex flex-col gap-2.5" {...(erros.cronograma ? { "aria-describedby": "evento-cronograma-problema" } : {})}>
-              <div aria-hidden="true" className="hidden border-b border-border/60 pb-1 text-xs font-semibold text-muted-foreground md:grid md:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem_minmax(0,1fr)] md:gap-2.5">
+            {/* A largura que conta é a da seção, não a da janela: com o menu do portal e o resumo ao lado,
+                a seção tem cerca de 520 px numa janela de 1280. As cinco colunas da prancha só a partir de
+                48rem; de 31rem a 48rem, quatro, com a Observação na linha de baixo, sob Data, Hora e Até, e
+                o nome no próprio campo; abaixo de 31rem, a grade do celular. */}
+            <div className="@container flex flex-col gap-2.5" {...(erros.cronograma ? { "aria-describedby": "evento-cronograma-problema" } : {})}>
+              <div aria-hidden="true" className="hidden border-b border-border/60 pb-1 text-xs font-semibold text-muted-foreground @min-[31rem]:grid @min-[31rem]:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem] @min-[31rem]:gap-2.5 @3xl:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem_minmax(0,1fr)]">
                 <span>Momento</span>
                 <span>Data</span>
                 <span>Hora</span>
                 <span>Até</span>
-                <span>Observação</span>
+                <span className="hidden @3xl:block">Observação</span>
               </div>
               {form.cronograma.map((linha, indice) => (
                 <LinhaDoMomento key={linha.id ?? `${linha.tipo}-${indice}`} linha={linha} onMudar={mudarLinha(indice)} />

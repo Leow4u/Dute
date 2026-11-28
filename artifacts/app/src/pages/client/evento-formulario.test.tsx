@@ -1,11 +1,13 @@
 import { ROTULO_DO_MOMENTO, TIPOS_DE_MOMENTO } from "@workspace/dominio";
+import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
 
+import { adicionarOutro } from "@/lib/eventos/cronograma";
 import { formularioDaEdicao } from "@/lib/eventos/formulario";
 import type { EventoView } from "@/lib/eventos/leitura";
-import { CAMPOS_DO_MOMENTO } from "@/lib/eventos/rotulos";
+import { CAMPOS_DO_MOMENTO, ROTULO_DO_OUTRO } from "@/lib/eventos/rotulos";
 import { violacoesDeAcessibilidade } from "@/test/acessibilidade";
 import { OBSERVACOES_DA_NECTON, edicaoDaNecton, produtosDaNecton } from "@/test/eventos-necton";
 import { textosForaDaLista } from "@/test/textos";
@@ -178,6 +180,36 @@ describe("Portal › Eventos, o formulário", () => {
     expect(html).not.toContain("Falta saldo");
     expect(html).toContain('aria-label="Tirar layout-necton-2027.pdf"');
     expect(html).toContain('aria-label="Tirar produtos-b2b-conference.xlsx"');
+  });
+
+  it("o cronograma pela largura da seção: as cinco colunas só onde a Observação cabe; antes, ela desce para a linha de baixo, com o nome no campo", () => {
+    const dom = new JSDOM(`<!doctype html><body>${tela()}</body>`);
+    const documento = dom.window.document;
+    const classes = (elemento: Element | null | undefined) => (elemento?.getAttribute("class") ?? "").split(/\s+/);
+    const cinco = "@3xl:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem_minmax(0,1fr)]";
+    const quatro = "@min-[31rem]:grid-cols-[minmax(0,12rem)_9rem_6rem_6rem]";
+    const cabecalho = [...documento.querySelectorAll("[aria-hidden=true]")].find((elemento) => elemento.textContent?.startsWith("MomentoDataHoraAté"));
+    // A largura que conta é a da seção (o menu lateral e o resumo tiram espaço), não a da janela.
+    expect(classes(cabecalho?.parentElement)).toContain("@container");
+    expect(classes(cabecalho)).toEqual(expect.arrayContaining(["@min-[31rem]:grid", quatro, cinco]));
+    expect(classes([...(cabecalho?.children ?? [])].at(-1))).toEqual(expect.arrayContaining(["hidden", "@3xl:block"]));
+    for (const tipo of TIPOS_DE_MOMENTO.filter((item) => item !== "outro")) {
+      const observacao = documento.querySelector(`input[aria-label="${CAMPOS_DO_MOMENTO[tipo].observacao}"]`);
+      expect(classes(observacao?.parentElement), tipo).toEqual(expect.arrayContaining([quatro, cinco, "gap-x-2.5", "gap-y-1.5"]));
+      expect(classes(observacao?.parentElement?.firstElementChild), tipo).toEqual(expect.arrayContaining(["col-span-2", "@min-[31rem]:col-span-1"]));
+      expect(classes(observacao?.parentElement).some((classe) => classe.startsWith("md:grid-cols-")), tipo).toBe(false);
+      expect(observacao?.getAttribute("placeholder"), tipo).toBe("Observação");
+      expect(classes(observacao), tipo).toEqual(expect.arrayContaining(["@min-[31rem]:col-start-2", "@min-[31rem]:col-span-3", "@3xl:col-start-auto", "@3xl:col-span-1", "@3xl:placeholder:text-transparent"]));
+    }
+    // Nada dentro do cronograma muda de grade, coluna ou visibilidade pela largura da janela.
+    const noCronograma = [cabecalho!.parentElement!, ...cabecalho!.parentElement!.querySelectorAll("[class]")].flatMap((elemento) => classes(elemento));
+    expect(noCronograma.filter((classe) => /^(?:sm|md|lg|xl|2xl):(?:grid|col-|row-|hidden|block)/.test(classe))).toEqual([]);
+    dom.window.close();
+    // O outro momento: o rótulo é um campo e segura as mesmas colunas.
+    const comOutro = new JSDOM(`<!doctype html><body>${tela({ form: { ...props().form, cronograma: adicionarOutro(props().form.cronograma) } })}</body>`);
+    const rotulo = comOutro.window.document.querySelector(`input[aria-label="${ROTULO_DO_OUTRO}"]`);
+    expect(classes(rotulo)).toEqual(expect.arrayContaining(["col-span-2", "@min-[31rem]:col-span-1"]));
+    comOutro.window.close();
   });
 
   it("com o GG da primeira família acima do disponível, a linha 'Falta saldo em 1 item: …' sob a seção, nos textos e sem violação do axe", async () => {
